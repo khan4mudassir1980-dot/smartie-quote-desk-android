@@ -1,10 +1,10 @@
-package in.smartie.quotedesk.data.repository
+package `in`.smartie.quotedesk.data.repository
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import in.smartie.quotedesk.data.model.MemberRole
-import in.smartie.quotedesk.data.model.UserProfile
-import in.smartie.quotedesk.data.model.toUserProfile
+import `in`.smartie.quotedesk.data.model.MemberRole
+import `in`.smartie.quotedesk.data.model.UserProfile
+import `in`.smartie.quotedesk.data.model.toUserProfile
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow

@@ -1,11 +1,11 @@
-package in.smartie.quotedesk.ui
+package `in`.smartie.quotedesk.ui
 
 import android.app.Activity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseUser
-import in.smartie.quotedesk.data.model.UserProfile
-import in.smartie.quotedesk.data.repository.AuthRepository
+import `in`.smartie.quotedesk.data.model.UserProfile
+import `in`.smartie.quotedesk.data.repository.AuthRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

@@ -1,4 +1,4 @@
-package in.smartie.quotedesk
+package `in`.smartie.quotedesk
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -7,9 +7,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import in.smartie.quotedesk.ui.SessionViewModel
-import in.smartie.quotedesk.ui.SmartieApp
-import in.smartie.quotedesk.ui.theme.SmartieTheme
+import `in`.smartie.quotedesk.ui.SessionViewModel
+import `in`.smartie.quotedesk.ui.SmartieApp
+import `in`.smartie.quotedesk.ui.theme.SmartieTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

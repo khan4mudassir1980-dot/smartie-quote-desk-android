@@ -1,4 +1,4 @@
-package in.smartie.quotedesk.ui.screens
+package `in`.smartie.quotedesk.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -38,9 +38,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import in.smartie.quotedesk.data.model.MemberRole
-import in.smartie.quotedesk.data.model.UserProfile
-import in.smartie.quotedesk.ui.AppDataViewModel
+import `in`.smartie.quotedesk.data.model.MemberRole
+import `in`.smartie.quotedesk.data.model.UserProfile
+import `in`.smartie.quotedesk.ui.AppDataViewModel
 
 @Composable
 fun MoreScreen(data: AppDataViewModel, onSignOut: () -> Unit) {

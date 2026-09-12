@@ -1,4 +1,4 @@
-package in.smartie.quotedesk.ui.screens
+package `in`.smartie.quotedesk.ui.screens
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -28,7 +28,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import in.smartie.quotedesk.R
+import `in`.smartie.quotedesk.R
 
 @Composable
 fun SignInScreen(busy: Boolean, error: String?, onGoogleSignIn: () -> Unit) {

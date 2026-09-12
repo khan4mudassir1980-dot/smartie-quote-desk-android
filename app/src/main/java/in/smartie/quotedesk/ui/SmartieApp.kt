@@ -1,4 +1,4 @@
-package in.smartie.quotedesk.ui
+package `in`.smartie.quotedesk.ui
 
 import android.app.Activity
 import androidx.compose.foundation.Image
@@ -53,16 +53,16 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import in.smartie.quotedesk.R
-import in.smartie.quotedesk.core.AppContainer
-import in.smartie.quotedesk.data.model.MemberRole
-import in.smartie.quotedesk.data.model.UserProfile
-import in.smartie.quotedesk.ui.screens.MoreScreen
-import in.smartie.quotedesk.ui.screens.ProductsScreen
-import in.smartie.quotedesk.ui.screens.PurchaseScreen
-import in.smartie.quotedesk.ui.screens.QuotationsScreen
-import in.smartie.quotedesk.ui.screens.SignInScreen
-import in.smartie.quotedesk.ui.screens.StockScreen
+import `in`.smartie.quotedesk.R
+import `in`.smartie.quotedesk.core.AppContainer
+import `in`.smartie.quotedesk.data.model.MemberRole
+import `in`.smartie.quotedesk.data.model.UserProfile
+import `in`.smartie.quotedesk.ui.screens.MoreScreen
+import `in`.smartie.quotedesk.ui.screens.ProductsScreen
+import `in`.smartie.quotedesk.ui.screens.PurchaseScreen
+import `in`.smartie.quotedesk.ui.screens.QuotationsScreen
+import `in`.smartie.quotedesk.ui.screens.SignInScreen
+import `in`.smartie.quotedesk.ui.screens.StockScreen
 
 @Composable
 fun SmartieApp(container: AppContainer, sessionViewModel: SessionViewModel) {

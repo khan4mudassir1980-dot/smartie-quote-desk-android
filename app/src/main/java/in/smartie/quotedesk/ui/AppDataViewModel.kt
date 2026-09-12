@@ -1,15 +1,15 @@
-package in.smartie.quotedesk.ui
+package `in`.smartie.quotedesk.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import in.smartie.quotedesk.core.AppContainer
-import in.smartie.quotedesk.data.model.MemberRole
-import in.smartie.quotedesk.data.model.Product
-import in.smartie.quotedesk.data.model.PurchaseRequirement
-import in.smartie.quotedesk.data.model.QuotationSummary
-import in.smartie.quotedesk.data.model.StockItem
-import in.smartie.quotedesk.data.model.Urgency
-import in.smartie.quotedesk.data.model.UserProfile
+import `in`.smartie.quotedesk.core.AppContainer
+import `in`.smartie.quotedesk.data.model.MemberRole
+import `in`.smartie.quotedesk.data.model.Product
+import `in`.smartie.quotedesk.data.model.PurchaseRequirement
+import `in`.smartie.quotedesk.data.model.QuotationSummary
+import `in`.smartie.quotedesk.data.model.StockItem
+import `in`.smartie.quotedesk.data.model.Urgency
+import `in`.smartie.quotedesk.data.model.UserProfile
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch

@@ -1,4 +1,4 @@
-package in.smartie.quotedesk.ui.theme
+package `in`.smartie.quotedesk.ui.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography

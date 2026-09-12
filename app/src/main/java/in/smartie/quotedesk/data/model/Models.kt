@@ -1,4 +1,4 @@
-package in.smartie.quotedesk.data.model
+package `in`.smartie.quotedesk.data.model
 
 import com.google.firebase.firestore.DocumentSnapshot
 

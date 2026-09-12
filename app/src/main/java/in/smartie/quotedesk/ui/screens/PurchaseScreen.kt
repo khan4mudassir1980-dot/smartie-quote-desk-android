@@ -1,4 +1,4 @@
-package in.smartie.quotedesk.ui.screens
+package `in`.smartie.quotedesk.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -35,9 +35,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import in.smartie.quotedesk.data.model.PurchaseRequirement
-import in.smartie.quotedesk.data.model.Urgency
-import in.smartie.quotedesk.ui.AppDataViewModel
+import `in`.smartie.quotedesk.data.model.PurchaseRequirement
+import `in`.smartie.quotedesk.data.model.Urgency
+import `in`.smartie.quotedesk.ui.AppDataViewModel
 import java.text.DateFormat
 import java.util.Date
 

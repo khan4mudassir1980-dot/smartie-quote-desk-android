@@ -1,0 +1,58 @@
+{
+  "project_info": {
+    "project_number": "169538913498",
+    "project_id": "smartie-quote-desk",
+    "storage_bucket": "smartie-quote-desk.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:169538913498:android:c6895f40c5c37a5fed91e3",
+        "android_client_info": {
+          "package_name": "in.smartie.quotedesk"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "REPLACE_WITH_FIREBASE_WEB_CLIENT_ID.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDaFQhRgmWBctskz_0NOR2SzrNb0hC5oao"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:169538913498:android:c6895f40c5c37a5fed91e4",
+        "android_client_info": {
+          "package_name": "in.smartie.quotedesk.debug"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "REPLACE_WITH_FIREBASE_WEB_CLIENT_ID.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDaFQhRgmWBctskz_0NOR2SzrNb0hC5oao"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

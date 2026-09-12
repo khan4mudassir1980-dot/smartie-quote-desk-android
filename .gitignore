@@ -1,0 +1,12 @@
+*.iml
+.gradle/
+.idea/
+local.properties
+app/google-services.json
+app/release-key.p12
+app/build/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+keystore.properties

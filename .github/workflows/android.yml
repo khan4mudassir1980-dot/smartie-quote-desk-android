@@ -1,0 +1,44 @@
+name: Android build
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Restore Firebase configuration
+        if: ${{ secrets.GOOGLE_SERVICES_JSON_B64 != '' }}
+        run: echo "${{ secrets.GOOGLE_SERVICES_JSON_B64 }}" | base64 --decode > app/google-services.json
+      - name: Use placeholder Firebase configuration for source checks
+        if: ${{ secrets.GOOGLE_SERVICES_JSON_B64 == '' }}
+        run: cp app/google-services.placeholder.json app/google-services.json
+      - name: Restore release signing key
+        if: ${{ secrets.SMARTIE_KEYSTORE_B64 != '' }}
+        run: |
+          echo "${{ secrets.SMARTIE_KEYSTORE_B64 }}" | base64 --decode > app/release-key.p12
+          {
+            echo "storeFile=app/release-key.p12"
+            echo "storePassword=${{ secrets.SMARTIE_STORE_PASSWORD }}"
+            echo "keyAlias=${{ secrets.SMARTIE_KEY_ALIAS }}"
+            echo "keyPassword=${{ secrets.SMARTIE_KEY_PASSWORD }}"
+            echo "storeType=PKCS12"
+          } > keystore.properties
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+      - name: Build signed release APK
+        if: ${{ secrets.SMARTIE_KEYSTORE_B64 != '' }}
+        run: ./gradlew assembleRelease --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smartie-native-apks
+          path: app/build/outputs/apk/**/*.apk

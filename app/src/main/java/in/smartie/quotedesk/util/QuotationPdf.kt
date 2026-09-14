@@ -31,9 +31,12 @@ object QuotationPdf {
         val directory = File(context.cacheDir, "quotations").apply { mkdirs() }
         val safeNumber = quotation.number.replace(Regex("[^A-Za-z0-9._-]"), "-")
         val file = File(directory, "SMARTIE-Quotation-$safeNumber.pdf")
-        PdfDocument().use { document ->
+        val document = PdfDocument()
+        try {
             drawQuotation(document, quotation)
             FileOutputStream(file).use(document::writeTo)
+        } finally {
+            document.close()
         }
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
         val intent = Intent(Intent.ACTION_SEND).apply {

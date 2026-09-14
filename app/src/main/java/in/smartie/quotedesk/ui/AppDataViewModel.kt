@@ -4,10 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import `in`.smartie.quotedesk.core.AppContainer
 import `in`.smartie.quotedesk.data.model.MemberRole
+import `in`.smartie.quotedesk.data.model.CreatedQuotation
+import `in`.smartie.quotedesk.data.model.Customer
 import `in`.smartie.quotedesk.data.model.Product
 import `in`.smartie.quotedesk.data.model.ProductCategory
 import `in`.smartie.quotedesk.data.model.PurchaseRequirement
 import `in`.smartie.quotedesk.data.model.QuotationSummary
+import `in`.smartie.quotedesk.data.model.QuotationLine
+import `in`.smartie.quotedesk.data.model.RateTier
 import `in`.smartie.quotedesk.data.model.StockItem
 import `in`.smartie.quotedesk.data.model.StockMovement
 import `in`.smartie.quotedesk.data.model.Urgency
@@ -44,6 +48,9 @@ class AppDataViewModel(
         .catch { messages.emit(it.readableMessage()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList<PurchaseRequirement>())
     val quotations = (if (profile.canQuote) container.quotationRepository.observeQuotations() else flowOf(emptyList<QuotationSummary>()))
+        .catch { messages.emit(it.readableMessage()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val customers = (if (profile.canQuote) container.quotationRepository.observeCustomers() else flowOf(emptyList<Customer>()))
         .catch { messages.emit(it.readableMessage()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val people = (if (profile.isAdmin) container.peopleRepository.observePeople() else flowOf(emptyList<UserProfile>()))
@@ -92,6 +99,32 @@ class AppDataViewModel(
 
     fun deleteRequirement(item: PurchaseRequirement) = action {
         container.purchaseRepository.deleteRequirement(item)
+    }
+
+    fun createQuotation(
+        customer: Customer,
+        tier: RateTier,
+        lines: List<QuotationLine>,
+        additionalLabel: String,
+        additionalAmount: Double,
+        saveCustomer: Boolean,
+        onCreated: (CreatedQuotation) -> Unit,
+    ) {
+        viewModelScope.launch {
+            runCatching {
+                container.quotationRepository.createQuotation(
+                    customer = customer,
+                    tier = tier,
+                    lines = lines,
+                    additionalLabel = additionalLabel,
+                    additionalAmount = additionalAmount,
+                    saveCustomer = saveCustomer,
+                )
+            }.onSuccess {
+                messages.emit("Quotation ${it.number} created")
+                onCreated(it)
+            }.onFailure { messages.emit(it.readableMessage()) }
+        }
     }
 
     fun changeRole(person: UserProfile, role: MemberRole) = action {

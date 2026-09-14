@@ -29,9 +29,34 @@ jobs:
           fi
       - name: Restore Gradle wrapper permission
         run: chmod +x gradlew
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --stacktrace
+      - name: Configure release signing
+        id: signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_SIGNING_PASSWORD: ${{ secrets.ANDROID_SIGNING_PASSWORD }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_SIGNING_PASSWORD" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > smartie-quote-desk-release.p12
+            {
+              echo "storeFile=../smartie-quote-desk-release.p12"
+              echo "storePassword=$ANDROID_SIGNING_PASSWORD"
+              echo "keyAlias=smartie-quote-desk"
+              echo "keyPassword=$ANDROID_SIGNING_PASSWORD"
+              echo "storeType=PKCS12"
+            } > keystore.properties
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build installable APK
+        run: |
+          if [ "${{ steps.signing.outputs.available }}" = "true" ]; then
+            ./gradlew assembleRelease --stacktrace
+          else
+            ./gradlew assembleDebug --stacktrace
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: smartie-native-apks
           path: app/build/outputs/apk/**/*.apk
+          if-no-files-found: error

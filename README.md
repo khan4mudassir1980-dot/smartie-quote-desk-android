@@ -60,6 +60,16 @@ Then run:
 
 Never commit the signing key or passwords.
 
+## Protected GitHub build
+
+The Actions workflow produces a functional signed release APK when these repository secrets exist:
+
+- `FIREBASE_GOOGLE_SERVICES_JSON`: complete Android Firebase configuration file contents
+- `ANDROID_KEYSTORE_BASE64`: base64 text of the private PKCS12 signing key
+- `ANDROID_SIGNING_PASSWORD`: password for the existing SMARTIE signing key
+
+Without Firebase configuration the workflow intentionally builds only against a placeholder. Without signing secrets it falls back to a debug APK. Private signing files are never committed.
+
 ## Migration safety
 
 The current TWA remains usable while this project is developed. The first production native build must be signed with the same release key and have a version code above `1`. Firestore-synced products, stock, requirements, people and quotations remain available; browser-only unfinished drafts do not automatically migrate.

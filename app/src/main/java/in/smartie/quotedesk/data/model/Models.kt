@@ -32,9 +32,12 @@ data class UserProfile(
 
 data class Product(
     val id: String = "",
+    val documentId: String = "",
     val model: String = "",
     val name: String = "",
     val group: String = "",
+    val categoryId: String = "",
+    val specification: String = "",
     val unit: String = "each",
     val gst: Double = 18.0,
     val dealer: Double? = null,
@@ -42,6 +45,13 @@ data class Product(
     val client: Double? = null,
     val active: Boolean = true,
     val seedModel: String = "",
+)
+
+data class ProductCategory(
+    val id: String = "",
+    val name: String = "",
+    val order: Double = 0.0,
+    val archived: Boolean = false,
 )
 
 data class StockItem(
@@ -53,10 +63,33 @@ data class StockItem(
     val updatedByUid: String = "",
     val note: String = "",
     val lastAction: String = "",
+    val group: String = "",
+    val model: String = "",
+    val pinned: Boolean = false,
+    val pinOrder: Double = 0.0,
+    val manual: Boolean = false,
+    val manualName: String = "",
+    val manualModel: String = "",
+    val categoryId: String = "",
+    val unit: String = "each",
 ) {
     val isOut: Boolean get() = quantity <= 0
     val isLow: Boolean get() = quantity > 0 && quantity <= reorderLevel
+    val displayModel: String get() = manualModel.ifBlank { model.ifBlank { key.substringAfterLast('|') } }
+    val displayName: String get() = manualName.ifBlank { displayModel }
 }
+
+data class StockMovement(
+    val id: String = "",
+    val key: String = "",
+    val action: String = "",
+    val previous: Double = 0.0,
+    val next: Double = 0.0,
+    val quantity: Double = 0.0,
+    val note: String = "",
+    val at: Long = 0,
+    val by: String = "",
+)
 
 enum class Urgency(val wireValue: String, val label: String) {
     CRITICAL("critical", "Very urgent"),
@@ -100,15 +133,20 @@ internal fun DocumentSnapshot.toUserProfile(): UserProfile? {
         role = MemberRole.from(getString("role")),
         active = getBoolean("active") != false,
         createdAt = getLong("createdAt") ?: 0,
-        primaryOwner = getBoolean("isPrimaryOwner") == true,
+        // Primary-owner identity is resolved from teamSettings/access at sign-in.
+        // It is intentionally not derived from or stored against a public email.
+        primaryOwner = false,
     )
 }
 
 internal fun DocumentSnapshot.toProduct() = Product(
-    id = id,
+    id = getString("id") ?: getString("key") ?: id,
+    documentId = id,
     model = getString("model").orEmpty(),
     name = getString("name").orEmpty(),
     group = getString("group").orEmpty(),
+    categoryId = getString("categoryId").orEmpty(),
+    specification = getString("spec").orEmpty(),
     unit = getString("unit") ?: "each",
     gst = getDouble("gst") ?: getLong("gst")?.toDouble() ?: 18.0,
     dealer = getDouble("dealer") ?: getLong("dealer")?.toDouble(),
@@ -127,6 +165,27 @@ internal fun DocumentSnapshot.toStockItem() = StockItem(
     updatedByUid = getString("byUid").orEmpty(),
     note = getString("stockNote").orEmpty(),
     lastAction = getString("lastAction").orEmpty(),
+    group = getString("group").orEmpty(),
+    model = getString("model").orEmpty(),
+    pinned = getBoolean("pinned") == true,
+    pinOrder = getDouble("pinOrder") ?: getLong("pinOrder")?.toDouble() ?: 0.0,
+    manual = getBoolean("manual") == true,
+    manualName = getString("manualName").orEmpty(),
+    manualModel = getString("manualModel").orEmpty(),
+    categoryId = getString("categoryId").orEmpty(),
+    unit = getString("unit") ?: "each",
+)
+
+internal fun DocumentSnapshot.toStockMovement() = StockMovement(
+    id = getString("id") ?: id,
+    key = getString("key").orEmpty(),
+    action = getString("action").orEmpty(),
+    previous = getDouble("prev") ?: getLong("prev")?.toDouble() ?: 0.0,
+    next = getDouble("next") ?: getLong("next")?.toDouble() ?: 0.0,
+    quantity = getDouble("qty") ?: getLong("qty")?.toDouble() ?: 0.0,
+    note = getString("note").orEmpty(),
+    at = getLong("at") ?: 0,
+    by = getString("by").orEmpty(),
 )
 
 internal fun DocumentSnapshot.toPurchaseRequirement() = PurchaseRequirement(

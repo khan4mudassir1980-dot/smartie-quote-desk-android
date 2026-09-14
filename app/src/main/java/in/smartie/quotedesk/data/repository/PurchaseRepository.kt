@@ -41,4 +41,29 @@ class PurchaseRepository(
             "received" to false,
         )).await()
     }
+
+    suspend fun updateRequirement(item: PurchaseRequirement, name: String, quantity: Double, urgency: Urgency, note: String) {
+        require(name.isNotBlank()) { "Product or item name is required." }
+        require(quantity > 0) { "Quantity must be more than zero." }
+        val caller = requireNotNull(auth.currentUser)
+        firestore.collection("purchase").document(item.id).update(mapOf(
+            "name" to name.trim(), "qty" to quantity, "urgency" to urgency.wireValue,
+            "note" to note.trim(), "updated" to System.currentTimeMillis(),
+            "upBy" to (caller.displayName ?: caller.email.orEmpty()), "upUid" to caller.uid,
+        )).await()
+    }
+
+    suspend fun markReceived(item: PurchaseRequirement) {
+        val caller = requireNotNull(auth.currentUser)
+        firestore.collection("purchase").document(item.id).update(mapOf(
+            "status" to "Received", "received" to true,
+            "updated" to System.currentTimeMillis(),
+            "upBy" to (caller.displayName ?: caller.email.orEmpty()), "upUid" to caller.uid,
+        )).await()
+    }
+
+    suspend fun deleteRequirement(item: PurchaseRequirement) {
+        requireNotNull(auth.currentUser)
+        firestore.collection("purchase").document(item.id).delete().await()
+    }
 }

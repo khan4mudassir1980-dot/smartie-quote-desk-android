@@ -24,6 +24,9 @@ class AuthRepository(
     private val auth: FirebaseAuth,
     private val firestore: FirebaseFirestore,
 ) {
+    @Volatile
+    private var primaryOwnerUid: String? = null
+
     val authUsers: Flow<FirebaseUser?> = callbackFlow {
         val listener = FirebaseAuth.AuthStateListener { trySend(it.currentUser) }
         auth.addAuthStateListener(listener)
@@ -60,19 +63,33 @@ class AuthRepository(
         val ref = firestore.collection("users").document(user.uid)
         val current = ref.get().await().toUserProfile()
         if (current != null) {
-            if (current.role == MemberRole.OWNER && !current.primaryOwner) {
+            if (current.role == MemberRole.OWNER) {
                 val access = firestore.collection("teamSettings").document("access")
+                var resolvedPrimaryUid = ""
                 firestore.runTransaction { transaction ->
                     val settings = transaction.get(access)
                     val primaryUid = settings.getString("primaryOwnerUid").orEmpty()
                     val secondUid = settings.getString("secondOwnerUid").orEmpty()
                     if (primaryUid.isBlank() && secondUid != user.uid) {
-                        transaction.set(access, mapOf("primaryOwnerUid" to user.uid), com.google.firebase.firestore.SetOptions.merge())
-                        transaction.update(ref, "isPrimaryOwner", true)
+                        transaction.set(
+                            access,
+                            mapOf(
+                                "primaryOwnerUid" to user.uid,
+                                "secondOwnerUid" to secondUid,
+                                "updatedAt" to System.currentTimeMillis(),
+                                "updatedBy" to user.uid,
+                            ),
+                            com.google.firebase.firestore.SetOptions.merge(),
+                        )
+                        resolvedPrimaryUid = user.uid
+                    } else {
+                        resolvedPrimaryUid = primaryUid
                     }
                 }.await()
-                return ref.get().await().toUserProfile() ?: current
+                primaryOwnerUid = resolvedPrimaryUid.ifBlank { null }
+                return current.copy(primaryOwner = resolvedPrimaryUid == user.uid)
             }
+            primaryOwnerUid = null
             return current
         }
 
@@ -83,7 +100,6 @@ class AuthRepository(
             "photoURL" to user.photoUrl?.toString().orEmpty(),
             "role" to MemberRole.WORKER.wireValue,
             "active" to true,
-            "isPrimaryOwner" to false,
             "createdAt" to System.currentTimeMillis(),
         )
         ref.set(profile).await()
@@ -93,7 +109,10 @@ class AuthRepository(
     fun observeProfile(uid: String): Flow<UserProfile?> = callbackFlow {
         val registration = firestore.collection("users").document(uid)
             .addSnapshotListener { snapshot, error ->
-                if (error != null) close(error) else trySend(snapshot?.toUserProfile())
+                if (error != null) close(error)
+                else trySend(snapshot?.toUserProfile()?.let { profile ->
+                    profile.copy(primaryOwner = profile.uid == primaryOwnerUid)
+                })
             }
         awaitClose { registration.remove() }
     }

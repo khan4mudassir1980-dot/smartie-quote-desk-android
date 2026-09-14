@@ -14,8 +14,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -41,6 +44,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import `in`.smartie.quotedesk.data.model.StockItem
+import `in`.smartie.quotedesk.data.model.StockMovement
 import `in`.smartie.quotedesk.ui.AppDataViewModel
 import kotlin.math.max
 
@@ -49,10 +53,13 @@ private enum class StockFilter { ALL, LOW, OUT }
 @Composable
 fun StockScreen(data: AppDataViewModel) {
     val stock by data.stock.collectAsStateWithLifecycle()
+    val movements by data.stockMovements.collectAsStateWithLifecycle()
     var search by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf(StockFilter.ALL) }
     val drafts = remember { mutableStateMapOf<String, Int>() }
     var editing by remember { mutableStateOf<StockItem?>(null) }
+    var addingManual by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
     val visible = remember(stock, search, filter) {
         stock.filter { item ->
             val matchesSearch = search.isBlank() || item.key.contains(search, true) || item.note.contains(search, true)
@@ -62,7 +69,7 @@ fun StockScreen(data: AppDataViewModel) {
                 StockFilter.OUT -> item.isOut
             }
             matchesSearch && matchesFilter
-        }
+        }.sortedWith(compareByDescending<StockItem> { it.pinned }.thenBy { it.pinOrder }.thenBy { it.displayModel.lowercase() })
     }
 
     LazyColumn(
@@ -85,6 +92,16 @@ fun StockScreen(data: AppDataViewModel) {
                 }
                 StockSummary("Out", stock.count { it.isOut }, Color(0xFFFFDCDC), Modifier.weight(1f)) {
                     filter = if (filter == StockFilter.OUT) StockFilter.ALL else StockFilter.OUT
+                }
+            }
+        }
+        if (data.profile.canWriteStock || data.profile.canQuote) item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (data.profile.canWriteStock) Button(onClick = { addingManual = true }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Outlined.Add, null); Text("  Add stock")
+                }
+                if (data.profile.canQuote) OutlinedButton(onClick = { showHistory = true }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Outlined.History, null); Text("  History")
                 }
             }
         }
@@ -124,6 +141,7 @@ fun StockScreen(data: AppDataViewModel) {
                     drafts.remove(item.key)
                 },
                 onEdit = { editing = item },
+                onPin = { data.toggleStockPin(item) },
             )
         }
         item { Spacer(Modifier.padding(10.dp)) }
@@ -139,6 +157,14 @@ fun StockScreen(data: AppDataViewModel) {
             },
         )
     }
+    if (addingManual) AddManualStockDialog(
+        onDismiss = { addingManual = false },
+        onSave = { model, name, category, unit, quantity, reorder, note ->
+            data.addManualStock(model, name, category, unit, quantity, reorder, note)
+            addingManual = false
+        },
+    )
+    if (showHistory) MovementHistoryDialog(movements) { showHistory = false }
 }
 
 @Composable
@@ -166,6 +192,7 @@ private fun StockCard(
     onPlus: () -> Unit,
     onDone: () -> Unit,
     onEdit: () -> Unit,
+    onPin: () -> Unit,
 ) {
     val shownQuantity = max(0.0, item.quantity + delta)
     val status = when {
@@ -182,7 +209,14 @@ private fun StockCard(
         Column(Modifier.fillMaxWidth().padding(14.dp)) {
             Row(verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f)) {
-                    Text(displayName(item.key), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(item.displayModel, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+                        if (canWrite) IconButton(onClick = onPin) {
+                            Icon(if (item.pinned) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                if (item.pinned) "Unpin stock item" else "Pin stock item")
+                        }
+                    }
+                    if (item.displayName != item.displayModel) Text(item.displayName, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Surface(color = statusColor.copy(alpha = .1f), shape = RoundedCornerShape(50)) {
                         Text(status, Modifier.padding(horizontal = 9.dp, vertical = 4.dp), color = statusColor, style = MaterialTheme.typography.labelMedium)
                     }
@@ -216,6 +250,49 @@ private fun StockCard(
             }
         }
     }
+}
+
+@Composable
+private fun AddManualStockDialog(
+    onDismiss: () -> Unit,
+    onSave: (String, String, String, String, Double, Double, String) -> Unit,
+) {
+    var model by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf("") }
+    var unit by remember { mutableStateOf("each") }
+    var quantity by remember { mutableStateOf("0") }
+    var reorder by remember { mutableStateOf("0") }
+    var note by remember { mutableStateOf("") }
+    val valid = (model.isNotBlank() || name.isNotBlank()) && quantity.toDoubleOrNull()?.let { it >= 0 } == true && reorder.toDoubleOrNull()?.let { it >= 0 } == true
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("Add stock manually") },
+        text = { LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            item { OutlinedTextField(model, { model = it }, label = { Text("Model / code") }, singleLine = true) }
+            item { OutlinedTextField(name, { name = it }, label = { Text("Product / item name") }) }
+            item { OutlinedTextField(category, { category = it }, label = { Text("Category (optional)") }, singleLine = true) }
+            item { OutlinedTextField(unit, { unit = it }, label = { Text("Unit") }, singleLine = true) }
+            item { OutlinedTextField(quantity, { quantity = it }, label = { Text("Starting quantity") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true) }
+            item { OutlinedTextField(reorder, { reorder = it }, label = { Text("Reorder level") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true) }
+            item { OutlinedTextField(note, { note = it }, label = { Text("Stock note (optional)") }, minLines = 2) }
+        } },
+        confirmButton = { Button(enabled = valid, onClick = { onSave(model, name, category, unit, quantity.toDouble(), reorder.toDouble(), note) }) { Text("Add to stock") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+}
+
+@Composable
+private fun MovementHistoryDialog(movements: List<StockMovement>, onDismiss: () -> Unit) {
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("Stock movement history") },
+        text = { LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (movements.isEmpty()) item { Text("No stock movements yet.") }
+            items(movements, key = { it.id }) { move ->
+                Column {
+                    Text(displayName(move.key), fontWeight = FontWeight.Bold)
+                    Text("${move.action.uppercase()} · ${formatQty(move.previous)} → ${formatQty(move.next)}", style = MaterialTheme.typography.bodySmall)
+                    Text("${move.by.ifBlank { "Team member" }}${if (move.note.isBlank()) "" else " · ${move.note}"}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } })
 }
 
 @Composable

@@ -12,6 +12,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -36,6 +39,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import `in`.smartie.quotedesk.data.model.PurchaseRequirement
+import `in`.smartie.quotedesk.data.model.MemberRole
 import `in`.smartie.quotedesk.data.model.Urgency
 import `in`.smartie.quotedesk.ui.AppDataViewModel
 import java.text.DateFormat
@@ -45,6 +49,9 @@ import java.util.Date
 fun PurchaseScreen(data: AppDataViewModel) {
     val requirements by data.requirements.collectAsStateWithLifecycle()
     var adding by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<PurchaseRequirement?>(null) }
+    val active = requirements.filterNot { it.received || it.status.equals("Received", true) || it.status.equals("Cancelled", true) }
+    val received = requirements.filterNot { it in active }
 
     LazyColumn(
         modifier = Modifier.padding(horizontal = 16.dp),
@@ -62,7 +69,21 @@ fun PurchaseScreen(data: AppDataViewModel) {
                 Text("  Add a requirement")
             }
         }
-        items(requirements, key = { it.id }) { requirement -> RequirementCard(requirement) }
+        items(active, key = { it.id }) { requirement ->
+            RequirementCard(
+                requirement = requirement,
+                canEdit = data.profile.role != MemberRole.WORKER || requirement.addedByUid == data.profile.uid,
+                canReceive = data.profile.role != MemberRole.WORKER,
+                canDelete = data.profile.isAdmin,
+                onEdit = { editing = requirement },
+                onReceive = { data.markRequirementReceived(requirement) },
+                onDelete = { data.deleteRequirement(requirement) },
+            )
+        }
+        if (received.isNotEmpty()) item { Text("Received / closed", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp)) }
+        items(received, key = { "closed-${it.id}" }) { requirement ->
+            RequirementCard(requirement, false, false, data.profile.isAdmin, {}, {}, { data.deleteRequirement(requirement) })
+        }
         item { Spacer(Modifier.padding(10.dp)) }
     }
 
@@ -73,10 +94,24 @@ fun PurchaseScreen(data: AppDataViewModel) {
             adding = false
         },
     )
+    editing?.let { item ->
+        EditRequirementDialog(item, onDismiss = { editing = null }) { name, qty, urgency, note ->
+            data.updateRequirement(item, name, qty, urgency, note)
+            editing = null
+        }
+    }
 }
 
 @Composable
-private fun RequirementCard(requirement: PurchaseRequirement) {
+private fun RequirementCard(
+    requirement: PurchaseRequirement,
+    canEdit: Boolean,
+    canReceive: Boolean,
+    canDelete: Boolean,
+    onEdit: () -> Unit,
+    onReceive: () -> Unit,
+    onDelete: () -> Unit,
+) {
     val color = when (requirement.urgency) {
         Urgency.CRITICAL -> Color(0xFFC62828)
         Urgency.URGENT -> Color(0xFFF57C00)
@@ -99,9 +134,43 @@ private fun RequirementCard(requirement: PurchaseRequirement) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (canEdit || canReceive || canDelete) {
+                    Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (canReceive) Button(onClick = onReceive, modifier = Modifier.weight(1f)) {
+                            Icon(Icons.Outlined.Check, null); Text(" Received")
+                        }
+                        if (canEdit) OutlinedButton(onClick = onEdit) { Icon(Icons.Outlined.Edit, "Edit") }
+                        if (canDelete) TextButton(onClick = onDelete) { Icon(Icons.Outlined.DeleteOutline, "Delete", tint = MaterialTheme.colorScheme.error) }
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+private fun EditRequirementDialog(
+    item: PurchaseRequirement,
+    onDismiss: () -> Unit,
+    onSave: (String, Double, Urgency, String) -> Unit,
+) {
+    var name by remember(item) { mutableStateOf(item.name) }
+    var quantity by remember(item) { mutableStateOf(formatPurchaseQty(item.quantity)) }
+    var urgency by remember(item) { mutableStateOf(item.urgency) }
+    var note by remember(item) { mutableStateOf(item.note) }
+    val valid = name.isNotBlank() && quantity.toDoubleOrNull()?.let { it > 0 } == true
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("Edit requirement") },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedTextField(name, { name = it }, label = { Text("Product / item") }, singleLine = true)
+            OutlinedTextField(quantity, { quantity = it }, label = { Text("Quantity") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+            Text("Urgency", fontWeight = FontWeight.SemiBold)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Urgency.entries.forEach { option -> OutlinedButton(onClick = { urgency = option }, enabled = urgency != option) { Text(option.label) } }
+            }
+            OutlinedTextField(note, { note = it }, label = { Text("Note (optional)") }, minLines = 2)
+        } },
+        confirmButton = { Button(enabled = valid, onClick = { onSave(name, quantity.toDouble(), urgency, note) }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
 }
 
 @Composable

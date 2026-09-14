@@ -59,7 +59,7 @@ class PeopleRepository(
             ), com.google.firebase.firestore.SetOptions.merge())
             transaction.update(user, mapOf(
                 "role" to MemberRole.OWNER.wireValue,
-                "isPrimaryOwner" to false,
+                "updatedAt" to System.currentTimeMillis(),
             ))
         }.await()
         audit("second_owner_appointed", person)

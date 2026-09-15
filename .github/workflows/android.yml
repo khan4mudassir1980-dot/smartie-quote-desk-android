@@ -38,7 +38,7 @@ jobs:
           if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_SIGNING_PASSWORD" ]; then
             printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > smartie-quote-desk-release.p12
             {
-              echo "storeFile=../smartie-quote-desk-release.p12"
+              echo "storeFile=smartie-quote-desk-release.p12"
               echo "storePassword=$ANDROID_SIGNING_PASSWORD"
               echo "keyAlias=smartie-quote-desk"
               echo "keyPassword=$ANDROID_SIGNING_PASSWORD"

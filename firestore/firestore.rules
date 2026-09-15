@@ -47,11 +47,15 @@ service cloud.firestore {
         : '';
     }
 
+    function callerEmail() {
+      return signedIn() ? request.auth.token.get('email', '') : '';
+    }
+
     function isPrimaryOwner() {
       return signedIn() && (
         primaryUid() != ''
           ? mine() == primaryUid()
-          : request.auth.token.email == ownerEmailFallback()
+          : callerEmail() == ownerEmailFallback()
       );
     }
 
@@ -59,7 +63,7 @@ service cloud.firestore {
     function protectsPrimary(uid, data) {
       return primaryUid() != ''
         ? uid == primaryUid()
-        : data.email == ownerEmailFallback();
+        : data.get('email', '') == ownerEmailFallback();
     }
 
     function owner()      { return member() && (isPrimaryOwner() || profile().role == 'owner'); }
@@ -187,9 +191,7 @@ service cloud.firestore {
 
     function revOk() {
       return !request.resource.data.keys().hasAny(['rev'])
-        || (resource.data.keys().hasAny(['rev'])
-              ? request.resource.data.rev == resource.data.rev + 1
-              : request.resource.data.rev == 1);
+        || request.resource.data.rev == resource.data.get('rev', 0) + 1;
     }
 
     match /purchase/{id} {
@@ -211,7 +213,11 @@ service cloud.firestore {
                     && request.resource.data.qty is number && request.resource.data.qty > 0
                     && request.resource.data.updated is number
                     && revOk()
-                    && (!touched().hasAny(['del']) || admin());
+                    && (admin() || (
+                      !touched().hasAny(['del'])
+                      && resource.data.get('del', false) != true
+                      && request.resource.data.get('del', false) != true
+                    ));
 
       // Never a hard delete: a removed document reappears from a PWA device.
       allow delete: if false;
@@ -229,8 +235,8 @@ service cloud.firestore {
                       admin()
                       || (staff()
                           && request.resource.data.name == resource.data.name
-                          && resource.data.archived != true
-                          && request.resource.data.archived != true)
+                          && resource.data.get('archived', false) != true
+                          && request.resource.data.get('archived', false) != true)
                     );
       allow delete: if admin();
     }
@@ -267,7 +273,7 @@ service cloud.firestore {
           && request.resource.data.prefix == resource.data.prefix
           && request.resource.data.fy == resource.data.fy
           && request.resource.data.pad == resource.data.pad
-          && request.resource.data.lastIssued.uid == mine())
+          && request.resource.data.get('lastIssued', {}).get('uid', '') == mine())
         ||
         (admin()
           && request.resource.data.next is number && request.resource.data.next >= 1

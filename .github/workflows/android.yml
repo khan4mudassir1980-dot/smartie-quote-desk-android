@@ -26,8 +26,11 @@ jobs:
         run: ./scripts/configure-firebase.sh
       - name: Restore Gradle wrapper permission
         run: chmod +x gradlew
+      # Only the staging variant is configured for debug builds: the production
+      # Firebase file registers the release package alone, so a production
+      # debug build has no matching client.
       - name: Unit tests
-        run: ./gradlew testStagingDebugUnitTest testProductionDebugUnitTest --stacktrace
+        run: ./gradlew testStagingDebugUnitTest --stacktrace
       - name: Lint
         run: ./gradlew lintStagingDebug --stacktrace
       - name: Upload reports
@@ -101,13 +104,9 @@ jobs:
           fi
       - name: Build staging debug APK
         run: ./gradlew assembleStagingDebug --stacktrace
-      - name: Build production APK
-        run: |
-          if [ "${{ steps.signing.outputs.available }}" = "true" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            ./gradlew assembleProductionRelease --stacktrace
-          else
-            ./gradlew assembleProductionDebug --stacktrace
-          fi
+      - name: Build signed production APK (main only)
+        if: github.ref == 'refs/heads/main' && steps.signing.outputs.available == 'true'
+        run: ./gradlew assembleProductionRelease --stacktrace
       - uses: actions/upload-artifact@v4
         with:
           name: smartie-native-apks

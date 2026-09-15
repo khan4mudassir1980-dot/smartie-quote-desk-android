@@ -19,8 +19,8 @@ android {
         applicationId = "in.smartie.quotedesk"
         minSdk = 23
         targetSdk = 36
-        versionCode = 3
-        versionName = "2.0.0-native-beta01"
+        versionCode = 4
+        versionName = "2.0.0-native-beta02"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

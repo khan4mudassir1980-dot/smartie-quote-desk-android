@@ -1,0 +1,92 @@
+[
+  {
+    "id": "q_pwa_finalised",
+    "fields": {
+      "id": "q_pwa_finalised",
+      "no": "SIE/QD/2025-26/007",
+      "at": 1712000000000,
+      "by": "Asha Nair",
+      "byUid": "uid_admin",
+      "tier": "contractor",
+      "tierName": "Contractor",
+      "partyId": "c_pwa",
+      "party": {
+        "name": "Sunrise Constructions",
+        "site": "Andheri East",
+        "gstin": "27AAACS1234F1Z5",
+        "contact": "Mr Deshmukh",
+        "phone": "9876543210",
+        "email": "accounts@sunrise.invalid",
+        "address": "Plot 14, Andheri East"
+      },
+      "lines": [
+        {
+          "t": "Sliding gate motor 1000 kg",
+          "s": "1000 kg, 230 V",
+          "u": "each",
+          "qty": 2,
+          "rate": 22200,
+          "origRate": 22200,
+          "k": "gateMotors|SIE1000",
+          "amt": 44400
+        },
+        {
+          "t": "Transportation",
+          "u": "lot",
+          "qty": 1,
+          "rate": 500,
+          "manual": true,
+          "amt": 500
+        }
+      ],
+      "gst": true,
+      "gstPct": 18,
+      "subtotal": 44900,
+      "total": 52982,
+      "status": "Finalised",
+      "snap": { "gstPct": 18, "validityDays": 15 }
+    }
+  },
+  {
+    "id": "q_beta_issued",
+    "fields": {
+      "id": "q_beta_issued",
+      "no": "SIE/QD/2025-26/008",
+      "at": 1712500000000,
+      "byUid": "uid_admin",
+      "partyName": "Harbour Interiors",
+      "party": { "company": "Harbour Interiors", "city": "Thane", "site": "Ghodbunder Road" },
+      "lines": [
+        {
+          "productId": "glass|TG12",
+          "model": "TG12",
+          "description": "Toughened glass 12 mm",
+          "unit": "sqft",
+          "qty": 120,
+          "rate": 145,
+          "gst": 18,
+          "amount": 17400,
+          "gstAmount": 3132
+        }
+      ],
+      "gstTotal": 3132,
+      "total": 20532,
+      "status": "Issued"
+    }
+  },
+  {
+    "id": "q_string_totals",
+    "fields": {
+      "id": "q_string_totals",
+      "no": "SIE/QD/2024-25/101",
+      "at": "1690000000000",
+      "party": "Walk-in customer",
+      "lines": [],
+      "total": "12390",
+      "subtotal": "10500",
+      "gst": 1,
+      "gstPct": "18",
+      "status": "Finalised"
+    }
+  }
+]

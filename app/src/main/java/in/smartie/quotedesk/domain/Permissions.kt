@@ -1,0 +1,166 @@
+package `in`.smartie.quotedesk.domain
+
+/**
+ * Every capability in the parity audit's role matrix (section 7), in one
+ * place, so no screen re-derives a rule and no rule drifts between screens.
+ *
+ * Hard invariants:
+ *  - the Primary Owner cannot be demoted, switched off or removed by anyone,
+ *    including themselves;
+ *  - an Additional Owner can never modify either Owner, or themselves;
+ *  - an Administrator manages Administrator, Staff and Worker accounts, but
+ *    never an Owner;
+ *  - nobody edits their own profile;
+ *  - at most two people hold an Owner position.
+ */
+object Permissions {
+
+    fun isOwner(member: Member): Boolean = member.active && member.isOwner
+
+    fun isAdmin(member: Member): Boolean = isOwner(member) || (member.active && member.role == Role.ADMIN)
+
+    private fun isStaff(member: Member): Boolean = member.active && member.role == Role.STAFF
+
+    private fun isWorker(member: Member): Boolean =
+        member.active && member.role == Role.WORKER && !member.isOwner
+
+    // --- products and prices ----------------------------------------------
+
+    /** Workers never see products or prices. */
+    fun canViewProducts(member: Member): Boolean = member.active && !isWorker(member)
+
+    fun canEditProducts(member: Member): Boolean = isAdmin(member)
+
+    fun canManageCategoriesAndPins(member: Member): Boolean = isAdmin(member)
+
+    fun canResolvePriceReviews(member: Member): Boolean = isAdmin(member)
+
+    // --- quotations and parties -------------------------------------------
+
+    fun canQuote(member: Member): Boolean = member.active && !isWorker(member)
+
+    fun canViewQuotationHistory(member: Member): Boolean = canQuote(member)
+
+    fun canCancelQuotation(member: Member): Boolean = isAdmin(member)
+
+    fun canUseParties(member: Member): Boolean = canQuote(member)
+
+    /** Staff may correct a party's contact details but not rename or archive. */
+    fun canRenameOrArchiveParty(member: Member): Boolean = isAdmin(member)
+
+    // --- stock -------------------------------------------------------------
+
+    /** Workers see stock, including names, but no controls. */
+    fun canViewStock(member: Member): Boolean = member.active
+
+    /** Owner, Administrator and Staff add and subtract stock. */
+    fun canAdjustStock(member: Member): Boolean = isAdmin(member) || isStaff(member)
+
+    /**
+     * A stock note is always optional. A blank note is stored as a neutral
+     * system label instead of blocking the save.
+     */
+    const val REQUIRES_STOCK_NOTE: Boolean = false
+
+    const val DEFAULT_STOCK_NOTE: String = "Quick stock update"
+
+    /** Exact-quantity correction lives in Edit and needs a reason. */
+    fun canSetExactQuantity(member: Member): Boolean = isAdmin(member)
+
+    fun requiresCorrectionReason(member: Member): Boolean = canSetExactQuantity(member)
+
+    fun canStopTrackingStock(member: Member): Boolean = isAdmin(member)
+
+    fun canPinStock(member: Member): Boolean = canAdjustStock(member)
+
+    fun canViewStockHistory(member: Member): Boolean = member.active && !isWorker(member)
+
+    // --- purchase ----------------------------------------------------------
+
+    fun canViewPurchase(member: Member): Boolean = member.active
+
+    /** Everyone, Workers included, may add a purchase requirement. */
+    fun canAddPurchase(member: Member): Boolean = member.active
+
+    /** Workers may view and add, but never edit — not even their own item. */
+    fun canEditPurchase(member: Member): Boolean = member.active && !isWorker(member)
+
+    fun canSetPurchaseStatus(member: Member): Boolean = canEditPurchase(member)
+
+    /** Deletion is a restricted soft delete. */
+    fun canDeletePurchase(member: Member): Boolean = isAdmin(member)
+
+    // --- settings and team -------------------------------------------------
+
+    fun canEditSettings(member: Member): Boolean = isAdmin(member)
+
+    fun canViewSettings(member: Member): Boolean = member.active && !isWorker(member)
+
+    fun canViewTeam(member: Member): Boolean = isAdmin(member)
+
+    fun canViewTeamActivity(member: Member): Boolean = isAdmin(member)
+
+    fun canExportBackup(member: Member): Boolean = isAdmin(member)
+
+    fun canViewMigrationReport(member: Member): Boolean = isOwner(member)
+
+    // --- managing other people --------------------------------------------
+
+    /**
+     * Whether [viewer] may change [target] at all. The Primary Owner is
+     * protected from everyone, and nobody manages their own account.
+     */
+    fun canManage(viewer: Member, target: Member): Boolean {
+        if (!viewer.active) return false
+        if (viewer.uid == target.uid) return false
+        if (sameIdentity(viewer, target)) return false
+        if (target.ownerRank == OwnerRank.PRIMARY) return false
+        return when {
+            viewer.ownerRank == OwnerRank.PRIMARY -> true
+            viewer.isOwner -> !target.isOwner
+            viewer.role == Role.ADMIN -> !target.isOwner
+            else -> false
+        }
+    }
+
+    /**
+     * Roles [viewer] may assign to [target]. Administrators may now set
+     * Administrator as well as Staff and Worker; only the Primary Owner may
+     * offer the Owner position, and only while a slot is free.
+     */
+    fun roleOptionsFor(viewer: Member, target: Member, ownerCount: Int): List<Role> {
+        if (!canManage(viewer, target)) return emptyList()
+        val base = mutableListOf(Role.WORKER, Role.STAFF, Role.ADMIN)
+        if (viewer.ownerRank == OwnerRank.PRIMARY) {
+            val slotFree = ownerCount < MAX_OWNERS
+            if (target.ownerRank == OwnerRank.ADDITIONAL || slotFree) base.add(Role.OWNER)
+        }
+        if (target.role !in base) base.add(target.role)
+        return base
+    }
+
+    fun canAppointAdditionalOwner(viewer: Member, target: Member, ownerCount: Int): Boolean =
+        viewer.ownerRank == OwnerRank.PRIMARY &&
+            canManage(viewer, target) &&
+            !target.isOwner &&
+            ownerCount < MAX_OWNERS
+
+    fun canDemoteAdditionalOwner(viewer: Member, target: Member): Boolean =
+        viewer.ownerRank == OwnerRank.PRIMARY && target.ownerRank == OwnerRank.ADDITIONAL
+
+    fun canEmergencyRevoke(viewer: Member, target: Member): Boolean =
+        canDemoteAdditionalOwner(viewer, target)
+
+    /** Switching an account off never applies to an Owner; revoke does that. */
+    fun canToggleActive(viewer: Member, target: Member): Boolean =
+        canManage(viewer, target) && !target.isOwner
+
+    fun canRemove(viewer: Member, target: Member): Boolean =
+        canManage(viewer, target) && !target.isOwner
+
+    const val MAX_OWNERS = 2
+
+    /** Duplicate uid records share an email; treat them as the same person. */
+    private fun sameIdentity(viewer: Member, target: Member): Boolean =
+        viewer.normalisedEmail.isNotEmpty() && viewer.normalisedEmail == target.normalisedEmail
+}

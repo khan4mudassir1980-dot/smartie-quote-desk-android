@@ -1,0 +1,344 @@
+rules_version = '2';
+
+// SMARTIE Quote Desk — Firestore rules v9 (DRAFT, staging only).
+//
+// Not deployed by this branch. Deploy to the staging project only, after the
+// emulator suite in `tests/` passes. Production keeps the V8C4 rules until
+// the cutover described in section 10 of the parity audit.
+//
+// What changes from V8C4:
+//   1. The Primary Owner is identified by teamSettings/access.primaryOwnerUid.
+//      The hard-coded email stays as a fallback only while that field is
+//      empty, and primaryOwnerUid can never be changed once it is set.
+//   2. An Administrator manages Administrator, Staff and Worker accounts
+//      (V8C4 allowed Staff and Worker only).
+//   3. Purchase requirements are soft-deleted by an Administrator; a hard
+//      delete is refused for everyone, so a PWA device can never resurrect a
+//      deleted item.
+//   4. Purchase updates carry an optimistic `rev` counter.
+//   5. Workers view and add purchase requirements but no longer edit them.
+//   6. Reads stay V8C4-compatible so the PWA keeps working during the
+//      transition.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- identity ------------------------------------------------------
+
+    function signedIn()   { return request.auth != null; }
+    function mine()       { return request.auth.uid; }
+    function profile()    { return get(/databases/$(database)/documents/users/$(mine())).data; }
+    function hasProfile() { return signedIn() && exists(/databases/$(database)/documents/users/$(mine())); }
+    function member()     { return hasProfile() && profile().active == true; }
+
+    // The owner email the PWA hard-codes. Used only until the migration has
+    // written primaryOwnerUid, and never as a way to grant a second owner.
+    function ownerEmailFallback() { return 'khan4mudassir1980@gmail.com'; }
+
+    function accessExists() {
+      return exists(/databases/$(database)/documents/teamSettings/access);
+    }
+    function accessData() {
+      return get(/databases/$(database)/documents/teamSettings/access).data;
+    }
+    function primaryUid() {
+      return accessExists() && accessData().keys().hasAny(['primaryOwnerUid'])
+        ? accessData().primaryOwnerUid
+        : '';
+    }
+
+    function isPrimaryOwner() {
+      return signedIn() && (
+        primaryUid() != ''
+          ? mine() == primaryUid()
+          : request.auth.token.email == ownerEmailFallback()
+      );
+    }
+
+    /** True when the document at [uid] belongs to the protected Primary Owner. */
+    function protectsPrimary(uid, data) {
+      return primaryUid() != ''
+        ? uid == primaryUid()
+        : data.email == ownerEmailFallback();
+    }
+
+    function owner()      { return member() && (isPrimaryOwner() || profile().role == 'owner'); }
+    function admin()      { return member() && (isPrimaryOwner() || profile().role in ['owner','admin']); }
+    function staff()      { return member() && profile().role == 'staff'; }
+    function worker()     { return member() && profile().role == 'worker' && !isPrimaryOwner(); }
+    function stockWriter(){ return admin() || staff(); }
+    function touched()    { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function priceOk(v)   { return v == null || (v is number && v >= 0); }
+
+    // --- people --------------------------------------------------------
+
+    match /users/{uid} {
+      allow read: if (signedIn() && mine() == uid) || admin();
+
+      // A first sign-in creates only the caller's own profile: the business
+      // owner as Owner, everybody else as an active Worker.
+      allow create: if signedIn() && uid == mine()
+                    && request.resource.data.keys().hasAll(['name','email','role','active'])
+                    && request.resource.data.email == request.auth.token.email
+                    && request.resource.data.active == true
+                    && ((isPrimaryOwner() && request.resource.data.role == 'owner')
+                        || (!isPrimaryOwner() && request.resource.data.role == 'worker'));
+
+      allow update: if
+        // The Primary Owner manages everyone but themselves, and is the only
+        // person who can appoint, demote or revoke the Additional Owner.
+        (isPrimaryOwner() && member() && uid != mine()
+          && !protectsPrimary(uid, resource.data)
+          && request.resource.data.email == resource.data.email
+          && (
+            (resource.data.role != 'owner' && request.resource.data.role != 'owner')
+            // Appointing writes the access slot in the same transaction.
+            || (resource.data.role != 'owner' && request.resource.data.role == 'owner'
+                && getAfter(/databases/$(database)/documents/teamSettings/access).data.secondOwnerUid == uid)
+            // Demotion and emergency revoke clear the slot in the same write.
+            || (resource.data.role == 'owner' && request.resource.data.role != 'owner'
+                && getAfter(/databases/$(database)/documents/teamSettings/access).data.secondOwnerUid != uid)
+          ))
+        ||
+        // The Additional Owner has full control, but never over either Owner
+        // and never over their own account.
+        (owner() && !isPrimaryOwner()
+          && uid != mine()
+          && resource.data.role != 'owner'
+          && !protectsPrimary(uid, resource.data)
+          && request.resource.data.role in ['admin','staff','worker']
+          && request.resource.data.email == resource.data.email)
+        ||
+        // An Administrator manages Administrator, Staff and Worker accounts.
+        (admin() && !owner()
+          && uid != mine()
+          && resource.data.role in ['admin','staff','worker']
+          && request.resource.data.role in ['admin','staff','worker']
+          && !protectsPrimary(uid, resource.data)
+          && request.resource.data.email == resource.data.email);
+
+      allow delete: if uid != mine()
+                    && !protectsPrimary(uid, resource.data)
+                    && resource.data.role != 'owner'
+                    && (owner() || (admin() && !owner() && resource.data.role in ['admin','staff','worker']));
+    }
+
+    // --- catalogue -----------------------------------------------------
+
+    match /products/{id} {
+      allow read: if member() && !worker();
+      allow create, update: if admin()
+                    && request.resource.data.model is string
+                    && request.resource.data.model.size() > 0
+                    && request.resource.data.group is string
+                    && request.resource.data.group.size() > 0
+                    && request.resource.data.seedModel is string
+                    && request.resource.data.name is string
+                    && request.resource.data.gst is number
+                    && request.resource.data.gst >= 0
+                    && request.resource.data.gst <= 28
+                    && priceOk(request.resource.data.dealer)
+                    && priceOk(request.resource.data.contractor)
+                    && priceOk(request.resource.data.client)
+                    && request.resource.data.active is bool;
+      allow delete: if admin();
+    }
+
+    // --- stock ---------------------------------------------------------
+
+    match /stock/{key} {
+      // Workers read stock, including the denormalised product name, without
+      // ever being able to read prices from /products.
+      allow read: if member();
+      allow create: if stockWriter()
+                    && request.resource.data.q is number && request.resource.data.q >= 0
+                    && request.resource.data.min is number && request.resource.data.min >= 0
+                    && request.resource.data.t is number
+                    && request.resource.data.byUid == mine()
+                    && (admin() || request.resource.data.lastAction in ['in','out','min','add','pin']);
+      allow update: if stockWriter()
+                    && request.resource.data.q is number && request.resource.data.q >= 0
+                    && request.resource.data.min is number && request.resource.data.min >= 0
+                    && request.resource.data.t is number
+                    && request.resource.data.byUid == mine()
+                    && request.resource.data.key == resource.data.key
+                    // Setting an exact quantity stays with Owner and
+                    // Administrator; Staff use the +/- actions.
+                    && (admin() || request.resource.data.lastAction in ['in','out','min','add','pin']);
+      allow delete: if admin();
+    }
+
+    match /stockMoves/{id} {
+      allow read: if member() && !worker();
+      allow create: if stockWriter()
+                    && request.resource.data.id == id
+                    && request.resource.data.key is string
+                    && request.resource.data.action in ['in','out','set','min','add','archive']
+                    && request.resource.data.prev is number
+                    && request.resource.data.next is number
+                    && request.resource.data.next >= 0
+                    && request.resource.data.at is number
+                    && request.resource.data.byUid == mine()
+                    && (admin() || request.resource.data.action in ['in','out','min','add']);
+      allow update, delete: if false;
+    }
+
+    // --- purchase ------------------------------------------------------
+
+    function revOk() {
+      return !request.resource.data.keys().hasAny(['rev'])
+        || (resource.data.keys().hasAny(['rev'])
+              ? request.resource.data.rev == resource.data.rev + 1
+              : request.resource.data.rev == 1);
+    }
+
+    match /purchase/{id} {
+      allow read: if member();
+      // Everyone, Workers included, may add a requirement.
+      allow create: if member()
+                    && request.resource.data.id == id
+                    && request.resource.data.byUid == mine()
+                    && request.resource.data.qty is number && request.resource.data.qty > 0
+                    && request.resource.data.status == 'Needed'
+                    && (!request.resource.data.keys().hasAny(['received']) || request.resource.data.received == false)
+                    && (!request.resource.data.keys().hasAny(['del']) || request.resource.data.del == false)
+                    && request.resource.data.urgency in ['critical','urgent','normal']
+                    && request.resource.data.updated is number;
+
+      // Workers view and add only. Soft delete is an Administrator action.
+      allow update: if member() && !worker()
+                    && request.resource.data.id == id
+                    && request.resource.data.qty is number && request.resource.data.qty > 0
+                    && request.resource.data.updated is number
+                    && revOk()
+                    && (!touched().hasAny(['del']) || admin());
+
+      // Never a hard delete: a removed document reappears from a PWA device.
+      allow delete: if false;
+    }
+
+    // --- parties and quotations ----------------------------------------
+
+    match /customers/{id} {
+      allow read: if member() && !worker();
+      allow create: if member() && !worker()
+                    && request.resource.data.id == id
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 0;
+      allow update: if request.resource.data.id == id && (
+                      admin()
+                      || (staff()
+                          && request.resource.data.name == resource.data.name
+                          && resource.data.archived != true
+                          && request.resource.data.archived != true)
+                    );
+      allow delete: if admin();
+    }
+
+    match /quotations/{id} {
+      allow read: if member() && !worker();
+      allow create: if member() && !worker()
+                    && request.resource.data.id == id
+                    && request.resource.data.no is string
+                    && request.resource.data.byUid == mine()
+                    && request.resource.data.at is number
+                    && request.resource.data.total is number;
+      allow update: if admin()
+                    && touched().hasOnly(['status','cancelledBy','cancelledAt'])
+                    && request.resource.data.no == resource.data.no
+                    && request.resource.data.total == resource.data.total;
+      allow delete: if false;
+    }
+
+    // --- team settings -------------------------------------------------
+
+    match /teamSettings/numbering {
+      allow read: if member() && !worker();
+      allow create: if admin()
+                    && request.resource.data.next is number && request.resource.data.next >= 1
+                    && request.resource.data.prefix is string
+                    && request.resource.data.fy is string
+                    && request.resource.data.pad is number;
+      allow update: if
+        (member() && !worker()
+          && touched().hasOnly(['next','lastIssued'])
+          && request.resource.data.next is number
+          && request.resource.data.next == resource.data.next + 1
+          && request.resource.data.prefix == resource.data.prefix
+          && request.resource.data.fy == resource.data.fy
+          && request.resource.data.pad == resource.data.pad
+          && request.resource.data.lastIssued.uid == mine())
+        ||
+        (admin()
+          && request.resource.data.next is number && request.resource.data.next >= 1
+          && request.resource.data.prefix is string
+          && request.resource.data.fy is string
+          && (request.resource.data.fy != resource.data.fy
+              || request.resource.data.next >= resource.data.next));
+      allow delete: if false;
+    }
+
+    match /teamSettings/company {
+      allow read: if member() && !worker();
+      allow create, update: if admin();
+      allow delete: if false;
+    }
+
+    match /teamSettings/categories {
+      allow read: if member() && !worker();
+      allow create, update: if admin() && request.resource.data.map is map;
+      allow delete: if false;
+    }
+
+    match /teamSettings/productPins {
+      allow read: if member() && !worker();
+      allow create, update: if admin()
+                            && request.resource.data.keys is list
+                            && request.resource.data.keys.size() <= 15;
+      allow delete: if false;
+    }
+
+    match /teamSettings/access {
+      allow read: if admin();
+      // Only the Primary Owner writes the protected slots, and the primary
+      // uid is immutable once the migration has written it.
+      allow create: if isPrimaryOwner() && member()
+                    && request.resource.data.secondOwnerUid is string;
+      allow update: if isPrimaryOwner() && member()
+                    && request.resource.data.secondOwnerUid is string
+                    && (!resource.data.keys().hasAny(['primaryOwnerUid'])
+                        || request.resource.data.primaryOwnerUid == resource.data.primaryOwnerUid);
+      allow delete: if false;
+    }
+
+    match /teamSettings/{other} {
+      allow read: if member() && !worker();
+      allow write: if false;
+    }
+
+    match /teamAudit/{id} {
+      allow read: if admin();
+      allow create: if admin()
+                    && request.resource.data.id == id
+                    && request.resource.data.byUid == mine()
+                    && request.resource.data.at is number;
+      allow update, delete: if false;
+    }
+
+    // --- cutover only ---------------------------------------------------
+    //
+    // At the cutover (migration phase M5) every write gets an additional
+    // `schemaVersion == 2` requirement. V8C4 writes carry no schemaVersion,
+    // so deploying that turns the PWA read-only without changing PWA code.
+    // It is deliberately NOT part of these rules: enable it only in the
+    // cutover window, and roll back by redeploying the V8C4 rules.
+    //
+    //   function v2() { return request.resource.data.schemaVersion == 2; }
+    //   … && v2()   on every create/update below /products, /stock,
+    //                /stockMoves, /purchase, /customers and /quotations.
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

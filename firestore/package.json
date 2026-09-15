@@ -1,0 +1,15 @@
+{
+  "name": "smartie-firestore-rules",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Firestore rules v9 draft and its emulator test suite (staging only).",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 tests/",
+    "test:emulator": "firebase emulators:exec --project smartie-rules-test --only firestore \"npm test\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.4",
+    "firebase": "^10.14.1",
+    "firebase-tools": "^13.29.1"
+  }
+}

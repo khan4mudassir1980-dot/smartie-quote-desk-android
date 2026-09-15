@@ -1,0 +1,41 @@
+[
+  {
+    "id": "access",
+    "fields": {
+      "secondOwnerUid": "uid_admin",
+      "updatedAt": 1712000000000,
+      "updatedBy": "uid_owner"
+    }
+  },
+  {
+    "id": "access_migrated",
+    "fields": {
+      "primaryOwnerUid": "uid_owner",
+      "secondOwnerUid": "",
+      "updatedAt": 1713000000000,
+      "updatedBy": "uid_owner"
+    }
+  },
+  {
+    "id": "numbering",
+    "fields": {
+      "prefix": "SIE/QD",
+      "fy": "2025-26",
+      "next": 9,
+      "pad": 3,
+      "lastIssued": { "no": "SIE/QD/2025-26/008", "at": 1712500000000, "by": "Asha Nair", "uid": "uid_admin" },
+      "updated": 1712500000000
+    }
+  },
+  {
+    "id": "categories",
+    "fields": {
+      "map": {
+        "motors": { "id": "motors", "name": "Motors", "order": 1 },
+        "glass": { "id": "glass", "name": "Glass", "order": 2 },
+        "retired": { "id": "retired", "name": "Retired", "order": 3, "archived": 1 }
+      },
+      "updated": 1705000000000
+    }
+  }
+]

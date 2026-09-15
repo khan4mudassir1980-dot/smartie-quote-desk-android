@@ -1,5 +1,10 @@
 <resources>
-    <color name="smartie_purple">#7125DC</color>
-    <color name="smartie_green">#087A34</color>
-    <color name="smartie_orange">#F4A13A</color>
+    <!-- Approved PWA tokens (index.html:22-42). -->
+    <color name="smartie_purple">#6D28D9</color>
+    <color name="smartie_purple_dark">#4C1D95</color>
+    <color name="smartie_paper">#F8F7FC</color>
+    <color name="smartie_panel">#FFFFFF</color>
+    <color name="smartie_green">#15803D</color>
+    <color name="smartie_warn">#B45309</color>
+    <color name="smartie_danger">#B91C1C</color>
 </resources>

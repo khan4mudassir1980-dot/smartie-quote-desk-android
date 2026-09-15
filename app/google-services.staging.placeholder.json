@@ -1,0 +1,58 @@
+{
+  "project_info": {
+    "project_number": "000000000000",
+    "project_id": "smartie-quote-desk-staging",
+    "storage_bucket": "smartie-quote-desk-staging.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "android_client_info": {
+          "package_name": "in.smartie.quotedesk.staging"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "REPLACE_WITH_STAGING_FIREBASE_WEB_CLIENT_ID.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "REPLACE_WITH_STAGING_ANDROID_API_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000001",
+        "android_client_info": {
+          "package_name": "in.smartie.quotedesk.staging.debug"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "REPLACE_WITH_STAGING_FIREBASE_WEB_CLIENT_ID.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "REPLACE_WITH_STAGING_ANDROID_API_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

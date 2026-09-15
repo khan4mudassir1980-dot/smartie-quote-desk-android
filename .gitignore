@@ -3,6 +3,7 @@
 .idea/
 local.properties
 app/google-services.json
+app/src/*/google-services.json
 app/release-key.p12
 app/build/
 build/
@@ -10,3 +11,5 @@ captures/
 .externalNativeBuild/
 .cxx/
 keystore.properties
+firestore/node_modules/
+node_modules/

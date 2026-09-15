@@ -1,19 +1,23 @@
 package `in`.smartie.quotedesk.core
 
+import android.content.Context
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import `in`.smartie.quotedesk.data.repository.AuthRepository
 import `in`.smartie.quotedesk.data.repository.PeopleRepository
-import `in`.smartie.quotedesk.data.repository.ProductRepository
-import `in`.smartie.quotedesk.data.repository.PurchaseRepository
-import `in`.smartie.quotedesk.data.repository.QuotationRepository
-import `in`.smartie.quotedesk.data.repository.StockRepository
+import `in`.smartie.quotedesk.data.repository.CatalogueReadRepository
+import `in`.smartie.quotedesk.data.repository.OperationsReadRepository
 
-class AppContainer(auth: FirebaseAuth, firestore: FirebaseFirestore) {
+class AppContainer(
+    context: Context,
+    auth: FirebaseAuth,
+    firestore: FirebaseFirestore
+) {
+    val devicePreferences = DevicePreferences(context.applicationContext)
+    val connectivity = Connectivity(context.applicationContext)
+    val errorReporter = ErrorReporter()
     val authRepository = AuthRepository(auth, firestore)
     val peopleRepository = PeopleRepository(auth, firestore)
-    val productRepository = ProductRepository(auth, firestore)
-    val stockRepository = StockRepository(auth, firestore)
-    val purchaseRepository = PurchaseRepository(auth, firestore)
-    val quotationRepository = QuotationRepository(auth, firestore)
+    val catalogueRepository = CatalogueReadRepository(firestore)
+    val operationsRepository = OperationsReadRepository(firestore)
 }

@@ -1,0 +1,28 @@
+[
+  {
+    "id": "ta_role_change",
+    "fields": {
+      "id": "ta_role_change",
+      "action": "role_changed",
+      "targetUid": "uid_admin",
+      "targetName": "Asha Nair",
+      "targetEmail": "asha@example.invalid",
+      "detail": { "from": "staff", "to": "admin" },
+      "byUid": "uid_owner",
+      "by": "Mudassir Khan",
+      "at": 1712000000000
+    }
+  },
+  {
+    "id": "ta_revoked",
+    "fields": {
+      "id": "ta_revoked",
+      "action": "owner_revoked",
+      "targetUid": "uid_second_owner",
+      "targetName": "Second Owner",
+      "byUid": "uid_owner",
+      "by": "Mudassir Khan",
+      "at": 1712900000000
+    }
+  }
+]

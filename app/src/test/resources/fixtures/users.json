@@ -1,0 +1,62 @@
+[
+  {
+    "id": "uid_owner",
+    "fields": {
+      "name": "Mudassir Khan",
+      "email": "Khan4Mudassir1980@gmail.com",
+      "role": "owner",
+      "active": true,
+      "photoURL": "https://example.invalid/photo.png",
+      "createdAt": 1690000000000,
+      "createdBy": "self-google",
+      "lastProvider": "google.com"
+    }
+  },
+  {
+    "id": "uid_admin",
+    "fields": {
+      "name": "Asha Nair",
+      "email": "asha@example.invalid",
+      "role": "admin",
+      "active": true,
+      "createdAt": 1700000000000
+    }
+  },
+  {
+    "id": "uid_legacy_no_active",
+    "fields": {
+      "name": "Legacy Member",
+      "email": "legacy@example.invalid",
+      "role": "staff",
+      "createdAt": 1680000000000
+    }
+  },
+  {
+    "id": "uid_switched_off",
+    "fields": {
+      "name": "Former Member",
+      "email": "former@example.invalid",
+      "role": "worker",
+      "active": false,
+      "createdAt": 1685000000000
+    }
+  },
+  {
+    "id": "uid_duplicate_email_newer",
+    "fields": {
+      "name": "Asha Nair (Google)",
+      "email": "ASHA@example.invalid",
+      "role": "worker",
+      "active": true,
+      "createdAt": 1720000000000
+    }
+  },
+  {
+    "id": "uid_no_role",
+    "fields": {
+      "name": "Unlabelled",
+      "email": "unlabelled@example.invalid",
+      "active": true
+    }
+  }
+]

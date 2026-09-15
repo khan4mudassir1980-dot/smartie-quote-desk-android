@@ -1,0 +1,83 @@
+[
+  {
+    "id": "gateMotors|SIE1000",
+    "fields": {
+      "id": "gateMotors|SIE1000",
+      "key": "gateMotors|SIE1000",
+      "group": "gateMotors",
+      "seedModel": "SIE1000",
+      "model": "SIE1000",
+      "name": "Sliding gate motor 1000 kg",
+      "unit": "each",
+      "spec": "1000 kg, 230 V",
+      "gst": 18,
+      "dealer": 18500,
+      "contractor": 22200,
+      "client": 25900,
+      "categoryId": "motors",
+      "active": true,
+      "kg": 1000,
+      "seeded": true,
+      "updated": 1700000000000,
+      "by": "Mudassir Khan"
+    }
+  },
+  {
+    "id": "gateMotors__SIE1000",
+    "fields": {
+      "id": "gateMotors|SIE1000",
+      "key": "gateMotors|SIE1000",
+      "group": "gateMotors",
+      "seedModel": "SIE1000",
+      "model": "SIE1000",
+      "name": "Sliding gate motor 1000 kg (edited)",
+      "gst": 18,
+      "dealer": 18900,
+      "active": true,
+      "updated": 1710000000000,
+      "conflictResolved": true
+    }
+  },
+  {
+    "id": "glass__TG12",
+    "fields": {
+      "id": "glass|TG12",
+      "group": "glass",
+      "seedModel": "TG12",
+      "model": "TG12",
+      "name": "Toughened glass 12 mm",
+      "unit": "sqft",
+      "gst": "18",
+      "dealer": null,
+      "contractor": null,
+      "client": null,
+      "active": true
+    }
+  },
+  {
+    "id": "hwWheel__SIEBAL58H_V",
+    "fields": {
+      "id": "hwWheel|SIEBAL58H/V",
+      "group": "hwWheel",
+      "seedModel": "SIEBAL58H/V",
+      "model": "SIEBAL58H/V",
+      "name": "Bearing wheel 58 mm",
+      "gst": 18,
+      "dealer": "1,250.50",
+      "active": 1
+    }
+  },
+  {
+    "id": "hsd__ARCHIVED1",
+    "fields": {
+      "id": "hsd|ARCHIVED1",
+      "group": "hsd",
+      "seedModel": "ARCHIVED1",
+      "model": "ARCHIVED1",
+      "name": "Withdrawn model",
+      "gst": 18,
+      "dealer": 1000,
+      "active": false
+    }
+  }
+]

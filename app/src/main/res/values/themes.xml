@@ -1,9 +1,14 @@
 <resources>
+    <!--
+        Launch theme only. Everything after the first frame is drawn by
+        SmartieTheme in Compose; the window is edge to edge with transparent
+        system bars so the app can draw behind them and apply its own insets.
+    -->
     <style name="Theme.SmartieQuoteDesk" parent="android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:fontFamily">sans</item>
-        <item name="android:windowLightStatusBar">false</item>
-        <item name="android:statusBarColor">@color/smartie_purple</item>
-        <item name="android:navigationBarColor">#FFFFFF</item>
+        <item name="android:windowBackground">@color/smartie_paper</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowActionModeOverlay">true</item>
     </style>
 </resources>

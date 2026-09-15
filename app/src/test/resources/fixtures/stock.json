@@ -1,0 +1,51 @@
+[
+  {
+    "id": "gateMotors|SIE1000",
+    "fields": {
+      "key": "gateMotors|SIE1000",
+      "q": 7,
+      "min": 2,
+      "t": 1710000000000,
+      "by": "Asha Nair",
+      "byUid": "uid_admin",
+      "lastAction": "in",
+      "pinned": true,
+      "pinOrder": 1710000000000,
+      "unit": "each"
+    }
+  },
+  {
+    "id": "hwWheel|SIEBAL58H_V",
+    "fields": {
+      "key": "hwWheel|SIEBAL58H/V",
+      "q": "5",
+      "min": "1",
+      "t": 1700000000000,
+      "lastAction": "set"
+    }
+  },
+  {
+    "id": "manualstock|manual-tape",
+    "fields": {
+      "key": "manualstock|manual-tape",
+      "q": 0,
+      "min": 0,
+      "manual": 1,
+      "manualName": "Insulation tape",
+      "manualModel": "TAPE-20",
+      "categoryId": "other",
+      "stockNote": "Kept in the van",
+      "t": 1705000000000
+    }
+  },
+  {
+    "id": "hsd|ARCHIVED1",
+    "fields": {
+      "key": "hsd|ARCHIVED1",
+      "q": 3,
+      "min": 0,
+      "off": 1,
+      "t": 1690000000000
+    }
+  }
+]

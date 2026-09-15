@@ -1,0 +1,56 @@
+[
+  {
+    "id": "mv_pwa_in",
+    "fields": {
+      "id": "mv_pwa_in",
+      "key": "gateMotors|SIE1000",
+      "group": "gateMotors",
+      "model": "SIE1000",
+      "name": "Sliding gate motor 1000 kg",
+      "action": "in",
+      "prev": 4,
+      "delta": 3,
+      "next": 7,
+      "min": 2,
+      "note": "Quick stock update",
+      "by": "Asha Nair",
+      "byUid": "uid_admin",
+      "at": 1710000000000
+    }
+  },
+  {
+    "id": "mv_pwa_out",
+    "fields": {
+      "id": "mv_pwa_out",
+      "key": "gateMotors|SIE1000",
+      "action": "out",
+      "prev": 7,
+      "delta": -2,
+      "next": 5,
+      "at": 1710000600000
+    }
+  },
+  {
+    "id": "mv_beta_absolute",
+    "fields": {
+      "id": "mv_beta_absolute",
+      "key": "hwWheel|SIEBAL58H/V",
+      "action": "out",
+      "prev": 5,
+      "next": 3,
+      "qty": 2,
+      "at": 1711000000000
+    }
+  },
+  {
+    "id": "mv_string_numbers",
+    "fields": {
+      "id": "mv_string_numbers",
+      "key": "manualstock|manual-tape",
+      "action": "in",
+      "prev": "0",
+      "next": "4",
+      "at": "1712000000000"
+    }
+  }
+]

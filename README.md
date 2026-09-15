@@ -8,8 +8,19 @@ Native Android replacement for the existing SMARTIE Quote Desk TWA.
 - Firebase Authentication with Android Credential Manager
 - Cloud Firestore with offline cache
 - Material 3 UI
-- Package ID: `in.smartie.quotedesk`
-- Version code: `2` (updates the current version-code-1 TWA)
+- Package ID: `in.smartie.quotedesk` (production) and `in.smartie.quotedesk.staging` (staging flavour)
+- Version code: `5` today; a production release must stay above the installed TWA's
+
+## Build flavours
+
+| Flavour | Application id | Firebase project | Use |
+|---|---|---|---|
+| `production` | `in.smartie.quotedesk` | `smartie-quote-desk` | The app people actually use. Not built from feature branches. |
+| `staging` | `in.smartie.quotedesk.staging` | `smartie-quote-desk-staging` | All parity development and acceptance testing. Installs side by side with production. |
+
+Each flavour reads its own ignored configuration file, `app/src/production/google-services.json`
+and `app/src/staging/google-services.json`. `scripts/configure-firebase.sh` places them from the
+GitHub secrets, falling back to the committed placeholders so a clean checkout still builds.
 
 ## Role access
 
@@ -18,9 +29,18 @@ Native Android replacement for the existing SMARTIE Quote Desk TWA.
 | Owner / Administrator | Manage | Manage | Manage | Manage | Full |
 | Administrator | Manage | Manage | Manage | Manage | Staff and Workers |
 | Staff | View | Add / remove | Manage | Create and view | None |
-| Worker | Hidden | View only | Add and edit own open item | Hidden | None |
+| Worker | Hidden | View only | View and add | Hidden | None |
 
-The original Owner is protected. One second Owner may be appointed; only the original Owner can emergency-revoke that position. The signed-in member is hidden from the People list, active members appear first, and deleting a profile lets that person return as a Worker on their next Google sign-in.
+Owners are labelled `Owner / Administrator` with a `Primary` or `Additional` sub-label. The Primary
+Owner cannot be demoted, switched off or removed by anyone, including themselves. Only the Primary
+Owner appoints, demotes or emergency-revokes the Additional Owner, and at most two people hold an
+Owner position. An Administrator manages Administrator, Staff and Worker accounts but never an Owner.
+Adding or removing stock never requires a note. Setting an exact quantity is an Owner or
+Administrator action and asks for a reason.
+
+The signed-in member is hidden from the People list (by uid and by email), active members appear
+first, and deleting a profile lets that person return as a Worker on their next sign-in. The single
+source of these rules is `domain/Permissions.kt`, with a test per row in `PermissionsTest`.
 
 ## Required Firebase setup
 
@@ -67,9 +87,26 @@ The Actions workflow produces a functional signed release APK when these reposit
 - `FIREBASE_GOOGLE_SERVICES_JSON`: complete Android Firebase configuration file contents
 - `ANDROID_KEYSTORE_BASE64`: base64 text of the private PKCS12 signing key
 - `ANDROID_SIGNING_PASSWORD`: password for the existing SMARTIE signing key
+- `FIREBASE_GOOGLE_SERVICES_JSON_STAGING`: the staging project's Android configuration file
+
+The workflow runs unit tests and lint, runs the Firestore rules suite against the emulator, and
+builds a staging debug APK on every branch. A signed production release is built from `main` only.
 
 Without Firebase configuration the workflow intentionally builds only against a placeholder. Without signing secrets it falls back to a debug APK. Private signing files are never committed.
 
 ## Migration safety
 
 The current TWA remains usable while this project is developed. The first production native build must be signed with the same release key and have a version code above `1`. Firestore-synced products, stock, requirements, people and quotations remain available; browser-only unfinished drafts do not automatically migrate.
+
+## Firestore rules
+
+`firestore/firestore.rules` is the v9 draft for staging. It is never deployed from this repository.
+Run its test suite locally with the Firebase emulator:
+
+```bash
+cd firestore
+npm ci
+npm run test:emulator
+```
+
+Production keeps the V8C4 rules until the cutover described in the parity audit.

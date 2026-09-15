@@ -1,0 +1,59 @@
+[
+  {
+    "id": "pr_open",
+    "fields": {
+      "id": "pr_open",
+      "name": "Sliding gate rack 1 m",
+      "qty": 6,
+      "urgency": "urgent",
+      "note": "For the Kandivali site",
+      "status": "Needed",
+      "by": "Ravi Worker",
+      "byUid": "uid_worker",
+      "t": 1712000000000,
+      "updated": 1712000000000
+    }
+  },
+  {
+    "id": "pr_received_legacy",
+    "fields": {
+      "id": "pr_received_legacy",
+      "name": "Remote handsets",
+      "qty": "10",
+      "urgency": "normal",
+      "status": "Received",
+      "received": 1,
+      "rcvQty": 10,
+      "rcvBy": "Asha Nair",
+      "rcvUid": "uid_admin",
+      "rcvAt": 1712600000000,
+      "t": 1711000000000,
+      "updated": 1712600000000
+    }
+  },
+  {
+    "id": "pr_soft_deleted",
+    "fields": {
+      "id": "pr_soft_deleted",
+      "name": "Duplicate entry",
+      "qty": 1,
+      "urgency": "normal",
+      "status": "Needed",
+      "del": 1,
+      "t": 1710500000000,
+      "updated": 1710600000000
+    }
+  },
+  {
+    "id": "pr_critical_no_created",
+    "fields": {
+      "id": "pr_critical_no_created",
+      "name": "Emergency stop button",
+      "qty": 2,
+      "urgency": "critical",
+      "status": "Ordered",
+      "received": false,
+      "updated": 1713000000000
+    }
+  }
+]

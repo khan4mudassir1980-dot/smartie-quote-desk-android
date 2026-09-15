@@ -12,6 +12,7 @@ class SmartieApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(
+            context = this,
             auth = FirebaseAuth.getInstance(),
             firestore = FirebaseFirestore.getInstance(),
         )

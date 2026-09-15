@@ -1,0 +1,42 @@
+[
+  {
+    "id": "c_pwa",
+    "fields": {
+      "id": "c_pwa",
+      "name": "Sunrise Constructions",
+      "type": "contractor",
+      "city": "Mumbai",
+      "gstin": "27AAACS1234F1Z5",
+      "contact": "Mr Deshmukh",
+      "phone": "9876543210",
+      "email": "accounts@sunrise.invalid",
+      "address": "Plot 14, Andheri East",
+      "notes": "Pays in 30 days",
+      "archived": false,
+      "t": 1700000000000,
+      "by": "Mudassir Khan",
+      "byUid": "uid_owner",
+      "updated": 1705000000000
+    }
+  },
+  {
+    "id": "c_beta_damaged",
+    "fields": {
+      "id": "c_beta_damaged",
+      "company": "Harbour Interiors",
+      "name": "Mrs Pinto",
+      "phone": "9820011223",
+      "city": "Thane",
+      "gstin": "27AAACH9999F1Z2"
+    }
+  },
+  {
+    "id": "c_archived",
+    "fields": {
+      "id": "c_archived",
+      "name": "Old Client Pvt Ltd",
+      "archived": 1,
+      "t": 1650000000000
+    }
+  }
+]

@@ -168,16 +168,20 @@ data class CreatedQuotation(
     val createdBy: String,
 )
 
+private fun DocumentSnapshot.stringValue(field: String): String? = get(field) as? String
+private fun DocumentSnapshot.numberValue(field: String): Number? = get(field) as? Number
+private fun DocumentSnapshot.booleanValue(field: String): Boolean? = get(field) as? Boolean
+
 internal fun DocumentSnapshot.toUserProfile(): UserProfile? {
     if (!exists()) return null
     return UserProfile(
         uid = id,
-        name = getString("name").orEmpty(),
-        email = getString("email").orEmpty(),
-        photoUrl = getString("photoURL").orEmpty(),
-        role = MemberRole.from(getString("role")),
-        active = getBoolean("active") != false,
-        createdAt = getLong("createdAt") ?: 0,
+        name = stringValue("name").orEmpty(),
+        email = stringValue("email").orEmpty(),
+        photoUrl = stringValue("photoURL").orEmpty(),
+        role = MemberRole.from(stringValue("role")),
+        active = booleanValue("active") != false,
+        createdAt = numberValue("createdAt")?.toLong() ?: 0,
         // Primary-owner identity is resolved from teamSettings/access at sign-in.
         // It is intentionally not derived from or stored against a public email.
         primaryOwner = false,
@@ -185,83 +189,91 @@ internal fun DocumentSnapshot.toUserProfile(): UserProfile? {
 }
 
 internal fun DocumentSnapshot.toProduct() = Product(
-    id = getString("id") ?: getString("key") ?: id,
+    id = stringValue("id") ?: stringValue("key") ?: id,
     documentId = id,
-    model = getString("model").orEmpty(),
-    name = getString("name").orEmpty(),
-    group = getString("group").orEmpty(),
-    categoryId = getString("categoryId").orEmpty(),
-    specification = getString("spec").orEmpty(),
-    unit = getString("unit") ?: "each",
-    gst = getDouble("gst") ?: getLong("gst")?.toDouble() ?: 18.0,
-    dealer = getDouble("dealer") ?: getLong("dealer")?.toDouble(),
-    contractor = getDouble("contractor") ?: getLong("contractor")?.toDouble(),
-    client = getDouble("client") ?: getLong("client")?.toDouble(),
-    active = getBoolean("active") != false,
-    seedModel = getString("seedModel").orEmpty(),
+    model = stringValue("model").orEmpty(),
+    name = stringValue("name").orEmpty(),
+    group = stringValue("group").orEmpty(),
+    categoryId = stringValue("categoryId").orEmpty(),
+    specification = stringValue("spec").orEmpty(),
+    unit = stringValue("unit") ?: "each",
+    gst = numberValue("gst")?.toDouble() ?: 18.0,
+    dealer = numberValue("dealer")?.toDouble(),
+    contractor = numberValue("contractor")?.toDouble(),
+    client = numberValue("client")?.toDouble(),
+    active = booleanValue("active") != false,
+    seedModel = stringValue("seedModel").orEmpty(),
 )
 
 internal fun DocumentSnapshot.toStockItem() = StockItem(
-    key = getString("key") ?: id,
-    quantity = getDouble("q") ?: getLong("q")?.toDouble() ?: 0.0,
-    reorderLevel = getDouble("min") ?: getLong("min")?.toDouble() ?: 0.0,
-    updatedAt = getLong("t") ?: 0,
-    updatedBy = getString("by").orEmpty(),
-    updatedByUid = getString("byUid").orEmpty(),
-    note = getString("stockNote").orEmpty(),
-    lastAction = getString("lastAction").orEmpty(),
-    group = getString("group").orEmpty(),
-    model = getString("model").orEmpty(),
-    pinned = getBoolean("pinned") == true,
-    pinOrder = getDouble("pinOrder") ?: getLong("pinOrder")?.toDouble() ?: 0.0,
-    manual = getBoolean("manual") == true,
-    manualName = getString("manualName").orEmpty(),
-    manualModel = getString("manualModel").orEmpty(),
-    categoryId = getString("categoryId").orEmpty(),
-    unit = getString("unit") ?: "each",
+    key = stringValue("key") ?: id,
+    quantity = numberValue("q")?.toDouble() ?: 0.0,
+    reorderLevel = numberValue("min")?.toDouble() ?: 0.0,
+    updatedAt = numberValue("t")?.toLong() ?: 0,
+    updatedBy = stringValue("by").orEmpty(),
+    updatedByUid = stringValue("byUid").orEmpty(),
+    note = stringValue("stockNote").orEmpty(),
+    lastAction = stringValue("lastAction").orEmpty(),
+    group = stringValue("group").orEmpty(),
+    model = stringValue("model").orEmpty(),
+    pinned = booleanValue("pinned") == true,
+    pinOrder = numberValue("pinOrder")?.toDouble() ?: 0.0,
+    manual = booleanValue("manual") == true,
+    manualName = stringValue("manualName").orEmpty(),
+    manualModel = stringValue("manualModel").orEmpty(),
+    categoryId = stringValue("categoryId").orEmpty(),
+    unit = stringValue("unit") ?: "each",
 )
 
 internal fun DocumentSnapshot.toStockMovement() = StockMovement(
-    id = getString("id") ?: id,
-    key = getString("key").orEmpty(),
-    action = getString("action").orEmpty(),
-    previous = getDouble("prev") ?: getLong("prev")?.toDouble() ?: 0.0,
-    next = getDouble("next") ?: getLong("next")?.toDouble() ?: 0.0,
-    quantity = getDouble("qty") ?: getLong("qty")?.toDouble() ?: 0.0,
-    note = getString("note").orEmpty(),
-    at = getLong("at") ?: 0,
-    by = getString("by").orEmpty(),
+    id = stringValue("id") ?: id,
+    key = stringValue("key").orEmpty(),
+    action = stringValue("action").orEmpty(),
+    previous = numberValue("prev")?.toDouble() ?: 0.0,
+    next = numberValue("next")?.toDouble() ?: 0.0,
+    quantity = numberValue("qty")?.toDouble() ?: 0.0,
+    note = stringValue("note").orEmpty(),
+    at = numberValue("at")?.toLong() ?: 0,
+    by = stringValue("by").orEmpty(),
 )
 
 internal fun DocumentSnapshot.toPurchaseRequirement() = PurchaseRequirement(
-    id = getString("id") ?: id,
-    name = getString("name").orEmpty(),
-    quantity = getDouble("qty") ?: getLong("qty")?.toDouble() ?: 1.0,
-    urgency = Urgency.from(getString("urgency")),
-    status = getString("status") ?: "Needed",
-    note = getString("note").orEmpty(),
-    addedBy = getString("by").orEmpty(),
-    addedByUid = getString("byUid").orEmpty(),
-    updatedAt = getLong("updated") ?: 0,
-    received = getBoolean("received") == true,
+    id = stringValue("id") ?: id,
+    name = stringValue("name").orEmpty(),
+    quantity = numberValue("qty")?.toDouble() ?: 1.0,
+    urgency = Urgency.from(stringValue("urgency")),
+    status = stringValue("status") ?: "Needed",
+    note = stringValue("note").orEmpty(),
+    addedBy = stringValue("by").orEmpty(),
+    addedByUid = stringValue("byUid").orEmpty(),
+    updatedAt = numberValue("updated")?.toLong() ?: 0,
+    received = booleanValue("received") == true,
 )
 
-internal fun DocumentSnapshot.toQuotationSummary() = QuotationSummary(
-    id = getString("id") ?: id,
-    number = getString("no").orEmpty(),
-    partyName = getString("party") ?: getString("partyName").orEmpty(),
-    total = getDouble("total") ?: getLong("total")?.toDouble() ?: 0.0,
-    createdAt = getLong("at") ?: 0,
-    status = getString("status") ?: "Saved",
-)
+internal fun DocumentSnapshot.toQuotationSummary(): QuotationSummary {
+    val partyValue = get("party")
+    val partyFromMap = (partyValue as? Map<*, *>)?.let { party ->
+        (party["company"] as? String).orEmpty().ifBlank { (party["name"] as? String).orEmpty() }
+    }.orEmpty()
+    return QuotationSummary(
+        id = stringValue("id") ?: id,
+        number = stringValue("no").orEmpty(),
+        partyName = stringValue("partyName").orEmpty().ifBlank {
+            (partyValue as? String).orEmpty().ifBlank { partyFromMap }
+        },
+        total = (get("total") as? Number)?.toDouble() ?: 0.0,
+        createdAt = (get("at") as? Number)?.toLong() ?: 0,
+        status = stringValue("status") ?: "Saved",
+    )
+}
 
 internal fun DocumentSnapshot.toCustomer() = Customer(
-    id = getString("id") ?: id,
-    name = getString("name").orEmpty(),
-    company = getString("company").orEmpty(),
-    phone = getString("phone").orEmpty(),
-    email = getString("email").orEmpty(),
-    gstin = getString("gstin").orEmpty(),
-    city = getString("city").orEmpty(),
-    address = getString("address").orEmpty(),
+    id = stringValue("id") ?: id,
+    name = stringValue("name").orEmpty(),
+    company = stringValue("company").orEmpty(),
+    phone = stringValue("phone").orEmpty(),
+    email = stringValue("email").orEmpty(),
+    gstin = stringValue("gstin").orEmpty(),
+    city = stringValue("city").orEmpty(),
+    address = stringValue("address").orEmpty(),
 )

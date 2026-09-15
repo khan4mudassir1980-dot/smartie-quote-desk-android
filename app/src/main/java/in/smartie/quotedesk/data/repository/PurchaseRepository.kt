@@ -17,7 +17,9 @@ class PurchaseRepository(
     fun observeRequirements(): Flow<List<PurchaseRequirement>> = callbackFlow {
         val registration = firestore.collection("purchase").addSnapshotListener { snapshot, error ->
             if (error != null) close(error)
-            else trySend(snapshot?.documents.orEmpty().map { it.toPurchaseRequirement() }
+            else trySend(snapshot?.documents.orEmpty().mapNotNull {
+                runCatching { it.toPurchaseRequirement() }.getOrNull()
+            }
                 .sortedByDescending { it.updatedAt })
         }
         awaitClose { registration.remove() }

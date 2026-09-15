@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Category
@@ -206,21 +207,21 @@ private fun SmartieHeader(profile: UserProfile) {
     Surface(shadowElevation = 2.dp) {
         Column {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
+                modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Image(
                     painter = painterResource(R.drawable.ic_launcher),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(42.dp).clip(RoundedCornerShape(10.dp)),
+                    modifier = Modifier.size(36.dp).clip(RoundedCornerShape(9.dp)),
                 )
-                Column(Modifier.padding(start = 12.dp).weight(1f)) {
-                    Text("SMARTIE", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
-                    Text("Quote Desk", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Column(Modifier.padding(start = 10.dp).weight(1f)) {
+                    Text("SMARTIE", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+                    Text("Quote Desk", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
                 Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(50)) {
-                    Text(profile.role.label, Modifier.padding(horizontal = 10.dp, vertical = 6.dp), style = MaterialTheme.typography.labelSmall)
+                    Text(profile.role.label, Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall)
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.primary, thickness = 3.dp)

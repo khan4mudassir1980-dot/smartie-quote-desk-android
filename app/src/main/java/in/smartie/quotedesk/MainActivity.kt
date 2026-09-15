@@ -2,6 +2,7 @@ package `in`.smartie.quotedesk
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.ViewModel
@@ -14,7 +15,10 @@ import `in`.smartie.quotedesk.ui.theme.SmartieTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.light(0xFFF8F7FC.toInt(), 0xFF101010.toInt()),
+        )
         val container = (application as SmartieApplication).container
         setContent {
             SmartieTheme {

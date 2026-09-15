@@ -17,7 +17,9 @@ class ProductRepository(
     fun observeProducts(): Flow<List<Product>> = callbackFlow {
         val registration = firestore.collection("products").addSnapshotListener { snapshot, error ->
             if (error != null) close(error)
-            else trySend(snapshot?.documents.orEmpty().map { it.toProduct() }
+            else trySend(snapshot?.documents.orEmpty().mapNotNull {
+                runCatching { it.toProduct() }.getOrNull()
+            }
                 .filter { it.active }.sortedWith(compareBy(Product::group, Product::model)))
         }
         awaitClose { registration.remove() }

@@ -21,7 +21,9 @@ class StockRepository(
     fun observeStock(): Flow<List<StockItem>> = callbackFlow {
         val registration = firestore.collection("stock").addSnapshotListener { snapshot, error ->
             if (error != null) close(error)
-            else trySend(snapshot?.documents.orEmpty().map { it.toStockItem() }
+            else trySend(snapshot?.documents.orEmpty().mapNotNull {
+                runCatching { it.toStockItem() }.getOrNull()
+            }
                 .sortedWith(compareByDescending<StockItem> { it.isOut }.thenByDescending { it.isLow }.thenBy { it.key }))
         }
         awaitClose { registration.remove() }
@@ -33,7 +35,9 @@ class StockRepository(
             .limit(400)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) close(error)
-                else trySend(snapshot?.documents.orEmpty().map { it.toStockMovement() })
+                else trySend(snapshot?.documents.orEmpty().mapNotNull {
+                    runCatching { it.toStockMovement() }.getOrNull()
+                })
             }
         awaitClose { registration.remove() }
     }
@@ -45,7 +49,7 @@ class StockRepository(
         val moveRef = firestore.collection("stockMoves").document()
         firestore.runTransaction { transaction ->
             val existing = transaction.get(stockRef)
-            val previous = existing.getDouble("q") ?: existing.getLong("q")?.toDouble() ?: item.quantity
+            val previous = (existing.get("q") as? Number)?.toDouble() ?: item.quantity
             val next = max(0.0, previous + delta)
             val at = System.currentTimeMillis()
             val action = if (delta > 0) "in" else "out"
@@ -82,7 +86,7 @@ class StockRepository(
         val moveRef = firestore.collection("stockMoves").document()
         firestore.runTransaction { transaction ->
             val existing = transaction.get(stockRef)
-            val previous = existing.getDouble("q") ?: existing.getLong("q")?.toDouble() ?: item.quantity
+            val previous = (existing.get("q") as? Number)?.toDouble() ?: item.quantity
             val at = System.currentTimeMillis()
             val action = if (previous != quantity) "set" else "min"
             transaction.set(stockRef, mapOf(

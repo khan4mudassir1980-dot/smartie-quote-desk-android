@@ -21,7 +21,9 @@ class QuotationRepository(
     fun observeQuotations(): Flow<List<QuotationSummary>> = callbackFlow {
         val registration = firestore.collection("quotations").addSnapshotListener { snapshot, error ->
             if (error != null) close(error)
-            else trySend(snapshot?.documents.orEmpty().map { it.toQuotationSummary() }.sortedByDescending { it.createdAt })
+            else trySend(snapshot?.documents.orEmpty().mapNotNull {
+                runCatching { it.toQuotationSummary() }.getOrNull()
+            }.sortedByDescending { it.createdAt })
         }
         awaitClose { registration.remove() }
     }
@@ -29,7 +31,9 @@ class QuotationRepository(
     fun observeCustomers(): Flow<List<Customer>> = callbackFlow {
         val registration = firestore.collection("customers").addSnapshotListener { snapshot, error ->
             if (error != null) close(error)
-            else trySend(snapshot?.documents.orEmpty().map { it.toCustomer() }.sortedBy { it.name.lowercase() })
+            else trySend(snapshot?.documents.orEmpty().mapNotNull {
+                runCatching { it.toCustomer() }.getOrNull()
+            }.sortedBy { it.name.lowercase() })
         }
         awaitClose { registration.remove() }
     }
@@ -73,10 +77,10 @@ class QuotationRepository(
         firestore.runTransaction { transaction ->
             val numbering = transaction.get(numberRef)
             require(numbering.exists()) { "Quotation numbering is not configured. Open the web app Settings once and save shared numbering." }
-            val next = numbering.getLong("next") ?: 1L
-            val prefix = numbering.getString("prefix").orEmpty().ifBlank { "SIE/QD" }
-            val fy = numbering.getString("fy").orEmpty()
-            val pad = (numbering.getLong("pad") ?: 3L).toInt().coerceIn(1, 8)
+            val next = (numbering.get("next") as? Number)?.toLong() ?: 1L
+            val prefix = (numbering.get("prefix") as? String).orEmpty().ifBlank { "SIE/QD" }
+            val fy = (numbering.get("fy") as? String).orEmpty()
+            val pad = ((numbering.get("pad") as? Number)?.toInt() ?: 3).coerceIn(1, 8)
             issuedNumber = listOf(prefix, fy, next.toString().padStart(pad, '0')).filter { it.isNotBlank() }.joinToString("/")
             val customerMap = mapOf(
                 "id" to savedCustomer.id, "name" to savedCustomer.name.trim(), "company" to savedCustomer.company.trim(),

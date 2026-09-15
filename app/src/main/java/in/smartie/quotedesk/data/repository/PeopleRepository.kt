@@ -17,7 +17,9 @@ class PeopleRepository(
     fun observePeople(): Flow<List<UserProfile>> = callbackFlow {
         val registration = firestore.collection("users").addSnapshotListener { snapshot, error ->
             if (error != null) close(error)
-            else trySend(snapshot?.documents.orEmpty().mapNotNull { it.toUserProfile() })
+            else trySend(snapshot?.documents.orEmpty().mapNotNull {
+                runCatching { it.toUserProfile() }.getOrNull()
+            })
         }
         awaitClose { registration.remove() }
     }
@@ -49,7 +51,7 @@ class PeopleRepository(
         val access = firestore.collection("teamSettings").document("access")
         val user = firestore.collection("users").document(person.uid)
         firestore.runTransaction { transaction ->
-            val occupied = transaction.get(access).getString("secondOwnerUid").orEmpty()
+            val occupied = transaction.get(access).get("secondOwnerUid") as? String ?: ""
             require(occupied.isBlank() || occupied == person.uid) { "The second Owner position is already occupied." }
             transaction.set(access, mapOf(
                 "primaryOwnerUid" to caller.uid,

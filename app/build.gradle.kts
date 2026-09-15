@@ -118,6 +118,15 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
         unitTests.isReturnDefaultValues = true
+        unitTests.all {
+            // Name every failing test in the console: the HTML report is not
+            // reachable when the build runs on CI.
+            it.testLogging {
+                events("failed", "skipped")
+                exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+                showStackTraces = false
+            }
+        }
     }
 
     packaging.resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"

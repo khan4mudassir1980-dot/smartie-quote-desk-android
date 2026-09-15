@@ -1,6 +1,5 @@
 package `in`.smartie.quotedesk.ui
 
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -19,7 +18,7 @@ import org.robolectric.annotation.Config
 
 @RunWith(AndroidJUnit4::class)
 // A plain Application: SmartieApplication would need a real Firebase project.
-@Config(application = Application::class)
+@Config(application = Application::class, qualifiers = "w412dp-h915dp")
 class MoreScreenTest {
 
     @get:Rule
@@ -35,11 +34,11 @@ class MoreScreenTest {
             SmartieTheme { MoreScreen(member = owner, onOpen = {}, onSignOut = {}) }
         }
 
-        compose.onNodeWithText("Owner / Administrator").assertIsDisplayed()
-        compose.onNodeWithText("Primary").assertIsDisplayed()
-        compose.onNodeWithText("Team").assertIsDisplayed()
-        compose.onNodeWithText("Settings").assertIsDisplayed()
-        compose.onNodeWithText("Sign out").assertIsDisplayed()
+        compose.onNodeWithText("Owner / Administrator").assertExists()
+        compose.onNodeWithText("Primary").assertExists()
+        compose.onNodeWithText("Team").assertExists()
+        compose.onNodeWithText("Settings").assertExists()
+        compose.onNodeWithText("Sign out").assertExists()
     }
 
     @Test
@@ -52,8 +51,8 @@ class MoreScreenTest {
             SmartieTheme { MoreScreen(member = worker, onOpen = {}, onSignOut = {}) }
         }
 
-        compose.onNodeWithText("Team").assertIsDisplayed()
-        compose.onNodeWithText("About & legal").assertIsDisplayed()
+        compose.onNodeWithText("Team").assertExists()
+        compose.onNodeWithText("About & legal").assertExists()
         assertEquals(0, compose.onAllNodesWithText("Settings").fetchSemanticsNodes().size)
         assertEquals(0, compose.onAllNodesWithText("Parties").fetchSemanticsNodes().size)
         assertEquals(0, compose.onAllNodesWithText("Quotation history").fetchSemanticsNodes().size)

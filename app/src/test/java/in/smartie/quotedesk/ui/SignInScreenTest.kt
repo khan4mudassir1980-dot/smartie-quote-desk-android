@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import android.app.Application
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import `in`.smartie.quotedesk.ui.screens.SignInScreen
 import `in`.smartie.quotedesk.ui.theme.SmartieTheme
@@ -12,8 +13,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 
 @RunWith(AndroidJUnit4::class)
+// A plain Application: SmartieApplication would need a real Firebase project.
+@Config(application = Application::class)
 class SignInScreenTest {
 
     @get:Rule

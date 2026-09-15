@@ -6,12 +6,10 @@ import com.google.firebase.firestore.FirebaseFirestore
 import `in`.smartie.quotedesk.core.AppContainer
 
 class SmartieApplication : Application() {
-    lateinit var container: AppContainer
-        private set
 
-    override fun onCreate() {
-        super.onCreate()
-        container = AppContainer(
+    /** Built on first use, so Firebase is not touched during onCreate. */
+    val container: AppContainer by lazy {
+        AppContainer(
             context = this,
             auth = FirebaseAuth.getInstance(),
             firestore = FirebaseFirestore.getInstance(),

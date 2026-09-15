@@ -253,59 +253,62 @@ private fun PersonRow(
     val canRemove = Permissions.canRemove(viewer, person)
     val canRevoke = Permissions.canEmergencyRevoke(viewer, person)
 
-    ListRow(
-        title = person.name.ifBlank { person.email },
-        secondary = person.email.takeIf { it.isNotBlank() },
-        background = if (person.active) SmartieColors.Panel else SmartieColors.Panel2,
-        tags = {
-            Tag(person.roleLabel, if (person.isOwner) TagTone.PURPLE else TagTone.NEUTRAL)
-            person.ownerSubLabel?.let { Tag(it, TagTone.PURPLE) }
-            if (!person.active) Tag("Switched off", TagTone.WARN)
-        },
-        trailing = {},
-    )
+    // One lazy item emits one node: the row and its controls share a Column.
+    Column(Modifier.fillMaxWidth()) {
+        ListRow(
+            title = person.name.ifBlank { person.email },
+            secondary = person.email.takeIf { it.isNotBlank() },
+            background = if (person.active) SmartieColors.Panel else SmartieColors.Panel2,
+            tags = {
+                Tag(person.roleLabel, if (person.isOwner) TagTone.PURPLE else TagTone.NEUTRAL)
+                person.ownerSubLabel?.let { Tag(it, TagTone.PURPLE) }
+                if (!person.active) Tag("Switched off", TagTone.WARN)
+            },
+            trailing = {},
+        )
 
-    if (options.isNotEmpty() || canToggle || canRemove || canRevoke) {
-        Row(
-            Modifier.fillMaxWidth().padding(start = 4.dp, bottom = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (options.isNotEmpty()) {
-                RoleMenu(
-                    person = person,
-                    options = options,
-                    onSelect = { role ->
-                        when {
-                            role == Role.OWNER -> onPending(PendingAction.Appoint(person))
-                            person.ownerRank == OwnerRank.ADDITIONAL ->
-                                onPending(PendingAction.Demote(person, role))
-                            else -> viewModel.changeRole(person, role)
-                        }
-                    },
-                )
-            }
-            if (canToggle) {
-                SmartieGhostButton(
-                    text = if (person.active) "Switch off" else "Switch on",
-                    onClick = {
-                        if (person.active) onPending(PendingAction.SwitchOff(person))
-                        else viewModel.setActive(person, true)
-                    },
-                )
-            }
-            if (canRevoke) {
-                SmartieGhostButton(
-                    text = "Emergency revoke",
-                    danger = true,
-                    onClick = { onPending(PendingAction.Revoke(person)) },
-                )
-            } else if (canRemove) {
-                SmartieGhostButton(
-                    text = "Remove",
-                    danger = true,
-                    onClick = { onPending(PendingAction.Remove(person)) },
-                )
+        if (options.isNotEmpty() || canToggle || canRemove || canRevoke) {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 4.dp, top = 6.dp, bottom = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (options.isNotEmpty()) {
+                    RoleMenu(
+                        person = person,
+                        options = options,
+                        onSelect = { role ->
+                            when {
+                                role == Role.OWNER -> onPending(PendingAction.Appoint(person))
+                                person.ownerRank == OwnerRank.ADDITIONAL ->
+                                    onPending(PendingAction.Demote(person, role))
+                                else -> viewModel.changeRole(person, role)
+                            }
+                        },
+                    )
+                }
+                if (canToggle) {
+                    SmartieGhostButton(
+                        text = if (person.active) "Switch off" else "Switch on",
+                        onClick = {
+                            if (person.active) onPending(PendingAction.SwitchOff(person))
+                            else viewModel.setActive(person, true)
+                        },
+                    )
+                }
+                if (canRevoke) {
+                    SmartieGhostButton(
+                        text = "Emergency revoke",
+                        danger = true,
+                        onClick = { onPending(PendingAction.Revoke(person)) },
+                    )
+                } else if (canRemove) {
+                    SmartieGhostButton(
+                        text = "Remove",
+                        danger = true,
+                        onClick = { onPending(PendingAction.Remove(person)) },
+                    )
+                }
             }
         }
     }

@@ -1,17 +1,16 @@
 package `in`.smartie.quotedesk.ui
 
 import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Category
@@ -19,10 +18,7 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.ShoppingCart
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -39,14 +35,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -54,50 +47,190 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import `in`.smartie.quotedesk.BuildConfig
 import `in`.smartie.quotedesk.R
 import `in`.smartie.quotedesk.core.AppContainer
-import `in`.smartie.quotedesk.data.model.MemberRole
-import `in`.smartie.quotedesk.data.model.UserProfile
-import `in`.smartie.quotedesk.ui.screens.MoreScreen
+import `in`.smartie.quotedesk.domain.Member
+import `in`.smartie.quotedesk.domain.Permissions
+import `in`.smartie.quotedesk.ui.components.ConnectivityBanner
+import `in`.smartie.quotedesk.ui.components.SmartieGhostButton
+import `in`.smartie.quotedesk.ui.components.SmartieTopBar
+import `in`.smartie.quotedesk.ui.more.AboutScreen
+import `in`.smartie.quotedesk.ui.more.MoreMenu
+import `in`.smartie.quotedesk.ui.more.MoreScreen
+import `in`.smartie.quotedesk.ui.more.PlaceholderScreen
 import `in`.smartie.quotedesk.ui.screens.ProductsScreen
 import `in`.smartie.quotedesk.ui.screens.PurchaseScreen
 import `in`.smartie.quotedesk.ui.screens.QuotationsScreen
 import `in`.smartie.quotedesk.ui.screens.SignInScreen
 import `in`.smartie.quotedesk.ui.screens.StockScreen
+import `in`.smartie.quotedesk.ui.team.TeamScreen
+import `in`.smartie.quotedesk.ui.team.TeamViewModel
+import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
+import `in`.smartie.quotedesk.ui.theme.SmartieColors
 
 @Composable
 fun SmartieApp(container: AppContainer, sessionViewModel: SessionViewModel) {
     val session by sessionViewModel.session.collectAsStateWithLifecycle()
     val signIn by sessionViewModel.signIn.collectAsStateWithLifecycle()
-    val activity = LocalContext.current as Activity
+    val activity = LocalContext.current.findActivity()
 
     when (val current = session) {
         SessionState.Loading -> LoadingScreen()
+
         SessionState.SignedOut -> SignInScreen(
-            busy = signIn.busy,
-            error = signIn.error,
-            onGoogleSignIn = { sessionViewModel.signIn(activity) },
+            state = signIn,
+            onGoogleSignIn = { activity?.let(sessionViewModel::signInWithGoogle) },
+            onEmailSignIn = sessionViewModel::signInWithEmail,
+            onPasswordReset = sessionViewModel::sendPasswordReset,
         )
-        is SessionState.Blocked -> BlockedScreen(
-            profile = current.profile,
-            onSignOut = { sessionViewModel.signOut(activity) },
+
+        is SessionState.Blocked -> MessageScreen(
+            title = "Access switched off",
+            message = "${current.member.name}, that account has been switched off. " +
+                "Ask an Owner or Administrator to switch it on again.",
+            onSignOut = { activity?.let(sessionViewModel::signOut) },
         )
-        is SessionState.Ready -> {
-            val data: AppDataViewModel = viewModel(
-                key = "app-data-${current.profile.uid}",
-                factory = object : ViewModelProvider.Factory {
-                    @Suppress("UNCHECKED_CAST")
-                    override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                        AppDataViewModel(container, current.profile) as T
+
+        is SessionState.Failed -> MessageScreen(
+            title = "Something went wrong",
+            message = current.message,
+            onSignOut = { activity?.let(sessionViewModel::signOut) },
+        )
+
+        is SessionState.Ready -> SignedInShell(
+            member = current.member,
+            container = container,
+            onSignOut = { activity?.let(sessionViewModel::signOut) },
+        )
+    }
+}
+
+private data class BottomDestination(
+    val route: String,
+    val label: String,
+    val icon: ImageVector,
+    val isVisible: (Member) -> Boolean,
+)
+
+private val bottomDestinations = listOf(
+    BottomDestination("products", "Products", Icons.Outlined.Category, Permissions::canViewProducts),
+    BottomDestination("stock", "Our Stock", Icons.Outlined.Inventory2, Permissions::canViewStock),
+    BottomDestination("purchase", "Purchase", Icons.Outlined.ShoppingCart, Permissions::canViewPurchase),
+    BottomDestination("quotations", "Quotation", Icons.Outlined.Description, Permissions::canQuote),
+    BottomDestination("more", "More", Icons.Outlined.Menu) { true },
+)
+
+@Composable
+private fun SignedInShell(member: Member, container: AppContainer, onSignOut: () -> Unit) {
+    val navController = rememberNavController()
+    val data: AppDataViewModel = viewModel(
+        key = "app-data-${member.uid}",
+        factory = AppDataViewModel.Factory(container, member),
+    )
+    val snackbar = remember { SnackbarHostState() }
+    val online by data.online.collectAsStateWithLifecycle()
+    val visible = bottomDestinations.filter { it.isVisible(member) }
+    val startRoute = if (Permissions.canViewProducts(member)) "products" else "stock"
+    val entry by navController.currentBackStackEntryAsState()
+    val route = entry?.destination?.route
+    val dimens = LocalSmartieDimens.current
+    val context = LocalContext.current
+
+    LaunchedEffect(data) { data.messages.collect { snackbar.showSnackbar(it) } }
+
+    Scaffold(
+        topBar = {
+            SmartieTopBar(
+                title = titleFor(route),
+                subtitle = if (BuildConfig.IS_STAGING) "Staging" else null,
+                onBack = if (route?.startsWith("more/") == true) {
+                    { navController.popBackStack() }
+                } else {
+                    null
                 },
             )
-            SignedInShell(
-                profile = current.profile,
-                data = data,
-                onSignOut = { sessionViewModel.signOut(activity) },
-            )
+        },
+        snackbarHost = { SnackbarHost(snackbar) },
+        bottomBar = {
+            NavigationBar(
+                containerColor = SmartieColors.Panel,
+                modifier = Modifier.height(dimens.bottomNavHeight + 24.dp),
+            ) {
+                visible.forEach { destination ->
+                    NavigationBarItem(
+                        selected = route == destination.route,
+                        onClick = {
+                            navController.navigate(destination.route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        icon = { Icon(destination.icon, contentDescription = destination.label) },
+                        label = {
+                            Text(
+                                destination.label,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                            )
+                        },
+                    )
+                }
+            }
+        },
+    ) { padding ->
+        Column(Modifier.padding(padding)) {
+            ConnectivityBanner(online = online)
+            NavHost(navController = navController, startDestination = startRoute) {
+                composable("products") { ProductsScreen(data) }
+                composable("stock") { StockScreen(data) }
+                composable("purchase") { PurchaseScreen(data) }
+                composable("quotations") { QuotationsScreen(data) }
+                composable("more") {
+                    MoreScreen(
+                        member = member,
+                        onOpen = { navController.navigate(it) },
+                        onSignOut = onSignOut,
+                    )
+                }
+                composable("more/team") {
+                    val teamViewModel: TeamViewModel = viewModel(
+                        key = "team-${member.uid}",
+                        factory = TeamViewModel.Factory(container, member),
+                    )
+                    LaunchedEffect(teamViewModel) {
+                        teamViewModel.messages.collect { snackbar.showSnackbar(it) }
+                    }
+                    TeamScreen(
+                        viewer = member,
+                        viewModel = teamViewModel,
+                        onShareInvite = { context.shareInvite() },
+                    )
+                }
+                composable("more/about") { AboutScreen() }
+                MoreMenu.destinations
+                    .filter { it.phase != null }
+                    .forEach { destination ->
+                        composable(destination.route) {
+                            PlaceholderScreen(destination.label, destination.phase.orEmpty())
+                        }
+                    }
+            }
         }
     }
+}
+
+private fun titleFor(route: String?): String = when (route) {
+    "products" -> "Products"
+    "stock" -> "Our Stock"
+    "purchase" -> "Purchase"
+    "quotations" -> "Quotation"
+    "more" -> "More"
+    null -> "SMARTIE Quote Desk"
+    else -> MoreMenu.destinations.firstOrNull { it.route == route }?.label ?: "SMARTIE Quote Desk"
 }
 
 @Composable
@@ -112,119 +245,54 @@ private fun LoadingScreen() {
             contentDescription = null,
             modifier = Modifier.size(72.dp).clip(RoundedCornerShape(18.dp)),
         )
-        Spacer(Modifier.height(20.dp))
-        CircularProgressIndicator()
-        Spacer(Modifier.height(12.dp))
-        Text("Opening SMARTIE Quote Desk…")
-    }
-}
-
-@Composable
-private fun BlockedScreen(profile: UserProfile, onSignOut: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(28.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text("Access switched off", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(12.dp))
+        CircularProgressIndicator(Modifier.padding(top = 20.dp))
         Text(
-            "${profile.name}, an Owner or Administrator needs to switch your account on.",
-            textAlign = TextAlign.Center,
+            "Opening SMARTIE Quote Desk…",
+            style = MaterialTheme.typography.bodyMedium,
+            color = SmartieColors.Steel,
+            modifier = Modifier.padding(top = 12.dp),
         )
-        Spacer(Modifier.height(24.dp))
-        Button(onClick = onSignOut) { Text("Sign out") }
     }
 }
 
-private data class Destination(
-    val route: String,
-    val label: String,
-    val icon: androidx.compose.ui.graphics.vector.ImageVector,
-    val allowedRoles: Set<MemberRole>,
-)
-
-private val destinations = listOf(
-    Destination("products", "Products", Icons.Outlined.Category, setOf(MemberRole.OWNER, MemberRole.ADMIN, MemberRole.STAFF)),
-    Destination("stock", "Our Stock", Icons.Outlined.Inventory2, MemberRole.entries.toSet()),
-    Destination("purchase", "Purchase", Icons.Outlined.ShoppingCart, MemberRole.entries.toSet()),
-    Destination("quotations", "Quotation", Icons.Outlined.Description, setOf(MemberRole.OWNER, MemberRole.ADMIN, MemberRole.STAFF)),
-    Destination("more", "More", Icons.Outlined.Menu, MemberRole.entries.toSet()),
-)
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SignedInShell(profile: UserProfile, data: AppDataViewModel, onSignOut: () -> Unit) {
-    val navController = rememberNavController()
-    val visibleDestinations = remember(profile.role) { destinations.filter { profile.role in it.allowedRoles } }
-    val firstRoute = if (profile.role == MemberRole.WORKER) "stock" else "products"
-    val currentEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = currentEntry?.destination?.route
-    val snackbar = remember { SnackbarHostState() }
-
-    LaunchedEffect(data) {
-        data.messages.collect { snackbar.showSnackbar(it) }
-    }
-
-    Scaffold(
-        topBar = { SmartieHeader(profile) },
-        snackbarHost = { SnackbarHost(snackbar) },
-        bottomBar = {
-            NavigationBar {
-                visibleDestinations.forEach { destination ->
-                    NavigationBarItem(
-                        selected = currentRoute == destination.route,
-                        onClick = {
-                            navController.navigate(destination.route) {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(destination.icon, contentDescription = destination.label) },
-                        label = { Text(destination.label, maxLines = 1) },
-                    )
-                }
-            }
-        },
-    ) { padding ->
-        NavHost(
-            navController = navController,
-            startDestination = firstRoute,
-            modifier = Modifier.padding(padding),
+private fun MessageScreen(title: String, message: String, onSignOut: () -> Unit) {
+    Surface(color = SmartieColors.Paper) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
-            composable("products") { ProductsScreen(data) }
-            composable("stock") { StockScreen(data) }
-            composable("purchase") { PurchaseScreen(data) }
-            composable("quotations") { QuotationsScreen(data) }
-            composable("more") { MoreScreen(data, onSignOut) }
+            Text(title, style = MaterialTheme.typography.titleLarge, color = SmartieColors.Ink)
+            Text(
+                message,
+                style = MaterialTheme.typography.bodyLarge,
+                color = SmartieColors.Ink2,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 10.dp, bottom = 20.dp),
+            )
+            SmartieGhostButton(text = "Sign out", onClick = onSignOut)
         }
     }
 }
 
-@Composable
-private fun SmartieHeader(profile: UserProfile) {
-    Surface(shadowElevation = 2.dp) {
-        Column {
-            Row(
-                modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_launcher),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(36.dp).clip(RoundedCornerShape(9.dp)),
-                )
-                Column(Modifier.padding(start = 10.dp).weight(1f)) {
-                    Text("SMARTIE", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
-                    Text("Quote Desk", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                }
-                Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(50)) {
-                    Text(profile.role.label, Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall)
-                }
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.primary, thickness = 3.dp)
-        }
+private fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
+/** Share sheet for the invite; the link is a build setting, not a secret. */
+private fun Context.shareInvite() {
+    val link = BuildConfig.APP_SHARE_URL
+    val text = buildString {
+        append("Join SMARTIE Quote Desk. Open the app and choose Continue with Google; ")
+        append("you enter as a Worker and an Owner or Administrator sets your role.")
+        if (link.isNotBlank()) append("\n\n").append(link)
     }
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    runCatching { startActivity(Intent.createChooser(intent, "Share app link")) }
 }

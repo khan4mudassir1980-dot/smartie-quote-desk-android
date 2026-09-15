@@ -36,7 +36,7 @@ class MainActivity : ComponentActivity() {
                 val sessionViewModel: SessionViewModel = viewModel(factory = object : ViewModelProvider.Factory {
                     @Suppress("UNCHECKED_CAST")
                     override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                        SessionViewModel(container.authRepository) as T
+                        SessionViewModel(container.authRepository, container.errorReporter) as T
                 })
                 SmartieApp(container = container, sessionViewModel = sessionViewModel)
             }

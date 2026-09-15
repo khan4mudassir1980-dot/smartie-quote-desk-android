@@ -30,7 +30,9 @@ data class Member(
     val name: String = "",
     val role: Role = Role.WORKER,
     val active: Boolean = true,
-    val ownerRank: OwnerRank = OwnerRank.NONE
+    val ownerRank: OwnerRank = OwnerRank.NONE,
+    /** Used to pick a winner when one person has duplicate profiles. */
+    val createdAt: Long = 0L
 ) {
     val normalisedEmail: String get() = Keys.normaliseEmail(email)
 
@@ -74,6 +76,7 @@ object TeamRoles {
         name = member.displayName,
         role = Role.from(member.roleWireValue),
         active = member.active,
+        createdAt = member.createdAt,
         ownerRank = rankOf(member.uid, member.email, Role.from(member.roleWireValue), access, primaryOwnerEmailFallback)
     )
 

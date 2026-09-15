@@ -30,7 +30,7 @@ jobs:
       # Firebase file registers the release package alone, so a production
       # debug build has no matching client.
       - name: Unit tests
-        run: ./gradlew testStagingDebugUnitTest --stacktrace
+        run: ./gradlew testStagingDebugUnitTest
       - name: Lint
         run: ./gradlew lintStagingDebug --stacktrace
       - name: Upload reports

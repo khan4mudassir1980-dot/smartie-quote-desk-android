@@ -30,7 +30,11 @@ object FriendlyMessages {
                 "Too many attempts. Wait a few minutes and try again."
             normalised.contains("network") || normalised.contains("unavailable") ->
                 "No connection. Check the internet and try again."
-            normalised.contains("cancel") -> "Sign-in was cancelled."
+            // Firebase reports a cancelled Google sign-in as
+            // popup-closed-by-user; Credential Manager says "cancelled".
+            normalised.contains("cancel") ||
+                normalised.contains("popup-closed") ||
+                normalised.contains("popup-blocked") -> "Sign-in was cancelled."
             normalised.contains("account-exists-with-different-credential") ->
                 "This email already signs in with a password. Sign in with the password once, " +
                     "then Google can be linked to the same account."

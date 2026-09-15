@@ -25,7 +25,7 @@ class MoreScreenTest {
     val compose = createComposeRule()
 
     @Test
-    fun `the primary owner is labelled and sees every entry`() {
+    fun `the primary owner is labelled and the menu starts with Parties`() {
         val owner = Member(
             uid = "uid_owner", email = "owner@example.invalid", name = "Primary Owner",
             role = Role.OWNER, ownerRank = OwnerRank.PRIMARY,
@@ -34,11 +34,14 @@ class MoreScreenTest {
             SmartieTheme { MoreScreen(member = owner, onOpen = {}, onSignOut = {}) }
         }
 
+        compose.onNodeWithText("Primary Owner").assertExists()
         compose.onNodeWithText("Owner / Administrator").assertExists()
         compose.onNodeWithText("Primary").assertExists()
-        compose.onNodeWithText("Team").assertExists()
-        compose.onNodeWithText("Settings").assertExists()
         compose.onNodeWithText("Sign out").assertExists()
+        // Entries further down the list are not composed until they scroll
+        // into view; which roles see which entry is covered by MoreMenuTest.
+        compose.onNodeWithText("Parties").assertExists()
+        compose.onNodeWithText("Products & Categories").assertExists()
     }
 
     @Test

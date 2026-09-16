@@ -1,0 +1,14 @@
+[
+  {
+    "id": "productPins",
+    "fields": {
+      "keys": [
+        "gateMotors|SIE1000",
+        "boom|BB6",
+        "gone|MISSING"
+      ],
+      "updatedAt": 1715000000000,
+      "updatedBy": "Mudassir Khan"
+    }
+  }
+]

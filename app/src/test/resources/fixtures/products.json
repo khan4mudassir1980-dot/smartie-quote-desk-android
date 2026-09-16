@@ -79,5 +79,59 @@
       "dealer": 1000,
       "active": false
     }
+  },
+  {
+    "id": "boom|BB6",
+    "fields": {
+      "id": "boom|BB6",
+      "key": "boom|BB6",
+      "group": "boom",
+      "seedModel": "BB6",
+      "model": "BB6",
+      "name": "Boom barrier 6 m (legacy document)",
+      "gst": 18,
+      "dealer": 40000,
+      "client": 52000,
+      "active": true,
+      "categoryId": "cat-boom",
+      "updated": 1720000000000
+    }
+  },
+  {
+    "id": "boom__BB6",
+    "fields": {
+      "id": "boom|BB6",
+      "key": "boom|BB6",
+      "group": "boom",
+      "seedModel": "BB6",
+      "model": "BB6",
+      "name": "Boom barrier 6 m",
+      "unit": "each",
+      "gst": 18,
+      "dealer": 41000,
+      "client": 53000,
+      "active": true,
+      "categoryId": "cat-boom",
+      "kg": 0,
+      "schemaVersion": 2,
+      "updated": 1715000000000,
+      "by": "Migration"
+    }
+  },
+  {
+    "id": "shutterMotors__RS500",
+    "fields": {
+      "id": "shutterMotors|RS500",
+      "group": "shutterMotors",
+      "model": "RS500",
+      "name": "Shutter motor 500 kg",
+      "unit": "each",
+      "gst": 18,
+      "dealer": 12000,
+      "client": 16000,
+      "active": 1,
+      "kg": 500,
+      "categoryId": "cat-shutter"
+    }
   }
 ]

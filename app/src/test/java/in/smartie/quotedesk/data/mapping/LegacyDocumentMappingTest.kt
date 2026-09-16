@@ -54,6 +54,23 @@ class LegacyDocumentMappingTest {
     }
 
     @Test
+    fun `a document written before seedModel existed falls back to its key`() {
+        val shutter = Fixtures.loadOne("products.json", "shutterMotors__RS500").toProductRecord()
+        assertEquals("shutterMotors", shutter.group)
+        assertEquals("RS500", shutter.seedModel)
+        assertEquals("shutterMotors|RS500", shutter.key)
+        // `active: 1` is the PWA's older boolean.
+        assertTrue(shutter.active)
+        assertEquals(500.0, shutter.kg!!, 0.0)
+    }
+
+    @Test
+    fun `the pinned shelf reads as a list of logical keys`() {
+        val pins = Fixtures.loadOne("product_pins.json", "productPins")["keys"].asStringList()
+        assertEquals(listOf("gateMotors|SIE1000", "boom|BB6", "gone|MISSING"), pins)
+    }
+
+    @Test
     fun `a product with no price shows as not set rather than zero`() {
         val glass = Fixtures.loadOne("products.json", "glass__TG12").toProductRecord()
         assertNull(glass.dealer)

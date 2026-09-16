@@ -24,6 +24,13 @@ test.beforeEach(async () => {
       byUid: UIDS.worker, t: Date.now(), updated: Date.now(), rev: 1,
     });
     await db.collection('customers').doc('c_1').set({ id: 'c_1', name: 'Sunrise Constructions' });
+    await db.collection('teamSettings').doc('categories').set({
+      map: { 'cat-shutter': { id: 'cat-shutter', name: 'Shutter Motors', order: 30 } },
+      updated: Date.now(), by: UIDS.admin,
+    });
+    await db.collection('teamSettings').doc('productPins').set({
+      keys: ['gateMotors|SIE1000'], updatedAt: Date.now(), updatedBy: 'Administrator',
+    });
   });
 });
 
@@ -167,4 +174,57 @@ test('a signed-out visitor reads nothing', async () => {
   await assertFails(db.collection('stock').get());
   await assertFails(db.collection('users').get());
   await assertFails(db.collection('products').get());
+});
+
+test('the catalogue shelves and pins read like the products they describe', async () => {
+  for (const uid of [UIDS.primaryOwner, UIDS.admin, UIDS.staff]) {
+    const db = as(testEnv, uid);
+    await assertSucceeds(db.collection('teamSettings').doc('categories').get());
+    await assertSucceeds(db.collection('teamSettings').doc('productPins').get());
+  }
+});
+
+test('a Worker reads neither the shelves nor the pins', async () => {
+  const db = as(testEnv, UIDS.worker);
+  await assertFails(db.collection('teamSettings').doc('categories').get());
+  await assertFails(db.collection('teamSettings').doc('productPins').get());
+});
+
+test('only an administrator changes the pinned shelf', async () => {
+  const keys = ['gateMotors|SIE1000', 'glass|TG12'];
+  await assertSucceeds(
+    as(testEnv, UIDS.admin).collection('teamSettings').doc('productPins')
+      .set({ keys, updatedAt: Date.now(), updatedBy: 'Administrator' }, { merge: true }),
+  );
+  await assertFails(
+    as(testEnv, UIDS.staff).collection('teamSettings').doc('productPins')
+      .set({ keys, updatedAt: Date.now(), updatedBy: 'Staff' }, { merge: true }),
+  );
+  await assertFails(
+    as(testEnv, UIDS.worker).collection('teamSettings').doc('productPins')
+      .set({ keys, updatedAt: Date.now(), updatedBy: 'Worker' }, { merge: true }),
+  );
+});
+
+test('a sixteenth pin is refused by the rules as well as by the app', async () => {
+  const db = as(testEnv, UIDS.admin).collection('teamSettings').doc('productPins');
+  const fifteen = Array.from({ length: 15 }, (_, i) => `gate|M${i + 1}`);
+  await assertSucceeds(db.set({ keys: fifteen, updatedAt: Date.now(), updatedBy: 'Administrator' }, { merge: true }));
+  await assertFails(db.set({ keys: [...fifteen, 'gate|M16'], updatedAt: Date.now(), updatedBy: 'Administrator' }, { merge: true }));
+});
+
+test('only an administrator changes the category shelves', async () => {
+  const map = { 'cat-shutter': { id: 'cat-shutter', name: 'Shutter and rolling motors', order: 30 } };
+  await assertSucceeds(
+    as(testEnv, UIDS.admin).collection('teamSettings').doc('categories').set({ map }, { merge: true }),
+  );
+  await assertFails(
+    as(testEnv, UIDS.staff).collection('teamSettings').doc('categories').set({ map }, { merge: true }),
+  );
+});
+
+test('a signed-out visitor reads neither shelves nor pins', async () => {
+  const db = testEnv.unauthenticatedContext().firestore();
+  await assertFails(db.collection('teamSettings').doc('categories').get());
+  await assertFails(db.collection('teamSettings').doc('productPins').get());
 });

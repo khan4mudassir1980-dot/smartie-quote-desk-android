@@ -59,20 +59,24 @@ import `in`.smartie.quotedesk.ui.theme.SmartieColors
  * are N6's; turning the draft this screen fills into a numbered quotation is
  * N5's.
  */
+/** Everything the catalogue can do, so the screen itself stays stateless. */
+data class ProductsActions(
+    val onQueryChange: (String) -> Unit = {},
+    val onMinimumKgChange: (Double?) -> Unit = {},
+    val onTierChange: (RateTierV2) -> Unit = {},
+    val onToggleShelf: (String, Boolean) -> Unit = { _, _ -> },
+    val onAdd: (ProductRecord) -> Unit = {},
+    val onChangeQuantity: (String, Double) -> Unit = { _, _ -> },
+    val onTogglePin: (String) -> Unit = {},
+    val onMovePin: (String, Int) -> Unit = { _, _ -> },
+    val onClearDraft: () -> Unit = {},
+)
+
 @Composable
 fun ProductsScreen(
     data: AppDataViewModel,
     viewModel: ProductsViewModel,
 ) {
-    val member = data.member
-    if (!Permissions.canViewProducts(member)) {
-        // The tab is already hidden from a Worker and the rules refuse the
-        // read, so this is the third lock rather than the only one (T-P3).
-        EmptyState("Products and prices are not part of a Worker account.")
-        return
-    }
-
-    val dimens = LocalSmartieDimens.current
     val products by data.products.collectAsStateWithLifecycle()
     val categories by data.categories.collectAsStateWithLifecycle()
     val pinnedKeys by data.pinnedKeys.collectAsStateWithLifecycle()
@@ -86,7 +90,56 @@ fun ProductsScreen(
         Catalogue.build(products, categories, pinnedKeys, query, minimumKg)
     }
     val stockByKey = remember(stock) { stock.associateBy { it.key } }
-    val canPin = viewModel.canManagePins()
+
+    ProductsCatalogue(
+        canViewProducts = Permissions.canViewProducts(data.member),
+        view = view,
+        draft = draft,
+        query = query,
+        minimumKg = minimumKg,
+        openShelves = openShelves,
+        pinnedKeys = pinnedKeys,
+        canPin = viewModel.canManagePins(),
+        stockByKey = stockByKey,
+        actions = ProductsActions(
+            onQueryChange = viewModel::setQuery,
+            onMinimumKgChange = viewModel::setMinimumKg,
+            onTierChange = { viewModel.setTier(it, products) },
+            onToggleShelf = viewModel::toggleShelf,
+            onAdd = viewModel::add,
+            onChangeQuantity = viewModel::changeQuantity,
+            onTogglePin = { key -> viewModel.togglePin(pinnedKeys, key) },
+            onMovePin = { key, delta -> viewModel.movePin(pinnedKeys, key, delta) },
+            onClearDraft = viewModel::clearDraft,
+        ),
+    )
+}
+
+/**
+ * The catalogue itself, taking only what it draws. Stateless, so the whole page
+ * can be rendered in a test without Firebase behind it.
+ */
+@Composable
+fun ProductsCatalogue(
+    canViewProducts: Boolean,
+    view: CatalogueView,
+    draft: QuoteDraft,
+    query: String = "",
+    minimumKg: Double? = null,
+    openShelves: Set<String> = emptySet(),
+    pinnedKeys: List<String> = emptyList(),
+    canPin: Boolean = false,
+    stockByKey: Map<String, StockRecord> = emptyMap(),
+    actions: ProductsActions = ProductsActions(),
+) {
+    if (!canViewProducts) {
+        // The tab is already hidden from a Worker and the rules refuse the
+        // read, so this is the third lock rather than the only one (T-P3).
+        EmptyState("Products and prices are not part of a Worker account.")
+        return
+    }
+
+    val dimens = LocalSmartieDimens.current
     var showDraft by remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize()) {
@@ -104,7 +157,7 @@ fun ProductsScreen(
                 SmartieField(
                     label = "Search",
                     value = query,
-                    onValueChange = viewModel::setQuery,
+                    onValueChange = actions.onQueryChange,
                     placeholder = "Search all products",
                 )
             }
@@ -115,22 +168,22 @@ fun ProductsScreen(
                         options = RateTierV2.entries.toList(),
                         selected = draft.tier,
                         label = { it.label },
-                        onSelect = { viewModel.setTier(it, products) },
+                        onSelect = actions.onTierChange,
                     )
-                    LoadFilter(minimumKg = minimumKg, onSelect = viewModel::setMinimumKg)
+                    LoadFilter(minimumKg = minimumKg, onSelect = actions.onMinimumKgChange)
                 }
             }
 
             if (view.searching) {
                 if (view.results.isEmpty()) {
                     item(key = "no-results") {
-                        EmptyState("No products found. Nothing matches “$query”.")
+                        EmptyState("No products found. Nothing matches \u201c$query\u201d.")
                     }
                 } else {
                     item(key = "result-head") {
                         SectionHeader(
                             text = "${view.matchCount} product${if (view.matchCount == 1) "" else "s"} " +
-                                "matching “$query”",
+                                "matching \u201c$query\u201d",
                             trailing = if (view.matchCount > view.results.size) {
                                 "showing ${view.results.size}"
                             } else {
@@ -139,18 +192,15 @@ fun ProductsScreen(
                         )
                     }
                     items(view.results, key = { it.product.documentId }) { entry ->
-                        ProductCard(
+                        CatalogueCard(
                             entry = entry,
                             stock = stockByKey[entry.product.key],
-                            tier = draft.tier,
-                            quantity = draft.quantityOf(entry.product.key),
+                            draft = draft,
                             pinned = ProductPins.isPinned(pinnedKeys, entry.product.key),
                             canPin = canPin,
+                            reorderable = false,
                             showCategory = true,
-                            onAdd = { viewModel.add(entry.product) },
-                            onChangeQuantity = { viewModel.changeQuantity(entry.product.key, it) },
-                            onTogglePin = { viewModel.togglePin(pinnedKeys, entry.product.key) },
-                            onMovePin = null,
+                            actions = actions,
                         )
                     }
                 }
@@ -159,20 +209,21 @@ fun ProductsScreen(
 
             if (view.pinned.isNotEmpty()) {
                 item(key = "pinned-head") {
-                    SectionHeader("Pinned Products", trailing = "${view.pinned.size} / ${Catalogue.MAX_PINS}")
+                    SectionHeader(
+                        "Pinned Products",
+                        trailing = "${view.pinned.size} / ${Catalogue.MAX_PINS}",
+                    )
                 }
                 items(view.pinned, key = { "pin-" + it.product.documentId }) { entry ->
-                    ProductCard(
+                    CatalogueCard(
                         entry = entry,
                         stock = stockByKey[entry.product.key],
-                        tier = draft.tier,
-                        quantity = draft.quantityOf(entry.product.key),
+                        draft = draft,
                         pinned = true,
                         canPin = canPin,
-                        onAdd = { viewModel.add(entry.product) },
-                        onChangeQuantity = { viewModel.changeQuantity(entry.product.key, it) },
-                        onTogglePin = { viewModel.togglePin(pinnedKeys, entry.product.key) },
-                        onMovePin = { delta -> viewModel.movePin(pinnedKeys, entry.product.key, delta) },
+                        reorderable = true,
+                        showCategory = false,
+                        actions = actions,
                     )
                 }
             }
@@ -195,7 +246,7 @@ fun ProductsScreen(
                         name = shelf.name,
                         count = shelf.count,
                         expanded = expanded,
-                        onClick = { viewModel.toggleShelf(shelf.id, !expanded) },
+                        onClick = { actions.onToggleShelf(shelf.id, !expanded) },
                     )
                 }
                 if (!expanded) return@forEach
@@ -205,17 +256,15 @@ fun ProductsScreen(
                     }
                 } else {
                     items(shelf.entries, key = { it.product.documentId }) { entry ->
-                        ProductCard(
+                        CatalogueCard(
                             entry = entry,
                             stock = stockByKey[entry.product.key],
-                            tier = draft.tier,
-                            quantity = draft.quantityOf(entry.product.key),
+                            draft = draft,
                             pinned = false,
                             canPin = canPin,
-                            onAdd = { viewModel.add(entry.product) },
-                            onChangeQuantity = { viewModel.changeQuantity(entry.product.key, it) },
-                            onTogglePin = { viewModel.togglePin(pinnedKeys, entry.product.key) },
-                            onMovePin = null,
+                            reorderable = false,
+                            showCategory = false,
+                            actions = actions,
                         )
                     }
                 }
@@ -237,13 +286,44 @@ fun ProductsScreen(
         DraftSheet(
             draft = draft,
             onDismiss = { showDraft = false },
-            onChangeQuantity = viewModel::changeQuantity,
+            onChangeQuantity = actions.onChangeQuantity,
             onClear = {
-                viewModel.clearDraft()
+                actions.onClearDraft()
                 showDraft = false
             },
         )
     }
+}
+
+/** One catalogue row, wherever it appears: pinned, on a shelf or in results. */
+@Composable
+private fun CatalogueCard(
+    entry: CatalogueEntry,
+    stock: StockRecord?,
+    draft: QuoteDraft,
+    pinned: Boolean,
+    canPin: Boolean,
+    reorderable: Boolean,
+    showCategory: Boolean,
+    actions: ProductsActions,
+) {
+    ProductCard(
+        entry = entry,
+        stock = stock,
+        tier = draft.tier,
+        quantity = draft.quantityOf(entry.product.key),
+        pinned = pinned,
+        canPin = canPin,
+        showCategory = showCategory,
+        onAdd = { actions.onAdd(entry.product) },
+        onChangeQuantity = { actions.onChangeQuantity(entry.product.key, it) },
+        onTogglePin = { actions.onTogglePin(entry.product.key) },
+        onMovePin = if (reorderable) {
+            { delta -> actions.onMovePin(entry.product.key, delta) }
+        } else {
+            null
+        },
+    )
 }
 
 /** The PWA's minimum-load filter (`match` 3088), as a row of choices. */

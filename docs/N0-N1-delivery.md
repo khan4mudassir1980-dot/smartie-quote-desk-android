@@ -41,7 +41,9 @@ rules or production data.
   return as a Worker instead of sitting on Loading.
 - Role and switch-off changes reach the running app within seconds, and
   signing out tears listeners down first.
-- The full role-filtered More menu in the PWA's order. Team and About & legal
+- The full role-filtered More menu in the PWA's order, with one deliberate
+  divergence: Team is offered only to an Owner or Administrator, where the PWA
+  leaves it in a Worker's drawer. Team and About & legal
   are built; the rest name the phase that replaces them.
 - People: live, de-duplicated by email, the signed-in person excluded by uid
   and by email, active first, grouped, searchable and filterable.
@@ -107,6 +109,7 @@ Run against **staging** only. No real business data.
 | T-A10 | As Primary Owner, appoint a second Owner | Allowed once; a second attempt is refused |
 | T-A11 | As Primary Owner, emergency revoke | The person becomes a Worker with the account switched off, and an audit row appears |
 | T-A12 | Change someone's role while they use the app | Their permissions change within seconds, no crash |
+| T-A13 | Open More as a Worker, then as Staff | No Team entry; a deep link to it still meets the guard |
 | T-X4 | 360x640 and 412x915, font scale 1.0 and 1.3 | No clipped text; nothing hidden behind the bar or keyboard |
 | Stability | 50 sign-in and sign-out cycles | No crash |
 

@@ -36,9 +36,9 @@ class MoreMenuTest {
     }
 
     @Test
-    fun `a worker sees only Team and About`() {
+    fun `a worker sees only About`() {
         assertEquals(
-            listOf("Team", "About & legal"),
+            listOf("About & legal"),
             MoreMenu.visibleTo(worker).map { it.label },
         )
     }
@@ -51,6 +51,32 @@ class MoreMenuTest {
         assertTrue(labels.contains("Stock movement history"))
         assertTrue(labels.contains("Settings"))
         assertTrue(!labels.contains("Products & Categories"))
+        assertTrue(!labels.contains("Team"))
+    }
+
+    /**
+     * Team is offered to the roles that can act on it and to nobody else. A
+     * Worker used to be offered the card and met the screen's refusal; the
+     * refusal stays, but the card is no longer there to tap.
+     */
+    @Test
+    fun `only an owner or administrator is offered Team`() {
+        assertTrue(MoreMenu.visibleTo(owner).map { it.label }.contains("Team"))
+        assertTrue(MoreMenu.visibleTo(admin).map { it.label }.contains("Team"))
+        assertTrue(!MoreMenu.visibleTo(staff).map { it.label }.contains("Team"))
+        assertTrue(!MoreMenu.visibleTo(worker).map { it.label }.contains("Team"))
+    }
+
+    @Test
+    fun `an additional owner is offered Team`() {
+        val additional = Member(uid = "ao", role = Role.OWNER, ownerRank = OwnerRank.ADDITIONAL)
+        assertTrue(MoreMenu.visibleTo(additional).map { it.label }.contains("Team"))
+    }
+
+    @Test
+    fun `a switched-off administrator is offered nothing`() {
+        val suspended = Member(uid = "x", role = Role.ADMIN, active = false)
+        assertEquals(emptyList<String>(), MoreMenu.visibleTo(suspended).map { it.label })
     }
 
     @Test

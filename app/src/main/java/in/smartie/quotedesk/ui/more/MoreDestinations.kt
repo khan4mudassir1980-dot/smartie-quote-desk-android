@@ -5,7 +5,15 @@ import `in`.smartie.quotedesk.domain.Permissions
 
 /**
  * The More menu, in the PWA's order (`index.html:7754-7762`), with Sign out
- * at the end. A Worker sees only Team and About & legal, as `renderNav` does.
+ * at the end.
+ *
+ * One deliberate divergence from the PWA: `renderNav` leaves Team in the
+ * drawer for a Worker, and shows the whole menu to everyone else, Staff
+ * included. Here the entry follows [Permissions.canViewTeam] like every other
+ * entry follows its own rule, so only an Owner or Administrator is offered it.
+ * The audit's role matrix already reads that way — Staff and Worker have no
+ * team controls — and offering a card that only ever opens a refusal is worse
+ * than not offering it. Do not "restore parity" by widening this again.
  */
 data class MoreDestination(
     val route: String,
@@ -45,8 +53,8 @@ object MoreMenu {
             label = "Purchase history",
             description = "Received, cancelled and reopened requirements",
             phase = "N4",
-            // A Worker adds requirements from the Purchase tab but, as in the
-            // PWA, sees only Team and About & legal in this menu.
+            // A Worker adds requirements from the Purchase tab but does not
+            // manage them, so the history entry is not offered.
             isVisible = Permissions::canEditPurchase,
         ),
         MoreDestination(
@@ -61,7 +69,7 @@ object MoreMenu {
             label = "Team",
             description = "People, roles and team activity",
             phase = null,
-            isVisible = { it.active },
+            isVisible = Permissions::canViewTeam,
         ),
         MoreDestination(
             route = "more/settings",

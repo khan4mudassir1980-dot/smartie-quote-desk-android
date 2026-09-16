@@ -7,8 +7,22 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+/** Release signing, production only. Written by CI from a repository secret. */
 val signingProperties = Properties().apply {
     rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use(::load)
+}
+
+/**
+ * Staging signing. A separate key from the release one, so a staging build can
+ * never be signed with the identity that installs over the real app.
+ *
+ * Without this file the debug variants fall back to the throwaway keystore the
+ * Android plugin generates per machine - which is fine locally, but on an
+ * ephemeral CI runner it is regenerated on every run, so its fingerprint cannot
+ * be registered with Firebase.
+ */
+val stagingSigningProperties = Properties().apply {
+    rootProject.file("staging-keystore.properties").takeIf { it.exists() }?.inputStream()?.use(::load)
 }
 
 /**
@@ -41,6 +55,15 @@ android {
                 keyAlias = signingProperties.getProperty("keyAlias")
                 keyPassword = signingProperties.getProperty("keyPassword")
                 storeType = signingProperties.getProperty("storeType", "PKCS12")
+            }
+        }
+        if (stagingSigningProperties.isNotEmpty()) {
+            create("staging") {
+                storeFile = rootProject.file(stagingSigningProperties.getProperty("storeFile"))
+                storePassword = stagingSigningProperties.getProperty("storePassword")
+                keyAlias = stagingSigningProperties.getProperty("keyAlias")
+                keyPassword = stagingSigningProperties.getProperty("keyPassword")
+                storeType = stagingSigningProperties.getProperty("storeType", "PKCS12")
             }
         }
     }
@@ -95,6 +118,13 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            // Set on the build type rather than the staging flavour: the debug
+            // build type already carries the plugin's default debug signing
+            // config, and a build type's config wins over a flavour's, so a
+            // flavour-level assignment would be ignored.
+            if (stagingSigningProperties.isNotEmpty()) {
+                signingConfig = signingConfigs.getByName("staging")
+            }
         }
         release {
             isMinifyEnabled = true

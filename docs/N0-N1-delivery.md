@@ -51,28 +51,37 @@ rules or production data.
 
 ## Human actions still required
 
-1. **Create the staging Firebase project.** `smartie-quote-desk-staging`,
-   with Google and Email/Password sign-in enabled. Register two Android apps,
-   `in.smartie.quotedesk.staging` and `in.smartie.quotedesk.staging.debug`,
-   each with your debug signing SHA-1. Download `google-services.json` and
-   add its contents as the GitHub secret
+1. **Create the staging signing key.** Debug builds are otherwise signed with a
+   keystore the Android plugin generates per run, so on CI the SHA-1 changes
+   every build and cannot be registered with Firebase. Generate the key once
+   (command in the README's "Staging signing" section) and add
+   `ANDROID_STAGING_KEYSTORE_BASE64` and `ANDROID_STAGING_KEYSTORE_PASSWORD` as
+   repository secrets. The next CI run prints the APK's SHA-1 and SHA-256 in the
+   job summary, ready to paste into Firebase.
+2. **Create the staging Firebase project.** `smartie-quote-desk-staging`,
+   with Google and Email/Password sign-in enabled. Register the Android app
+   **`in.smartie.quotedesk.staging.debug`** — that is the package CI builds,
+   because the debug build type appends `.debug` — with the SHA-1 from step 1.
+   Download `google-services.json` and add its contents as the GitHub secret
    `FIREBASE_GOOGLE_SERVICES_JSON_STAGING`.
    Until this exists, staging builds use the placeholder and sign-in cannot
    complete; everything else still builds and tests.
-2. **Seed the owner identity in staging.** Write
+3. **Seed the owner identity in staging.** Write
    `teamSettings/access.primaryOwnerUid` with the Owner's uid, or set
    `smartie.stagingPrimaryOwnerEmail` in `gradle.properties` so the email
    fallback resolves. The app never writes `primaryOwnerUid` itself.
-3. **Deploy the v9 rules to staging** when you are ready
+4. **Deploy the v9 rules to staging** when you are ready
    (`firebase deploy --only firestore:rules` from `firestore/`, against the
    staging project). Not run from here.
-4. Optional: a read-only export of production Firestore, so the mapper suite
+5. Optional: a read-only export of production Firestore, so the mapper suite
    runs against real legacy documents as well as the synthesised ones.
 
 ## Building and installing the staging APK
 
 CI builds `app-staging-debug.apk` on every push to this branch; download it
-from the run's `smartie-native-apks` artifact. Locally:
+from the run's `smartie-native-apks` artifact. Each run's job summary reports the
+certificate that signed it, and says whether that certificate is stable enough to
+register with Firebase. Locally:
 
 ```bash
 ./gradlew assembleStagingDebug

@@ -88,6 +88,8 @@ The Actions workflow produces a functional signed release APK when these reposit
 - `ANDROID_KEYSTORE_BASE64`: base64 text of the private PKCS12 signing key
 - `ANDROID_SIGNING_PASSWORD`: password for the existing SMARTIE signing key
 - `FIREBASE_GOOGLE_SERVICES_JSON_STAGING`: the staging project's Android configuration file
+- `ANDROID_STAGING_KEYSTORE_BASE64`: base64 text of the staging PKCS12 signing key
+- `ANDROID_STAGING_KEYSTORE_PASSWORD`: password for the staging signing key
 
 The workflow runs unit tests and lint, runs the Firestore rules suite against the emulator, and
 builds a staging debug APK on every branch. A signed production release is built from `main` only.
@@ -110,3 +112,57 @@ npm run test:emulator
 ```
 
 Production keeps the V8C4 rules until the cutover described in the parity audit.
+
+## Staging signing
+
+Debug builds are signed, by default, with a keystore the Android plugin
+generates on the spot. On a throwaway CI runner that keystore is regenerated on
+every run, so its SHA-1 changes every time and cannot be registered with
+Firebase: Google sign-in would work on one APK and then fail with
+`DEVELOPER_ERROR` on the next.
+
+The staging flavour therefore uses its own signing key — separate from the
+release key, so a staging build can never carry the identity that installs over
+the real app.
+
+**Create the key once:**
+
+```bash
+keytool -genkeypair -v \
+  -keystore smartie-quote-desk-staging.p12 -storetype PKCS12 \
+  -alias smartie-quote-desk-staging \
+  -keyalg RSA -keysize 2048 -validity 10000 \
+  -dname "CN=SMARTIE Quote Desk Staging, O=Smart India Enterprises, C=IN"
+```
+
+Keep the file and its password safe and out of the repository, then add them as
+the two repository secrets listed above:
+
+```bash
+base64 -w0 smartie-quote-desk-staging.p12    # the value for ANDROID_STAGING_KEYSTORE_BASE64
+```
+
+**Register it with Firebase.** The next CI run prints the APK's certificate in
+the job summary, in the form the Firebase console expects. Add the **SHA-1** to
+the Android app `in.smartie.quotedesk.staging.debug` in the staging project —
+that is the package CI builds, because the debug build type appends `.debug`.
+SHA-256 is not needed for sign-in but is required later for Play Integrity and
+App Links. Re-download `google-services.json` afterwards and update
+`FIREBASE_GOOGLE_SERVICES_JSON_STAGING`.
+
+Until those secrets exist the build still succeeds; the job summary says plainly
+that the certificate is not stable and must not be registered.
+
+For a local build, put the same values in an untracked `staging-keystore.properties`:
+
+```properties
+storeFile=/absolute/path/to/smartie-quote-desk-staging.p12
+storePassword=YOUR_PASSWORD
+keyAlias=smartie-quote-desk-staging
+keyPassword=YOUR_PASSWORD
+storeType=PKCS12
+```
+
+Without that file, local debug builds keep using your own machine's debug key,
+exactly as before. Production signing is untouched: same key, same secrets,
+release builds from `main` only.

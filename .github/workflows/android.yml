@@ -83,29 +83,25 @@ jobs:
         run: ./scripts/configure-firebase.sh
       - name: Restore Gradle wrapper permission
         run: chmod +x gradlew
-      - name: Configure release signing
+      - name: Configure signing
         id: signing
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_SIGNING_PASSWORD: ${{ secrets.ANDROID_SIGNING_PASSWORD }}
-        run: |
-          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_SIGNING_PASSWORD" ]; then
-            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > smartie-quote-desk-release.p12
-            {
-              echo "storeFile=smartie-quote-desk-release.p12"
-              echo "storePassword=$ANDROID_SIGNING_PASSWORD"
-              echo "keyAlias=smartie-quote-desk"
-              echo "keyPassword=$ANDROID_SIGNING_PASSWORD"
-              echo "storeType=PKCS12"
-            } > keystore.properties
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-          fi
+          ANDROID_STAGING_KEYSTORE_BASE64: ${{ secrets.ANDROID_STAGING_KEYSTORE_BASE64 }}
+          ANDROID_STAGING_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_STAGING_KEYSTORE_PASSWORD }}
+        run: ./scripts/configure-signing.sh
       - name: Build staging debug APK
         run: ./gradlew assembleStagingDebug --stacktrace
+      # Reads the certificate out of the APK itself, so it reports what actually
+      # signed the artifact rather than what was meant to. Certificate
+      # fingerprints are public; no key material or password is printed.
+      - name: Report the staging APK certificate
+        env:
+          STAGING_KEY_CONFIGURED: ${{ steps.signing.outputs.staging_available }}
+        run: ./scripts/print-apk-certificate.sh app/build/outputs/apk/staging/debug/app-staging-debug.apk
       - name: Build signed production APK (main only)
-        if: github.ref == 'refs/heads/main' && steps.signing.outputs.available == 'true'
+        if: github.ref == 'refs/heads/main' && steps.signing.outputs.release_available == 'true'
         run: ./gradlew assembleProductionRelease --stacktrace
       - uses: actions/upload-artifact@v4
         with:

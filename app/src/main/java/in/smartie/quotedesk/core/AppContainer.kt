@@ -8,6 +8,7 @@ import `in`.smartie.quotedesk.data.repository.AuthRepository
 import `in`.smartie.quotedesk.data.repository.PeopleRepository
 import `in`.smartie.quotedesk.data.repository.CatalogueReadRepository
 import `in`.smartie.quotedesk.data.repository.OperationsReadRepository
+import `in`.smartie.quotedesk.data.repository.ProductPinsRepository
 
 class AppContainer(
     context: Context,
@@ -25,4 +26,5 @@ class AppContainer(
     val peopleRepository = PeopleRepository(auth, firestore)
     val catalogueRepository = CatalogueReadRepository(firestore)
     val operationsRepository = OperationsReadRepository(firestore)
+    val productPinsRepository = ProductPinsRepository(auth, firestore)
 }

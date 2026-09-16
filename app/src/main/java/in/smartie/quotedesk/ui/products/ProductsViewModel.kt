@@ -1,0 +1,191 @@
+package `in`.smartie.quotedesk.ui.products
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import `in`.smartie.quotedesk.core.AppContainer
+import `in`.smartie.quotedesk.core.toAppError
+import `in`.smartie.quotedesk.data.model.ProductRecord
+import `in`.smartie.quotedesk.data.model.RateTierV2
+import `in`.smartie.quotedesk.domain.Member
+import `in`.smartie.quotedesk.domain.Permissions
+import `in`.smartie.quotedesk.domain.PinChange
+import `in`.smartie.quotedesk.domain.ProductPins
+import `in`.smartie.quotedesk.domain.QuoteDraft
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+/**
+ * What the Products tab holds that Firestore does not: the search box, the
+ * load filter, the tier, which shelves are open, and the quotation being
+ * built.
+ *
+ * The catalogue itself is arranged by [`in`.smartie.quotedesk.domain.Catalogue]
+ * from the shared read-only flows, so this class stays small and every
+ * arrangement rule remains unit-tested without Android.
+ */
+class ProductsViewModel(
+    private val container: AppContainer,
+    private val member: Member,
+) : ViewModel() {
+
+    val messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
+
+    private val _query = MutableStateFlow("")
+    val query: StateFlow<String> = _query.asStateFlow()
+
+    private val _minimumKg = MutableStateFlow<Double?>(null)
+    val minimumKg: StateFlow<Double?> = _minimumKg.asStateFlow()
+
+    private val _draft = MutableStateFlow(QuoteDraft())
+    val draft: StateFlow<QuoteDraft> = _draft.asStateFlow()
+
+    /** The draft owns the tier, so the selector and the lines cannot disagree. */
+    val tier: RateTierV2 get() = _draft.value.tier
+
+    val openShelves: StateFlow<Set<String>> = container.devicePreferences.openShelves
+        .catch { emit(emptySet()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    init {
+        // The stored draft is read once. After that this view model owns it,
+        // so an edit is never overwritten by the store catching up.
+        viewModelScope.launch {
+            runCatching { container.devicePreferences.quoteDraft.first() }
+                .onSuccess { stored -> if (!stored.isEmpty) _draft.value = stored }
+        }
+    }
+
+    fun setQuery(value: String) {
+        _query.value = value
+    }
+
+    fun setMinimumKg(value: Double?) {
+        _minimumKg.value = value?.takeIf { it > 0.0 }
+    }
+
+    fun toggleShelf(categoryId: String, open: Boolean) {
+        viewModelScope.launch {
+            runCatching { container.devicePreferences.setShelfOpen(categoryId, open) }
+        }
+    }
+
+    /**
+     * Switches tier and reprices the lines nobody typed a rate into, saying
+     * what moved and what was kept, as the PWA does (2269-2288).
+     */
+    fun setTier(newTier: RateTierV2, products: List<ProductRecord>) {
+        val current = _draft.value
+        if (newTier == current.tier) return
+        val byKey = products.associateBy { it.key }
+        val outcome = current.withTier(newTier) { key -> byKey[key]?.priceFor(newTier) }
+        persist(outcome.draft)
+        if (outcome.repriced > 0 || outcome.kept > 0) {
+            val parts = buildList {
+                if (outcome.repriced > 0) add("${outcome.repriced} repriced")
+                if (outcome.kept > 0) add("${outcome.kept} kept at your rate")
+            }
+            emit(parts.joinToString(", ").replaceFirstChar { it.uppercase() })
+        }
+    }
+
+    fun add(product: ProductRecord) {
+        val before = _draft.value.quantityOf(product.key)
+        persist(_draft.value.add(product))
+        if (before > 0.0) emit(ALREADY_IN_QUOTE)
+    }
+
+    fun changeQuantity(key: String, delta: Double) {
+        persist(_draft.value.changeQuantity(key, delta))
+    }
+
+    fun setQuantity(key: String, quantity: Double) {
+        if (!QuoteDraft.isValidQuantity(quantity)) {
+            emit(NEGATIVE_QUANTITY)
+            return
+        }
+        persist(_draft.value.setQuantity(key, quantity))
+    }
+
+    fun clearDraft() {
+        persist(_draft.value.clear())
+    }
+
+    // --- pins --------------------------------------------------------------
+
+    fun canManagePins(): Boolean = Permissions.canManageCategoriesAndPins(member)
+
+    fun togglePin(currentKeys: List<String>, key: String) {
+        applyPinChange(ProductPins.toggle(currentKeys, key), pinned = key !in currentKeys)
+    }
+
+    fun movePin(currentKeys: List<String>, key: String, delta: Int) {
+        applyPinChange(ProductPins.move(currentKeys, key, delta), announce = false)
+    }
+
+    private fun applyPinChange(
+        change: PinChange,
+        pinned: Boolean = true,
+        announce: Boolean = true,
+    ) {
+        if (!canManagePins()) {
+            emit(NOT_ALLOWED)
+            return
+        }
+        when (change) {
+            PinChange.Unchanged -> Unit
+            PinChange.Full -> emit(ProductPins.FULL_MESSAGE)
+            is PinChange.Updated -> viewModelScope.launch {
+                runCatching { container.productPinsRepository.save(member, change.keys) }
+                    .onSuccess {
+                        if (announce) {
+                            emit(if (pinned) ProductPins.PINNED_MESSAGE else ProductPins.UNPINNED_MESSAGE)
+                        }
+                    }
+                    .onFailure { report(it) }
+            }
+        }
+    }
+
+    // --- plumbing ----------------------------------------------------------
+
+    private fun persist(draft: QuoteDraft) {
+        _draft.value = draft
+        viewModelScope.launch {
+            runCatching { container.devicePreferences.setQuoteDraft(draft) }
+                .onFailure { report(it) }
+        }
+    }
+
+    private fun report(throwable: Throwable) {
+        val error = throwable.toAppError()
+        container.errorReporter.report(error)
+        if (!error.isBenign) emit(error.message)
+    }
+
+    private fun emit(message: String) {
+        messages.tryEmit(message)
+    }
+
+    class Factory(
+        private val container: AppContainer,
+        private val member: Member,
+    ) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T =
+            ProductsViewModel(container, member) as T
+    }
+
+    private companion object {
+        const val ALREADY_IN_QUOTE = "Already in the quotation — quantity raised"
+        const val NEGATIVE_QUANTITY = "Quantity cannot be negative"
+        const val NOT_ALLOWED = "Only an Owner or Administrator can manage pinned products"
+    }
+}

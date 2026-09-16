@@ -59,7 +59,8 @@ import `in`.smartie.quotedesk.ui.more.AboutScreen
 import `in`.smartie.quotedesk.ui.more.MoreMenu
 import `in`.smartie.quotedesk.ui.more.MoreScreen
 import `in`.smartie.quotedesk.ui.more.PlaceholderScreen
-import `in`.smartie.quotedesk.ui.screens.ProductsScreen
+import `in`.smartie.quotedesk.ui.products.ProductsScreen
+import `in`.smartie.quotedesk.ui.products.ProductsViewModel
 import `in`.smartie.quotedesk.ui.screens.PurchaseScreen
 import `in`.smartie.quotedesk.ui.screens.QuotationsScreen
 import `in`.smartie.quotedesk.ui.screens.SignInScreen
@@ -185,7 +186,16 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
         Column(Modifier.padding(padding)) {
             ConnectivityBanner(online = online)
             NavHost(navController = navController, startDestination = startRoute) {
-                composable("products") { ProductsScreen(data) }
+                composable("products") {
+                    val productsViewModel: ProductsViewModel = viewModel(
+                        key = "products-${member.uid}",
+                        factory = ProductsViewModel.Factory(container, member),
+                    )
+                    LaunchedEffect(productsViewModel) {
+                        productsViewModel.messages.collect { snackbar.showSnackbar(it) }
+                    }
+                    ProductsScreen(data = data, viewModel = productsViewModel)
+                }
                 composable("stock") { StockScreen(data) }
                 composable("purchase") { PurchaseScreen(data) }
                 composable("quotations") { QuotationsScreen(data) }

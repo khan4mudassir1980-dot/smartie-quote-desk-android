@@ -28,11 +28,11 @@ class CatalogueReadRepository(private val firestore: FirebaseFirestore) {
             documents
                 .map { it.toProductRecord() }
                 // Seeding wrote `group|model` and editing wrote `group__model`;
-                // keep the most recently updated document per logical key so the
-                // same product cannot appear twice (audit P3/C1).
+                // keep one document per logical key so the same product cannot
+                // appear twice (audit P3/C1).
                 .groupBy { it.key }
                 .values
-                .map { duplicates -> duplicates.maxBy { it.updatedAt } }
+                .map(::canonical)
                 .sortedWith(compareBy({ it.group }, { it.model.lowercase() }))
         }
 
@@ -52,6 +52,19 @@ class CatalogueReadRepository(private val firestore: FirebaseFirestore) {
                 .filterNot { it.archived }
                 .sortedWith(compareByDescending<StockRecord> { it.pinned }.thenBy { it.name.lowercase() })
         }
+
+    /**
+     * Which of a logical key's documents to show. Migration step M2.1 writes
+     * the canonical `group__seedModel` document with `schemaVersion: 2` and
+     * leaves the legacy one in place for the PWA, so a migrated product is
+     * represented by its v2 document however recently the legacy one was
+     * touched. Before migration nothing carries a schema version, and the most
+     * recently updated document still wins.
+     */
+    private fun canonical(duplicates: List<ProductRecord>): ProductRecord =
+        duplicates.filter { it.schemaVersion >= 2 }
+            .ifEmpty { duplicates }
+            .maxBy { it.updatedAt }
 
     fun observeRecentMovements(limit: Long = 300): Flow<List<StockMove>> =
         firestore.collection("stockMoves")

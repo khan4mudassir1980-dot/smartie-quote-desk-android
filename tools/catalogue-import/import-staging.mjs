@@ -97,12 +97,13 @@ async function importCatalogue() {
       `pins ${existingPins ? 'present' : 'absent'}\n`,
   );
 
-  const { documents, categories, pins, report } = buildPlan({
+  const { documents, actions, report } = buildPlan({
     seed,
     exported,
     device,
     existingProducts,
     existingCategories,
+    existingPins,
     applyDeviceOverrides: flag('--apply-device-overrides'),
     mode: apply ? 'apply' : 'dry-run',
     project: STAGING_PROJECT,
@@ -114,7 +115,18 @@ async function importCatalogue() {
 
   if (!apply) {
     console.log(`\nDry run. Nothing was written. Report: ${reportPath}`);
-    console.log('Re-run with --apply once the report reads right.');
+    if (report.writes.total === 0) {
+      console.log('An --apply from here would write nothing: staging already matches.');
+    } else {
+      console.log('Re-run with --apply once the report reads right.');
+    }
+    return;
+  }
+
+  if (actions.length === 0 && existingProducts.length > 0) {
+    // Nothing to do, so nothing to guard against.
+    console.log('\nStaging already matches. No write was attempted.');
+    console.log(`Report: ${reportPath}`);
     return;
   }
 
@@ -126,20 +138,36 @@ async function importCatalogue() {
     );
   }
 
-  console.log('\nWriting products');
-  await inBatches(db, [...documents.entries()], (batch, [id, fields]) => {
-    batch.set(db.collection('products').doc(id), fields, { merge: true });
-  });
+  // Only what the plan asked for. A run with nothing to do writes nothing at
+  // all, which is what makes re-running safe rather than merely quiet.
+  if (actions.length === 0) {
+    console.log('\nNothing to write: staging already says all of this.');
+  } else {
+    const productWrites = actions.filter((action) => action.type === 'product');
+    if (productWrites.length > 0) {
+      console.log(`\nWriting ${productWrites.length} product documents`);
+      await inBatches(db, productWrites, (batch, action) => {
+        batch.set(db.collection('products').doc(action.id), action.fields, { merge: true });
+      });
+    } else {
+      console.log('\nNo product document needs writing.');
+    }
 
-  await db.collection('teamSettings').doc('categories').set(categories, { merge: true });
-  console.log('  categories written');
+    const categoryWrite = actions.find((action) => action.type === 'categories');
+    if (categoryWrite) {
+      await db.collection('teamSettings').doc('categories').set(categoryWrite.data, { merge: true });
+      console.log('  categories written');
+    } else {
+      console.log('  categories unchanged, not written');
+    }
 
-  if (pins.keys.length > 0) {
-    await db
-      .collection('teamSettings')
-      .doc('productPins')
-      .set({ keys: pins.keys, updatedAt: Date.now(), updatedBy: 'Catalogue import' }, { merge: true });
-    console.log(`  ${pins.keys.length} pins written, in the exported order`);
+    const pinWrite = actions.find((action) => action.type === 'pins');
+    if (pinWrite) {
+      await db.collection('teamSettings').doc('productPins').set(pinWrite.data, { merge: true });
+      console.log(`  ${pinWrite.data.keys.length} pins written, in the exported order`);
+    } else {
+      console.log('  pins unchanged, not written');
+    }
   }
 
   const after = await readCollection(db, 'products');
@@ -162,6 +190,11 @@ function printReport(report, seed) {
   console.log(`  no price at any tier     ${report.nullPrices.allThree}`);
   console.log(`  no dealer price          ${report.nullPrices.dealer}`);
   console.log(`  ids needing a character replaced  ${report.sanitisedIds.length}`);
+  console.log(
+    `  writes this run          ${report.writes.total} ` +
+      `(products ${report.writes.products}, categories ${report.writes.categories ? 'yes' : 'no'}, ` +
+      `pins ${report.writes.pins ? 'yes' : 'no'})`,
+  );
   console.log('\n  shelves');
   for (const category of seed.categories) {
     console.log(`      ${category.id.padEnd(14)} ${String(report.shelfCounts[category.id] ?? 0).padStart(3)}`);

@@ -11,14 +11,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  buildCategories,
+  buildCategoryMap,
   buildPins,
   buildPlan,
   buildProducts,
-  classify,
   countNulls,
   countShelves,
   differs,
+  reconcileProducts,
+  sameValue,
 } from '../lib/plan.mjs';
 import { productDocId, productKey } from '../lib/keys.mjs';
 
@@ -105,10 +106,13 @@ test('production beats the book, and the report says where', () => {
     ],
     pins: { keys: ['gate|SIE1000'] },
   };
-  const { documents, report } = buildPlan({ seed: SEED, exported, project: 'staging' });
+  const { documents, actions, report } = buildPlan({ seed: SEED, exported, project: 'staging' });
 
   assert.equal(documents.get('gate__SIE1000').dealer, 175);
-  assert.equal(documents.get('gate__SIE1000').updated, 1_700_000_000_000);
+  // The timestamp is decided when the write is planned, not when the merge is.
+  const write = actions.find((action) => action.id === 'gate__SIE1000');
+  assert.equal(write.fields.updated, 1_700_000_000_000);
+  assert.equal(write.fields.by, 'Asha');
   assert.deepEqual(report.productionBeatSeed, [
     { key: 'gate|SIE1000', field: 'dealer', seed: 100, production: 175 },
   ]);
@@ -158,14 +162,14 @@ test('a device override can switch a product off', () => {
 
 test('the twelve defaults are added, and an existing shelf is never renamed', () => {
   const existing = { map: { 'cat-sliding': { id: 'cat-sliding', name: 'Sliding gates (renamed)', order: 5 } } };
-  const categories = buildCategories(SEED, null, existing);
-  assert.equal(categories.map['cat-sliding'].name, 'Sliding gates (renamed)');
-  assert.equal(categories.map['cat-sliding'].order, 5);
-  assert.equal(categories.map['cat-other'].name, 'Other Products');
+  const map = buildCategoryMap(SEED, null, existing);
+  assert.equal(map['cat-sliding'].name, 'Sliding gates (renamed)');
+  assert.equal(map['cat-sliding'].order, 5);
+  assert.equal(map['cat-other'].name, 'Other Products');
 });
 
 test('pins drop what no longer resolves, and never exceed the cap', () => {
-  const { documents } = buildProducts(SEED, null, null, false, 1);
+  const { documents } = buildProducts(SEED, null, null, false);
   const wanted = ['gate|SIE1000', 'gate|GONE', 'shutter|RS500'];
   const { keys, dropped } = buildPins({ pins: { keys: wanted } }, documents);
   assert.deepEqual(keys, ['gate|SIE1000', 'shutter|RS500']);
@@ -177,29 +181,186 @@ test('pins drop what no longer resolves, and never exceed the cap', () => {
   assert.equal(capped.dropped.length, 20);
 });
 
-test('a second run reports everything as unchanged', () => {
-  const first = buildPlan({ seed: SEED, project: 'staging', now: 1 });
-  const asStored = [...first.documents.entries()].map(([id, data]) => ({ id, data }));
+/**
+ * What staging would hold after a run: the documents that run actually wrote,
+ * in the shape `readCollection` returns them.
+ */
+function stagingAfter(plan) {
+  return plan.actions
+    .filter((action) => action.type === 'product')
+    .map((action) => ({ id: action.id, data: action.fields }));
+}
 
-  const second = buildPlan({ seed: SEED, existingProducts: asStored, project: 'staging', now: 2 });
+test('a second run performs no writes at all, not merely no changes', () => {
+  const first = buildPlan({ seed: SEED, project: 'staging', now: 1_000 });
+  assert.equal(first.report.writes.total, 4); // 3 products + the shelves
+  assert.equal(first.report.writes.products, 3);
+  assert.equal(first.report.writes.categories, true);
+
+  const second = buildPlan({
+    seed: SEED,
+    existingProducts: stagingAfter(first),
+    existingCategories: first.actions.find((action) => action.type === 'categories').data,
+    project: 'staging',
+    now: 2_000,
+  });
+
+  // The report says nothing changed, and — the part that matters — the plan
+  // contains nothing to send.
+  assert.equal(second.report.counts.unchanged, 3);
   assert.equal(second.report.counts.created, 0);
   assert.equal(second.report.counts.updated, 0);
-  assert.equal(second.report.counts.unchanged, 3);
-  assert.equal(second.report.stagingBefore.products, 3);
+  assert.deepEqual(second.actions, []);
+  assert.equal(second.report.writes.total, 0);
+  assert.equal(second.report.writes.products, 0);
+  assert.equal(second.report.writes.categories, false);
+  assert.equal(second.report.writes.pins, false);
 });
 
-test('differs ignores the timestamps and notices everything else', () => {
-  const fields = { dealer: 100, updated: 5, createdAt: 5 };
+test('a third run is a no-op too, so the property is stable rather than lucky', () => {
+  const first = buildPlan({ seed: SEED, project: 'staging', now: 1_000 });
+  const categories = first.actions.find((action) => action.type === 'categories').data;
+  const stored = stagingAfter(first);
+
+  for (const now of [2_000, 3_000, 4_000]) {
+    const again = buildPlan({
+      seed: SEED,
+      existingProducts: stored,
+      existingCategories: categories,
+      project: 'staging',
+      now,
+    });
+    assert.deepEqual(again.actions, []);
+  }
+});
+
+test('an unchanged document keeps the updated and createdAt it already had', () => {
+  const first = buildPlan({ seed: SEED, project: 'staging', now: 1_000 });
+  const stored = stagingAfter(first);
+  for (const entry of stored) {
+    assert.equal(entry.data.createdAt, 1_000);
+    assert.equal(entry.data.updated, 1_000);
+  }
+
+  const second = buildPlan({
+    seed: SEED,
+    existingProducts: stored,
+    existingCategories: first.actions.find((action) => action.type === 'categories').data,
+    project: 'staging',
+    now: 9_999,
+  });
+  // No action means nothing is sent, so the stored timestamps cannot move.
+  assert.deepEqual(second.actions, []);
+  assert.equal(stored[0].data.updated, 1_000);
+});
+
+test('a document that does change keeps the createdAt it was first given', () => {
+  const first = buildPlan({ seed: SEED, project: 'staging', now: 1_000 });
+  const stored = stagingAfter(first);
+
+  const repriced = {
+    ...SEED,
+    products: SEED.products.map((product) =>
+      product.seedModel === 'SIE1000' ? { ...product, dealer: 555 } : product,
+    ),
+  };
+  const second = buildPlan({
+    seed: repriced,
+    existingProducts: stored,
+    existingCategories: first.actions.find((action) => action.type === 'categories').data,
+    project: 'staging',
+    now: 8_000,
+  });
+
+  assert.equal(second.report.writes.products, 1);
+  const write = second.actions.find((action) => action.type === 'product');
+  assert.equal(write.id, productDocId('gate', 'SIE1000'));
+  assert.equal(write.fields.dealer, 555);
+  assert.equal(write.fields.createdAt, 1_000, 'createdAt must survive an update');
+  assert.equal(write.fields.updated, 8_000);
+});
+
+test('the shelves are written once and never again', () => {
+  const first = buildPlan({ seed: SEED, project: 'staging', now: 1 });
+  const categories = first.actions.find((action) => action.type === 'categories').data;
+  assert.ok(categories);
+
+  const second = buildPlan({
+    seed: SEED,
+    existingProducts: stagingAfter(first),
+    existingCategories: categories,
+    project: 'staging',
+    now: 2,
+  });
+  assert.equal(second.actions.filter((action) => action.type === 'categories').length, 0);
+  assert.equal(second.report.writes.categories, false);
+});
+
+test('a shelf map that differs only in key order is not a change', () => {
+  const first = buildPlan({ seed: SEED, project: 'staging', now: 1 });
+  const categories = first.actions.find((action) => action.type === 'categories').data;
+  const shuffled = { map: Object.fromEntries(Object.entries(categories.map).reverse()) };
+
+  const second = buildPlan({
+    seed: SEED,
+    existingProducts: stagingAfter(first),
+    existingCategories: shuffled,
+    project: 'staging',
+    now: 2,
+  });
+  assert.equal(second.report.writes.categories, false);
+});
+
+test('pins are written once, and rewritten only when the order changes', () => {
+  const exported = { products: [], pins: { keys: ['gate|SIE1000', 'shutter|RS500'] } };
+  const first = buildPlan({ seed: SEED, exported, project: 'staging', now: 1 });
+  const pinWrite = first.actions.find((action) => action.type === 'pins');
+  assert.deepEqual(pinWrite.data.keys, ['gate|SIE1000', 'shutter|RS500']);
+
+  const settled = {
+    seed: SEED,
+    exported,
+    existingProducts: stagingAfter(first),
+    existingCategories: first.actions.find((action) => action.type === 'categories').data,
+    project: 'staging',
+  };
+  const second = buildPlan({ ...settled, existingPins: pinWrite.data, now: 2 });
+  assert.equal(second.report.writes.pins, false);
+  assert.deepEqual(second.actions, []);
+
+  // Someone reorders them in the app; the import would put its order back.
+  const reordered = { keys: ['shutter|RS500', 'gate|SIE1000'] };
+  const third = buildPlan({ ...settled, existingPins: reordered, now: 3 });
+  assert.equal(third.report.writes.pins, true);
+});
+
+test('with no pins to import, the pins document is never touched', () => {
+  const plan = buildPlan({ seed: SEED, project: 'staging', now: 1 });
+  assert.equal(plan.actions.filter((action) => action.type === 'pins').length, 0);
+  assert.equal(plan.report.writes.pins, false);
+});
+
+test('differs compares content and ignores what is only on the stored document', () => {
+  const fields = { dealer: 100 };
   assert.equal(differs({ dealer: 100, updated: 999, createdAt: 999 }, fields), false);
-  assert.equal(differs({ dealer: 101, updated: 5, createdAt: 5 }, fields), true);
+  assert.equal(differs({ dealer: 101 }, fields), true);
   assert.equal(differs(undefined, fields), true);
+  assert.equal(sameValue({ a: 1, b: 2 }, { b: 2, a: 1 }), true);
 });
 
 test('the counting helpers are callable, which is the regression itself', () => {
-  const { documents } = buildProducts(SEED, null, null, false, 1);
+  const { documents, exportUpdated } = buildProducts(SEED, null, null, false);
   assert.equal(typeof countShelves, 'function');
   assert.equal(typeof countNulls, 'function');
   assert.deepEqual(countShelves(documents), { 'cat-sliding': 2, 'cat-shutter': 1 });
   assert.deepEqual(countNulls(documents), { allThree: 1, dealer: 1 });
-  assert.deepEqual(classify(documents, []).created.length, 3);
+  assert.equal(reconcileProducts(documents, [], exportUpdated, 1).created.length, 3);
+});
+
+test('a product carries no timestamp until reconciliation gives it one', () => {
+  const { documents } = buildProducts(SEED, null, null, false);
+  for (const fields of documents.values()) {
+    assert.equal('createdAt' in fields, false);
+    assert.equal('updated' in fields, false);
+  }
 });

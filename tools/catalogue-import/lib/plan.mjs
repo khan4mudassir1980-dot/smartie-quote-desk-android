@@ -1,12 +1,19 @@
 /**
  * Deciding what the import would write, with no Firebase anywhere in sight.
  *
- * This is the whole merge — seed, production export, device overrides — and the
- * migration report built from it. It lives here rather than inside
- * `import-staging.mjs` so a test can execute it: the report path once threw a
- * ReferenceError that `node --check` could not see, because the helpers it
- * called were `const` arrows below the top-level dispatch. Everything exported
- * here is a function declaration, so ordering cannot bite again.
+ * Two things live here. The merge — seed, production export, device overrides —
+ * and the reconciliation that turns it into an explicit list of **write
+ * actions**. The script executes that list and nothing else, so "a second run
+ * changes nothing" is a property of the plan rather than a claim in a report:
+ * an unchanged catalogue produces zero actions, so zero writes leave.
+ *
+ * Content and bookkeeping are kept apart on purpose. [buildProducts] returns
+ * only what a product *is*; `createdAt`, `updated`, and whether to write at all
+ * are decided in [reconcileProducts], against what staging already holds.
+ *
+ * Everything exported is a function declaration: the report path once threw a
+ * ReferenceError that `node --check` could not see, because its helpers were
+ * `const` arrows below the top-level dispatch.
  */
 import { needsSanitising, productKey, splitProductKey } from './keys.mjs';
 
@@ -18,15 +25,31 @@ export const PRICE_FIELDS = ['dealer', 'contractor', 'client'];
 /** Fields the export carries that describe the write, not the product. */
 const BOOKKEEPING = new Set(['schemaVersion', 'createdAt', 'updated', 'by', 'byUid', 'serverAt']);
 
+/** Key order must not decide whether two documents are the same. */
+function stable(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value ?? null);
+  if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
+  const keys = Object.keys(value).sort();
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${stable(value[key])}`).join(',')}}`;
+}
+
+export function sameValue(left, right) {
+  return stable(left) === stable(right);
+}
+
 /**
- * The documents the import would write, keyed by canonical document id.
+ * What each product *is*, with no timestamps.
  *
  * Winner per field, as audit M2 step 1 specifies: newest Firestore `updated`
  * beats the book, and a device override — which carries no timestamp — is
  * listed for a decision rather than applied, unless [applyDeviceOverrides].
+ *
+ * `updatedAt` per document is returned separately rather than stamped in, so a
+ * document that has not changed can keep the timestamp it already has.
  */
-export function buildProducts(seed, exported, device, applyDeviceOverrides, now = Date.now()) {
+export function buildProducts(seed, exported, device, applyDeviceOverrides) {
   const documents = new Map();
+  const exportUpdated = new Map();
   const overrides = [];
   const deviceNotes = [];
 
@@ -63,8 +86,6 @@ export function buildProducts(seed, exported, device, applyDeviceOverrides, now 
       conflictResolved: product.conflictResolved,
       seeded: true,
       schemaVersion: 2,
-      createdAt: now,
-      updated: now,
       by: 'Catalogue import',
       byUid: 'import',
       legacyDocIds: [],
@@ -80,13 +101,13 @@ export function buildProducts(seed, exported, device, applyDeviceOverrides, now 
         if (!(field in fields)) continue;
         if (value === undefined) continue;
         const normalised = value === NULLP ? null : value;
-        if (JSON.stringify(normalised) === JSON.stringify(fields[field])) continue;
+        if (sameValue(normalised, fields[field])) continue;
         overrides.push({ key: product.key, field, seed: fields[field], production: normalised });
         fields[field] = normalised;
       }
-      fields.updated = fromExport.data?.updated ?? now;
       fields.by = fromExport.data?.by ?? fields.by;
       fields.byUid = fromExport.data?.byUid ?? fields.byUid;
+      if (fromExport.data?.updated != null) exportUpdated.set(product.documentId, fromExport.data.updated);
     }
 
     const override = deviceOverrides?.[product.group]?.[product.seedModel];
@@ -94,7 +115,7 @@ export function buildProducts(seed, exported, device, applyDeviceOverrides, now 
       for (const [short, field] of [['d', 'dealer'], ['c', 'contractor'], ['cl', 'client']]) {
         if (!(short in override)) continue;
         const value = override[short] === NULLP ? null : override[short];
-        if (JSON.stringify(value) === JSON.stringify(fields[field])) continue;
+        if (sameValue(value, fields[field])) continue;
         deviceNotes.push({
           key: product.key,
           field,
@@ -119,19 +140,19 @@ export function buildProducts(seed, exported, device, applyDeviceOverrides, now 
     documents.set(product.documentId, fields);
   }
 
-  return { documents, overrides, deviceNotes };
+  return { documents, exportUpdated, overrides, deviceNotes };
 }
 
 /**
- * The shelves document. Defaults are added where missing; an existing shelf is
- * never renamed or reordered (audit M2 step 2).
+ * The shelves document's map. Defaults are added where missing; an existing
+ * shelf is never renamed or reordered (audit M2 step 2).
  */
-export function buildCategories(seed, exported, existing, now = Date.now()) {
+export function buildCategoryMap(seed, exported, existing) {
   const map = { ...(existing?.map ?? {}), ...(exported?.categories?.map ?? {}) };
   for (const category of seed.categories) {
     if (!map[category.id]) map[category.id] = { ...category };
   }
-  return { map, updated: now, by: 'Catalogue import' };
+  return map;
 }
 
 /** The pinned shelf: exported order, live keys only, never more than fifteen. */
@@ -148,12 +169,15 @@ export function buildPins(exported, documents, max = 15) {
   return { keys, dropped };
 }
 
-/** Whether a stored document differs from what would be written. */
+/**
+ * Whether a stored document differs from what a product should be.
+ *
+ * Only the content fields are compared, because [fields] carries no timestamps;
+ * anything else already on the document is left alone.
+ */
 export function differs(current, fields) {
-  return Object.entries(fields).some(([field, value]) => {
-    if (field === 'updated' || field === 'createdAt') return false;
-    return JSON.stringify(current?.[field] ?? null) !== JSON.stringify(value ?? null);
-  });
+  if (!current) return true;
+  return Object.entries(fields).some(([field, value]) => !sameValue(current[field] ?? null, value ?? null));
 }
 
 export function countShelves(documents) {
@@ -172,24 +196,46 @@ export function countNulls(documents) {
   };
 }
 
-/** Which documents are new, which change and which are already right. */
-export function classify(documents, existingProducts) {
+/**
+ * Turns the desired products into the writes that are actually needed.
+ *
+ * A document that already says the right thing produces no action at all, so
+ * its `updated` and `createdAt` stay exactly as they were. A document that does
+ * change keeps the `createdAt` it was first given.
+ */
+export function reconcileProducts(documents, existingProducts, exportUpdated, now) {
   const existingById = new Map(existingProducts.map((entry) => [entry.id, entry.data]));
   const created = [];
   const updated = [];
   const unchanged = [];
+  const actions = [];
+
   for (const [id, fields] of documents) {
     const current = existingById.get(id);
-    if (!current) created.push(id);
-    else if (differs(current, fields)) updated.push(id);
-    else unchanged.push(id);
+    if (current && !differs(current, fields)) {
+      unchanged.push(id);
+      continue;
+    }
+    (current ? updated : created).push(id);
+    actions.push({
+      type: 'product',
+      id,
+      fields: {
+        ...fields,
+        // First seen now, or whenever this document was first written.
+        createdAt: current?.createdAt ?? now,
+        updated: exportUpdated.get(id) ?? now,
+      },
+    });
   }
-  return { created, updated, unchanged };
+
+  return { created, updated, unchanged, actions };
 }
 
 /**
- * The whole plan, and the report that describes it. This is the path that used
- * to throw; the test drives it end to end.
+ * The whole plan: what to write, what not to, and the report describing both.
+ *
+ * `actions` is the contract. An import executes exactly these and nothing else.
  */
 export function buildPlan({
   seed,
@@ -197,16 +243,38 @@ export function buildPlan({
   device = null,
   existingProducts = [],
   existingCategories = null,
+  existingPins = null,
   applyDeviceOverrides = false,
   mode = 'dry-run',
   project,
   backupPath = null,
   now = Date.now(),
 }) {
-  const { documents, overrides, deviceNotes } = buildProducts(seed, exported, device, applyDeviceOverrides, now);
-  const categories = buildCategories(seed, exported, existingCategories, now);
+  const { documents, exportUpdated, overrides, deviceNotes } = buildProducts(
+    seed,
+    exported,
+    device,
+    applyDeviceOverrides,
+  );
+  const { created, updated, unchanged, actions } = reconcileProducts(documents, existingProducts, exportUpdated, now);
+
+  const categoryMap = buildCategoryMap(seed, exported, existingCategories);
+  const categoriesChanged = !sameValue(existingCategories?.map ?? null, categoryMap);
+  if (categoriesChanged) {
+    actions.push({
+      type: 'categories',
+      data: { map: categoryMap, updated: now, by: 'Catalogue import' },
+    });
+  }
+
   const pins = buildPins(exported, documents);
-  const counts = classify(documents, existingProducts);
+  const pinsChanged = pins.keys.length > 0 && !sameValue(existingPins?.keys ?? null, pins.keys);
+  if (pinsChanged) {
+    actions.push({
+      type: 'pins',
+      data: { keys: pins.keys, updatedAt: now, updatedBy: 'Catalogue import' },
+    });
+  }
 
   const report = {
     generatedAt: new Date(now).toISOString(),
@@ -217,10 +285,13 @@ export function buildPlan({
     deviceBackup: device ? 'supplied' : 'NOT SUPPLIED',
     deviceOverridesApplied: Boolean(applyDeviceOverrides),
     stagingBefore: { products: existingProducts.length },
-    counts: {
-      created: counts.created.length,
-      updated: counts.updated.length,
-      unchanged: counts.unchanged.length,
+    counts: { created: created.length, updated: updated.length, unchanged: unchanged.length },
+    // What will actually be sent. Zero here means the run is a no-op.
+    writes: {
+      products: actions.filter((action) => action.type === 'product').length,
+      categories: categoriesChanged,
+      pins: pinsChanged,
+      total: actions.length,
     },
     productionBeatSeed: overrides,
     deviceOverrides: deviceNotes,
@@ -233,5 +304,5 @@ export function buildPlan({
     backup: backupPath,
   };
 
-  return { documents, categories, pins, report };
+  return { documents, actions, categoryMap, pins, report };
 }

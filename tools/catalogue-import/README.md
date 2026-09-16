@@ -66,7 +66,21 @@ GOOGLE_APPLICATION_CREDENTIALS=<staging key> \
 
 `--apply` is required to write. A staging project that already holds products
 also needs `--accept-existing`, so a populated project cannot be overwritten on
-a first attempt.
+a first attempt — unless the run has nothing to write, which needs no guard.
+
+## Re-running writes nothing
+
+`buildPlan` returns a list of **write actions**, and the script sends exactly
+those. A product that already says the right thing produces no action, so its
+`updated` and `createdAt` are never touched; a product that does change keeps
+the `createdAt` it was first given. The shelves document is skipped when its map
+is unchanged, ignoring key order, and the pins document is skipped when its
+ordered keys are unchanged.
+
+The report's `writes` block is the number that matters — `total: 0` means the
+run sends nothing, which is stronger than "0 created, 0 updated, 403 unchanged".
+An earlier version wrote all 403 documents on every run while reporting exactly
+that.
 
 ## The Owner device backup is required
 

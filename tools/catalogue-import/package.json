@@ -4,7 +4,8 @@
   "type": "module",
   "description": "Derives the approved V8C4 catalogue and imports it into the staging Firebase project. Never writes to production.",
   "scripts": {
-    "check": "node --check extract-v8c4.mjs && node --check export-production.mjs && node --check import-staging.mjs && node --check verify-staging.mjs"
+    "check": "node --check extract-v8c4.mjs && node --check export-production.mjs && node --check import-staging.mjs && node --check verify-staging.mjs",
+    "test": "node --test"
   },
   "dependencies": {
     "firebase-admin": "^13.0.0"

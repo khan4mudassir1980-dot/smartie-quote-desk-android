@@ -84,6 +84,20 @@ Device overrides carry no timestamp, so the audit puts them on a review list
 rather than applying them silently. The import lists every one; re-run with
 `--apply-device-overrides` to take them once you have read the list.
 
+## Tests
+
+```bash
+npm test
+```
+
+`lib/plan.mjs` decides what the import would write — the merge, the pins, the
+shelves and the migration report — with no Firebase in it, and `test/` drives
+that path end to end. It exists because a dry run once died on
+`Cannot access 'countShelves' before initialization`: the helpers the report
+built itself from were `const` arrows below the top-level dispatch, still in the
+temporal dead zone. `node --check` parses without running, so it saw nothing.
+CI runs both.
+
 ## Rollback
 
 ```bash

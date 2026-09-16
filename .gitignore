@@ -16,3 +16,10 @@ smartie-quote-desk-release.p12
 smartie-quote-desk-staging.p12
 firestore/node_modules/
 node_modules/
+
+# Catalogue import: seed, exports, staging backups and reports never ship,
+# and a service-account key never enters the working tree.
+tools/catalogue-import/out/
+tools/catalogue-import/node_modules/
+*.serviceaccount.json
+*service-account*.json

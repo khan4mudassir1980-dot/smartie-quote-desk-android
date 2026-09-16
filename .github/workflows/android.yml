@@ -64,6 +64,11 @@ jobs:
       - name: Run the section 7 permission matrix against the emulator
         working-directory: firestore
         run: npx firebase emulators:exec --only firestore "npm test"
+      # Nothing else compiles the catalogue import tooling, and a syntax error
+      # there would only surface on the Owner's machine, mid-import.
+      - name: Check the catalogue import tooling parses
+        working-directory: tools/catalogue-import
+        run: npm run check
 
   build:
     name: Build APKs

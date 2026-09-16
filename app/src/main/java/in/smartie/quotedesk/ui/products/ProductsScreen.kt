@@ -31,6 +31,7 @@ import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.data.model.StockRecord
 import `in`.smartie.quotedesk.domain.Catalogue
 import `in`.smartie.quotedesk.domain.CatalogueEntry
+import `in`.smartie.quotedesk.domain.CatalogueView
 import `in`.smartie.quotedesk.domain.DraftLine
 import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.domain.ProductPins

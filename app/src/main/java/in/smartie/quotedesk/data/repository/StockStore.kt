@@ -45,7 +45,7 @@ interface StockTransaction {
 class FirestoreStockStore(private val firestore: FirebaseFirestore) : StockStore {
 
     override suspend fun <T> transaction(body: (StockTransaction) -> T): T =
-        firestore.runTransaction { transaction ->
+        firestore.runTransaction<T> { transaction ->
             body(
                 object : StockTransaction {
                     override fun readStock(docId: String): Map<String, Any?>? {
@@ -67,8 +67,13 @@ class FirestoreStockStore(private val firestore: FirebaseFirestore) : StockStore
             )
         }.await()
 
-    private fun resolve(data: Map<String, Any?>): Map<String, Any?> =
-        data.mapValues { (_, value) -> if (value === ServerTimestamp) FieldValue.serverTimestamp() else value }
+    /** Swaps the marker, and drops a null rather than writing one. */
+    private fun resolve(data: Map<String, Any?>): Map<String, Any> = buildMap {
+        for ((field, value) in data) {
+            val resolved = if (value === ServerTimestamp) FieldValue.serverTimestamp() else value
+            if (resolved != null) put(field, resolved)
+        }
+    }
 
     private companion object {
         const val STOCK = "stock"

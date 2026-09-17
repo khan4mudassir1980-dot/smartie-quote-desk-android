@@ -41,6 +41,7 @@ class StockWriteTest {
         val movementAttempts = mutableListOf<List<Recorded>>()
         var bodyRuns = 0
 
+        @Suppress("UNCHECKED_CAST")
         override suspend fun <T> transaction(body: (StockTransaction) -> T): T {
             var last: T? = null
             repeat(attempts) {
@@ -59,7 +60,6 @@ class StockWriteTest {
                 stockAttempts += stockWrites
                 movementAttempts += movementWrites
             }
-            @Suppress("UNCHECKED_CAST")
             return last as T
         }
 

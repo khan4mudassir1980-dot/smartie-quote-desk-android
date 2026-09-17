@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-17.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `56d1acc` — [run #45](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35210460917), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `9665688` — [run #46](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35212243391), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -23,7 +23,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N0 Foundation | **Complete** |
 | N1 Auth & Team | **Complete** |
 | N2 Products | **Complete and verified** |
-| N3 Our Stock | **Batch A built and green**, including the A.1 identity correction. Batch B — ViewModel and screen — not started |
+| N3 Our Stock | **Batch A and batch B built.** Not yet deployed or manually tested against staging |
 | N4–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -34,15 +34,12 @@ above; it is the last head CI has verified, not necessarily the tip.
 
 ## Current next action
 
-**Get approval to implement N3 batch B: the ViewModel and the Our Stock
-screen.** Batch A is complete, including the A.1 correction that made product
-identity immutable, and **no identity question is left open for batch B**.
+**Deploy the `stockMoves` index and the v9 rules to staging, then run the
+T-S manual pass.** N3 is written and its automated coverage is green, but
+nothing has been deployed and no Firebase project has been touched by any
+session. Until that pass runs, N3 is not delivered.
 
-Batch B is exactly: `ui/stock/StockViewModel.kt`, the rewrite of
-`ui/stock/StockScreen.kt` with its Robolectric test, wiring
-`stockWriteRepository` into `AppContainer` and `SmartieApp`, and removing the
-`InDevelopmentBanner`. The domain and data layers are settled; batch B is not
-to change them.
+The steps, in order, are in `docs/N3-plan.md` under "Staging deployment".
 
 ## Decisions that bind future work
 
@@ -79,6 +76,12 @@ not a `/stockMoves` action.
 
 **Below zero is rejected, never clamped**, and the movement id and `at` are
 generated once before the transaction and reused if Firestore replays it.
+
+**A pending `+`/`−` count is never a queue.** It persists on the device so a
+long shelf count survives the app being killed, and it commits only when the
+person presses Done — never on reconnect, never on restart. It is cleared only
+when its own transaction succeeds; a failure keeps it for a retry, and a mixed
+save says what actually happened rather than "Saved".
 
 **Product identity for stock is immutable.** `ProductRecord.stockKey` decides
 it — the stored `key`, else `group|seedModel`, else `group|model` for a legacy

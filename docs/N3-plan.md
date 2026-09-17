@@ -1,7 +1,7 @@
 # N3 Our Stock — implementation plan
 
-**Approved 2026-09-17. Batch A (steps 1-5, plus the A.1 identity
-correction) is implemented; the ViewModel and the screen are not.** It is
+**Approved 2026-09-17. Batch A, A.1 and batch B are implemented. Nothing has
+been deployed and no Firebase project has been touched.** It is
 written against the roadmap's §12 line for N3 and the agreed behaviour below,
 and it is deliberately specific about the writes, because N3 is the first phase
 in which the native app writes a document the PWA also writes.
@@ -236,7 +236,7 @@ audit trail as one.
 `stopTracking` (Administrator only) sets `off: true` with an `archive` move;
 `observeStock()` already filters archived rows out.
 
-### `ui/stock/StockViewModel.kt` — batch B, not built
+### `ui/stock/StockViewModel.kt` — **built** (batch B)
 
 Follows `ProductsViewModel`: the query, the filter, and the **pending deltas**
 that have not been committed yet. Pending deltas are held per key and persisted
@@ -252,7 +252,7 @@ success, and dropped when its row disappears. When a transaction is rejected
 the pending delta stays exactly as it was, so the person sees what they still
 have to commit rather than a count that quietly succeeded somewhere.
 
-### `ui/stock/StockScreen.kt` — batch B, not built
+### `ui/stock/StockScreen.kt` — **built** (batch B)
 
 The `InDevelopmentBanner` goes. The screen becomes stateless over a
 `StockActions` record, as `ProductsScreen` is, so Robolectric can drive it
@@ -289,7 +289,7 @@ without Firebase.
 - A Worker sees the list, the tiles, the search and the tags, and **no
   control**: no stepper, no Done, no Edit, no pin, no Add, no history.
 
-### Wiring — batch B, not built
+### Wiring — **built** (batch B)
 
 `AppContainer` gains `stockWriteRepository`. `SmartieApp` passes a
 `StockViewModel` to `StockScreen` the way it already passes `ProductsViewModel`
@@ -503,13 +503,28 @@ movement whose document id differs from its `id` field refused.
 | T-S15 | Then press Done | It commits, once, with the right `prev` and `next` |
 | T-X4 | 360×640 and 412×915, font scale 1.0 and 1.3 | Nothing clipped; the stepper and Done reachable |
 
-## Human actions
+## Staging deployment, and what is left
 
-**Deploy the composite index.** Per-item history queries `stockMoves` by `key`
-ordered by `at`. `firestore.indexes.json` already declares it, but it has not
-been deployed: `firebase deploy --only firestore:indexes` against staging,
-before T-S7. Without it the per-item history fails at runtime with a
-create-index link.
+Nothing below has been done. No session has accessed either Firebase project.
+
+1. **Deploy the composite index.** Per-item history queries `stockMoves` by
+   `key` ordered by `at`. `firestore.indexes.json` declares it; it has never
+   been deployed. From `firestore/`, against **staging only**:
+   `firebase deploy --only firestore:indexes`.
+2. **Deploy the v9 rules to staging.** They now carry the `noPriceData()` and
+   `safeName()` guards and the `note` action, and staging is running the
+   version deployed before those existed. From `firestore/`, against
+   **staging only**: `firebase deploy --only firestore:rules`.
+   Production keeps the V8C4 rules; nothing here goes near it.
+3. **Build and install the staging APK** — `./gradlew assembleStagingDebug`,
+   or take `app-staging-debug.apk` from the CI run's `smartie-native-apks`
+   artifact.
+4. **Run the T-S manual pass below**, as Owner, as Staff and as a Worker.
+
+## Manual acceptance still to run
+
+Every row below is outstanding. The automated suites cover the logic; these
+cover the device.
 
 ## Out of scope for N3
 

@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.QuoteDraftCodec
+import `in`.smartie.quotedesk.domain.StockPendingCodec
 import `in`.smartie.quotedesk.ui.theme.TextSizePreference
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -23,11 +24,12 @@ private val Context.preferencesStore: DataStore<Preferences> by preferencesDataS
  * `state.prefs`: the text size, which catalogue shelves are open, and the
  * quotation being built. None of it is shared, and none of it is Firestore's.
  */
-class DevicePreferences(private val context: Context) {
+class DevicePreferences(private val context: Context) : StockPendingStore {
 
     private val textSizeKey = intPreferencesKey("text_size_percent")
     private val openShelvesKey = stringSetPreferencesKey("catalogue_open_shelves")
     private val quoteDraftKey = stringPreferencesKey("quote_draft")
+    private val stockPendingKey = stringPreferencesKey("stock_pending")
 
     private val preferences: Flow<Preferences> = context.preferencesStore.data
         .catch { emit(emptyPreferences()) }
@@ -56,5 +58,17 @@ class DevicePreferences(private val context: Context) {
 
     suspend fun setQuoteDraft(draft: QuoteDraft) {
         context.preferencesStore.edit { it[quoteDraftKey] = QuoteDraftCodec.encode(draft) }
+    }
+
+    /**
+     * Uncommitted `+`/`−` counts, so a long shelf count survives the app being
+     * killed. **Never a queue**: nothing here commits itself, on reconnect or
+     * on restart. The person presses Done.
+     */
+    override val pending: Flow<Map<String, Double>> =
+        preferences.map { StockPendingCodec.decode(it[stockPendingKey]) }
+
+    override suspend fun setPending(pending: Map<String, Double>) {
+        context.preferencesStore.edit { it[stockPendingKey] = StockPendingCodec.encode(pending) }
     }
 }

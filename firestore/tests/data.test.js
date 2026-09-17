@@ -1,4 +1,5 @@
 const test = require('node:test');
+const assert = require('node:assert/strict');
 const { assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
 const { createTestEnvironment, seed, as, UIDS } = require('./helpers');
 
@@ -84,6 +85,118 @@ test('setting an exact quantity is an Administrator action', async () => {
     id: 'mv_set_admin', key: 'gateMotors|SIE1000', action: 'set', prev: 7, next: 20,
     at: Date.now(), byUid: UIDS.admin,
   }));
+});
+
+test('a Worker reads the denormalised name but can change nothing', async () => {
+  const db = as(testEnv, UIDS.worker);
+  const snapshot = await db.collection('stock').doc('gateMotors|SIE1000').get();
+  // The whole point of the additive field: a name without /products access.
+  assert.equal(snapshot.data().name, 'Sliding gate motor');
+  await assertFails(db.collection('products').doc('gateMotors__SIE1000').get());
+  await assertFails(db.collection('stock').doc('gateMotors|SIE1000').update({
+    q: 1, min: 2, t: Date.now(), byUid: UIDS.worker, lastAction: 'in',
+  }));
+  await assertFails(db.collection('stock').doc('manualstock|new').set({
+    key: 'manualstock|new', q: 1, min: 0, t: Date.now(), byUid: UIDS.worker, lastAction: 'add',
+  }));
+});
+
+test('no price or tax field may be written to a Worker-readable stock document', async () => {
+  const db = as(testEnv, UIDS.admin);
+  const base = {
+    key: 'gateMotors|SIE1000', q: 8, min: 2, t: Date.now(),
+    byUid: UIDS.admin, lastAction: 'in', name: 'Sliding gate motor',
+  };
+  await assertSucceeds(db.collection('stock').doc('gateMotors|SIE1000').set(base, { merge: true }));
+  for (const leak of ['dealer', 'contractor', 'client', 'gst']) {
+    await assertFails(
+      db.collection('stock').doc('gateMotors|SIE1000').set({ ...base, [leak]: 18500 }, { merge: true }),
+    );
+  }
+});
+
+test('a name that is not a string is refused', async () => {
+  const db = as(testEnv, UIDS.admin);
+  await assertFails(db.collection('stock').doc('gateMotors|SIE1000').set({
+    key: 'gateMotors|SIE1000', q: 8, min: 2, t: Date.now(),
+    byUid: UIDS.admin, lastAction: 'in', name: { first: 'Sliding' },
+  }, { merge: true }));
+});
+
+test('Staff save a note-only edit and change the reorder level, but not the quantity', async () => {
+  const db = as(testEnv, UIDS.staff);
+  await assertSucceeds(db.collection('stock').doc('gateMotors|SIE1000').set({
+    key: 'gateMotors|SIE1000', q: 7, min: 2, t: Date.now(),
+    byUid: UIDS.staff, lastAction: 'note', stockNote: 'Top shelf',
+  }, { merge: true }));
+  await assertSucceeds(db.collection('stock').doc('gateMotors|SIE1000').set({
+    key: 'gateMotors|SIE1000', q: 7, min: 6, t: Date.now(),
+    byUid: UIDS.staff, lastAction: 'min',
+  }, { merge: true }));
+  await assertFails(db.collection('stock').doc('gateMotors|SIE1000').set({
+    key: 'gateMotors|SIE1000', q: 99, min: 2, t: Date.now(),
+    byUid: UIDS.staff, lastAction: 'set',
+  }, { merge: true }));
+});
+
+test('a note-only save is never logged as a movement', async () => {
+  const db = as(testEnv, UIDS.admin);
+  await assertFails(db.collection('stockMoves').doc('mv_note').set({
+    id: 'mv_note', key: 'gateMotors|SIE1000', action: 'note', prev: 7, delta: 0, next: 7,
+    at: Date.now(), byUid: UIDS.admin, by: 'Administrator',
+  }));
+});
+
+test('a movement document id must equal its own id field', async () => {
+  const db = as(testEnv, UIDS.admin);
+  await assertFails(db.collection('stockMoves').doc('mv_wrong_door').set({
+    id: 'mv_something_else', key: 'gateMotors|SIE1000', action: 'in', prev: 7, delta: 1, next: 8,
+    at: Date.now(), byUid: UIDS.admin, by: 'Administrator',
+  }));
+  await assertSucceeds(db.collection('stockMoves').doc('mv_matching').set({
+    id: 'mv_matching', key: 'gateMotors|SIE1000', action: 'in', prev: 7, delta: 1, next: 8,
+    at: Date.now(), byUid: UIDS.admin, by: 'Administrator',
+  }));
+});
+
+test('a movement is attributed to its author and never rewritten', async () => {
+  const db = as(testEnv, UIDS.staff);
+  await assertFails(db.collection('stockMoves').doc('mv_forged').set({
+    id: 'mv_forged', key: 'gateMotors|SIE1000', action: 'in', prev: 7, delta: 1, next: 8,
+    at: Date.now(), byUid: UIDS.admin, by: 'Administrator',
+  }));
+  await assertSucceeds(db.collection('stockMoves').doc('mv_own').set({
+    id: 'mv_own', key: 'gateMotors|SIE1000', action: 'in', prev: 7, delta: 1, next: 8,
+    at: Date.now(), byUid: UIDS.staff, by: 'Staff',
+  }));
+  await assertFails(db.collection('stockMoves').doc('mv_own').update({ next: 99 }));
+  await assertFails(db.collection('stockMoves').doc('mv_own').delete());
+});
+
+test('an Administrator creates a manual stock row; a negative one is refused', async () => {
+  const db = as(testEnv, UIDS.admin);
+  await assertSucceeds(db.collection('stock').doc('manualstock|shed_padlock').set({
+    key: 'manualstock|shed_padlock', group: 'manualstock', model: 'shed_padlock',
+    name: 'Brass padlock', q: 4, min: 1, off: false, t: Date.now(), lastAction: 'add',
+    manual: true, manualName: 'Brass padlock', manualModel: 'Shed padlock',
+    byUid: UIDS.admin, by: 'Administrator',
+  }));
+  await assertFails(db.collection('stock').doc('manualstock|bad').set({
+    key: 'manualstock|bad', q: -1, min: 0, t: Date.now(), byUid: UIDS.admin, lastAction: 'add',
+  }));
+  await assertFails(db.collection('stock').doc('manualstock|bad2').set({
+    key: 'manualstock|bad2', q: 1, min: -1, t: Date.now(), byUid: UIDS.admin, lastAction: 'add',
+  }));
+});
+
+test('a stock write is attributed to the caller and cannot re-key a row', async () => {
+  const db = as(testEnv, UIDS.staff);
+  await assertFails(db.collection('stock').doc('gateMotors|SIE1000').set({
+    key: 'gateMotors|SIE1000', q: 8, min: 2, t: Date.now(), byUid: UIDS.admin, lastAction: 'in',
+  }, { merge: true }));
+  await assertFails(db.collection('stock').doc('gateMotors|SIE1000').set({
+    key: 'somethingElse|SIE1000', q: 8, min: 2, t: Date.now(), byUid: UIDS.staff, lastAction: 'in',
+  }, { merge: true }));
 });
 
 test('a Worker adds a purchase requirement but never edits one', async () => {

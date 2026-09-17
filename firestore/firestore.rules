@@ -71,6 +71,14 @@ service cloud.firestore {
     function staff()      { return member() && profile().role == 'staff'; }
     function worker()     { return member() && profile().role == 'worker' && !isPrimaryOwner(); }
     function stockWriter(){ return admin() || staff(); }
+
+    // A /stock document is readable by a Worker, who may never read /products.
+    // The native app denormalises the descriptive `name` onto it so a Worker
+    // sees more than a model code; no price or tax may travel the same way.
+    function noPriceData() {
+      return !request.resource.data.keys().hasAny(['dealer','contractor','client','gst']);
+    }
+    function safeName() { return request.resource.data.get('name', '') is string; }
     function touched()    { return request.resource.data.diff(resource.data).affectedKeys(); }
     function priceOk(v)   { return v == null || (v is number && v >= 0); }
 
@@ -151,26 +159,29 @@ service cloud.firestore {
     // --- stock ---------------------------------------------------------
 
     match /stock/{key} {
-      // Workers read stock without ever being able to read prices from
-      // /products. The V8C4 stock document carries `model` and, for a manual
-      // item, `manualName` — but no descriptive product name, so a Worker
-      // sees the model rather than the catalogue name (docs/N3-plan.md).
+      // Workers read stock without ever being able to read /products. The
+      // V8C4 document carries no descriptive name, so the native app writes
+      // one additively — see noPriceData() above for the line that keeps a
+      // price from following it into a Worker-readable collection.
       allow read: if member();
       allow create: if stockWriter()
                     && request.resource.data.q is number && request.resource.data.q >= 0
                     && request.resource.data.min is number && request.resource.data.min >= 0
                     && request.resource.data.t is number
                     && request.resource.data.byUid == mine()
-                    && (admin() || request.resource.data.lastAction in ['in','out','min','add','pin']);
+                    && noPriceData() && safeName()
+                    && (admin() || request.resource.data.lastAction in ['in','out','min','add','pin','note']);
       allow update: if stockWriter()
                     && request.resource.data.q is number && request.resource.data.q >= 0
                     && request.resource.data.min is number && request.resource.data.min >= 0
                     && request.resource.data.t is number
                     && request.resource.data.byUid == mine()
                     && request.resource.data.key == resource.data.key
+                    && noPriceData() && safeName()
                     // Setting an exact quantity stays with Owner and
-                    // Administrator; Staff use the +/- actions.
-                    && (admin() || request.resource.data.lastAction in ['in','out','min','add','pin']);
+                    // Administrator; Staff use the +/- actions, the reorder
+                    // level (`min`) and the note-only save (`note`).
+                    && (admin() || request.resource.data.lastAction in ['in','out','min','add','pin','note']);
       allow delete: if admin();
     }
 
@@ -179,6 +190,8 @@ service cloud.firestore {
       allow create: if stockWriter()
                     && request.resource.data.id == id
                     && request.resource.data.key is string
+                    // `note` is deliberately absent: a note-only save changes
+                    // shared text, not a count, and logs nothing.
                     && request.resource.data.action in ['in','out','set','min','add','archive']
                     && request.resource.data.prev is number
                     && request.resource.data.next is number

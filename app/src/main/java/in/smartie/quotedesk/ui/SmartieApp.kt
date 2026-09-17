@@ -64,7 +64,8 @@ import `in`.smartie.quotedesk.ui.products.ProductsViewModel
 import `in`.smartie.quotedesk.ui.screens.PurchaseScreen
 import `in`.smartie.quotedesk.ui.screens.QuotationsScreen
 import `in`.smartie.quotedesk.ui.screens.SignInScreen
-import `in`.smartie.quotedesk.ui.screens.StockScreen
+import `in`.smartie.quotedesk.ui.stock.StockScreen
+import `in`.smartie.quotedesk.ui.stock.StockViewModel
 import `in`.smartie.quotedesk.ui.team.TeamScreen
 import `in`.smartie.quotedesk.ui.team.TeamViewModel
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
@@ -196,7 +197,16 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
                     }
                     ProductsScreen(data = data, viewModel = productsViewModel)
                 }
-                composable("stock") { StockScreen(data) }
+                composable("stock") {
+                    val stockViewModel: StockViewModel = viewModel(
+                        key = "stock-${member.uid}",
+                        factory = StockViewModel.Factory(container, member),
+                    )
+                    LaunchedEffect(stockViewModel) {
+                        stockViewModel.messages.collect { snackbar.showSnackbar(it) }
+                    }
+                    StockScreen(data = data, viewModel = stockViewModel)
+                }
                 composable("purchase") { PurchaseScreen(data) }
                 composable("quotations") { QuotationsScreen(data) }
                 composable("more") {

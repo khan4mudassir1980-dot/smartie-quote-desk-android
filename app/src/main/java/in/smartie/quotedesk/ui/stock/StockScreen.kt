@@ -3,6 +3,8 @@ package `in`.smartie.quotedesk.ui.stock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -41,6 +43,7 @@ import `in`.smartie.quotedesk.ui.AppDataViewModel
 import `in`.smartie.quotedesk.ui.components.CompactStepper
 import `in`.smartie.quotedesk.ui.components.EmptyState
 import `in`.smartie.quotedesk.ui.components.ListRow
+import `in`.smartie.quotedesk.ui.components.clickableNoRipple
 import `in`.smartie.quotedesk.ui.components.SectionHeader
 import `in`.smartie.quotedesk.ui.components.SmartieCard
 import `in`.smartie.quotedesk.ui.components.SmartieField
@@ -468,10 +471,7 @@ private fun EditStockDialog(
         onDismissRequest = onDismiss,
         title = { Text("Edit ${StockBoard.displayName(record)}") },
         text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.verticalScroll(rememberScrollState())
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (capabilities.exactQuantity) {
                     SmartieField(
                         label = "Exact quantity",
@@ -573,9 +573,11 @@ private fun AddStockDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add stock") },
         text = {
-            // A Column that scrolls, never a LazyColumn: a lazy list inside a
-            // dialog measures against unbounded height and never settles —
-            // Compose recomposes until Espresso gives up.
+            // Never a LazyColumn, and never an unbounded scrollable: either
+            // measures against infinite height inside a dialog and never
+            // settles, recomposing until Espresso gives up. A Box with a
+            // bounded max height gives the scroll finite constraints.
+            Box(Modifier.heightIn(max = 380.dp)) {
             Column(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.verticalScroll(rememberScrollState())
@@ -611,12 +613,16 @@ private fun AddStockDialog(
                         }
                     )
                     matches.forEach { product ->
-                        ListRow(
-                            title = product.name.ifBlank { product.model },
-                            secondary = product.model,
-                            onClick = {
-                                onAddProduct(product, startingQuantity, startingReorder, note)
-                            }
+                        Text(
+                            product.name.ifBlank { product.model },
+                            style = MaterialTheme.typography.titleSmall,
+                            color = SmartieColors.Ink,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickableNoRipple {
+                                    onAddProduct(product, startingQuantity, startingReorder, note)
+                                }
+                                .padding(vertical = 10.dp)
                         )
                     }
                 }
@@ -641,6 +647,7 @@ private fun AddStockDialog(
                         color = SmartieColors.Warn
                     )
                 }
+            }
             }
         },
         confirmButton = {

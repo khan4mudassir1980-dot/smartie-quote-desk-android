@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-17.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `9665688` — [run #46](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35212243391), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `30541bd` — [run #54](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35222458290), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -23,7 +23,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N0 Foundation | **Complete** |
 | N1 Auth & Team | **Complete** |
 | N2 Products | **Complete and verified** |
-| N3 Our Stock | **Batch A and batch B built.** Not yet deployed or manually tested against staging |
+| N3 Our Stock | **Batch A and batch B built and green.** Not yet deployed or manually tested against staging |
 | N4–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -76,6 +76,18 @@ not a `/stockMoves` action.
 
 **Below zero is rejected, never clamped**, and the movement id and `at` are
 generated once before the transaction and reused if Firestore replays it.
+
+**Compose dialog bodies are extracted as panels.** A Compose `Dialog` opens
+its own window with its own recomposer, which the Robolectric test clock does
+not drive, so any test that opens one spins until Espresso times out. Each
+dialog body — fields and actions together — is an internal panel the tests
+drive directly; the `AlertDialog` is a wrapper holding no logic. Keep it that
+way for any dialog added later.
+
+**Robolectric test classes stay small.** Its native-object registry is a fixed
+16,777,216-entry array per JVM and a Compose composition consumes many entries,
+so the suite runs `forkEvery(1)` and the stock screen tests are four small
+classes rather than one large one.
 
 **A pending `+`/`−` count is never a queue.** It persists on the device so a
 long shelf count survives the app being killed, and it commits only when the

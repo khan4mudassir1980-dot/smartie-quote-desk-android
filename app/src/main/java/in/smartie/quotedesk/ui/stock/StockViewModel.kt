@@ -59,9 +59,18 @@ class StockViewModel(
     private val _saving = MutableStateFlow<Set<String>>(emptySet())
     val saving: StateFlow<Set<String>> = _saving.asStateFlow()
 
+    /**
+     * Collected **eagerly**, not [SharingStarted.WhileSubscribed].
+     *
+     * This is a guard, not a display value: `requireOnline` reads `.value`
+     * before every write. Under `WhileSubscribed` that value is the initial
+     * `true` until something subscribes, and reverts five seconds after the
+     * screen goes away — so a save could be attempted offline in exactly the
+     * window the guard exists to cover.
+     */
     val online: StateFlow<Boolean> = onlineFlow
         .catch { emit(true) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     init {
         // Read once. After that this view model owns the pending counts, so a

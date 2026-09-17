@@ -149,6 +149,12 @@ android {
         unitTests.isIncludeAndroidResources = true
         unitTests.isReturnDefaultValues = true
         unitTests.all {
+            // Robolectric keeps a sandbox per test class and Compose keeps a
+            // whole composition inside it. The forked test JVM's default heap
+            // is not enough once there are four Compose test classes, and it
+            // fails as OutOfMemoryError in unrelated-looking tests.
+            it.maxHeapSize = "2g"
+            it.jvmArgs("-XX:MaxMetaspaceSize=1g")
             // Name every failing test in the console: the HTML report is not
             // reachable when the build runs on CI.
             it.testLogging {

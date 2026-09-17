@@ -155,11 +155,14 @@ class StockScreenTest {
     }
 
     @Test
-    fun `search narrows the list and says so when nothing matches`() {
+    fun `search narrows the list`() {
         show(query = "boom")
         compose.onNodeWithText("Boom barrier").assertExists()
         assertTrue(compose.onAllNodesWithText("Sliding gate motor").fetchSemanticsNodes().isEmpty())
+    }
 
+    @Test
+    fun `a search that matches nothing says so`() {
         show(query = "nothing here at all")
         compose.onNodeWithText("Nothing matches that search.").assertExists()
     }

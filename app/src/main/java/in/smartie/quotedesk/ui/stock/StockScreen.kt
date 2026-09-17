@@ -3,7 +3,6 @@ package `in`.smartie.quotedesk.ui.stock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -460,6 +459,42 @@ private fun EditStockDialog(
     onSave: (Double, Double, String) -> Unit,
     onStopTracking: () -> Unit
 ) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit ${StockBoard.displayName(record)}") },
+        text = {
+            EditStockPanel(
+                record = record,
+                capabilities = capabilities,
+                online = online,
+                onSave = onSave,
+                onStopTracking = onStopTracking,
+                onCancel = onDismiss
+            )
+        },
+        // The panel carries its own actions, so the dialog holds none: that
+        // keeps the whole body ordinary composable content.
+        confirmButton = {}
+    )
+}
+
+/**
+ * The Edit body, deliberately **not** wrapped in a dialog.
+ *
+ * A Compose `Dialog` opens its own window with its own recomposer, which the
+ * Robolectric test clock does not drive — `waitForIdle` then spins until
+ * Espresso gives up, whatever the content is. Keeping the body a plain
+ * composable is what makes it testable at all.
+ */
+@Composable
+internal fun EditStockPanel(
+    record: StockRecord,
+    capabilities: StockCapabilities,
+    online: Boolean,
+    onSave: (Double, Double, String) -> Unit,
+    onStopTracking: () -> Unit,
+    onCancel: () -> Unit
+) {
     var quantity by remember(record) { mutableStateOf(Money.formatQuantity(record.quantity)) }
     var reorder by remember(record) { mutableStateOf(Money.formatQuantity(record.reorderLevel)) }
     var note by remember(record) { mutableStateOf("") }
@@ -467,64 +502,56 @@ private fun EditStockDialog(
     val parsedReorder = reorder.trim().toDoubleOrNull()
     val valid = (parsedQuantity ?: record.quantity) >= 0.0 && (parsedReorder ?: 0.0) >= 0.0
 
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Edit ${StockBoard.displayName(record)}") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (capabilities.exactQuantity) {
-                    SmartieField(
-                        label = "Exact quantity",
-                        value = quantity,
-                        onValueChange = { quantity = it },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.semantics { contentDescription = "Exact quantity" }
-                    )
-                } else {
-                    // Staff reach this dialog for the reorder level and the
-                    // note; the rules reserve an exact quantity for an
-                    // Administrator, so the field is not offered at all.
-                    Text(
-                        "Only an Owner or Administrator can set an exact quantity.",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = SmartieColors.Steel
-                    )
-                }
-                SmartieField(
-                    label = "Reorder level",
-                    value = reorder,
-                    onValueChange = { reorder = it },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.semantics { contentDescription = "Reorder level" }
-                )
-                SmartieField(
-                    label = "Reason or shared note",
-                    value = note,
-                    onValueChange = { note = it },
-                    singleLine = false,
-                    placeholder = "Why, or where it is kept",
-                    modifier = Modifier.semantics { contentDescription = "Reason or shared note" }
-                )
-                if (!online) {
-                    Text(
-                        OFFLINE_LABEL,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = SmartieColors.Warn
-                    )
-                }
-                if (capabilities.stopTracking) {
-                    SmartieGhostButton(
-                        text = "Stop tracking",
-                        onClick = onStopTracking,
-                        enabled = online,
-                        modifier = Modifier.semantics {
-                            contentDescription = "Stop tracking this item"
-                        }
-                    )
-                }
-            }
-        },
-        confirmButton = {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (capabilities.exactQuantity) {
+            SmartieField(
+                label = "Exact quantity",
+                value = quantity,
+                onValueChange = { quantity = it },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.semantics { contentDescription = "Exact quantity" }
+            )
+        } else {
+            // Staff reach this for the reorder level and the note; the rules
+            // reserve an exact quantity for an Administrator, so the field is
+            // not offered at all rather than offered and refused.
+            Text(
+                "Only an Owner or Administrator can set an exact quantity.",
+                style = MaterialTheme.typography.labelMedium,
+                color = SmartieColors.Steel
+            )
+        }
+        SmartieField(
+            label = "Reorder level",
+            value = reorder,
+            onValueChange = { reorder = it },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.semantics { contentDescription = "Reorder level" }
+        )
+        SmartieField(
+            label = "Reason or shared note",
+            value = note,
+            onValueChange = { note = it },
+            singleLine = false,
+            placeholder = "Why, or where it is kept",
+            modifier = Modifier.semantics { contentDescription = "Reason or shared note" }
+        )
+        if (!online) {
+            Text(
+                OFFLINE_LABEL,
+                style = MaterialTheme.typography.labelMedium,
+                color = SmartieColors.Warn
+            )
+        }
+        if (capabilities.stopTracking) {
+            SmartieGhostButton(
+                text = "Stop tracking",
+                onClick = onStopTracking,
+                enabled = online,
+                modifier = Modifier.semantics { contentDescription = "Stop tracking this item" }
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SmartiePrimaryButton(
                 text = "Save",
                 enabled = valid && online,
@@ -536,9 +563,9 @@ private fun EditStockDialog(
                     )
                 }
             )
-        },
-        dismissButton = { SmartieGhostButton(text = "Cancel", onClick = onDismiss) }
-    )
+            SmartieGhostButton(text = "Cancel", onClick = onCancel)
+        }
+    }
 }
 
 @Composable
@@ -548,6 +575,31 @@ private fun AddStockDialog(
     onDismiss: () -> Unit,
     onAddProduct: (ProductRecord, Double, Double, String) -> Unit,
     onAddManual: (String, String, String, Double, Double, String) -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add stock") },
+        text = {
+            AddStockPanel(
+                products = products,
+                online = online,
+                onAddProduct = onAddProduct,
+                onAddManual = onAddManual,
+                onCancel = onDismiss
+            )
+        },
+        confirmButton = {}
+    )
+}
+
+/** The Add body. Plain composable content, for the reason above. */
+@Composable
+internal fun AddStockPanel(
+    products: List<ProductRecord>,
+    online: Boolean,
+    onAddProduct: (ProductRecord, Double, Double, String) -> Unit,
+    onAddManual: (String, String, String, Double, Double, String) -> Unit,
+    onCancel: () -> Unit
 ) {
     var search by remember { mutableStateOf("") }
     var model by remember { mutableStateOf("") }
@@ -569,98 +621,82 @@ private fun AddStockDialog(
     val startingQuantity = quantity.trim().toDoubleOrNull() ?: 0.0
     val startingReorder = reorder.trim().toDoubleOrNull() ?: 0.0
 
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add stock") },
-        text = {
-            // Never a LazyColumn, and never an unbounded scrollable: either
-            // measures against infinite height inside a dialog and never
-            // settles, recomposing until Espresso gives up. A Box with a
-            // bounded max height gives the scroll finite constraints.
-            Box(Modifier.heightIn(max = 380.dp)) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.verticalScroll(rememberScrollState())
-            ) {
-                SmartieField(
-                    label = "Starting quantity",
-                    value = quantity,
-                    onValueChange = { quantity = it },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.semantics { contentDescription = "Starting quantity" }
-                )
-                SmartieField(
-                    label = "Reorder level",
-                    value = reorder,
-                    onValueChange = { reorder = it },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                )
-                SmartieField(
-                    label = "Note",
-                    value = note,
-                    onValueChange = { note = it },
-                    singleLine = false
-                )
-                if (products.isNotEmpty()) {
-                    SectionHeader("From the catalogue")
-                    SmartieField(
-                        label = "Find a product",
-                        value = search,
-                        onValueChange = { search = it },
-                        placeholder = "Model or name",
-                        modifier = Modifier.semantics {
-                            contentDescription = "Find a catalogue product"
+    Column(
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())
+    ) {
+        SmartieField(
+            label = "Starting quantity",
+            value = quantity,
+            onValueChange = { quantity = it },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.semantics { contentDescription = "Starting quantity" }
+        )
+        SmartieField(
+            label = "Reorder level",
+            value = reorder,
+            onValueChange = { reorder = it },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+        )
+        SmartieField(
+            label = "Note",
+            value = note,
+            onValueChange = { note = it },
+            singleLine = false
+        )
+        if (products.isNotEmpty()) {
+            SectionHeader("From the catalogue")
+            SmartieField(
+                label = "Find a product",
+                value = search,
+                onValueChange = { search = it },
+                placeholder = "Model or name",
+                modifier = Modifier.semantics { contentDescription = "Find a catalogue product" }
+            )
+            matches.forEach { product ->
+                Text(
+                    product.name.ifBlank { product.model },
+                    style = MaterialTheme.typography.titleSmall,
+                    color = SmartieColors.Ink,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickableNoRipple {
+                            onAddProduct(product, startingQuantity, startingReorder, note)
                         }
-                    )
-                    matches.forEach { product ->
-                        Text(
-                            product.name.ifBlank { product.model },
-                            style = MaterialTheme.typography.titleSmall,
-                            color = SmartieColors.Ink,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickableNoRipple {
-                                    onAddProduct(product, startingQuantity, startingReorder, note)
-                                }
-                                .padding(vertical = 10.dp)
-                        )
-                    }
-                }
-                SectionHeader("Or a manual item")
-                SmartieField(
-                    label = "Model or code",
-                    value = model,
-                    onValueChange = { model = it },
-                    modifier = Modifier.semantics { contentDescription = "Manual model or code" }
+                        .padding(vertical = 10.dp)
                 )
-                SmartieField(
-                    label = "Item name",
-                    value = name,
-                    onValueChange = { name = it },
-                    modifier = Modifier.semantics { contentDescription = "Manual item name" }
-                )
-                SmartieField(label = "Unit", value = unit, onValueChange = { unit = it })
-                if (!online) {
-                    Text(
-                        OFFLINE_LABEL,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = SmartieColors.Warn
-                    )
-                }
             }
-            }
-        },
-        confirmButton = {
+        }
+        SectionHeader("Or a manual item")
+        SmartieField(
+            label = "Model or code",
+            value = model,
+            onValueChange = { model = it },
+            modifier = Modifier.semantics { contentDescription = "Manual model or code" }
+        )
+        SmartieField(
+            label = "Item name",
+            value = name,
+            onValueChange = { name = it },
+            modifier = Modifier.semantics { contentDescription = "Manual item name" }
+        )
+        SmartieField(label = "Unit", value = unit, onValueChange = { unit = it })
+        if (!online) {
+            Text(
+                OFFLINE_LABEL,
+                style = MaterialTheme.typography.labelMedium,
+                color = SmartieColors.Warn
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SmartiePrimaryButton(
                 text = "Add item",
                 enabled = online && (model.isNotBlank() || name.isNotBlank()),
-                onClick = {
-                    onAddManual(model, name, unit, startingQuantity, startingReorder, note)
-                }
+                onClick = { onAddManual(model, name, unit, startingQuantity, startingReorder, note) }
             )
-        },
-        dismissButton = { SmartieGhostButton(text = "Cancel", onClick = onDismiss) }
-    )
+            SmartieGhostButton(text = "Cancel", onClick = onCancel)
+        }
+    }
 }
 
 /** One wording, on every disabled control and in every refusal. */

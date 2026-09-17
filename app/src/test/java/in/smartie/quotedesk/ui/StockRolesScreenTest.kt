@@ -10,7 +10,9 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import `in`.smartie.quotedesk.data.mapping.Keys
 import `in`.smartie.quotedesk.data.model.ProductRecord
-import `in`.smartie.quotedesk.ui.stock.StockActions
+import `in`.smartie.quotedesk.ui.stock.AddStockPanel
+import `in`.smartie.quotedesk.ui.stock.EditStockPanel
+import `in`.smartie.quotedesk.ui.theme.SmartieTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -18,13 +20,23 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
-/** What each role is offered, and what Add stock does. */
+/**
+ * What each role is offered, and what Add stock does.
+ *
+ * These drive the dialog **panels** rather than the dialogs. A Compose
+ * `Dialog` opens its own window with its own recomposer, which the Robolectric
+ * test clock does not drive, so `waitForIdle` spins until Espresso gives up
+ * whatever the content is. The panels are the whole body, actions included;
+ * only the AlertDialog wrapper is untested, and it holds no logic.
+ */
 @RunWith(AndroidJUnit4::class)
 @Config(application = Application::class, qualifiers = "w412dp-h915dp")
 class StockRolesScreenTest {
 
     @get:Rule
     val compose = createComposeRule()
+
+    private val motor = stockRecord("SIE1000", "Sliding gate motor", quantity = 9.0, reorder = 2.0)
 
     @Test
     fun `a Worker sees stock and names but no control at all`() {
@@ -41,18 +53,26 @@ class StockRolesScreenTest {
 
     @Test
     fun `Staff get Edit but no exact quantity field`() {
-        compose.showStock(capabilities = staffCaps)
-        compose.onNodeWithContentDescription("Edit Sliding gate motor").performClick()
+        compose.setContent {
+            SmartieTheme {
+                EditStockPanel(motor, staffCaps, online = true, onSave = { _, _, _ -> }, onStopTracking = {}, onCancel = {})
+            }
+        }
         compose.onNodeWithText("Only an Owner or Administrator can set an exact quantity.")
             .assertExists()
         assertTrue(compose.onAllNodesWithText("Exact quantity").fetchSemanticsNodes().isEmpty())
         compose.onNodeWithContentDescription("Reorder level").assertExists()
+        // Stop tracking is an Administrator action.
+        assertTrue(compose.onAllNodesWithText("Stop tracking").fetchSemanticsNodes().isEmpty())
     }
 
     @Test
     fun `an Administrator gets the exact quantity field and Stop tracking`() {
-        compose.showStock(capabilities = adminCaps)
-        compose.onNodeWithContentDescription("Edit Sliding gate motor").performClick()
+        compose.setContent {
+            SmartieTheme {
+                EditStockPanel(motor, adminCaps, online = true, onSave = { _, _, _ -> }, onStopTracking = {}, onCancel = {})
+            }
+        }
         compose.onNodeWithContentDescription("Exact quantity").assertExists()
         compose.onNodeWithContentDescription("Stop tracking this item").assertExists()
     }
@@ -60,15 +80,30 @@ class StockRolesScreenTest {
     @Test
     fun `saving an edit passes the stored numbers straight through`() {
         var edited: Triple<Double, Double, String>? = null
-        compose.showStock(
-            capabilities = adminCaps,
-            actions = StockActions(onEdit = { _, q, r, n -> edited = Triple(q, r, n) })
-        )
-        compose.onNodeWithContentDescription("Edit Sliding gate motor").performClick()
+        compose.setContent {
+            SmartieTheme {
+                EditStockPanel(
+                    motor, adminCaps, online = true,
+                    onSave = { q, r, n -> edited = Triple(q, r, n) },
+                    onStopTracking = {}, onCancel = {}
+                )
+            }
+        }
         compose.onNodeWithText("Save").performClick()
         // Untouched fields must arrive unchanged, so an edit nobody altered
         // reaches the repository as the no-op it is.
         assertEquals(Triple(9.0, 2.0, ""), edited)
+    }
+
+    @Test
+    fun `offline the edit panel cannot be saved and says why`() {
+        compose.setContent {
+            SmartieTheme {
+                EditStockPanel(motor, adminCaps, online = false, onSave = { _, _, _ -> }, onStopTracking = {}, onCancel = {})
+            }
+        }
+        compose.onNodeWithText("Save").assertIsNotEnabled()
+        compose.onNodeWithText("Internet required to change stock").assertExists()
     }
 
     @Test
@@ -83,19 +118,34 @@ class StockRolesScreenTest {
             name = "Barrier arm"
         )
         var added: String? = null
-        compose.showStock(
-            products = listOf(renamed),
-            actions = StockActions(onAddProduct = { p, _, _, _ -> added = p.stockKey })
-        )
-        compose.onNodeWithContentDescription("Add stock").performClick()
+        compose.setContent {
+            SmartieTheme {
+                AddStockPanel(
+                    products = listOf(renamed),
+                    online = true,
+                    onAddProduct = { p, _, _, _ -> added = p.stockKey },
+                    onAddManual = { _, _, _, _, _, _ -> },
+                    onCancel = {}
+                )
+            }
+        }
         compose.onNodeWithText("Barrier arm").performClick()
         assertEquals("gateMotors|SIE9000", added)
     }
 
     @Test
     fun `Add item stays disabled until a manual item is named`() {
-        compose.showStock()
-        compose.onNodeWithContentDescription("Add stock").performClick()
+        compose.setContent {
+            SmartieTheme {
+                AddStockPanel(
+                    products = emptyList(),
+                    online = true,
+                    onAddProduct = { _, _, _, _ -> },
+                    onAddManual = { _, _, _, _, _, _ -> },
+                    onCancel = {}
+                )
+            }
+        }
         compose.onNodeWithText("Add item").assertIsNotEnabled()
         compose.onNodeWithContentDescription("Manual model or code").assertExists()
         compose.onNodeWithContentDescription("Manual item name").assertExists()

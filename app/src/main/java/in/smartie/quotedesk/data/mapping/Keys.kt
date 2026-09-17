@@ -27,14 +27,36 @@ object Keys {
     fun productKey(group: String, seedModel: String): String = "$group|$seedModel"
 
     /**
+     * The characters the PWA's own `docId` replaces (`index.html:5723`),
+     * mirrored in `tools/catalogue-import/lib/keys.mjs`: the path separator,
+     * and the four Realtime-Database-era characters the PWA has always
+     * stripped. Firestore itself only refuses `/`, but the id that matters is
+     * the one already on disk, not the one Firestore would tolerate.
+     */
+    private val PWA_DOC_ID_CHARACTERS = Regex("[/.#\$\\[\\]]")
+
+    /**
      * Canonical product document id for schema v2: one document per product.
      *
      * Seeding wrote `group|model` and editing wrote `group__model`, so the
      * same product could exist twice with the same `id` field — the duplicate
      * Compose key that crashes the beta Products screen (audit C1/P3).
+     *
+     * This must be **character for character** what the staging importer
+     * wrote, or a native write lands on a second document and re-creates the
+     * duplicate the canonical id exists to prevent. It previously replaced
+     * only `/`, which is right for `SIEBAL58H/V` and wrong for every model
+     * carrying a `.`, `#`, `$`, `[` or `]`. Only the model is canonicalised,
+     * not the group, because that is what the PWA does.
+     *
+     * `sanitiseDocId` is deliberately not used here and is deliberately left
+     * alone: it guards arbitrary ids, including stock keys, whose own rule is
+     * still an open question against the V8C4 source.
      */
-    fun productDocId(group: String, seedModel: String): String =
-        sanitiseDocId("${group}__${seedModel}")
+    fun productDocId(group: String, seedModel: String): String {
+        val canonical = seedModel.replace(PWA_DOC_ID_CHARACTERS, "_")
+        return "${group}__$canonical"
+    }
 
     /** Splits either id scheme back into group and model. */
     fun splitProductKey(raw: String): Pair<String, String>? {

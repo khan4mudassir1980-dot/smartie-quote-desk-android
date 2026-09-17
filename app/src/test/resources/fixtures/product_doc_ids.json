@@ -1,0 +1,68 @@
+{
+  "note": "The canonical product document id, as the staging importer wrote it. Read by KeysTest (Kotlin) and by tools/catalogue-import/test/doc-ids.test.mjs (Node), so both implementations are proven against one table rather than against each other's opinion. Rows marked real come from the catalogue; the rest exist because no real model has been confirmed for that character yet. Add the remaining real models from `node inspect-v8c4.mjs` output as they are extracted.",
+  "cases": [
+    {
+      "group": "gateMotors",
+      "seedModel": "SIE1000",
+      "documentId": "gateMotors__SIE1000",
+      "character": "none",
+      "source": "real"
+    },
+    {
+      "group": "hwWheel",
+      "seedModel": "SIEBAL58H/V",
+      "documentId": "hwWheel__SIEBAL58H_V",
+      "character": "/",
+      "source": "real"
+    },
+    {
+      "group": "gateMotors",
+      "seedModel": "SIE-1.5",
+      "documentId": "gateMotors__SIE-1_5",
+      "character": ".",
+      "source": "synthetic"
+    },
+    {
+      "group": "glass",
+      "seedModel": "TG#12",
+      "documentId": "glass__TG_12",
+      "character": "#",
+      "source": "synthetic"
+    },
+    {
+      "group": "hwWheel",
+      "seedModel": "RAIL$9",
+      "documentId": "hwWheel__RAIL_9",
+      "character": "$",
+      "source": "synthetic"
+    },
+    {
+      "group": "hwWheel",
+      "seedModel": "BRK[2]",
+      "documentId": "hwWheel__BRK_2_",
+      "character": "[ and ]",
+      "source": "synthetic"
+    },
+    {
+      "group": "mixed",
+      "seedModel": "A/B.C#D$E[F]G",
+      "documentId": "mixed__A_B_C_D_E_F_G",
+      "character": "all six",
+      "source": "synthetic"
+    },
+    {
+      "group": "gateMotors",
+      "seedModel": "SIE_1000",
+      "documentId": "gateMotors__SIE_1000",
+      "character": "underscore is not replaced",
+      "source": "synthetic"
+    },
+    {
+      "group": "gate.motors",
+      "seedModel": "SIE1000",
+      "documentId": "gate.motors__SIE1000",
+      "character": "the group is never canonicalised",
+      "source": "synthetic"
+    }
+  ]
+}

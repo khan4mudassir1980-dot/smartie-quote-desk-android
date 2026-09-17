@@ -1,6 +1,7 @@
 # N3 Our Stock — implementation plan
 
-**Direction approved 2026-09-17. Nothing in this plan is implemented.** It is
+**Approved 2026-09-17. Batch A (steps 1-5) is implemented; the ViewModel and
+the screen are not.** It is
 written against the roadmap's §12 line for N3 and the agreed behaviour below,
 and it is deliberately specific about the writes, because N3 is the first phase
 in which the native app writes a document the PWA also writes.
@@ -63,7 +64,7 @@ mostly adds the write path and the screen, not a new model.
 
 ## What N3 adds
 
-### `domain/StockBoard.kt` — new, pure, unit-tested
+### `domain/StockBoard.kt` — **built** (batch A), pure, unit-tested
 
 The arrangement rules, in the shape `Catalogue` uses for Products, so nothing
 is decided in a composable:
@@ -82,7 +83,7 @@ is decided in a composable:
 N2 settled for product pins (audit P4). `observeStock()` currently sorts
 `pinned` then `name` and ignores `pinOrder`; N3 fixes that.
 
-### `domain/StockEntry.kt` — new, pure, unit-tested
+### `domain/StockEntry.kt` — **built** (batch A), pure, unit-tested
 
 What a new stock row is, for behaviour 4:
 
@@ -93,7 +94,7 @@ What a new stock row is, for behaviour 4:
 - `validate()` returning the PWA's own refusals: a blank item, a negative
   starting quantity, a negative reorder level, a key that already exists.
 
-### `data/repository/StockWriteRepository.kt` — new
+### `data/repository/StockWriteRepository.kt` — **built** (batch A)
 
 The only new writer. Every quantity or reorder-level change is a single
 Firestore transaction, so two phones counting the same shelf cannot overwrite
@@ -147,7 +148,7 @@ added alongside, on both documents, for PWA compatibility and for ordering.
 **Stock** (`/stock/{stockDocId}`), merge — exactly the V8C4 shape:
 
 ```
-key, group, model,
+key, group, model, name,
 q, min, off,
 t, lastAction,
 pinned, pinOrder,
@@ -155,6 +156,11 @@ manual, manualName, manualModel,
 categoryId, unit, linkedKey, stockNote,
 by, byUid, serverAt
 ```
+
+`name` is the one approved addition to the V8C4 shape. `q` and `min` are
+written as numbers on **every** write, even when unchanged: an imported PWA row
+can hold them as strings and the rules require `q is number`, so re-asserting
+them is what keeps a legacy row writable at all.
 
 **Movement** (`/stockMoves/{id}`) — exactly the V8C4 shape, plus `serverAt`
 which the transaction adds:
@@ -183,9 +189,11 @@ negative one. The note is optional; blank stores
 - Quantity changed → `action: "set"`.
 - Quantity unchanged, reorder level changed → `action: "min"`, with
   `prev == next` and `delta: 0`.
-- **Quantity unchanged, reorder level unchanged, no note → no write at all.**
-  No stock document, no movement. A no-op must cost nothing and must not
-  appear in the history.
+- Quantity and reorder level unchanged, a note typed → the note and the audit
+  metadata are saved with `lastAction: "note"` and **no movement is written**.
+- **Nothing changed and no note → no write at all.** No stock document, no
+  movement. A no-op must cost nothing and must not appear in the history.
+  A blank note never clears a stored one.
 
 Refused in the repository for anyone `Permissions.canSetExactQuantity` rejects,
 so a doomed write never leaves the device; the rules refuse it too, and both
@@ -205,7 +213,7 @@ audit trail as one.
 `stopTracking` (Administrator only) sets `off: true` with an `archive` move;
 `observeStock()` already filters archived rows out.
 
-### `ui/stock/StockViewModel.kt` — new
+### `ui/stock/StockViewModel.kt` — batch B, not built
 
 Follows `ProductsViewModel`: the query, the filter, and the **pending deltas**
 that have not been committed yet. Pending deltas are held per key and persisted
@@ -221,7 +229,7 @@ success, and dropped when its row disappears. When a transaction is rejected
 the pending delta stays exactly as it was, so the person sees what they still
 have to commit rather than a count that quietly succeeded somewhere.
 
-### `ui/stock/StockScreen.kt` — rewritten in place
+### `ui/stock/StockScreen.kt` — batch B, not built
 
 The `InDevelopmentBanner` goes. The screen becomes stateless over a
 `StockActions` record, as `ProductsScreen` is, so Robolectric can drive it
@@ -258,7 +266,7 @@ without Firebase.
 - A Worker sees the list, the tiles, the search and the tags, and **no
   control**: no stepper, no Done, no Edit, no pin, no Add, no history.
 
-### Wiring
+### Wiring — batch B, not built
 
 `AppContainer` gains `stockWriteRepository`. `SmartieApp` passes a
 `StockViewModel` to `StockScreen` the way it already passes `ProductsViewModel`
@@ -290,11 +298,10 @@ its own section below, because it is the rule the whole screen is built to.
 write. One Done is one transaction and one audit row, which is what makes the
 history readable and what keeps a shelf count from costing forty writes.
 
-**The V8C4 stock shape is written exactly, and nothing is added to it.**
-That includes not adding a `name` field, which an earlier draft of this plan
-proposed before the shape was known. `group` and `model` are written because
-the shape carries them; the descriptive name is not, so a Worker sees the
-model. See "One consequence worth flagging" below.
+**The V8C4 stock shape is written exactly, plus one approved addition.**
+That addition is `name`, so a Worker reading `/stock` sees a descriptive name
+without gaining `/products`. Nothing else is added, and the rules refuse any
+write carrying a price. See "Two decisions taken on top of the findings".
 
 **Pin state lives on the stock document, not in `teamSettings`.** Unlike
 product pins, that is where the PWA's schema already puts it (`pinned`,
@@ -362,39 +369,43 @@ rather than one plus synthetic stand-ins.
 `min`, and creates a movement **when the minimum actually changes**. A no-op —
 minimum unchanged, no note — **creates no write and no movement**.
 
-### One consequence worth flagging before implementation
+### Two decisions taken on top of the findings
 
-**The V8C4 stock document has no `name` field.** It carries `model`,
-`manualName` and `manualModel`, and the descriptive product name lives only in
-`/products`, which a Worker may not read.
+**1. `name` is written to `/stock` as an approved additive extension.**
+Approved 2026-09-17. The V8C4 stock document has no `name` field — it carries
+`model`, `manualName` and `manualModel`, and the descriptive name lives only in
+`/products`, which a Worker may not read. Without an addition a Worker's list
+would read `SIE1000` rather than `Sliding gate motor`.
 
-So a Worker's stock list shows the **model** — `SIE1000` — not
-`Sliding gate motor 1000 kg`. An earlier draft of this plan said N3 would
-denormalise `name` onto the stock document on every write; that was written
-before the shape was known, and it is withdrawn. The comment in
-`firestore/firestore.rules` that speaks of "the denormalised product name" and
-the KDoc on `StockRecord.name` overstate the same thing, and are corrected in
-this commit.
+So the native app writes `name`: the catalogue product's name for a catalogue
+row, the manual item's name for a hand-typed one, and **nothing else from the
+catalogue**. `StockEntry.fromProduct` copies the name, model, group, unit and
+category and no price. The PWA ignores fields it does not know, so this is safe
+in the same way the importer's additive `kg` is safe.
 
-`StockBoard.displayName` therefore resolves `manualName` → `name` (for any
-document that happens to carry one) → `model` → the key's tail, and a Worker
-always sees something.
+Because `/stock` is now the one Worker-readable place a price could leak to,
+the rules refuse one outright: `noPriceData()` rejects any write carrying
+`dealer`, `contractor`, `client` or `gst`, and `safeName()` requires `name` to
+be a string. The emulator suite proves a Worker reads the name, cannot read
+`/products`, and cannot write stock at all.
 
-**If the descriptive name should be visible to Workers, that is an additive
-`name` field on the stock document.** The PWA ignores fields it does not know,
-so it is safe in the same way the importer's additive `kg` is safe — but it is
-a deliberate divergence from the V8C4 shape and it is the Owner's call, not
-something to slip in. **Not planned unless asked for.** Until then, N3 writes
-the V8C4 shape exactly.
+An earlier draft of this plan said the opposite — that no `name` would be
+written. That was correct before this decision and is superseded by it.
 
-### One native decision inside Q4's envelope
+**2. A note-only edit writes no movement.** Approved 2026-09-17. When neither
+the quantity nor the reorder level changed but a note was typed, the stock
+document's `stockNote` is saved with its audit metadata (`by`, `byUid`, `t`,
+`serverAt`) and **no `/stockMoves` document is created** — nothing moved, so
+nothing is logged.
 
-Q4 settles the no-op and the changed-minimum cases. It does not say what a
-**note-only** edit does — quantity and minimum both unchanged, but the person
-typed a note. N3 writes the stock document's `stockNote` and records a `min`
-movement with `prev == next` and `delta: 0`, so a note that changes a shared
-field is auditable rather than silently applied. Flagged as a native decision,
-not a V8C4 finding; say so if you want it to write nothing instead.
+It is **not** disguised as `min`, which would claim a minimum changed when none
+did. It carries `lastAction: "note"`, a native additive value permitted for
+Staff by the rules and deliberately absent from the `/stockMoves` action list,
+so a movement with that action is refused. Quantity movements and genuine
+minimum changes keep carrying their own optional note as before.
+
+An earlier draft proposed a `min` movement with `prev == next` for this case;
+that is superseded.
 
 ## Test plan
 

@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-17.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `353eddb` — [run #41](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35194386675), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `30cada2` — [run #42](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35200750311), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -23,7 +23,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N0 Foundation | **Complete** |
 | N1 Auth & Team | **Complete** |
 | N2 Products | **Complete and verified** |
-| N3 Our Stock | **Planned and resolved against V8C4, not implemented** |
+| N3 Our Stock | **Batch A built** (domain, write path, rules). Batch B — ViewModel and screen — not started |
 | N4–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -34,14 +34,17 @@ above; it is the last head CI has verified, not necessarily the tip.
 
 ## Current next action
 
-**Get approval to implement N3.** The plan in `docs/N3-plan.md` is complete:
-the V8C4 inspection has been run against the authoritative `index.html` and
-**no open schema question remains**. Document identity, the movement and stock
-shapes, and the reorder-level rule are all resolved and recorded there, and the
-transaction contract is specified.
+**Get approval to implement N3 batch B: the ViewModel and the Our Stock
+screen.** Batch A is built and committed — `StockBoard`, `StockEntry`,
+`Permissions.canSetReorderLevel`, `StockWrite`, `StockStore`,
+`StockWriteRepository` and the emulator rule tests. Nothing below the UI layer
+is outstanding. (Its own CI run is later than the verified head recorded above;
+advance that hash once the run for these commits is green.)
 
-Nothing of N3 — the repository, the ViewModel or the screen — is to be written
-until that approval is given.
+Batch B is exactly: `ui/stock/StockViewModel.kt`, the rewrite of
+`ui/stock/StockScreen.kt` with its Robolectric test, wiring
+`stockWriteRepository` into `AppContainer` and `SmartieApp`, and removing the
+`InDevelopmentBanner`. Nothing in `domain/` or `data/` changes.
 
 ## Decisions that bind future work
 
@@ -64,9 +67,20 @@ test, and all thirteen real affected catalogue models are in it.
 **Movements carry a signed `delta` and no `qty` field**, `at` in epoch
 milliseconds and `serverAt` as the server timestamp.
 
-**The V8C4 stock document has no `name` field**, so a Worker sees the model
-rather than the catalogue name. Adding one would be a deliberate additive
-divergence and is the Owner's call; it is not planned.
+**`name` is written to `/stock` as an approved additive extension**, so a
+Worker sees a descriptive name without gaining `/products`. It carries the
+catalogue product name, or the manual item's name, and nothing else from the
+catalogue. Because `/stock` is the one Worker-readable place a price could leak
+to, the rules refuse any write carrying `dealer`, `contractor`, `client` or
+`gst`, and require `name` to be a string.
+
+**A note-only edit writes no movement.** The stock document's `stockNote` and
+its audit metadata are saved with `lastAction: "note"`; nothing moved, so
+nothing is logged, and it is never disguised as `min`. `note` is deliberately
+not a `/stockMoves` action.
+
+**Below zero is rejected, never clamped**, and the movement id and `at` are
+generated once before the transaction and reused if Firestore replays it.
 
 ## Data and credentials
 

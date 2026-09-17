@@ -104,6 +104,13 @@ Device overrides carry no timestamp, so the audit puts them on a review list
 rather than applying them silently. The import lists every one; re-run with
 `--apply-device-overrides` to take them once you have read the list.
 
+An **Owner attestation** is an accepted second form of `--device`: a file with
+an empty override map (`ov: {}`), written after the Owner has confirmed that no
+price was edited on any PWA device. It satisfies the guard above, but the
+report's `deviceBackup: SUPPLIED` then means "attested", not "extracted", and
+whatever records the run must say which of the two it was. The 2026-09-17 run
+used an attestation — see `docs/N2-verification.md`.
+
 ## Tests
 
 ```bash

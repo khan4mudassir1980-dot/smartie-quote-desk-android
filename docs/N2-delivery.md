@@ -50,8 +50,10 @@ No code change was needed to close them, as this section previously said.
 
 - **T-P1** is closed. `verify-staging.mjs` compared all 403 products against
   the seed book and the production export field by field — all three tiers
-  included — rather than sampling twenty of them. The §12 exit criterion
-  **"403-item parity"** is met.
+  included — rather than sampling twenty of them. Price parity rests on the
+  seed, that export, and the Owner's explicit attestation that no price was
+  edited on any PWA device; `docs/N2-verification.md` records which is which.
+  The §12 exit criterion **"403-item parity"** is met.
 - **T-P4** is closed as far as two separate Firebase projects allow: staging's
   pinned order equals the exported production order, and reorder survives a
   force stop and reopen.

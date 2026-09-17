@@ -1,9 +1,13 @@
 # N3 Our Stock — implementation plan
 
-**Proposed. Nothing in this plan is implemented.** It is written for review
-against the roadmap's §12 line for N3 and the agreed behaviour below, and it is
-deliberately specific about the writes, because N3 is the first phase in which
-the native app writes a document the PWA also writes.
+**Direction approved 2026-09-17. Nothing in this plan is implemented.** It is
+written against the roadmap's §12 line for N3 and the agreed behaviour below,
+and it is deliberately specific about the writes, because N3 is the first phase
+in which the native app writes a document the PWA also writes.
+
+Two things settled at approval are already folded in: stock writing is
+**online-only** (see "Stock writing is online-only"), and the canonical
+document-id mismatch is fixed **before** N3 rather than inside it.
 
 Phase N3 turns the read-only Our Stock screen into the working one. The screen
 currently carries an `InDevelopmentBanner` promising exactly this: *"Adding and
@@ -150,8 +154,15 @@ Follows `ProductsViewModel`: the query, the filter, and the **pending deltas**
 that have not been committed yet. Pending deltas are held per key and persisted
 to `DevicePreferences` under a new `stock_pending` key, so a long shelf count
 survives the app being killed — the same reasoning that puts the quote draft on
-the device (audit C8). A pending delta is cleared when its Done commits, and
-dropped when its row disappears.
+the device (audit C8).
+
+A pending delta is **a number this person has typed in, nothing more**. It is
+never a queued write: it does not commit itself when signal returns, it does
+not commit itself on restart, and nothing else in the app may read it as though
+it had been written. It is cleared only when its own transaction returns
+success, and dropped when its row disappears. When a transaction is rejected
+the pending delta stays exactly as it was, so the person sees what they still
+have to commit rather than a count that quietly succeeded somewhere.
 
 ### `ui/stock/StockScreen.kt` — rewritten in place
 
@@ -163,9 +174,14 @@ without Firebase.
   the filter, and the selected one is visibly selected — behaviour 8.
 - Search field.
 - Rows: name, model, the status tag, `Reorder at n`, the note, and the quantity
-  with its unit. The quantity shows `stored + pending` while a delta is
-  pending, with the pending amount called out, so nobody has to do the
-  arithmetic.
+  with its unit. **The quantity shown is the stored quantity**, always. A
+  pending delta appears beside it as its own figure — `12 each · +5 pending,
+  17 after Done` — and never replaces the live number, because until Done
+  returns, 12 is what the shelf and the other phones say.
+- **The Out and Low tags are computed from the stored quantity only.** A
+  pending −5 must not make a row read `Out of stock`: nothing has been taken
+  yet. The beta got this wrong by deriving its status from
+  `quantity + delta`.
 - **No typeable quantity on the row** — behaviour 3. The stepper's `−` and `+`
   only.
 - A **Done** button appears on a row with a pending delta, opening a small
@@ -210,12 +226,8 @@ canAdjustStock(member)` with its row in `PermissionsTest`.
 **A transaction, not `FieldValue.increment`.** Increment would work offline and
 is atomic, but it cannot clamp at zero and cannot know `prev` or `next`, so
 every audit row would carry a guess. An audit trail that is sometimes wrong is
-worse than one that sometimes has to wait. Consequence: **Done needs
-connectivity**, because a Firestore transaction needs a round trip. Offline,
-Done is disabled and the existing connectivity banner says why; the pending
-delta is kept on the device and commits when signal returns. This is the one
-decision in this plan that is a genuine trade-off rather than a reading of the
-rules — see the open questions.
+worse than one that sometimes has to wait. What follows from that is set out in
+its own section below, because it is the rule the whole screen is built to.
 
 **The pending delta is client-side and explicit.** Every `−` and `+` is not a
 write. One Done is one transaction and one audit row, which is what makes the
@@ -231,6 +243,39 @@ backfills the rows in use, and `StockBoard.displayName` covers the rest.
 product pins, that is where the PWA's schema already puts it (`pinned`,
 `pinOrder`), and the rules already permit it.
 
+## Stock writing is online-only
+
+Approved at review, and binding on the implementation. A Firestore transaction
+needs a round trip, so a stock change cannot be made offline. Rather than work
+around that, the screen states it.
+
+- **The transaction re-reads the stored quantity and applies the delta to it.**
+  Never to the figure the screen was showing, and never to a figure cached on
+  the device.
+- **No offline mutation queue.** Nothing is stored to be sent later, and
+  nothing sends itself when signal returns. The person presses Done again.
+- **No optimistic quantity change.** The number on the row is the stored
+  number until a transaction returns success. A pending delta is shown as its
+  own separate figure, and the Out and Low tags ignore it entirely.
+- **No fake pending-write count for a rejected transaction.** A rejected or
+  failed write leaves the pending delta untouched and says the write did not
+  happen. Nothing anywhere counts it as written, not in the row, not in the
+  tiles, not in history.
+- **Cached stock stays readable offline.** The list, the quantities, the tags,
+  the search and the filters all work from the Firestore cache, because reading
+  a stale count is useful and changing one is not.
+- **Add, Reduce, Done, Edit and Add stock say why they are unavailable.** The
+  wording is *"Internet required to change stock"*, on the disabled control and
+  in the message shown if one is somehow reached, alongside the existing
+  connectivity banner.
+- **The person retries once connectivity returns.** That is the whole recovery
+  path; there is no other.
+
+What this costs is honest: a shelf counted in a basement cannot be committed
+there. What it buys is that every number in `stockMoves` is a number that was
+true on the server at the moment it was written, which is the point of keeping
+an audit trail at all.
+
 ## Open questions — to settle before implementing
 
 1. **The stock document id for a key containing `/`.** Stock is keyed by the
@@ -240,34 +285,34 @@ product pins, that is where the PWA's schema already puts it (`pinned`,
    appears. **Read the PWA's stock write path in the V8C4 `index.html` and
    pin the answer with a test before any write ships.**
 
-2. **`Keys.productDocId` already diverges from the PWA's rule, and N3 is the
-   first phase that could be bitten by it.** `tools/catalogue-import/lib/keys.mjs`
-   says so in its own header: the native rule replaces only `/`, the PWA's
-   `docId` (`index.html:5723`) also replaces `. # $ [ ]`, and **thirteen of the
-   403 models need the broader rule**. Staging's product ids were written with
-   the PWA rule. `KeysTest` only ever asserts the `/` case, so nothing catches
-   it. N2 is unaffected because it writes no product document, but N3 links
-   stock rows to products by identity. Recommend fixing `Keys.sanitiseDocId` to
-   the PWA's character set and adding the thirteen-model case to `KeysTest`, as
-   a small commit **before** N3 rather than inside it.
+2. **The thirteen models that need the broader canonicalisation.**
+   `Keys.productDocId` has been corrected to the PWA's exact rule in its own
+   commit, ahead of this phase, and a shared fixture proves Kotlin and
+   `tools/catalogue-import/lib/keys.mjs` agree. The fixture carries one real
+   affected model (`hwWheel|SIEBAL58H/V`) and synthetic cases for `.`, `#`,
+   `$`, `[` and `]`. The other twelve real models should be added to it once
+   the extraction lists them — the command below prints them.
 
 3. **`delta` versus `qty` on a movement.** Confirm from the V8C4 source which
    field the PWA's history reads, so the native write is compatible while the
    PWA is still live. The plan writes both; that is a safe default, not a
    verified one.
 
-4. **Offline Done.** The recommendation above refuses it. If stock is counted
-   where there is no signal, say so and the alternative is a queue on the
-   device that commits transactions on reconnect — more moving parts, and a
-   count that is not yet true for the other phones. Your call.
-
-5. **Does the PWA write a movement when a reorder level changes alone?** The
+4. **Does the PWA write a movement when a reorder level changes alone?** The
    rules permit the `min` action, which suggests yes. Worth confirming so the
    two histories match.
 
-Questions 1, 2, 3 and 5 all need the approved **V8C4 `index.html`**, which is
-not in this repository — `tools/catalogue-import/extract-v8c4.mjs` takes it as
-a path. Please make it available for the N3 build, as it was for the import.
+All four need the approved **V8C4 `index.html`**, which is deliberately not in
+this repository. `tools/catalogue-import/inspect-v8c4.mjs` answers all four
+read-only, from the file where it already lives on the Owner's machine — one
+command, printed to the console, nothing written and nothing committed:
+
+```powershell
+node tools\catalogue-import\inspect-v8c4.mjs --index "C:\Users\dell\Documents\SMARTIE-Development\V8C4-source\index.html"
+```
+
+Implementation of the write path waits on its output. Nothing in it is guessed
+at in the meantime.
 
 ## Test plan
 
@@ -288,7 +333,10 @@ becoming `DEFAULT_STOCK_NOTE`, `t` and `at` being numbers, and both `delta` and
 **Compose (Robolectric):** `StockScreenTest` — the Worker sees rows and tags
 and no control at all; tapping Low filters and tapping again clears; the row
 has no editable quantity field; Done appears only with a pending delta; Staff
-see Edit without the quantity field; the pending delta shows in the row total.
+see Edit without the quantity field; a pending delta shows beside the stored
+quantity and never replaces it; a pending −5 on a quantity of 5 still reads
+`In stock`; offline, the controls are disabled and say "Internet required to
+change stock" while the list stays readable.
 
 **Rules (emulator):** extend `firestore/tests/data.test.js` — Staff refused a
 `set` move and allowed `in`, `out`, `min` and `add`; a Worker refused every
@@ -310,7 +358,10 @@ action refused on `stockMoves`; a `stockMoves` update and delete refused.
 | T-S9 | Pending delta, force stop, reopen | The pending delta is still there, uncommitted |
 | T-S10 | Add a manual item, then add it again | The second is refused, not merged |
 | T-S11 | Pin three rows | They lead the list in the order pinned; no history rows |
-| T-S12 | Aeroplane mode with a pending delta, then reconnect | Done is disabled and says why; it commits after |
+| T-S12 | Aeroplane mode | The list, tags and filters still work from cache |
+| T-S13 | Aeroplane mode with a pending delta | Done disabled, "Internet required to change stock"; the row still shows the stored number |
+| T-S14 | Reconnect after T-S13, without touching Done | Nothing has been written; the delta is still pending |
+| T-S15 | Then press Done | It commits, once, with the right `prev` and `next` |
 | T-X4 | 360×640 and 412×915, font scale 1.0 and 1.3 | Nothing clipped; the stepper and Done reachable |
 
 ## Human actions

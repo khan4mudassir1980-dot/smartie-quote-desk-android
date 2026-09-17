@@ -8,7 +8,7 @@ Run date: 2026-09-17. Run by the Owner, against
 `smartie-quote-desk-staging`, following `tools/catalogue-import/README.md`.
 Nothing in this session touched either Firebase project: this container holds
 no credential for either, by design. The one part that needs none —
-`node --test` in `tools/catalogue-import` — was re-run here and passed 22 of 22.
+`test/plan.test.mjs` in `tools/catalogue-import` — was re-run here and passed 22 of 22.
 
 ## What the run produced
 
@@ -18,7 +18,7 @@ no credential for either, by design. The one part that needs none —
 | Every product matches the book and the production export, field by field | `verify-staging.mjs` | Passed |
 | Pinned order in staging equals the exported production order | `verify-staging.mjs` | Matched |
 | A second import writes nothing | `import-staging.mjs` re-run | `writes.total: 0` |
-| The import plan behaves as specified | `npm test` in `tools/catalogue-import` | 22 / 22 passed |
+| The import plan behaves as specified | `test/plan.test.mjs` | 22 / 22 passed |
 | Search, shelves, the load filter, prices, the stepper and the quote bar | Staging APK, by hand | Passed |
 | Pin, reorder, and both surviving a force stop and reopen | Staging APK, by hand | Passed |
 | Production data | — | Never modified |
@@ -38,7 +38,8 @@ exit criterion names.
   check rather than merely sampling it. Count parity, distinct-key parity,
   `schemaVersion: 2` on every document, the canonical `group__seedModel`
   document id on every document, and the 13 ids needing a character replaced
-  all passed in the same run.
+  all passed in the same run. What the price half of it rests on is set out
+  under "What price parity rests on" below.
 - **T-P4 — pin order, the half that two projects allow.** Closed. Staging's
   pinned order equals the exported production order, is within the cap of 15,
   and every key resolves to a product. Reorder and unpin in the staging APK
@@ -61,17 +62,31 @@ staging cannot appear in the production PWA, and nothing here will write to
 production to make it. It is recorded as blocked, not claimed. Closing it needs
 a PWA build pointed at the staging project.
 
-## What this run does not cover
+## What price parity rests on
 
-**Device-only price overrides.** A price edited in the PWA on a device that
-never pushed to Firestore exists only on that device.
-`tools/catalogue-import/README.md` therefore requires `--device` for a run that
-claims price parity, and records `deviceBackup: NOT SUPPLIED` when it is
-missing. The parity closed above is parity against the seed book and the
-production export. If the report for this run carries `NOT SUPPLIED`, a price
-held only on the Owner's device would not have been seen, and the import's
-override review list would be empty for the wrong reason. Check the stored
-report's `deviceBackup` field before treating price parity as covering those.
+Three things, and it is worth being exact about the third.
+
+1. The **V8C4 seed** extracted from the approved `index.html`.
+2. The **read-only production export**, which wins over the seed wherever
+   production holds a value.
+3. An explicit **Owner attestation that no price was edited on any PWA device**.
+
+The import reports `deviceBackup: SUPPLIED` for this run, and that is accurate
+in the sense the script means it, but it must not be read as more than it is:
+the file passed to `--device` was **not an extracted device export**. It was an
+attestation JSON, written after the Owner confirmed that no prices had been
+edited on any PWA device, carrying an empty override map (`ov: {}`).
+
+So the guard in `tools/catalogue-import/README.md` — that a run without a
+device backup must not claim price parity — is satisfied by attestation rather
+than by extraction. The override review list is empty because the Owner states
+there is nothing in it, not because nothing was looked for. That is a sound
+basis for closing T-P1 given who made the statement, and it is recorded here
+plainly so nobody later mistakes it for a device dump.
+
+**This does not reopen N2.** T-P1 stays closed. If a device-only price is ever
+found, it is a single-product correction through the normal edit path, not a
+re-import.
 
 ## Credentials
 

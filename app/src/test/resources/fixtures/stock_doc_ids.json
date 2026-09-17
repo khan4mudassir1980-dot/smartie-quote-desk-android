@@ -1,0 +1,113 @@
+{
+  "note": "The /stock document id scheme, confirmed against the approved V8C4 source on 2026-09-17: the logical key `group|model` with ONLY `/` replaced by `_`. It is deliberately NOT the product scheme, which is `group__model` with `/ . # $ [ ]` replaced. Every row carries both so the difference is asserted, not assumed: productDocId must never address a stock document. A /stockMoves document id is the movement's own `id` field and needs no rule.",
+  "cases": [
+    {
+      "group": "gate",
+      "model": "SIE2.5MSMALL",
+      "key": "gate|SIE2.5MSMALL",
+      "stockDocId": "gate|SIE2.5MSMALL",
+      "productDocId": "gate__SIE2_5MSMALL",
+      "differs": true,
+      "source": "real"
+    },
+    {
+      "group": "garage",
+      "model": "GD-3.0-A",
+      "key": "garage|GD-3.0-A",
+      "stockDocId": "garage|GD-3.0-A",
+      "productDocId": "garage__GD-3_0-A",
+      "differs": true,
+      "source": "real"
+    },
+    {
+      "group": "garage",
+      "model": "GD-5.8-M",
+      "key": "garage|GD-5.8-M",
+      "stockDocId": "garage|GD-5.8-M",
+      "productDocId": "garage__GD-5_8-M",
+      "differs": true,
+      "source": "real"
+    },
+    {
+      "group": "glass",
+      "model": "SMARTIE4.2 DOOR KIT",
+      "key": "glass|SMARTIE4.2 DOOR KIT",
+      "stockDocId": "glass|SMARTIE4.2 DOOR KIT",
+      "productDocId": "glass__SMARTIE4_2 DOOR KIT",
+      "differs": true,
+      "source": "real"
+    },
+    {
+      "group": "glass",
+      "model": "GLASSCLAMP 1.2M",
+      "key": "glass|GLASSCLAMP 1.2M",
+      "stockDocId": "glass|GLASSCLAMP 1.2M",
+      "productDocId": "glass__GLASSCLAMP 1_2M",
+      "differs": true,
+      "source": "real"
+    },
+    {
+      "group": "hwWheel",
+      "model": "SIEHL2U147 R12.5",
+      "key": "hwWheel|SIEHL2U147 R12.5",
+      "stockDocId": "hwWheel|SIEHL2U147 R12.5",
+      "productDocId": "hwWheel__SIEHL2U147 R12_5",
+      "differs": true,
+      "source": "real"
+    },
+    {
+      "group": "hwWheel",
+      "model": "SIEBAL58H/V",
+      "key": "hwWheel|SIEBAL58H/V",
+      "stockDocId": "hwWheel|SIEBAL58H_V",
+      "productDocId": "hwWheel__SIEBAL58H_V",
+      "differs": true,
+      "source": "real"
+    },
+    {
+      "group": "gateMotors",
+      "model": "SIE1000",
+      "key": "gateMotors|SIE1000",
+      "stockDocId": "gateMotors|SIE1000",
+      "productDocId": "gateMotors__SIE1000",
+      "differs": true,
+      "source": "real"
+    },
+    {
+      "group": "manualstock",
+      "model": "shed_padlock",
+      "key": "manualstock|shed_padlock",
+      "stockDocId": "manualstock|shed_padlock",
+      "productDocId": "manualstock__shed_padlock",
+      "differs": true,
+      "source": "synthetic"
+    },
+    {
+      "group": "hwWheel",
+      "model": "A/B/C",
+      "key": "hwWheel|A/B/C",
+      "stockDocId": "hwWheel|A_B_C",
+      "productDocId": "hwWheel__A_B_C",
+      "differs": true,
+      "source": "synthetic"
+    },
+    {
+      "group": "glass",
+      "model": "TG#12",
+      "key": "glass|TG#12",
+      "stockDocId": "glass|TG#12",
+      "productDocId": "glass__TG_12",
+      "differs": true,
+      "source": "synthetic"
+    },
+    {
+      "group": "hwWheel",
+      "model": "BRK[2]",
+      "key": "hwWheel|BRK[2]",
+      "stockDocId": "hwWheel|BRK[2]",
+      "productDocId": "hwWheel__BRK_2_",
+      "differs": true,
+      "source": "synthetic"
+    }
+  ]
+}

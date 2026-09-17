@@ -27,6 +27,34 @@ object Keys {
     fun productKey(group: String, seedModel: String): String = "$group|$seedModel"
 
     /**
+     * The `/stock` document id for a logical key.
+     *
+     * **A different scheme from [productDocId], and not interchangeable with
+     * it.** Confirmed against the approved V8C4 source: a stock document is
+     * addressed by the logical key `group|model` with **only `/` replaced**,
+     * where a product document is `group__model` with `/ . # $ [ ]` replaced.
+     * `gate|SIE2.5MSMALL` is `gate|SIE2.5MSMALL` as a stock id and
+     * `gate__SIE2_5MSMALL` as a product id — the dot survives in one and not
+     * the other. Using the product function for a stock document would read
+     * and write the wrong row.
+     *
+     * Deliberately nothing else is replaced, because the ids already in
+     * Firestore are the PWA's, not the ones Firestore would merely tolerate.
+     * A blank key is the caller's to refuse before it gets here; `StockEntry`
+     * validation does that.
+     */
+    fun stockDocId(key: String): String = key.replace('/', '_')
+
+    /**
+     * The `/stockMoves` document id: the movement's own `id` field.
+     *
+     * The v9 rules require `request.resource.data.id == id`, so the two can
+     * never drift. Generate it with `generateId("mv_")` **once, before the
+     * transaction**, and reuse it if Firestore replays the transaction body.
+     */
+    fun stockMoveDocId(movementId: String): String = movementId
+
+    /**
      * The characters the PWA's own `docId` replaces (`index.html:5723`),
      * mirrored in `tools/catalogue-import/lib/keys.mjs`: the path separator,
      * and the four Realtime-Database-era characters the PWA has always

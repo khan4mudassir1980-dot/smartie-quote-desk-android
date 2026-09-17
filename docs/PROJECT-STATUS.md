@@ -8,13 +8,13 @@ anything.** Last updated 2026-09-17.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `7370677` — [run #40](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35193092072), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `353eddb` — [run #41](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35194386675), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
 `claude/trusting-hamilton-z12eer` was based on `claude/sweet-fermi-ejyrg2`, so
-it contains the whole N0–N2 history. Documentation commits may sit above
-`7370677`; that hash is the last head CI has verified, not necessarily the tip.
+it contains the whole N0–N2 history. Later commits may sit above the hash
+above; it is the last head CI has verified, not necessarily the tip.
 
 ## Phase state
 
@@ -23,7 +23,7 @@ it contains the whole N0–N2 history. Documentation commits may sit above
 | N0 Foundation | **Complete** |
 | N1 Auth & Team | **Complete** |
 | N2 Products | **Complete and verified** |
-| N3 Our Stock | **Planned, not implemented** |
+| N3 Our Stock | **Planned and resolved against V8C4, not implemented** |
 | N4–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -34,19 +34,14 @@ it contains the whole N0–N2 history. Documentation commits may sit above
 
 ## Current next action
 
-**Run `tools/catalogue-import/inspect-v8c4.mjs` against the local authoritative
-V8C4 `index.html`, on the Owner's machine.** It is read-only and writes
-nothing:
+**Get approval to implement N3.** The plan in `docs/N3-plan.md` is complete:
+the V8C4 inspection has been run against the authoritative `index.html` and
+**no open schema question remains**. Document identity, the movement and stock
+shapes, and the reorder-level rule are all resolved and recorded there, and the
+transaction contract is specified.
 
-```powershell
-node tools\catalogue-import\inspect-v8c4.mjs --index "C:\Users\dell\Documents\SMARTIE-Development\V8C4-source\index.html"
-```
-
-Its output answers the four questions `docs/N3-plan.md` leaves open — the stock
-document-id rule, `delta` versus `qty` on a movement, the `docId` character
-set with the affected catalogue models, and whether a reorder-level-only change
-logs a movement. **N3's write path is not to be implemented until those answers
-are in.** Nothing about the PWA's behaviour is to be guessed at meanwhile.
+Nothing of N3 — the repository, the ViewModel or the screen — is to be written
+until that approval is given.
 
 ## Decisions that bind future work
 
@@ -59,9 +54,19 @@ required to change stock". Full rationale in `docs/N3-plan.md`.
 **Out and Low are computed from the stored quantity only**, never from a
 pending delta.
 
-**Product document ids follow the PWA's rule exactly** — `/ . # $ [ ]`
-replaced in the model, never in the group — proven against a shared fixture
-read by both `KeysTest` and the importer's own test.
+**Two document-id schemes, never interchangeable.** A product document is
+`group__model` with `/ . # $ [ ]` replaced; a **stock** document is the logical
+key `group|model` with **only `/`** replaced; a movement document is the
+movement's own `id`. `productDocId` must never address a stock document. Both
+schemes are proven by fixtures — the product one shared with the importer's own
+test, and all thirteen real affected catalogue models are in it.
+
+**Movements carry a signed `delta` and no `qty` field**, `at` in epoch
+milliseconds and `serverAt` as the server timestamp.
+
+**The V8C4 stock document has no `name` field**, so a Worker sees the model
+rather than the catalogue name. Adding one would be a deliberate additive
+divergence and is the Owner's call; it is not planned.
 
 ## Data and credentials
 
@@ -83,7 +88,7 @@ read by both `KeysTest` and the importer's own test.
 | `docs/N0-N1-delivery.md` | N0 and N1 scope, human actions (all done), acceptance checklist |
 | `docs/N2-delivery.md` | N2 scope, what is deliberately not in it, acceptance |
 | `docs/N2-verification.md` | The import evidence, what price parity rests on, what stays blocked |
-| `docs/N3-plan.md` | The approved N3 plan, its decisions, open questions and test plan |
+| `docs/N3-plan.md` | The N3 plan: resolved V8C4 facts, the transaction contract, decisions and test plan |
 | `tools/catalogue-import/README.md` | How the import runs, its guards, and rollback |
 | `firestore/firestore.rules` | The v9 rules — staging only; production keeps V8C4 |
 

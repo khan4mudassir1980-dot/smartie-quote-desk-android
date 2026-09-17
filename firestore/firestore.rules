@@ -151,8 +151,10 @@ service cloud.firestore {
     // --- stock ---------------------------------------------------------
 
     match /stock/{key} {
-      // Workers read stock, including the denormalised product name, without
-      // ever being able to read prices from /products.
+      // Workers read stock without ever being able to read prices from
+      // /products. The V8C4 stock document carries `model` and, for a manual
+      // item, `manualName` — but no descriptive product name, so a Worker
+      // sees the model rather than the catalogue name (docs/N3-plan.md).
       allow read: if member();
       allow create: if stockWriter()
                     && request.resource.data.q is number && request.resource.data.q >= 0

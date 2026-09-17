@@ -69,7 +69,12 @@ data class StockRecord(
     val unit: String = "each",
     val linkedKey: String = "",
     val note: String = "",
-    /** Denormalised so Workers can read names without reading prices. */
+    /**
+     * Read from `name` when a document happens to carry one, else
+     * `manualName`. The V8C4 stock document has **no** `name` field, so for a
+     * catalogue-linked row this is usually blank and the display falls back to
+     * [model]. Tolerant on read; N3 does not write it (docs/N3-plan.md).
+     */
     val name: String = "",
     val model: String = "",
     val group: String = "",

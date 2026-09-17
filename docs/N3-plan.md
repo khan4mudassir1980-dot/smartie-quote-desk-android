@@ -5,9 +5,13 @@ written against the roadmap's §12 line for N3 and the agreed behaviour below,
 and it is deliberately specific about the writes, because N3 is the first phase
 in which the native app writes a document the PWA also writes.
 
-Two things settled at approval are already folded in: stock writing is
+Two things settled at approval are folded in: stock writing is
 **online-only** (see "Stock writing is online-only"), and the canonical
-document-id mismatch is fixed **before** N3 rather than inside it.
+document-id mismatch was fixed **before** N3 rather than inside it.
+
+**The V8C4 inspection has been run and every schema question is resolved** —
+see "Resolved against the V8C4 source". Nothing below is a guess about PWA
+behaviour. Implementation awaits approval of this resolved plan.
 
 Phase N3 turns the read-only Our Stock screen into the working one. The screen
 currently carries an `InDevelopmentBanner` promising exactly this: *"Adding and
@@ -40,8 +44,9 @@ mostly adds the write path and the screen, not a new model.
   `reorderLevel > 0.0`, so an item with no reorder level is never both.
 - `DocData.toStockRecord()` / `toStockMove()` in `mapping/CatalogueReaders.kt`,
   already tolerant of the PWA's string numbers, `0`/`1` booleans, the `off`
-  archive flag, and a move that carries an absolute `qty` instead of a signed
-  `delta`.
+  archive flag, and a beta movement carrying an absolute `qty` instead of a
+  signed `delta`. That tolerance is for **reading** old documents; N3 writes
+  `delta` only, as V8C4 does.
 - `CatalogueReadRepository.observeStock()` and `observeRecentMovements(limit)`.
 - The whole **stock block of `Permissions`**: `canViewStock`, `canAdjustStock`,
   `canSetExactQuantity`, `requiresCorrectionReason`, `canStopTrackingStock`,
@@ -90,54 +95,106 @@ What a new stock row is, for behaviour 4:
 
 ### `data/repository/StockWriteRepository.kt` — new
 
-The only new writer. Three operations, each a single Firestore transaction, so
-two phones counting the same shelf cannot overwrite each other:
+The only new writer. Every quantity or reorder-level change is a single
+Firestore transaction, so two phones counting the same shelf cannot overwrite
+each other.
+
+#### Document identity — two schemes, never interchangeable
+
+Confirmed against the V8C4 source:
+
+| | Rule | Example |
+|---|---|---|
+| `/stock/{id}` | the logical key `group\|model`, **only `/` replaced** | `gate\|SIE2.5MSMALL` |
+| `/products/{id}` | `group__model`, `/ . # $ [ ]` replaced | `gate__SIE2_5MSMALL` |
+| `/stockMoves/{id}` | the movement's own `id` field | `mv_m1a2b3xyzab` |
+
+`Keys.stockDocId(key)` and `Keys.stockMoveDocId(id)` exist for this, and
+`fixtures/stock_doc_ids.json` asserts on every row that the two schemes produce
+**different** ids. **`productDocId` must never address a stock document** — the
+dot survives in a stock id and does not in a product id, so one would silently
+read and write the wrong row.
+
+#### The transaction contract
+
+Binding on every one of the three writes below:
+
+1. **Generate the movement id once, before entering the transaction**, with
+   `Keys.generateId("mv_")`. Capture `at` (epoch milliseconds) at the same
+   moment.
+2. **Reuse both if Firestore replays the transaction body.** Firestore may run
+   the body several times under contention; generating inside it risks a second
+   movement document for one action, and would drift `at` on every retry. `at`
+   is the moment the person pressed Done, which is what the history should say.
+3. **Read the stored `q` inside the transaction.** Never the figure the screen
+   was showing, never a cached one.
+4. **Derive `prev`, signed `delta` and `next` from that stored value** —
+   `prev = stored.q`, `next = prev + delta` for an adjustment, `delta = next -
+   prev` for an exact set. `delta` is always `next - prev`.
+5. **Reject anything that would take stock below zero.** The transaction fails
+   and says so — *"Only 3 left; someone else took some while you were
+   counting"*. It does **not** clamp to zero: a clamp turns a wrong instruction
+   into a plausible-looking success, and the rules refuse `q < 0` anyway.
+6. **Write the stock document and the movement atomically**, in that one
+   transaction. There is no path where a quantity moves without its audit row.
+
+`t` and `at` are epoch milliseconds, because the rules require `t is number`
+and a sentinel is not one. `serverAt` is `FieldValue.serverTimestamp()` and is
+added alongside, on both documents, for PWA compatibility and for ordering.
+
+#### The documents written
+
+**Stock** (`/stock/{stockDocId}`), merge — exactly the V8C4 shape:
+
+```
+key, group, model,
+q, min, off,
+t, lastAction,
+pinned, pinOrder,
+manual, manualName, manualModel,
+categoryId, unit, linkedKey, stockNote,
+by, byUid, serverAt
+```
+
+**Movement** (`/stockMoves/{id}`) — exactly the V8C4 shape, plus `serverAt`
+which the transaction adds:
+
+```
+id, key, group, model, name,
+action, prev, delta, next,
+min, note, by, byUid, at, serverAt
+```
+
+**There is no `qty` field.** An earlier draft of this plan proposed writing
+both `delta` and `qty`; that was a guess and it is withdrawn. The movement
+carries the signed `delta` only. `toStockMove()` already prefers `delta` and
+keeps its `qty` fallback for documents the native beta wrote, which is reading
+tolerance, not a licence to write one.
+
+#### The three writes
 
 **1. `adjust(member, record, delta, note)`** — behaviours 2, 5, 11.
-
-```
-transaction:
-  stored   = get(stock/<docId>)
-  previous = stored.q                       // re-read, never the screen's value
-  next     = max(0, previous + delta)
-  set(stock/<docId>, merge) { key, q: next, min, t, by, byUid,
-                              lastAction: delta > 0 ? "in" : "out",
-                              stockNote, name, model, group, unit, categoryId }
-  set(stockMoves/<mv_id>)    { id, key, action, prev: previous, next,
-                               delta: next - previous,     // signed, PWA shape
-                               qty: abs(next - previous),  // absolute, beta shape
-                               min, note, at, by, byUid, group, model, name }
-```
-
-The delta is applied to the **re-read** quantity, not to the quantity the
-screen was showing, which is what makes two devices safe. When the clamp at
-zero actually bites — someone else took the last of it while this person was
-counting — the move records the true `prev` and `next`, and the person is told
-what happened rather than being shown a silent success.
-
-`t` and `at` are `System.currentTimeMillis()`. They cannot be
-`FieldValue.serverTimestamp()`: the rules require `t is number`, and a sentinel
-is not a number, so a server timestamp would be rejected.
-
-Both `delta` and `qty` are written. `toStockMove()` prefers `delta` and falls
-back to `next - prev` and then `qty`, but the PWA is still live and reads these
-documents, so N3 writes the shape the PWA expects as well as the canonical one.
-**Confirm against the V8C4 source which of the two it reads before merging** —
-see the open questions.
+`action` and `lastAction` are `"in"` for a positive delta and `"out"` for a
+negative one. The note is optional; blank stores
+`Permissions.DEFAULT_STOCK_NOTE`.
 
 **2. `setExact(member, record, quantity, reorderLevel, reason)`** — behaviour 3.
 
-Same transaction shape, `lastAction: "set"` when the quantity moved and
-`"min"` when only the reorder level did. Refused in the repository for anyone
-`Permissions.canSetExactQuantity` rejects, so a doomed write never leaves the
-device — the rules refuse it too, and both refusals are tested. The reason is
-required here (`Permissions.requiresCorrectionReason`), unlike the note on a
-+/- commit, which stays optional.
+- Quantity changed → `action: "set"`.
+- Quantity unchanged, reorder level changed → `action: "min"`, with
+  `prev == next` and `delta: 0`.
+- **Quantity unchanged, reorder level unchanged, no note → no write at all.**
+  No stock document, no movement. A no-op must cost nothing and must not
+  appear in the history.
+
+Refused in the repository for anyone `Permissions.canSetExactQuantity` rejects,
+so a doomed write never leaves the device; the rules refuse it too, and both
+refusals are tested. A reason is required here
+(`Permissions.requiresCorrectionReason`), unlike the note on a +/- commit.
 
 **3. `create(member, entry, quantity, reorderLevel, note)`** — behaviour 4.
-
-`lastAction: "add"`, a matching `add` move, and a transaction that refuses a
-key that already exists rather than silently merging onto someone else's row.
+`action: "add"`, and a transaction that refuses a key that already exists
+rather than merging onto someone else's row.
 
 **Pinning is not one of these.** `togglePin` is a plain merge write of
 `pinned`, `pinOrder`, `lastAction: "pin"`, `t`, `by`, `byUid` — and it writes
@@ -233,11 +290,11 @@ its own section below, because it is the rule the whole screen is built to.
 write. One Done is one transaction and one audit row, which is what makes the
 history readable and what keeps a shelf count from costing forty writes.
 
-**Names are denormalised onto the stock document on every write.** The rules
-let a Worker read `/stock` but never `/products`, so a Worker's stock list can
-only show a name if the name is on the stock row. Imported PWA rows may not
-carry one; N3 writes `name`, `model` and `group` on every touch, which
-backfills the rows in use, and `StockBoard.displayName` covers the rest.
+**The V8C4 stock shape is written exactly, and nothing is added to it.**
+That includes not adding a `name` field, which an earlier draft of this plan
+proposed before the shape was known. `group` and `model` are written because
+the shape carries them; the descriptive name is not, so a Worker sees the
+model. See "One consequence worth flagging" below.
 
 **Pin state lives on the stock document, not in `teamSettings`.** Unlike
 product pins, that is where the PWA's schema already puts it (`pinned`,
@@ -276,43 +333,68 @@ there. What it buys is that every number in `stockMoves` is a number that was
 true on the server at the moment it was written, which is the point of keeping
 an audit trail at all.
 
-## Open questions — to settle before implementing
+## Resolved against the V8C4 source
 
-1. **The stock document id for a key containing `/`.** Stock is keyed by the
-   logical product key (`hwWheel|SIEBAL58H/V` is a real one), and a `/` cannot
-   go in a document id — audit C6. `Keys.sanitiseDocId` handles it, but the
-   native app and the PWA must agree on the *same* id or a second document
-   appears. **Read the PWA's stock write path in the V8C4 `index.html` and
-   pin the answer with a test before any write ships.**
+The inspection was run on the authoritative `index.html` on 2026-09-17. **No
+open V8C4 schema question remains.** What it settled:
 
-2. **The thirteen models that need the broader canonicalisation.**
-   `Keys.productDocId` has been corrected to the PWA's exact rule in its own
-   commit, ahead of this phase, and a shared fixture proves Kotlin and
-   `tools/catalogue-import/lib/keys.mjs` agree. The fixture carries one real
-   affected model (`hwWheel|SIEBAL58H/V`) and synthetic cases for `.`, `#`,
-   `$`, `[` and `]`. The other twelve real models should be added to it once
-   the extraction lists them — the command below prints them.
+**Q1 — stock document identity.** The stock key is `${group}|${model}`. The
+`/stock` document id is that key with **only `/` replaced by `_`**. A
+`/stockMoves` document id is the record's own `id`. Stock and product ids are
+**different schemes**, and `productDocId` must never be used for a stock
+document. Implemented as `Keys.stockDocId` / `Keys.stockMoveDocId`, with
+`fixtures/stock_doc_ids.json` asserting on every row that the two schemes
+disagree.
 
-3. **`delta` versus `qty` on a movement.** Confirm from the V8C4 source which
-   field the PWA's history reads, so the native write is compatible while the
-   PWA is still live. The plan writes both; that is a safe default, not a
-   verified one.
+**Q2 — movement schema.** `id, key, group, model, name, action, prev, delta,
+next, min, note, by, byUid, at`, with the transaction adding `serverAt`.
+`delta` is signed and equals `next - prev`. **There is no `qty` field** — the
+earlier plan's "write both" was a guess and is withdrawn. `at` stays epoch
+milliseconds for PWA compatibility; `serverAt` is the Firestore server
+timestamp. The stock document shape is recorded above, verbatim.
 
-4. **Does the PWA write a movement when a reorder level changes alone?** The
-   rules permit the `min` action, which suggests yes. Worth confirming so the
-   two histories match.
+**Q3 — product document identity.** The replacement set is exactly
+`/ . # $ [ ]`. The canonicalisation fix already committed in `7370677` is
+correct, and the fixture now carries **all thirteen real affected models**
+rather than one plus synthetic stand-ins.
 
-All four need the approved **V8C4 `index.html`**, which is deliberately not in
-this repository. `tools/catalogue-import/inspect-v8c4.mjs` answers all four
-read-only, from the file where it already lives on the Owner's machine — one
-command, printed to the console, nothing written and nothing committed:
+**Q4 — reorder-level history.** A reorder-level-only change uses action
+`min`, and creates a movement **when the minimum actually changes**. A no-op —
+minimum unchanged, no note — **creates no write and no movement**.
 
-```powershell
-node tools\catalogue-import\inspect-v8c4.mjs --index "C:\Users\dell\Documents\SMARTIE-Development\V8C4-source\index.html"
-```
+### One consequence worth flagging before implementation
 
-Implementation of the write path waits on its output. Nothing in it is guessed
-at in the meantime.
+**The V8C4 stock document has no `name` field.** It carries `model`,
+`manualName` and `manualModel`, and the descriptive product name lives only in
+`/products`, which a Worker may not read.
+
+So a Worker's stock list shows the **model** — `SIE1000` — not
+`Sliding gate motor 1000 kg`. An earlier draft of this plan said N3 would
+denormalise `name` onto the stock document on every write; that was written
+before the shape was known, and it is withdrawn. The comment in
+`firestore/firestore.rules` that speaks of "the denormalised product name" and
+the KDoc on `StockRecord.name` overstate the same thing, and are corrected in
+this commit.
+
+`StockBoard.displayName` therefore resolves `manualName` → `name` (for any
+document that happens to carry one) → `model` → the key's tail, and a Worker
+always sees something.
+
+**If the descriptive name should be visible to Workers, that is an additive
+`name` field on the stock document.** The PWA ignores fields it does not know,
+so it is safe in the same way the importer's additive `kg` is safe — but it is
+a deliberate divergence from the V8C4 shape and it is the Owner's call, not
+something to slip in. **Not planned unless asked for.** Until then, N3 writes
+the V8C4 shape exactly.
+
+### One native decision inside Q4's envelope
+
+Q4 settles the no-op and the changed-minimum cases. It does not say what a
+**note-only** edit does — quantity and minimum both unchanged, but the person
+typed a note. N3 writes the stock document's `stockNote` and records a `min`
+movement with `prev == next` and `delta: 0`, so a note that changes a shared
+field is auditable rather than silently applied. Flagged as a native decision,
+not a V8C4 finding; say so if you want it to write nothing instead.
 
 ## Test plan
 
@@ -324,11 +406,30 @@ every refusal. `StockPinsTest` — appending, and that a pin writes no movement.
 `PermissionsTest` — a row for `canSetReorderLevel`, plus the Worker row for
 every stock capability.
 
+**Document identity:** `KeysTest` drives both fixtures — 21 product cases
+including all thirteen real affected models, and 12 stock cases each asserting
+that `stockDocId` and `productDocId` produce **different** ids for the same
+product. `tools/catalogue-import/test/doc-ids.test.mjs` drives the product
+fixture from the importer side, so Kotlin cannot drift from the ids already in
+staging.
+
 **Write path:** `StockWriteTest` over the transaction body with a faked
-document, asserting the exact field map for each of the four writes: the
-re-read delta, the clamp at zero recording true `prev`/`next`, a blank note
-becoming `DEFAULT_STOCK_NOTE`, `t` and `at` being numbers, and both `delta` and
-`qty` present on a move.
+document, asserting for each write:
+
+- the movement id and `at` are generated **once, before** the transaction, and
+  a replayed body reuses both — drive the fake to replay and assert one
+  movement document with one id and one `at`;
+- `prev` comes from the stored `q`, not from the caller's view of it;
+- `delta == next - prev`, signed;
+- a delta taking stock below zero is **rejected**, with nothing written —
+  neither document;
+- the exact V8C4 field map on both documents, with **no `qty` field** and no
+  `name` field on the stock document;
+- `t` and `at` are numbers; `serverAt` is a server timestamp;
+- a blank note becomes `DEFAULT_STOCK_NOTE`;
+- an edit with quantity and minimum unchanged and no note writes **nothing**;
+- a minimum-only change writes `action: "min"` with `prev == next`,
+  `delta: 0`.
 
 **Compose (Robolectric):** `StockScreenTest` — the Worker sees rows and tags
 and no control at all; tapping Low filters and tapping again clears; the row
@@ -341,7 +442,8 @@ change stock" while the list stays readable.
 **Rules (emulator):** extend `firestore/tests/data.test.js` — Staff refused a
 `set` move and allowed `in`, `out`, `min` and `add`; a Worker refused every
 stock write and refused `stockMoves` reads; a negative `q` refused; a `pin`
-action refused on `stockMoves`; a `stockMoves` update and delete refused.
+action refused on `stockMoves`; a `stockMoves` update and delete refused; and a
+movement whose document id differs from its `id` field refused.
 
 **Manual, on staging:**
 
@@ -349,12 +451,15 @@ action refused on `stockMoves`; a `stockMoves` update and delete refused.
 |---|---|---|
 | T-S1 | Press `+` five times, then Done with no note | One audit row, `+5`, the neutral note |
 | T-S2 | Take a row to exactly 0 | `Out of stock`, and only at 0 |
+| T-S2b | Try to take a row below 0 | Refused and explained; nothing written, no movement |
+| T-S2c | Edit, change nothing, no note, Save | No write, no movement, no history row |
+| T-S2d | Edit the reorder level alone | One `min` movement, `prev == next` |
 | T-S3 | Reorder level 5, quantity 5, then 4, then 6 | Low, Low, In stock |
 | T-S4 | Tap Low, then Out, then Out again | The list filters, then filters, then clears |
 | T-S5 | Two phones, same row, +3 and −1 without refreshing | Final quantity is correct; two audit rows |
 | T-S6 | Edit as Staff | No exact-quantity field; the rules refuse a forced `set` |
 | T-S7 | Edit as Administrator with a reason | `set` row in history with the reason |
-| T-S8 | Sign in as a Worker | Rows and names visible; no stepper, Edit, pin, Add or History |
+| T-S8 | Sign in as a Worker | Rows visible by **model** (no catalogue name — expected); no stepper, Edit, pin, Add or History |
 | T-S9 | Pending delta, force stop, reopen | The pending delta is still there, uncommitted |
 | T-S10 | Add a manual item, then add it again | The second is refused, not merged |
 | T-S11 | Pin three rows | They lead the list in the order pinned; no history rows |

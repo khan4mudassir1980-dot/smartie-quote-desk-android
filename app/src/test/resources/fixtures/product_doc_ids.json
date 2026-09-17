@@ -1,11 +1,95 @@
 {
-  "note": "The canonical product document id, as the staging importer wrote it. Read by KeysTest (Kotlin) and by tools/catalogue-import/test/doc-ids.test.mjs (Node), so both implementations are proven against one table rather than against each other's opinion. Rows marked real come from the catalogue; the rest exist because no real model has been confirmed for that character yet. Add the remaining real models from `node inspect-v8c4.mjs` output as they are extracted.",
+  "note": "The canonical product document id, as the staging importer wrote it. Read by KeysTest (Kotlin) and by tools/catalogue-import/test/doc-ids.test.mjs (Node), so both implementations are proven against one table rather than against each other's opinion. The 13 rows marked real are every catalogue model whose id needs a character replaced, extracted from the approved V8C4 source on 2026-09-17; the synthetic rows cover characters no real model happens to use. This is the PRODUCT id scheme only — a stock document uses a different one, see fixtures/stock_doc_ids.json.",
   "cases": [
     {
       "group": "gateMotors",
       "seedModel": "SIE1000",
       "documentId": "gateMotors__SIE1000",
       "character": "none",
+      "source": "real"
+    },
+    {
+      "group": "gate",
+      "seedModel": "SIE2.5MSMALL",
+      "documentId": "gate__SIE2_5MSMALL",
+      "character": ".",
+      "source": "real"
+    },
+    {
+      "group": "garage",
+      "seedModel": "GD-3.0-A",
+      "documentId": "garage__GD-3_0-A",
+      "character": ".",
+      "source": "real"
+    },
+    {
+      "group": "garage",
+      "seedModel": "GD-4.0-A",
+      "documentId": "garage__GD-4_0-A",
+      "character": ".",
+      "source": "real"
+    },
+    {
+      "group": "garage",
+      "seedModel": "GD-5.0-A",
+      "documentId": "garage__GD-5_0-A",
+      "character": ".",
+      "source": "real"
+    },
+    {
+      "group": "garage",
+      "seedModel": "GD-5.8-A",
+      "documentId": "garage__GD-5_8-A",
+      "character": ".",
+      "source": "real"
+    },
+    {
+      "group": "garage",
+      "seedModel": "GD-3.0-M",
+      "documentId": "garage__GD-3_0-M",
+      "character": ".",
+      "source": "real"
+    },
+    {
+      "group": "garage",
+      "seedModel": "GD-4.0-M",
+      "documentId": "garage__GD-4_0-M",
+      "character": ".",
+      "source": "real"
+    },
+    {
+      "group": "garage",
+      "seedModel": "GD-5.0-M",
+      "documentId": "garage__GD-5_0-M",
+      "character": ".",
+      "source": "real"
+    },
+    {
+      "group": "garage",
+      "seedModel": "GD-5.8-M",
+      "documentId": "garage__GD-5_8-M",
+      "character": ".",
+      "source": "real"
+    },
+    {
+      "group": "glass",
+      "seedModel": "SMARTIE4.2 DOOR KIT",
+      "documentId": "glass__SMARTIE4_2 DOOR KIT",
+      "character": ".",
+      "source": "real"
+    },
+    {
+      "group": "glass",
+      "seedModel": "GLASSCLAMP 1.2M",
+      "documentId": "glass__GLASSCLAMP 1_2M",
+      "character": ".",
+      "source": "real"
+    },
+    {
+      "group": "hwWheel",
+      "seedModel": "SIEHL2U147 R12.5",
+      "documentId": "hwWheel__SIEHL2U147 R12_5",
+      "character": ".",
       "source": "real"
     },
     {

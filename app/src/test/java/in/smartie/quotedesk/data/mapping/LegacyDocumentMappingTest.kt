@@ -64,6 +64,41 @@ class LegacyDocumentMappingTest {
         assertEquals(500.0, shutter.kg!!, 0.0)
     }
 
+    /**
+     * Whole path, document to identity: every real fixture resolves to the
+     * same immutable stock key its `/stock` row is already filed under, and
+     * never to one built from a display model.
+     */
+    @Test
+    fun `every catalogue document resolves to its immutable stock identity`() {
+        val cases = mapOf(
+            // A stored key, and the edited twin that shares it.
+            "gateMotors|SIE1000" to "gateMotors|SIE1000",
+            "gateMotors__SIE1000" to "gateMotors|SIE1000",
+            // No stored key, but a seed model.
+            "glass__TG12" to "glass|TG12",
+            "hwWheel__SIEBAL58H_V" to "hwWheel|SIEBAL58H/V",
+            // Written before seedModel existed: recovered from the id.
+            "shutterMotors__RS500" to "shutterMotors|RS500"
+        )
+        for ((documentId, expected) in cases) {
+            val product = Fixtures.loadOne("products.json", documentId).toProductRecord()
+            assertEquals(documentId, expected, product.stockKey)
+        }
+    }
+
+    @Test
+    fun `a stock document id is the identity with only a slash replaced`() {
+        val wheel = Fixtures.loadOne("products.json", "hwWheel__SIEBAL58H_V").toProductRecord()
+        assertEquals("hwWheel|SIEBAL58H/V", wheel.stockKey)
+        assertEquals("hwWheel|SIEBAL58H_V", Keys.stockDocId(wheel.stockKey))
+        // The row that already exists in the stock fixture, under that id.
+        assertEquals(
+            Keys.stockDocId(wheel.stockKey),
+            Fixtures.loadOne("stock.json", "hwWheel|SIEBAL58H_V").id
+        )
+    }
+
     @Test
     fun `the pinned shelf reads as a list of logical keys`() {
         val pins = Fixtures.loadOne("product_pins.json", "productPins")["keys"].asStringList()

@@ -1,5 +1,7 @@
 package `in`.smartie.quotedesk.data.model
 
+import `in`.smartie.quotedesk.data.mapping.Keys
+
 /**
  * Schema v2 records. These replace the beta models in `Models.kt` phase by
  * phase; the beta models stay until their screen is rebuilt.
@@ -37,6 +39,28 @@ data class ProductRecord(
         RateTierV2.CONTRACTOR -> contractor
         RateTierV2.CLIENT -> client
     }
+
+    /**
+     * The **immutable** identity this product's stock is keyed by.
+     *
+     * The V8C4 `skey(gid, m)` takes the *seed* catalogue model, not the
+     * display model: `L.m` may have been edited, and renaming what a product
+     * is called must never open a second stock row, orphan its movement
+     * history or change its document id. So identity comes, in order, from:
+     *
+     * 1. the product's own stored [key] — already `group|seedModel`;
+     * 2. `group|seedModel`, when the document carries a seed model;
+     * 3. `group|model`, only for a legacy document that has neither.
+     *
+     * [name] and [model] are display fields and may change freely; this may
+     * not. Use it wherever stock is joined to a product — never [model].
+     */
+    val stockKey: String
+        get() = when {
+            key.isNotBlank() -> key
+            seedModel.isNotBlank() -> Keys.productKey(group, seedModel)
+            else -> Keys.productKey(group, model)
+        }
 }
 
 enum class RateTierV2(val wireValue: String, val label: String) {
@@ -67,6 +91,12 @@ data class StockRecord(
     val manualModel: String = "",
     val categoryId: String = "",
     val unit: String = "each",
+    /**
+     * Reserved for an explicit manual-to-catalogue linking feature that does
+     * not exist yet. Ordinary catalogue stock leaves it **empty**: its link to
+     * a product is [key] itself. Do not infer a meaning for it from a written
+     * value — none has been established against the V8C4 source.
+     */
     val linkedKey: String = "",
     val note: String = "",
     /**

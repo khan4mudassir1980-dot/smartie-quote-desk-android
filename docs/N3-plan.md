@@ -1,7 +1,7 @@
 # N3 Our Stock — implementation plan
 
-**Approved 2026-09-17. Batch A (steps 1-5) is implemented; the ViewModel and
-the screen are not.** It is
+**Approved 2026-09-17. Batch A (steps 1-5, plus the A.1 identity
+correction) is implemented; the ViewModel and the screen are not.** It is
 written against the roadmap's §12 line for N3 and the agreed behaviour below,
 and it is deliberately specific about the writes, because N3 is the first phase
 in which the native app writes a document the PWA also writes.
@@ -87,8 +87,8 @@ N2 settled for product pins (audit P4). `observeStock()` currently sorts
 
 What a new stock row is, for behaviour 4:
 
-- `StockEntry.fromProduct(product)` → key `group|seedModel`, `unit`,
-  `categoryId`, `model`, and `name` denormalised off the product.
+- `StockEntry.fromProduct(product)` → key `ProductRecord.stockKey`, plus
+  `unit`, `categoryId`, `model` and `name` denormalised off the product.
 - `StockEntry.manual(model, name, categoryId, unit)` → `manual = true`, key
   `manualstock|<slug>`, with the slug derived from the model or the name.
 - `validate()` returning the PWA's own refusals: a blank item, a negative
@@ -115,6 +115,29 @@ Confirmed against the V8C4 source:
 **different** ids. **`productDocId` must never address a stock document** — the
 dot survives in a stock id and does not in a product id, so one would silently
 read and write the wrong row.
+
+#### Product identity is immutable
+
+Confirmed against the V8C4 source: the `m` that `skey(gid, m)` takes is the
+**seed** catalogue model, while `L.m` is a display model an Administrator may
+edit. Renaming what a product is called must never open a second stock row,
+orphan its movement history, or move its document id.
+
+`ProductRecord.stockKey` is the single place that decides it, in order:
+
+1. the product's own stored `key` — already `group|seedModel`;
+2. `group|seedModel`, when the document carries a seed model;
+3. `group|model`, **only** for a legacy document that has neither.
+
+`name` and `model` are display fields and may change freely on a later write
+without touching the key. Every stock-to-product join uses `stockKey` — the
+Products screen's stock chip included — so none of them can drift onto a
+display model.
+
+`linkedKey` stays **empty** for ordinary catalogue stock: its link to a product
+is the key itself. The field is reserved for an explicit manual-to-catalogue
+linking feature that does not exist yet, and no meaning has been established
+for it against the V8C4 source, so none is invented here.
 
 #### The transaction contract
 

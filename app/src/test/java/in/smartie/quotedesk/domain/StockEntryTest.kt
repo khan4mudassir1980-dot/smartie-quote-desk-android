@@ -2,6 +2,8 @@ package `in`.smartie.quotedesk.domain
 
 import `in`.smartie.quotedesk.data.mapping.Keys
 import `in`.smartie.quotedesk.data.model.ProductRecord
+import `in`.smartie.quotedesk.data.model.StockMove
+import `in`.smartie.quotedesk.data.model.StockRecord
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -34,7 +36,7 @@ class StockEntryTest {
     // --- from the catalogue ----------------------------------------------
 
     @Test
-    fun `a catalogue entry is keyed by group and model`() {
+    fun `a catalogue entry is keyed by the product's immutable identity`() {
         val entry = StockEntry.fromProduct(product())
         assertEquals("gateMotors|SIE1000", entry.key)
         assertEquals("gateMotors", entry.group)
@@ -82,6 +84,86 @@ class StockEntryTest {
     @Test
     fun `a product with no unit is counted in each`() {
         assertEquals("each", StockEntry.fromProduct(product(unit = "")).unit)
+    }
+
+    // --- identity is immutable across a display-model rename --------------
+
+    /**
+     * The V8C4 `skey(gid, m)` takes the **seed** model. `L.m` is a display
+     * field an Administrator may edit, and a rename must never open a second
+     * stock row, orphan its movement history, or move its document id.
+     */
+    @Test
+    fun `renaming the display model changes neither the stock key nor the document id`() {
+        val before = product(model = "SIE1000", seedModel = "SIE1000")
+        val renamed = before.copy(model = "SIE-1000 PRO", name = "Sliding gate motor mk II")
+
+        val first = StockEntry.fromProduct(before)
+        val second = StockEntry.fromProduct(renamed)
+
+        assertEquals(first.key, second.key)
+        assertEquals(first.documentId, second.documentId)
+        assertEquals("gateMotors|SIE1000", second.key)
+        // The display fields are free to move; the identity is not.
+        assertEquals("SIE-1000 PRO", second.model)
+        assertEquals("Sliding gate motor mk II", second.name)
+    }
+
+    @Test
+    fun `stock and movement history still join after a display-model rename`() {
+        val renamed = product(model = "SIE-1000 PRO", seedModel = "SIE1000")
+        val entry = StockEntry.fromProduct(renamed)
+
+        // Rows written before the rename, keyed the way they always were.
+        val existingStock = StockRecord(
+            documentId = "gateMotors|SIE1000",
+            key = "gateMotors|SIE1000",
+            quantity = 7.0
+        )
+        val existingMove = StockMove(id = "mv_1", key = "gateMotors|SIE1000", next = 7.0)
+
+        assertEquals(existingStock.key, entry.key)
+        assertEquals(existingStock.documentId, entry.documentId)
+        assertEquals(existingMove.key, entry.key)
+        // And the join the Products screen performs still resolves.
+        assertEquals(existingStock, listOf(existingStock).associateBy { it.key }[renamed.stockKey])
+    }
+
+    @Test
+    fun `the product's own stored key wins over everything else`() {
+        val odd = product(model = "RENAMED", seedModel = "ALSO-NOT-THIS")
+            .copy(key = "gateMotors|SIE1000")
+        assertEquals("gateMotors|SIE1000", odd.stockKey)
+        assertEquals("gateMotors|SIE1000", StockEntry.fromProduct(odd).key)
+    }
+
+    @Test
+    fun `the seed model is the identity when there is no stored key`() {
+        val noKey = product(model = "RENAMED", seedModel = "SIE1000").copy(key = "")
+        assertEquals("gateMotors|SIE1000", noKey.stockKey)
+        assertEquals("gateMotors|SIE1000", StockEntry.fromProduct(noKey).key)
+    }
+
+    /** A legacy document with neither: the display model is all there is. */
+    @Test
+    fun `a legacy product with no key and no seed model still works`() {
+        val legacy = product(model = "SIE1000").copy(key = "", seedModel = "")
+        assertEquals("gateMotors|SIE1000", legacy.stockKey)
+        val entry = StockEntry.fromProduct(legacy)
+        assertEquals("gateMotors|SIE1000", entry.key)
+        assertNull(entry.refusal(0.0, 0.0))
+    }
+
+    @Test
+    fun `a seed model carrying a slash keeps the stock rule, not the product one`() {
+        val renamed = product(group = "hwWheel", model = "BALANCE WHEEL 58H", seedModel = "SIEBAL58H/V")
+            .copy(key = "")
+        val entry = StockEntry.fromProduct(renamed)
+
+        assertEquals("hwWheel|SIEBAL58H/V", entry.key)
+        assertEquals("hwWheel|SIEBAL58H_V", entry.documentId)
+        // The product scheme would have produced something else entirely.
+        assertEquals("hwWheel__SIEBAL58H_V", Keys.productDocId("hwWheel", "SIEBAL58H/V"))
     }
 
     // --- manual items -----------------------------------------------------

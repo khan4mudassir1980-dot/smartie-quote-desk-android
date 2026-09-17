@@ -62,12 +62,17 @@ data class StockEntry(
         /**
          * Track a catalogue product.
          *
-         * The stock key is the PWA's `group|model`, which is **not** the
-         * product document id — see [Keys.stockDocId] against
-         * [Keys.productDocId].
+         * Identity is [ProductRecord.stockKey] — the product's immutable
+         * key, **never** its display model, so renaming a product cannot open
+         * a second stock row or orphan its history. The [model] and [name]
+         * carried here are display fields and may change on a later write
+         * without touching the key.
+         *
+         * The stock key is also **not** the product document id — see
+         * [Keys.stockDocId] against [Keys.productDocId].
          */
         fun fromProduct(product: ProductRecord): StockEntry = StockEntry(
-            key = Keys.productKey(product.group, product.model),
+            key = product.stockKey,
             group = product.group,
             model = product.model,
             name = product.name.trim().ifBlank { product.model },

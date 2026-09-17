@@ -90,6 +90,8 @@ fun ProductsScreen(
     val view = remember(products, categories, pinnedKeys, query, minimumKg) {
         Catalogue.build(products, categories, pinnedKeys, query, minimumKg)
     }
+    // Joined on the product's immutable key, never its display model: a
+    // renamed product keeps the stock row and the history it already had.
     val stockByKey = remember(stock) { stock.associateBy { it.key } }
 
     ProductsCatalogue(
@@ -195,7 +197,7 @@ fun ProductsCatalogue(
                     items(view.results, key = { it.product.documentId }) { entry ->
                         CatalogueCard(
                             entry = entry,
-                            stock = stockByKey[entry.product.key],
+                            stock = stockByKey[entry.product.stockKey],
                             draft = draft,
                             pinned = ProductPins.isPinned(pinnedKeys, entry.product.key),
                             canPin = canPin,
@@ -218,7 +220,7 @@ fun ProductsCatalogue(
                 items(view.pinned, key = { "pin-" + it.product.documentId }) { entry ->
                     CatalogueCard(
                         entry = entry,
-                        stock = stockByKey[entry.product.key],
+                        stock = stockByKey[entry.product.stockKey],
                         draft = draft,
                         pinned = true,
                         canPin = canPin,
@@ -259,7 +261,7 @@ fun ProductsCatalogue(
                     items(shelf.entries, key = { it.product.documentId }) { entry ->
                         CatalogueCard(
                             entry = entry,
-                            stock = stockByKey[entry.product.key],
+                            stock = stockByKey[entry.product.stockKey],
                             draft = draft,
                             pinned = false,
                             canPin = canPin,

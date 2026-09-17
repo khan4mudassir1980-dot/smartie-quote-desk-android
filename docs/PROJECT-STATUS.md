@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-17.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `30cada2` — [run #42](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35200750311), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `56d1acc` — [run #45](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35210460917), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -23,7 +23,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N0 Foundation | **Complete** |
 | N1 Auth & Team | **Complete** |
 | N2 Products | **Complete and verified** |
-| N3 Our Stock | **Batch A built** (domain, write path, rules). Batch B — ViewModel and screen — not started |
+| N3 Our Stock | **Batch A built and green**, including the A.1 identity correction. Batch B — ViewModel and screen — not started |
 | N4–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -35,16 +35,14 @@ above; it is the last head CI has verified, not necessarily the tip.
 ## Current next action
 
 **Get approval to implement N3 batch B: the ViewModel and the Our Stock
-screen.** Batch A is built and committed — `StockBoard`, `StockEntry`,
-`Permissions.canSetReorderLevel`, `StockWrite`, `StockStore`,
-`StockWriteRepository` and the emulator rule tests. Nothing below the UI layer
-is outstanding. (Its own CI run is later than the verified head recorded above;
-advance that hash once the run for these commits is green.)
+screen.** Batch A is complete, including the A.1 correction that made product
+identity immutable, and **no identity question is left open for batch B**.
 
 Batch B is exactly: `ui/stock/StockViewModel.kt`, the rewrite of
 `ui/stock/StockScreen.kt` with its Robolectric test, wiring
 `stockWriteRepository` into `AppContainer` and `SmartieApp`, and removing the
-`InDevelopmentBanner`. Nothing in `domain/` or `data/` changes.
+`InDevelopmentBanner`. The domain and data layers are settled; batch B is not
+to change them.
 
 ## Decisions that bind future work
 
@@ -81,6 +79,13 @@ not a `/stockMoves` action.
 
 **Below zero is rejected, never clamped**, and the movement id and `at` are
 generated once before the transaction and reused if Firestore replays it.
+
+**Product identity for stock is immutable.** `ProductRecord.stockKey` decides
+it — the stored `key`, else `group|seedModel`, else `group|model` for a legacy
+document only. A display-model rename never changes a stock key, a stock
+document id, or which movements belong to a row. Every stock-to-product join
+uses it. `linkedKey` stays empty and is reserved for a future explicit
+manual-to-catalogue link; do not give it a meaning.
 
 ## Data and credentials
 

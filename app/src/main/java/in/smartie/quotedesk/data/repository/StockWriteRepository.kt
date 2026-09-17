@@ -114,6 +114,39 @@ class StockWriteRepository(
         }
     }
 
+    /** Pin or unpin. A merge write, and never a movement. */
+    suspend fun togglePin(member: Member, record: StockRecord): StockWriteResult {
+        require(Permissions.canPinStock(member)) { NOT_ALLOWED_PIN }
+        return commit(member) { transaction, author, at, _ ->
+            StockWrite.pin(
+                record = record,
+                storedQuantity = storedQuantity(transaction, record),
+                pinned = !record.pinned,
+                author = author,
+                at = at
+            )
+        }
+    }
+
+    /** Stop tracking a row. Administrator only; the rules agree. */
+    suspend fun stopTracking(
+        member: Member,
+        record: StockRecord,
+        note: String = ""
+    ): StockWriteResult {
+        require(Permissions.canStopTrackingStock(member)) { NOT_ALLOWED_ARCHIVE }
+        return commit(member) { transaction, author, at, movementId ->
+            StockWrite.stopTracking(
+                record = record,
+                storedQuantity = storedQuantity(transaction, record),
+                note = note,
+                author = author,
+                at = at,
+                movementId = movementId
+            )
+        }
+    }
+
     /**
      * Runs one plan in one transaction.
      *
@@ -159,5 +192,7 @@ class StockWriteRepository(
         const val NOT_ALLOWED_ADJUST = "Only an Owner, Administrator or Staff can change stock"
         const val NOT_ALLOWED_EDIT = "Only an Owner, Administrator or Staff can edit stock"
         const val NOT_ALLOWED_EXACT = "Only an Owner or Administrator can set an exact quantity"
+        const val NOT_ALLOWED_PIN = "Only an Owner, Administrator or Staff can pin stock"
+        const val NOT_ALLOWED_ARCHIVE = "Only an Owner or Administrator can stop tracking an item"
     }
 }

@@ -1,6 +1,8 @@
 package `in`.smartie.quotedesk.ui.stock
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -466,7 +468,10 @@ private fun EditStockDialog(
         onDismissRequest = onDismiss,
         title = { Text("Edit ${StockBoard.displayName(record)}") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
                 if (capabilities.exactQuantity) {
                     SmartieField(
                         label = "Exact quantity",
@@ -568,46 +573,44 @@ private fun AddStockDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add stock") },
         text = {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                item {
-                    SmartieField(
-                        label = "Starting quantity",
-                        value = quantity,
-                        onValueChange = { quantity = it },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.semantics { contentDescription = "Starting quantity" }
-                    )
-                }
-                item {
-                    SmartieField(
-                        label = "Reorder level",
-                        value = reorder,
-                        onValueChange = { reorder = it },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                    )
-                }
-                item {
-                    SmartieField(
-                        label = "Note",
-                        value = note,
-                        onValueChange = { note = it },
-                        singleLine = false
-                    )
-                }
+            // A Column that scrolls, never a LazyColumn: a lazy list inside a
+            // dialog measures against unbounded height and never settles —
+            // Compose recomposes until Espresso gives up.
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
+                SmartieField(
+                    label = "Starting quantity",
+                    value = quantity,
+                    onValueChange = { quantity = it },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.semantics { contentDescription = "Starting quantity" }
+                )
+                SmartieField(
+                    label = "Reorder level",
+                    value = reorder,
+                    onValueChange = { reorder = it },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                )
+                SmartieField(
+                    label = "Note",
+                    value = note,
+                    onValueChange = { note = it },
+                    singleLine = false
+                )
                 if (products.isNotEmpty()) {
-                    item { SectionHeader("From the catalogue") }
-                    item {
-                        SmartieField(
-                            label = "Find a product",
-                            value = search,
-                            onValueChange = { search = it },
-                            placeholder = "Model or name",
-                            modifier = Modifier.semantics {
-                                contentDescription = "Find a catalogue product"
-                            }
-                        )
-                    }
-                    items(matches, key = { it.documentId }) { product ->
+                    SectionHeader("From the catalogue")
+                    SmartieField(
+                        label = "Find a product",
+                        value = search,
+                        onValueChange = { search = it },
+                        placeholder = "Model or name",
+                        modifier = Modifier.semantics {
+                            contentDescription = "Find a catalogue product"
+                        }
+                    )
+                    matches.forEach { product ->
                         ListRow(
                             title = product.name.ifBlank { product.model },
                             secondary = product.model,
@@ -617,34 +620,26 @@ private fun AddStockDialog(
                         )
                     }
                 }
-                item { SectionHeader("Or a manual item") }
-                item {
-                    SmartieField(
-                        label = "Model or code",
-                        value = model,
-                        onValueChange = { model = it },
-                        modifier = Modifier.semantics { contentDescription = "Manual model or code" }
-                    )
-                }
-                item {
-                    SmartieField(
-                        label = "Item name",
-                        value = name,
-                        onValueChange = { name = it },
-                        modifier = Modifier.semantics { contentDescription = "Manual item name" }
-                    )
-                }
-                item {
-                    SmartieField(label = "Unit", value = unit, onValueChange = { unit = it })
-                }
+                SectionHeader("Or a manual item")
+                SmartieField(
+                    label = "Model or code",
+                    value = model,
+                    onValueChange = { model = it },
+                    modifier = Modifier.semantics { contentDescription = "Manual model or code" }
+                )
+                SmartieField(
+                    label = "Item name",
+                    value = name,
+                    onValueChange = { name = it },
+                    modifier = Modifier.semantics { contentDescription = "Manual item name" }
+                )
+                SmartieField(label = "Unit", value = unit, onValueChange = { unit = it })
                 if (!online) {
-                    item {
-                        Text(
-                            OFFLINE_LABEL,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = SmartieColors.Warn
-                        )
-                    }
+                    Text(
+                        OFFLINE_LABEL,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = SmartieColors.Warn
+                    )
                 }
             }
         },

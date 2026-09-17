@@ -126,7 +126,8 @@ class StockScreenTest {
         compose.onNodeWithText("Out of stock").assertExists()
         // The row sitting exactly on its reorder level is Low, not Out.
         assertEquals(1, compose.onAllNodesWithText("Out of stock").fetchSemanticsNodes().size)
-        compose.onNodeWithText("Low").assertExists()
+        // The tile caption and the one low row.
+        assertEquals(2, compose.onAllNodesWithText("Low").fetchSemanticsNodes().size)
     }
 
     @Test
@@ -201,7 +202,9 @@ class StockScreenTest {
             stock = listOf(record("SIE2000", "Swing gate motor", quantity = 2.0, reorder = 2.0)),
             pending = mapOf("gateMotors|SIE2000" to -2.0)
         )
-        compose.onNodeWithText("Low").assertExists()
+        // Two nodes read "Low": the tile caption and this row's tag. What
+        // matters is that the row is not Out of stock.
+        assertEquals(2, compose.onAllNodesWithText("Low").fetchSemanticsNodes().size)
         assertTrue(compose.onAllNodesWithText("Out of stock").fetchSemanticsNodes().isEmpty())
     }
 

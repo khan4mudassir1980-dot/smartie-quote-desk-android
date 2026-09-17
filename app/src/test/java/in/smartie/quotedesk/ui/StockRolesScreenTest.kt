@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import `in`.smartie.quotedesk.data.mapping.Keys
 import `in`.smartie.quotedesk.data.model.ProductRecord
@@ -129,7 +130,9 @@ class StockRolesScreenTest {
                 )
             }
         }
-        compose.onNodeWithText("Barrier arm").performClick()
+        // The panel scrolls, and the catalogue sits below the quantity fields,
+        // so the row has to be brought into view before it can be clicked.
+        compose.onNodeWithText("Barrier arm").performScrollTo().performClick()
         assertEquals("gateMotors|SIE9000", added)
     }
 

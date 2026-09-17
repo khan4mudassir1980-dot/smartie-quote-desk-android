@@ -86,10 +86,25 @@ class PermissionsTest {
     }
 
     @Test
+    fun `staff set the reorder level but never an exact quantity`() {
+        listOf(primaryOwner, additionalOwner, admin, staff).forEach {
+            assertTrue(it.uid, Permissions.canSetReorderLevel(it))
+        }
+        assertFalse(Permissions.canSetReorderLevel(worker))
+        // The line the v9 rules draw: `min` for Staff, `set` for an
+        // Administrator. Both halves, so neither can drift alone.
+        assertTrue(Permissions.canSetReorderLevel(staff))
+        assertFalse(Permissions.canSetExactQuantity(staff))
+    }
+
+    @Test
     fun `a worker sees stock but no history and no controls`() {
         assertTrue(Permissions.canViewStock(worker))
         assertFalse(Permissions.canViewStockHistory(worker))
         assertFalse(Permissions.canPinStock(worker))
+        assertFalse(Permissions.canAdjustStock(worker))
+        assertFalse(Permissions.canSetReorderLevel(worker))
+        assertFalse(Permissions.canSetExactQuantity(worker))
         assertFalse(Permissions.canStopTrackingStock(staff))
     }
 

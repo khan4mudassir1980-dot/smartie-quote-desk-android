@@ -67,6 +67,17 @@ object Permissions {
     /** Exact-quantity correction lives in Edit and needs a reason. */
     fun canSetExactQuantity(member: Member): Boolean = isAdmin(member)
 
+    /**
+     * Staff correct the reorder level; only an Owner or Administrator sets an
+     * exact quantity.
+     *
+     * The v9 rules have always allowed a Staff write carrying `lastAction:
+     * "min"` while reserving `"set"` for an Administrator. Until now nothing
+     * in [Permissions] said so, which left every screen to re-derive it from
+     * the rules file.
+     */
+    fun canSetReorderLevel(member: Member): Boolean = canAdjustStock(member)
+
     fun requiresCorrectionReason(member: Member): Boolean = canSetExactQuantity(member)
 
     fun canStopTrackingStock(member: Member): Boolean = isAdmin(member)

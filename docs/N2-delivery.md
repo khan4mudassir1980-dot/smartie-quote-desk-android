@@ -42,21 +42,26 @@ sheet says so. The catalogue migration itself is N8.
 The PWA shows a Calculators grid on this page; §12 puts the calculators in N7,
 so the grid is omitted rather than shipped as a placeholder.
 
-## Blocked until the staging import runs
+## The staging import has run
 
-Staging carries rules v9 and `teamSettings/access.primaryOwnerUid`, but **no
-product or category documents**: audit M1 step 2 and M2 steps 1–3 have not run.
+Audit M0, M1 step 2 and M2 steps 1–3 are done: staging carries **403 products
+and 12 categories**, and the evidence is recorded in `docs/N2-verification.md`.
+No code change was needed to close them, as this section previously said.
 
-- **T-P1** ("count and spot-check 20 models × 3 tiers vs the PWA") and the §12
-  exit criterion **"403-item parity"** stay open. No catalogue data was
-  fabricated to close them, and P1 forbids embedding the price book in the APK.
-- **T-P4's PWA-order half** ("order identical in PWA") waits on the same import.
-  Its refusal half is covered by unit test and by the emulator.
-- Until then the staging APK shows twelve empty shelves and says so.
+- **T-P1** is closed. `verify-staging.mjs` compared all 403 products against
+  the seed book and the production export field by field — all three tiers
+  included — rather than sampling twenty of them. The §12 exit criterion
+  **"403-item parity"** is met.
+- **T-P4** is closed as far as two separate Firebase projects allow: staging's
+  pinned order equals the exported production order, and reorder survives a
+  force stop and reopen.
+- The second import reported `writes.total: 0`, so re-running sends nothing.
+- Production was never written. Both temporary service-account keys have been
+  revoked and their local JSON files deleted.
 
-**Human action required**: run the M0 export, import it into
-`smartie-quote-desk-staging` (M1 step 2), then M2 steps 1–3. No code change is
-needed afterwards to close T-P1 and T-P4.
+**Still blocked**: the audit's "order identical in PWA" *after* a reorder. It
+needs a PWA build pointed at the staging project, and none exists. It is
+recorded as blocked rather than claimed.
 
 ## Known difference from the PWA
 
@@ -70,9 +75,11 @@ record the fact on the document; it is not guessed at here.
 
 | ID | Test | Pass condition |
 |---|---|---|
+| T-P1 | 403 products and all three tiers against the PWA's data | **Passed** — field by field, all 403 (`docs/N2-verification.md`) |
 | T-P2 | Add an unpriced product to the quote | The line is flagged as needing a rate; never ₹0 |
 | T-P3 | Sign in as a Worker | No Products tab, no route, no prices anywhere |
 | T-P4 | Pin a sixteenth product | Refused with "You can pin up to 15 products" |
+| T-P4 | Pin, reorder, force stop, reopen | **Passed** — order held, and matched Firebase |
 | T-P5 | Open and scroll every shelf repeatedly | No crash, no duplicate rows |
 | T-X4 | 360×640 and 412×915, font scale 1.0 and 1.3 | Nothing clipped or hidden behind the bar, stepper and quote bar included |
 | — | Sign in as Staff | Catalogue and all three tiers visible; no pin controls |

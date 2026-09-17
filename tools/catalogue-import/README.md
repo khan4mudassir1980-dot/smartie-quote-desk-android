@@ -6,6 +6,12 @@ Closes **T-P1** (count parity and 20 models × 3 tiers) and as much of **T-P4**
 
 Nothing here ever writes to production, and nothing here ever runs by itself.
 
+**This has been run.** 403 products and 12 categories are in staging, the
+verification passed, a second run wrote nothing, and both temporary service
+accounts have been revoked and their key files deleted. The evidence is
+`docs/N2-verification.md`. What follows is how to run it again — against a
+fresh staging project, or after a restore.
+
 ## The four scripts
 
 | Script | Reads | Writes | Credential |

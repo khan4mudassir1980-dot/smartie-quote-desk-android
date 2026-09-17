@@ -51,7 +51,14 @@ rules or production data.
   appoint, demote and emergency revoke as transactions, typed-name
   confirmations, and a team activity list of the latest 40 audit entries.
 
-## Human actions still required
+## Human actions
+
+Steps 1-4 are **done**. The staging signing key and Firebase project exist, the
+v9 rules are deployed to staging and `teamSettings/access.primaryOwnerUid` is
+seeded: the N2 catalogue import ran against that project and the staging APK
+was signed in and exercised by hand against the result
+(`docs/N2-verification.md`). Step 5 remains optional. The instructions are kept
+below because they are what a rebuild of either would follow.
 
 1. **Create the staging signing key.** Debug builds are otherwise signed with a
    keystore the Android plugin generates per run, so on CI the SHA-1 changes

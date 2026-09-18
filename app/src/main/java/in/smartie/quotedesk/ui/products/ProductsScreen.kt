@@ -1,5 +1,6 @@
 package `in`.smartie.quotedesk.ui.products
 
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -20,10 +23,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import `in`.smartie.quotedesk.data.mapping.Money
 import `in`.smartie.quotedesk.data.model.ProductRecord
@@ -34,10 +45,12 @@ import `in`.smartie.quotedesk.domain.CatalogueEntry
 import `in`.smartie.quotedesk.domain.CatalogueView
 import `in`.smartie.quotedesk.domain.DraftLine
 import `in`.smartie.quotedesk.domain.Permissions
+import `in`.smartie.quotedesk.domain.PinDrag
 import `in`.smartie.quotedesk.domain.ProductPins
 import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.ui.AppDataViewModel
 import `in`.smartie.quotedesk.ui.components.CompactStepper
+import `in`.smartie.quotedesk.ui.components.DragHandle
 import `in`.smartie.quotedesk.ui.components.EmptyState
 import `in`.smartie.quotedesk.ui.components.QuoteBar
 import `in`.smartie.quotedesk.ui.components.SectionHeader
@@ -69,7 +82,10 @@ data class ProductsActions(
     val onAdd: (ProductRecord) -> Unit = {},
     val onChangeQuantity: (String, Double) -> Unit = { _, _ -> },
     val onTogglePin: (String) -> Unit = {},
+    /** One place up (-1) or down (+1), from the drag handle's named actions. */
     val onMovePin: (String, Int) -> Unit = { _, _ -> },
+    /** A drop: put the first key where the second one currently sits. */
+    val onReorderPin: (String, String) -> Unit = { _, _ -> },
     val onClearDraft: () -> Unit = {},
 )
 
@@ -113,6 +129,7 @@ fun ProductsScreen(
             onChangeQuantity = viewModel::changeQuantity,
             onTogglePin = { key -> viewModel.togglePin(pinnedKeys, key) },
             onMovePin = { key, delta -> viewModel.movePin(pinnedKeys, key, delta) },
+            onReorderPin = { moved, target -> viewModel.reorderPin(pinnedKeys, moved, target) },
             onClearDraft = viewModel::clearDraft,
         ),
     )
@@ -144,6 +161,13 @@ fun ProductsCatalogue(
 
     val dimens = LocalSmartieDimens.current
     var showDraft by remember { mutableStateOf(false) }
+
+    // Which pinned card is being dragged, how far it has travelled, and the
+    // heights it has to travel over. The heights are a plain map: nothing
+    // reads them until the finger lifts, so they must not cause recomposition.
+    var draggingKey by remember { mutableStateOf<String?>(null) }
+    var dragOffset by remember { mutableStateOf(0f) }
+    val pinnedHeights = remember { mutableMapOf<String, Int>() }
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -201,7 +225,6 @@ fun ProductsCatalogue(
                             draft = draft,
                             pinned = ProductPins.isPinned(pinnedKeys, entry.product.key),
                             canPin = canPin,
-                            reorderable = false,
                             showCategory = true,
                             actions = actions,
                         )
@@ -217,16 +240,56 @@ fun ProductsCatalogue(
                         trailing = "${view.pinned.size} / ${Catalogue.MAX_PINS}",
                     )
                 }
-                items(view.pinned, key = { "pin-" + it.product.documentId }) { entry ->
+                itemsIndexed(
+                    view.pinned,
+                    key = { _, entry -> "pin-" + entry.product.documentId },
+                ) { index, entry ->
+                    val key = entry.product.key
+                    val dragging = draggingKey == key
                     CatalogueCard(
                         entry = entry,
                         stock = stockByKey[entry.product.stockKey],
                         draft = draft,
                         pinned = true,
                         canPin = canPin,
-                        reorderable = true,
                         showCategory = false,
                         actions = actions,
+                        modifier = Modifier
+                            .onSizeChanged { pinnedHeights[key] = it.height }
+                            // Lifted above its neighbours while it travels.
+                            .zIndex(if (dragging) 1f else 0f)
+                            .graphicsLayer { translationY = if (dragging) dragOffset else 0f },
+                        dragging = dragging,
+                        drag = if (canPin && view.pinned.size > 1) {
+                            PinDragHandlers(
+                                label = "Reorder " +
+                                    entry.product.model.ifBlank { entry.product.seedModel },
+                                onStart = {
+                                    draggingKey = key
+                                    dragOffset = 0f
+                                },
+                                onDelta = { dragOffset += it },
+                                onDrop = {
+                                    val heights = view.pinned.map { pinned ->
+                                        pinnedHeights[pinned.product.key]
+                                            ?: pinnedHeights[key]
+                                            ?: 1
+                                    }
+                                    val to = PinDrag.targetIndex(heights, index, dragOffset)
+                                    draggingKey = null
+                                    dragOffset = 0f
+                                    if (to != index) {
+                                        actions.onReorderPin(key, view.pinned[to].product.key)
+                                    }
+                                },
+                                onCancel = {
+                                    draggingKey = null
+                                    dragOffset = 0f
+                                },
+                            )
+                        } else {
+                            null
+                        },
                     )
                 }
             }
@@ -265,7 +328,6 @@ fun ProductsCatalogue(
                             draft = draft,
                             pinned = false,
                             canPin = canPin,
-                            reorderable = false,
                             showCategory = false,
                             actions = actions,
                         )
@@ -306,9 +368,11 @@ private fun CatalogueCard(
     draft: QuoteDraft,
     pinned: Boolean,
     canPin: Boolean,
-    reorderable: Boolean,
     showCategory: Boolean,
     actions: ProductsActions,
+    modifier: Modifier = Modifier,
+    dragging: Boolean = false,
+    drag: PinDragHandlers? = null,
 ) {
     ProductCard(
         entry = entry,
@@ -318,16 +382,29 @@ private fun CatalogueCard(
         pinned = pinned,
         canPin = canPin,
         showCategory = showCategory,
+        modifier = modifier,
+        dragging = dragging,
+        drag = drag,
         onAdd = { actions.onAdd(entry.product) },
         onChangeQuantity = { actions.onChangeQuantity(entry.product.key, it) },
         onTogglePin = { actions.onTogglePin(entry.product.key) },
-        onMovePin = if (reorderable) {
-            { delta -> actions.onMovePin(entry.product.key, delta) }
-        } else {
-            null
-        },
+        onMovePin = { delta -> actions.onMovePin(entry.product.key, delta) },
     )
 }
+
+/**
+ * What a pinned card's drag handle does.
+ *
+ * Only pinned cards get one, and only when there are at least two of them:
+ * a shelf of one has nothing to reorder.
+ */
+private data class PinDragHandlers(
+    val label: String,
+    val onStart: () -> Unit,
+    val onDelta: (Float) -> Unit,
+    val onDrop: () -> Unit,
+    val onCancel: () -> Unit,
+)
 
 /** The PWA's minimum-load filter (`match` 3088), as a row of choices. */
 @Composable
@@ -356,14 +433,25 @@ private fun ProductCard(
     onAdd: () -> Unit,
     onChangeQuantity: (Double) -> Unit,
     onTogglePin: () -> Unit,
-    onMovePin: ((Int) -> Unit)?,
+    onMovePin: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    dragging: Boolean = false,
+    drag: PinDragHandlers? = null,
     showCategory: Boolean = false,
 ) {
     val dimens = LocalSmartieDimens.current
     val product = entry.product
     val inQuote = quantity > 0.0
     SmartieCard(
-        background = if (pinned) SmartieColors.PurpleTint else SmartieColors.Panel,
+        // Lifted while it is being dragged, so it is obvious which card the
+        // finger has hold of.
+        modifier = if (dragging) {
+            modifier.shadow(8.dp, RoundedCornerShape(dimens.radius))
+        } else {
+            modifier
+        },
+        background = if (dragging || pinned) SmartieColors.PurpleTint else SmartieColors.Panel,
+        borderColor = if (dragging) SmartieColors.PurpleLine else SmartieColors.Rule,
         accent = if (inQuote) SmartieColors.Purple else null,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(dimens.gapXs)) {
@@ -426,19 +514,57 @@ private fun ProductCard(
             }
 
             if (canPin) {
-                Row(horizontalArrangement = Arrangement.spacedBy(dimens.gapXs)) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(dimens.gapXs),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     SmartieGhostButton(
                         text = if (pinned) "★ Pinned" else "☆ Pin",
                         onClick = onTogglePin,
                     )
-                    if (onMovePin != null) {
-                        SmartieGhostButton(text = "↑", onClick = { onMovePin(-1) })
-                        SmartieGhostButton(text = "↓", onClick = { onMovePin(1) })
-                    }
+                    // The arrows this replaced were two more taps on a card
+                    // that already carries three, and they only ever moved
+                    // one place at a time.
+                    if (drag != null) PinDragHandle(drag = drag, onMovePin = onMovePin)
                 }
             }
         }
     }
+}
+
+/**
+ * The grip on a pinned card: long-press and drag to reorder.
+ *
+ * The handlers are read through [rememberUpdatedState] because the gesture
+ * detector outlives the recompositions that renumber the shelf — keying the
+ * `pointerInput` on the order instead would cancel a drag in progress every
+ * time the list moved under it.
+ */
+@Composable
+private fun PinDragHandle(drag: PinDragHandlers, onMovePin: (Int) -> Unit) {
+    val latest = rememberUpdatedState(drag)
+    DragHandle(
+        label = drag.label,
+        // Reachable without a drag, and without putting the arrows back.
+        accessibilityActions = listOf(
+            CustomAccessibilityAction("Move up") {
+                onMovePin(-1)
+                true
+            },
+            CustomAccessibilityAction("Move down") {
+                onMovePin(1)
+                true
+            },
+        ),
+        modifier = Modifier.pointerInput(Unit) {
+            detectDragGesturesAfterLongPress(
+                onDragStart = { latest.value.onStart() },
+                onDrag = { _, delta -> latest.value.onDelta(delta.y) },
+                onDragEnd = { latest.value.onDrop() },
+                onDragCancel = { latest.value.onCancel() },
+            )
+        },
+    )
 }
 
 /** What the quotation holds so far. Building it into one is N5's work. */

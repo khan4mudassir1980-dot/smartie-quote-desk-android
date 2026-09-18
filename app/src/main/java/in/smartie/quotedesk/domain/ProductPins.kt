@@ -48,6 +48,31 @@ object ProductPins {
     fun toggle(keys: List<String>, key: String): PinChange =
         if (key in keys) unpin(keys, key) else pin(keys, key)
 
+    /**
+     * Drops the pin at [from] onto index [to].
+     *
+     * Ordinary "move to index" semantics: everything between the two shuffles
+     * by one and nothing is added or lost, so the cap cannot be breached by a
+     * reorder. Used by the pinned shelf's drag-and-drop.
+     */
+    fun reorder(keys: List<String>, from: Int, to: Int): PinChange {
+        if (from !in keys.indices || to !in keys.indices || from == to) return PinChange.Unchanged
+        val reordered = keys.toMutableList()
+        reordered.add(to, reordered.removeAt(from))
+        return PinChange.Updated(reordered)
+    }
+
+    /**
+     * Drops [movedKey] where [targetKey] currently sits.
+     *
+     * The screen drops onto a **card**, and the pinned shelf drops any pin
+     * whose product has gone, so the two lists can differ in length. Working
+     * in keys rather than indices keeps a dangling pin exactly where it was
+     * instead of silently dropping it from the write.
+     */
+    fun reorderTo(keys: List<String>, movedKey: String, targetKey: String): PinChange =
+        reorder(keys, keys.indexOf(movedKey), keys.indexOf(targetKey))
+
     /** Moves a pin one place up (-1) or down (+1); the ends do not wrap. */
     fun move(keys: List<String>, key: String, delta: Int): PinChange {
         val from = keys.indexOf(key)

@@ -126,8 +126,19 @@ class ProductsViewModel(
         applyPinChange(ProductPins.toggle(currentKeys, key), pinned = key !in currentKeys)
     }
 
+    /** The drag handle's named accessibility actions: one place at a time. */
     fun movePin(currentKeys: List<String>, key: String, delta: Int) {
         applyPinChange(ProductPins.move(currentKeys, key, delta), announce = false)
+    }
+
+    /**
+     * A drop: [movedKey] goes where [targetKey] sits.
+     *
+     * One write, after the finger lifts, through the same shared
+     * `teamSettings/productPins` document as every other pin change.
+     */
+    fun reorderPin(currentKeys: List<String>, movedKey: String, targetKey: String) {
+        applyPinChange(ProductPins.reorderTo(currentKeys, movedKey, targetKey), announce = false)
     }
 
     private fun applyPinChange(

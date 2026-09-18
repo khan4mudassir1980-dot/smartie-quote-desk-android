@@ -71,4 +71,47 @@ class ProductPinsTest {
         assertEquals(PinChange.Unchanged, ProductPins.move(pins, "gate|Z", -1))
         assertEquals(PinChange.Unchanged, ProductPins.move(pins, "gate|B", 0))
     }
+
+    @Test
+    fun `a drop moves a pin to the index it was dropped on`() {
+        assertEquals(
+            listOf("gate|B", "gate|C", "gate|A"),
+            keysAfter(ProductPins.reorder(pins, from = 0, to = 2)),
+        )
+        assertEquals(
+            listOf("gate|C", "gate|A", "gate|B"),
+            keysAfter(ProductPins.reorder(pins, from = 2, to = 0)),
+        )
+    }
+
+    @Test
+    fun `a drop neither adds nor loses a pin, so the cap cannot be breached`() {
+        val full = (1..ProductPins.MAX).map { "gate|$it" }
+        val dropped = keysAfter(ProductPins.reorder(full, from = 14, to = 0))
+        assertEquals(ProductPins.MAX, dropped.size)
+        assertEquals(full.toSet(), dropped.toSet())
+        assertEquals("gate|15", dropped.first())
+    }
+
+    @Test
+    fun `a drop that lands where it started, or outside the list, changes nothing`() {
+        assertEquals(PinChange.Unchanged, ProductPins.reorder(pins, from = 1, to = 1))
+        assertEquals(PinChange.Unchanged, ProductPins.reorder(pins, from = 1, to = 3))
+        assertEquals(PinChange.Unchanged, ProductPins.reorder(pins, from = -1, to = 1))
+    }
+
+    @Test
+    fun `a drop works in keys, so a pin whose product has gone keeps its place`() {
+        // The shelf drops a pin whose product is missing, so the cards the
+        // finger moves are a shorter list than the one being written.
+        val stored = listOf("gate|A", "gate|GONE", "gate|B", "gate|C")
+        assertEquals(
+            listOf("gate|A", "gate|GONE", "gate|C", "gate|B"),
+            keysAfter(ProductPins.reorderTo(stored, "gate|B", "gate|C")),
+        )
+        assertEquals(
+            PinChange.Unchanged,
+            ProductPins.reorderTo(stored, "gate|B", "gate|NOT-PINNED"),
+        )
+    }
 }

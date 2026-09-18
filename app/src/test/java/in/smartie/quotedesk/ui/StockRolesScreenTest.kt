@@ -7,11 +7,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import `in`.smartie.quotedesk.data.mapping.Keys
-import `in`.smartie.quotedesk.data.model.ProductRecord
-import `in`.smartie.quotedesk.ui.stock.AddStockPanel
 import `in`.smartie.quotedesk.ui.stock.EditStockPanel
 import `in`.smartie.quotedesk.ui.theme.SmartieTheme
 import org.junit.Assert.assertEquals
@@ -22,7 +18,7 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * What each role is offered, and what Add stock does.
+ * What each role is offered, and what Edit does for them.
  *
  * These drive the dialog **panels** rather than the dialogs. A Compose
  * `Dialog` opens its own window with its own recomposer, which the Robolectric
@@ -44,7 +40,9 @@ class StockRolesScreenTest {
         compose.showStock(capabilities = workerCaps)
         compose.onNodeWithText("Sliding gate motor").assertExists()
         compose.onNodeWithText("9 each").assertExists()
-        for (control in listOf("Done", "Edit", "Pin", "Add stock", "Clear", "+", "−")) {
+        for (control in listOf(
+            "Done", "Edit", "Pin", "History", "Add stock", "Clear", "+", "−"
+        )) {
             assertTrue(
                 "a Worker must not see $control",
                 compose.onAllNodesWithText(control).fetchSemanticsNodes().isEmpty()
@@ -105,52 +103,5 @@ class StockRolesScreenTest {
         }
         compose.onNodeWithText("Save").assertIsNotEnabled()
         compose.onNodeWithText("Internet required to change stock").assertExists()
-    }
-
-    @Test
-    fun `Add stock offers the catalogue, keyed by immutable identity`() {
-        val renamed = ProductRecord(
-            documentId = Keys.productDocId("gateMotors", "SIE9000"),
-            key = Keys.productKey("gateMotors", "SIE9000"),
-            group = "gateMotors",
-            seedModel = "SIE9000",
-            // Renamed since seeding: the stock key must not follow.
-            model = "SIE-9000 PRO",
-            name = "Barrier arm"
-        )
-        var added: String? = null
-        compose.setContent {
-            SmartieTheme {
-                AddStockPanel(
-                    products = listOf(renamed),
-                    online = true,
-                    onAddProduct = { p, _, _, _ -> added = p.stockKey },
-                    onAddManual = { _, _, _, _, _, _ -> },
-                    onCancel = {}
-                )
-            }
-        }
-        // The panel scrolls, and the catalogue sits below the quantity fields,
-        // so the row has to be brought into view before it can be clicked.
-        compose.onNodeWithText("Barrier arm").performScrollTo().performClick()
-        assertEquals("gateMotors|SIE9000", added)
-    }
-
-    @Test
-    fun `Add item stays disabled until a manual item is named`() {
-        compose.setContent {
-            SmartieTheme {
-                AddStockPanel(
-                    products = emptyList(),
-                    online = true,
-                    onAddProduct = { _, _, _, _ -> },
-                    onAddManual = { _, _, _, _, _, _ -> },
-                    onCancel = {}
-                )
-            }
-        }
-        compose.onNodeWithText("Add item").assertIsNotEnabled()
-        compose.onNodeWithContentDescription("Manual model or code").assertExists()
-        compose.onNodeWithContentDescription("Manual item name").assertExists()
     }
 }

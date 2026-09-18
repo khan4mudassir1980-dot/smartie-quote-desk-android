@@ -1,5 +1,6 @@
 package `in`.smartie.quotedesk.domain
 
+import `in`.smartie.quotedesk.data.model.StockMove
 import `in`.smartie.quotedesk.data.model.StockRecord
 
 /** Which rows a tile shows when it is selected. */
@@ -150,6 +151,19 @@ object StockBoard {
     fun displayName(record: StockRecord): String =
         record.name.ifBlank { record.manualName }
             .ifBlank { displayModel(record) }
+
+    /**
+     * One row's movements, newest first.
+     *
+     * Filtered on the immutable stock key, never on a model, so a display
+     * rename never hides the history a row already had. Ties break on the
+     * movement id so the order is stable when two land in the same
+     * millisecond.
+     */
+    fun historyFor(movements: List<StockMove>, key: String): List<StockMove> =
+        movements
+            .filter { it.key == key }
+            .sortedWith(compareByDescending<StockMove> { it.at }.thenByDescending { it.id })
 
     fun displayModel(record: StockRecord): String =
         record.model.ifBlank { record.manualModel }

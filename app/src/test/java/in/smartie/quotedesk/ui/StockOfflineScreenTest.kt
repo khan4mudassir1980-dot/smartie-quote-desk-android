@@ -37,7 +37,7 @@ class StockOfflineScreenTest {
     @Test
     fun `offline the pending draft is still shown so nothing is lost`() {
         compose.showStock(pending = mapOf("gateMotors|SIE1000" to 3.0), online = false)
-        compose.onNodeWithText("+3 pending").assertExists()
+        compose.onNodeWithText("Pending change +3", substring = true).assertExists()
     }
 
     @Test

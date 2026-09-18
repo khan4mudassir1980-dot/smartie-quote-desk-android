@@ -10,6 +10,7 @@ import `in`.smartie.quotedesk.data.model.ProductCategoryRecord
 import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.PurchaseRecord
 import `in`.smartie.quotedesk.data.model.QuotationRecord
+import `in`.smartie.quotedesk.data.model.StockMove
 import `in`.smartie.quotedesk.data.model.StockRecord
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.Permissions
@@ -55,6 +56,21 @@ class AppDataViewModel(
     /** Every role, Workers included, may see stock. */
     val stock = container.catalogueRepository.observeStock()
         .guarded(emptyList<StockRecord>())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Stock movements, for the History action on a stock card. A Worker may
+     * read `/stock` but the rules refuse them `/stockMoves`, so they get an
+     * empty list and no History control.
+     */
+    val movements = (
+        if (Permissions.canViewStockHistory(member)) {
+            container.catalogueRepository.observeRecentMovements()
+        } else {
+            flowOf(emptyList())
+        }
+        )
+        .guarded(emptyList<StockMove>())
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val requirements = container.operationsRepository.observeRequirements()

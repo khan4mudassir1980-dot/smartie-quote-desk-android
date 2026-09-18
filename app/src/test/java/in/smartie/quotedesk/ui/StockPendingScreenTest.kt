@@ -28,9 +28,27 @@ class StockPendingScreenTest {
     @Test
     fun `a pending delta is shown beside the stored quantity, never instead of it`() {
         compose.showStock(pending = mapOf("gateMotors|SIE1000" to 5.0))
+        // The stored quantity is the authoritative figure.
         compose.onNodeWithText("9 each").assertExists()
-        compose.onNodeWithText("+5 pending").assertExists()
+        // The delta is named as a pending change, so it cannot be read as one.
+        compose.onNodeWithText("Pending change +5", substring = true).assertExists()
+        // And 14 is never presented as the quantity in stock.
         assertTrue(compose.onAllNodesWithText("14 each").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun `the stepper's middle figure is captioned as the pending change`() {
+        compose.showStock(
+            stock = listOf(stockRecord("SIE1000", "Sliding gate motor", quantity = 9.0)),
+            pending = mapOf("gateMotors|SIE1000" to 5.0)
+        )
+        // Two nodes on this one card read it: the line above the rule, and
+        // the caption under the stepper.
+        assertEquals(
+            2,
+            compose.onAllNodesWithText("Pending change", substring = true)
+                .fetchSemanticsNodes().size
+        )
     }
 
     /** A pending −2 on a count of 2 must not read Out of stock. */

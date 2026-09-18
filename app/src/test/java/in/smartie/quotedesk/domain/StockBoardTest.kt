@@ -1,6 +1,7 @@
 package `in`.smartie.quotedesk.domain
 
 import `in`.smartie.quotedesk.data.mapping.Keys
+import `in`.smartie.quotedesk.data.model.StockMove
 import `in`.smartie.quotedesk.data.model.StockRecord
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -228,5 +229,47 @@ class StockBoardTest {
     fun `a key with no separator still displays`() {
         val odd = StockRecord(documentId = "legacyrow", key = "legacyrow")
         assertEquals("legacyrow", StockBoard.displayName(odd))
+    }
+
+    // --- history -----------------------------------------------------------
+
+    private fun move(id: String, key: String, at: Long) =
+        StockMove(id = id, key = key, at = at)
+
+    @Test
+    fun `history is this row's movements, newest first`() {
+        val movements = listOf(
+            move("m1", "gateMotors|SIE1000", at = 100L),
+            move("m2", "gateMotors|SIE2000", at = 200L),
+            move("m3", "gateMotors|SIE1000", at = 300L),
+            move("m4", "gateMotors|SIE1000", at = 200L)
+        )
+        assertEquals(
+            listOf("m3", "m4", "m1"),
+            StockBoard.historyFor(movements, "gateMotors|SIE1000").map { it.id }
+        )
+    }
+
+    @Test
+    fun `two movements in the same millisecond still order the same way twice`() {
+        val same = listOf(
+            move("a", "gateMotors|SIE1000", at = 500L),
+            move("b", "gateMotors|SIE1000", at = 500L)
+        )
+        assertEquals(
+            StockBoard.historyFor(same, "gateMotors|SIE1000").map { it.id },
+            StockBoard.historyFor(same.reversed(), "gateMotors|SIE1000").map { it.id }
+        )
+    }
+
+    @Test
+    fun `a row nothing has happened to has an empty history`() {
+        assertTrue(StockBoard.historyFor(emptyList(), "gateMotors|SIE1000").isEmpty())
+        assertTrue(
+            StockBoard.historyFor(
+                listOf(move("m1", "gateMotors|SIE2000", at = 1L)),
+                "gateMotors|SIE1000"
+            ).isEmpty()
+        )
     }
 }

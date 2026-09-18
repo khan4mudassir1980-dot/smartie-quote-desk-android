@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-18.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `d11b5da` — [run #55](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35224973508), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `f4cb42e` — [run #57](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35312864658), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -47,9 +47,12 @@ Our Stock or on Purchase; Purchase urgency was invisible without opening Edit;
 the pinned shelf reordered through `↑`/`↓` buttons; and the header carried a
 saffron/white/green line.
 
-All seven are fixed, with regression coverage for each. Nothing in the settled
-N3 domain, transaction or rules changed. **A second manual pass on a corrected
-APK is what closes N3.**
+All seven are fixed, with regression coverage for each — 359 Kotlin tests
+across 35 classes, up from 310 across 26, plus the unchanged 43 emulator tests
+and 26 importer tests. Nothing in the settled N3 domain, transaction or rules
+changed. **A second manual pass on a corrected APK is what closes N3.** The
+APK to use is `app-staging-debug.apk` from run #57's `smartie-native-apks`
+artifact.
 
 ## Current next action
 

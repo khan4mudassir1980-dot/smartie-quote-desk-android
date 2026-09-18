@@ -527,26 +527,27 @@ row above still has to be re-run on the corrected APK.
 
 ## Staging deployment, and what is left
 
-No session has accessed either Firebase project. Steps 3 and 4 have been done
-by the Owner — the run #58 APK was installed on one physical phone and the
-pass was run; `docs/N3-verification.md` is the record. Whether step 2 was done
-first is **not stated in that evidence**, so it stays open below until someone
-confirms it.
+No session has accessed either Firebase project. **All four steps have been
+done by the Owner.** Steps 1 and 2 were deployed from an extracted `d11b5da`
+tree before the run #55 APK was installed; steps 3 and 4 followed, and the
+second pass ran on the run #58 APK. `docs/N3-verification.md` is the record,
+including the distinction between *deployed at a known point* and *verified
+live now* — the latter has not been done and needs a credential nobody here
+holds.
 
-1. **The composite index is not needed yet.** `firestore.indexes.json`
-   declares `stockMoves` by `key` ordered by `at`, for a per-item history
-   query. History as built does not use it: it reads the recent movements
-   ordered by `at` alone — a single-field index every project has — and picks
-   one key's rows out in memory. So there is nothing to deploy here until a
-   feature queries one key's movements directly, and no manual pass is
-   blocked on it.
-2. **Deploy the v9 rules to staging — unconfirmed.** They carry the
-   `noPriceData()` and `safeName()` guards and the `note` action, and staging
-   was last known to be running the version deployed before those existed. The
-   second pass's writes were accepted by whatever rules staging is running,
-   which does not say which. From `firestore/`, against **staging only**:
-   `firebase deploy --only firestore:rules`. Production keeps the V8C4 rules;
-   nothing here goes near it.
+1. **Deploy the composite index — done.**
+   `firebase deploy --only firestore:indexes --project smartie-quote-desk-staging`,
+   from a `d11b5da` tree. History as built does not need it — it reads the
+   recent movements ordered by `at` alone and picks one key's rows out in
+   memory — so it is deployed ahead of the first feature that queries one
+   key's movements directly.
+2. **Deploy the v9 rules to staging — done.**
+   `firebase deploy --only firestore:rules --project smartie-quote-desk-staging`,
+   from the same `d11b5da` tree. They carry the `noPriceData()` and
+   `safeName()` guards and the `note` action. `firestore.rules` is
+   byte-identical between `d11b5da` and now, so what went up is what the
+   repository holds. Production keeps the V8C4 rules; nothing here went near
+   it. **Not re-verified live:** no session has read the deployed ruleset back.
 3. **Build and install the staging APK — done.** `app-staging-debug.apk` from
    run #58's `smartie-native-apks` artifact.
 4. **Run the T-S manual pass above — done on one phone.** As Owner, as Staff

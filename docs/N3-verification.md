@@ -103,10 +103,31 @@ Six rows above were not reached: T-S2c, T-S2d, T-S4, T-S9, T-S20 and T-X4.
 They are not failures and they are not passes; they are outstanding, and they
 are tracked here alongside T-S5 rather than being quietly dropped.
 
-**Whether the v9 rules were deployed to staging before this pass is not stated
-in the evidence.** The writes the pass performed were accepted by whatever
-rules staging is currently running. `docs/N3-plan.md` still carries the
-deployment step; it stays there until someone confirms it has been done.
+**The rules and indexes were deployed — as history, not as a fresh check.**
+The Owner has since confirmed that before installing the run #55 APK, from the
+`firestore` directory of an extracted **`d11b5da`** tree, both of these ran and
+completed:
+
+```
+firebase.cmd deploy --only firestore:indexes --project smartie-quote-desk-staging
+firebase.cmd deploy --only firestore:rules   --project smartie-quote-desk-staging
+```
+
+Two things follow, and they are not the same thing:
+
+- **What was deployed is known.** `firestore.rules` and
+  `firestore.indexes.json` are byte-identical between `d11b5da` and the current
+  head — the rules file has not been touched since `a339c0f`, which predates
+  `d11b5da`. So the v9 rules the repository holds now are the ones that
+  command uploaded. That is a repository fact, checkable with `git show`.
+- **What is live now is not verified.** Nobody has read back the deployed
+  ruleset from the project. A later deploy, a console edit or a rollback from
+  any source would not show up here, and no session holds a credential to
+  look. This is **deployment history the Owner confirmed**, not a fresh
+  verification of the currently deployed rules or their exact contents.
+
+Treat it as: the correct rules were sent to staging at a known point, and the
+live state has been taken on trust since.
 
 ## Purchase, and why its rows are N4's
 

@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-18.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `846bf79` — [run #58](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35313430384), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `92f2cf1` — [run #59](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35340658753), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -24,7 +24,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N1 Auth & Team | **Complete** |
 | N2 Products | **Complete and verified** |
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** Not fully closed: T-S5 needs two phones |
-| N3.1 Stock Photo/Camera | Not started. **Its plan is the current next action**; nothing is to be implemented until that plan is approved |
+| N3.1 Stock Photo | **Planned, not started.** `docs/N3.1-plan.md` is written and awaiting approval. Nothing is implemented, no dependency added, no Firebase project touched |
 | N4–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -62,26 +62,33 @@ the Worker/Staff/Owner separation, Archive, and the drag reorder.
   checks belong to N4. The automated rendering tests are recorded as
   **automated evidence only**.
 
+**The rules and indexes were deployed to staging**, from an extracted
+`d11b5da` tree, before the run #55 APK was installed — Owner-confirmed. Both
+files are byte-identical between `d11b5da` and now, so what went up is what
+this repository holds. That is **deployment history, not a fresh read of the
+live ruleset**: nobody has read the deployed rules back, and no session holds
+a credential to do it.
+
 Row by row, with the evidence for each, in `docs/N3-verification.md`.
 
 ## Current next action
 
-**Prepare the N3.1 Stock Photo/Camera plan, for review before anything is
-built.** A plan only: no camera code, no permission entries, no dependency, no
-Firebase access, until it is approved — the same sequence N3 followed.
+**Review `docs/N3.1-plan.md` and answer its open decision 1 — whether
+`smartie-quote-desk-staging` goes on the Blaze plan.** Cloud Storage for
+Firebase requires Blaze even for a default bucket, so that one answer decides
+whether N3.1 is built as planned or falls back to a smaller, worse shape. It
+is the only decision that blocks anything; the rest of the plan's decisions
+can be settled during implementation.
+
+Nothing is to be built until the plan is approved. Batches A–D need no bucket
+and no plan change, so approval alone unblocks most of the work; only batch E
+waits on billing.
 
 N3's outstanding device work is **tracked, not closed**, and does not become
 this action: T-S5 on two phones, the six rows the second pass did not reach,
 and the second-device halves of T-S24 and T-S27. They are listed with their
 evidence in `docs/N3-verification.md`, and they come back as soon as a second
-phone is available.
-
-Also still recorded in `docs/N3-plan.md` under "Staging deployment": whether
-the v9 rules have been deployed to staging is not stated in the pass evidence,
-so that step stays open until someone confirms it. The `stockMoves` composite
-index is not needed for History as it is built — the read orders by `at` alone
-and filters by key in memory — so it deploys with the first feature that
-queries a single key's movements directly.
+phone is available. N3.1 must not be the reason they slip.
 
 ## Decisions that bind future work
 
@@ -182,6 +189,7 @@ manual-to-catalogue link; do not give it a meaning.
 | `docs/N2-verification.md` | The import evidence, what price parity rests on, what stays blocked |
 | `docs/N3-plan.md` | The N3 plan: resolved V8C4 facts, the transaction contract, decisions and test plan |
 | `docs/N3-verification.md` | The second manual pass, row by row: what passed, what is pending, what is N4's |
+| `docs/N3.1-plan.md` | The N3.1 Stock Photo plan: flow, data model, rules, Android integration, batches, costs and open decisions |
 | `tools/catalogue-import/README.md` | How the import runs, its guards, and rollback |
 | `firestore/firestore.rules` | The v9 rules — staging only; production keeps V8C4 |
 

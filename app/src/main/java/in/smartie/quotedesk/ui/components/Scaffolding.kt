@@ -26,36 +26,35 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
 import `in`.smartie.quotedesk.ui.theme.SmartieColors
 
 /**
- * The 3dp tricolour strip the PWA draws under its masthead
- * (`index.html:74-76`) — saffron 34%, white 32%, green 34%.
+ * The rule under the screen header: **one solid purple line**, full width, the
+ * same on every screen.
+ *
+ * It replaced a saffron/white/green tricolour copied from the PWA masthead.
+ * On a white header its white middle third read as a gap rather than a line,
+ * and neither the saffron nor the green appeared anywhere else in the app.
  */
 @Composable
-fun TricolourStrip(modifier: Modifier = Modifier) {
-    val height = LocalSmartieDimens.current.tricolourHeight
+fun HeaderRule(modifier: Modifier = Modifier) {
     Box(
         modifier
             .fillMaxWidth()
-            .height(height)
-            .background(
-                Brush.horizontalGradient(
-                    0.00f to SmartieColors.TricolourSaffron,
-                    0.34f to SmartieColors.TricolourSaffron,
-                    0.34f to SmartieColors.TricolourWhite,
-                    0.66f to SmartieColors.TricolourWhite,
-                    0.66f to SmartieColors.TricolourGreen,
-                    1.00f to SmartieColors.TricolourGreen
-                )
-            )
+            .height(LocalSmartieDimens.current.headerRuleHeight)
+            .background(SmartieColors.HeaderRule)
+            .semantics { contentDescription = HEADER_RULE_LABEL }
     )
 }
+
+/** Names the rule for tests and for a screen reader. */
+const val HEADER_RULE_LABEL: String = "Header rule"
 
 /**
  * Page titles live in the app bar, not as an oversized heading inside the
@@ -106,7 +105,7 @@ fun SmartieTopBar(
                 actionIconContentColor = SmartieColors.Ink2
             )
         )
-        TricolourStrip()
+        HeaderRule()
     }
 }
 

@@ -14,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,6 +66,11 @@ fun ListRow(
     title: String,
     modifier: Modifier = Modifier,
     secondary: String? = null,
+    /**
+     * A shared note somebody typed. Passed only when non-empty — a row must
+     * never show an empty note placeholder.
+     */
+    note: String? = null,
     meta: String? = null,
     tags: @Composable () -> Unit = {},
     trailing: @Composable () -> Unit = {},
@@ -100,6 +106,18 @@ fun ListRow(
                         color = SmartieColors.Steel,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (!note.isNullOrBlank()) {
+                    Text(
+                        note,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SmartieColors.Ink2,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        // A tag, not a content description: a description
+                        // would be read out *instead of* the note.
+                        modifier = Modifier.testTag(NOTE_TAG).padding(top = dimens.gapXs)
                     )
                 }
                 if (meta != null) {
@@ -139,3 +157,6 @@ fun ConnectivityBanner(online: Boolean, modifier: Modifier = Modifier) {
         )
     }
 }
+
+/** Marks the note line, so a test can prove there is none when there is none. */
+const val NOTE_TAG: String = "row-note"

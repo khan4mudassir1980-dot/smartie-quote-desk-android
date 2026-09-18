@@ -19,7 +19,7 @@ data class SmartieDimens(
     val stepperHeightNarrow: Dp = 40.dp,
     val bottomNavHeight: Dp = 56.dp,
     val topBarHeight: Dp = 56.dp,
-    val tricolourHeight: Dp = 3.dp,
+    val headerRuleHeight: Dp = 3.dp,
     val accentBarWidth: Dp = 3.dp,
     val cardPadding: Dp = 15.dp,
     val screenPadding: Dp = 12.dp,

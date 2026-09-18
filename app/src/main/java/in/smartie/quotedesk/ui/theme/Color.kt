@@ -49,10 +49,13 @@ object SmartieColors {
     val UrgencyUrgent = Color(0xFFEAB308)
     val UrgencyNormal = Success
 
-    /** The one deliberately non-purple detail: the 3dp tricolour strip. */
-    val TricolourSaffron = Color(0xFFFF9933)
-    val TricolourWhite = Color(0xFFFFFFFF)
-    val TricolourGreen = Color(0xFF138808)
+    /**
+     * The rule under every screen header: one solid brand purple, full width.
+     * It replaced a saffron/white/green tricolour, whose white middle third
+     * read as a gap on a white header and whose segments belonged to no other
+     * part of the app.
+     */
+    val HeaderRule = Purple
 }
 
 val SmartieLightColorScheme = lightColorScheme(

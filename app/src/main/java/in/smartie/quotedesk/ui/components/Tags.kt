@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
 import `in`.smartie.quotedesk.ui.theme.SmartieColors
 import `in`.smartie.quotedesk.ui.theme.SmartieTagTextStyle
 
@@ -69,4 +70,26 @@ fun StatusChip(text: String, state: ChipState, modifier: Modifier = Modifier) {
         Box(Modifier.size(7.dp).clip(CircleShape).background(state.dot))
         Text(text, style = SmartieTagTextStyle, color = state.tone.content, maxLines = 1)
     }
+}
+
+/**
+ * A **filled** chip in one solid colour, for something that has to read at a
+ * glance without being looked for.
+ *
+ * Purchase urgency uses it: the 3dp accent bar down the side of a card was
+ * technically present but nobody saw it, so the first staging pass reported
+ * the colours as missing.
+ */
+@Composable
+fun FilledTag(text: String, colour: Color, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        style = SmartieTagTextStyle,
+        color = SmartieColors.Panel,
+        maxLines = 1,
+        modifier = modifier
+            .clip(RoundedCornerShape(LocalSmartieDimens.current.pillRadius))
+            .background(colour)
+            .padding(horizontal = 9.dp, vertical = 3.dp)
+    )
 }

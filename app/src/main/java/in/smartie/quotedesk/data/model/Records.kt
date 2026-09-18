@@ -100,10 +100,15 @@ data class StockRecord(
     val linkedKey: String = "",
     val note: String = "",
     /**
-     * Read from `name` when a document happens to carry one, else
-     * `manualName`. The V8C4 stock document has **no** `name` field, so for a
-     * catalogue-linked row this is usually blank and the display falls back to
-     * [model]. Tolerant on read; N3 does not write it (docs/N3-plan.md).
+     * The safe descriptive name, read from `name` when a document carries one
+     * and else from `manualName`.
+     *
+     * The V8C4 stock document has no `name` field, so a row the PWA wrote
+     * leaves this blank and the display falls back to [model]. N3 **does**
+     * write it, as an approved additive extension, so a Worker — who may read
+     * `/stock` but never `/products` — sees more than a model code. Nothing
+     * else from the catalogue is copied here, and the rules refuse any stock
+     * write carrying a price field (docs/N3-plan.md).
      */
     val name: String = "",
     val model: String = "",
@@ -132,10 +137,14 @@ data class StockMove(
     val at: Long = 0L
 )
 
+/**
+ * How badly something is needed. The wire values are the PWA's and never
+ * change; the labels are the words the Owner uses for them on the card.
+ */
 enum class UrgencyV2(val wireValue: String, val label: String) {
     CRITICAL("critical", "Very urgent"),
-    URGENT("urgent", "Urgent"),
-    NORMAL("normal", "Normal");
+    URGENT("urgent", "Can wait 1-2 days"),
+    NORMAL("normal", "Not needed now");
 
     companion object {
         fun from(value: String?): UrgencyV2 =

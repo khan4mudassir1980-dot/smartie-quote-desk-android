@@ -14,7 +14,6 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import `in`.smartie.quotedesk.data.mapping.Money
 import `in`.smartie.quotedesk.data.model.PurchaseRecord
-import `in`.smartie.quotedesk.data.model.UrgencyV2
 import `in`.smartie.quotedesk.ui.AppDataViewModel
 import `in`.smartie.quotedesk.ui.components.EmptyState
 import `in`.smartie.quotedesk.ui.components.InDevelopmentBanner
@@ -22,6 +21,8 @@ import `in`.smartie.quotedesk.ui.components.ListRow
 import `in`.smartie.quotedesk.ui.components.SectionHeader
 import `in`.smartie.quotedesk.ui.components.Tag
 import `in`.smartie.quotedesk.ui.components.TagTone
+import `in`.smartie.quotedesk.ui.components.UrgencyTag
+import `in`.smartie.quotedesk.ui.components.urgencyColour
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
 import `in`.smartie.quotedesk.ui.theme.SmartieColors
 import java.text.SimpleDateFormat
@@ -63,15 +64,19 @@ fun PurchaseScreen(data: AppDataViewModel) {
     }
 }
 
+/** Internal so the note and the urgency colour can be asserted directly. */
 @Composable
-private fun PurchaseRow(item: PurchaseRecord) {
+internal fun PurchaseRow(item: PurchaseRecord) {
     ListRow(
         title = item.name,
         secondary = "${Money.formatQuantity(item.quantity)} needed",
+        // A note is shown only when there is one: no empty placeholder.
+        note = item.note.takeIf { it.isNotBlank() },
         meta = creatorLine(item),
         accent = urgencyColour(item.urgency),
         tags = {
-            Tag(item.urgency.label, urgencyTone(item.urgency))
+            // Filled, not toned: the accent bar alone was invisible in use.
+            UrgencyTag(item.urgency)
             Tag(item.status, if (item.isClosed) TagTone.NEUTRAL else TagTone.PURPLE)
         },
         trailing = {
@@ -94,15 +99,3 @@ private fun creatorLine(item: PurchaseRecord): String? {
 
 private fun formatDate(millis: Long): String =
     SimpleDateFormat("d MMM yyyy", Locale.forLanguageTag("en-IN")).format(Date(millis))
-
-private fun urgencyTone(urgency: UrgencyV2): TagTone = when (urgency) {
-    UrgencyV2.CRITICAL -> TagTone.DANGER
-    UrgencyV2.URGENT -> TagTone.WARN
-    UrgencyV2.NORMAL -> TagTone.GREEN
-}
-
-private fun urgencyColour(urgency: UrgencyV2) = when (urgency) {
-    UrgencyV2.CRITICAL -> SmartieColors.UrgencyCritical
-    UrgencyV2.URGENT -> SmartieColors.UrgencyUrgent
-    UrgencyV2.NORMAL -> SmartieColors.UrgencyNormal
-}

@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-18.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `92f2cf1` — [run #59](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35340658753), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `cd41791` — [run #60](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35346221054), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -24,7 +24,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N1 Auth & Team | **Complete** |
 | N2 Products | **Complete and verified** |
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** Not fully closed: T-S5 needs two phones |
-| N3.1 Stock Photo | **Planned, not started.** `docs/N3.1-plan.md` is written and awaiting approval. Nothing is implemented, no dependency added, no Firebase project touched |
+| N3.1 Stock Photo | **Planned for Spark, not started.** `docs/N3.1-plan.md` revised: photos live in a separate Firestore document, not Cloud Storage. Awaiting approval. Nothing implemented, no dependency added, no Firebase project touched |
 | N4–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -73,16 +73,20 @@ Row by row, with the evidence for each, in `docs/N3-verification.md`.
 
 ## Current next action
 
-**Review `docs/N3.1-plan.md` and answer its open decision 1 — whether
-`smartie-quote-desk-staging` goes on the Blaze plan.** Cloud Storage for
-Firebase requires Blaze even for a default bucket, so that one answer decides
-whether N3.1 is built as planned or falls back to a smaller, worse shape. It
-is the only decision that blocks anything; the rest of the plan's decisions
-can be settled during implementation.
+**Review the revised `docs/N3.1-plan.md` and approve or amend it.** The Blaze
+question is closed — SMARTIE stays on Spark — so the plan has been rewritten
+around a separate Firestore photo document. It is judged suitable, with four
+limitations stated in it.
 
-Nothing is to be built until the plan is approved. Batches A–D need no bucket
-and no plan change, so approval alone unblocks most of the work; only batch E
-waits on billing.
+The one answer that could still invalidate it is **open decision 3: is reading
+small printed text off a photo actually required?** At 80 KB and 800×800 it is
+not reliable, and if that is the real requirement the feature needs rethinking
+rather than retuning.
+
+Nothing is to be built until the plan is approved. When it is, **batch A's
+index exemption must be deployed to staging before any photo-writing build
+reaches a device** — an unexempted 80 KB `bytes` field breaks the 7.5 KiB
+index-entry limit and every write fails with `InvalidArgument`.
 
 N3's outstanding device work is **tracked, not closed**, and does not become
 this action: T-S5 on two phones, the six rows the second pass did not reach,
@@ -91,6 +95,14 @@ evidence in `docs/N3-verification.md`, and they come back as soon as a second
 phone is available. N3.1 must not be the reason they slip.
 
 ## Decisions that bind future work
+
+**SMARTIE stays on the Firebase Spark plan.** No billing account, no Blaze
+upgrade, no Cloud Storage, no Cloud Functions, no paid service. Anything that
+needs one of those is not an option to weigh — it is out. Cloud Storage for
+Firebase requires Blaze even for a default bucket, so image and file storage
+must be solved inside Firestore or not at all, and the daily Spark quotas are
+shared by every feature. Nothing in this repository may promise free operation
+without limits.
 
 **Stock writing is online-only.** A Firestore transaction that re-reads the
 stored quantity and applies the delta to it. No offline mutation queue, no

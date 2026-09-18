@@ -490,7 +490,7 @@ movement whose document id differs from its `id` field refused.
 | T-S2d | Edit the reorder level alone | One `min` movement, `prev == next` |
 | T-S3 | Reorder level 5, quantity 5, then 4, then 6 | Low, Low, In stock |
 | T-S4 | Tap Low, then Out, then Out again | The list filters, then filters, then clears |
-| T-S5 | Two phones, same row, +3 and −1 without refreshing | Final quantity is correct; two audit rows |
+| T-S5 | Two phones, same row, +3 and −1 without refreshing | Final quantity is correct; two audit rows. **PENDING — no second phone yet; nothing substitutes for it** |
 | T-S6 | Edit as Staff | No exact-quantity field; the rules refuse a forced `set` |
 | T-S7 | Edit as Administrator with a reason | `set` row in history with the reason |
 | T-S8 | Sign in as a Worker | Rows visible by descriptive `name` where one has been written, and by model where the row is still the PWA's; no price anywhere; no stepper, Edit, pin, Add, Archive or History |
@@ -520,14 +520,18 @@ row above still has to be re-run on the corrected APK.
 | T-S22 | Press back again, then tap outside the dialog | Neither closes it; Cancel does |
 | T-S23 | Look at a tracked row | One card: the stored quantity captioned "in stock", the stepper captioned "Pending change", and Pin, Edit and History under the same rule |
 | T-S24 | Save a note on a stock row, then restart the app and open it on a second device | The note is on the card in both places |
-| T-S25 | Look at an open Purchase requirement with a note | The note is on the card, and its urgency is red, yellow or green without opening Edit |
+| T-S25 | Look at an open Purchase requirement with a note | The note is on the card, and its urgency is red, yellow or green without opening Edit. **MOVED TO N4** — Purchase is view-only until then, so no requirement can be created to check |
 | T-S26 | Pin three products, long-press a handle and drag one | It lifts, and drops into the new position; nothing is added to the quotation and nothing is unpinned |
 | T-S27 | Restart, and open Products on a second device | The dragged order is the order everywhere |
 | T-S28 | Look at any screen header | One solid purple line, full width, with no orange or green anywhere |
 
 ## Staging deployment, and what is left
 
-Nothing below has been done. No session has accessed either Firebase project.
+No session has accessed either Firebase project. Steps 3 and 4 have been done
+by the Owner — the run #58 APK was installed on one physical phone and the
+pass was run; `docs/N3-verification.md` is the record. Whether step 2 was done
+first is **not stated in that evidence**, so it stays open below until someone
+confirms it.
 
 1. **The composite index is not needed yet.** `firestore.indexes.json`
    declares `stockMoves` by `key` ordered by `at`, for a per-item history
@@ -536,26 +540,46 @@ Nothing below has been done. No session has accessed either Firebase project.
    one key's rows out in memory. So there is nothing to deploy here until a
    feature queries one key's movements directly, and no manual pass is
    blocked on it.
-2. **Deploy the v9 rules to staging.** They now carry the `noPriceData()` and
-   `safeName()` guards and the `note` action, and staging is running the
-   version deployed before those existed. From `firestore/`, against
-   **staging only**: `firebase deploy --only firestore:rules`.
-   Production keeps the V8C4 rules; nothing here goes near it.
-3. **Build and install the staging APK** — `./gradlew assembleStagingDebug`,
-   or take `app-staging-debug.apk` from the CI run's `smartie-native-apks`
-   artifact.
-4. **Run the T-S manual pass above**, as Owner, as Staff and as a Worker.
+2. **Deploy the v9 rules to staging — unconfirmed.** They carry the
+   `noPriceData()` and `safeName()` guards and the `note` action, and staging
+   was last known to be running the version deployed before those existed. The
+   second pass's writes were accepted by whatever rules staging is running,
+   which does not say which. From `firestore/`, against **staging only**:
+   `firebase deploy --only firestore:rules`. Production keeps the V8C4 rules;
+   nothing here goes near it.
+3. **Build and install the staging APK — done.** `app-staging-debug.apk` from
+   run #58's `smartie-native-apks` artifact.
+4. **Run the T-S manual pass above — done on one phone.** As Owner, as Staff
+   and as a Worker. What it reached, and what it did not, is in
+   `docs/N3-verification.md`.
 
 ## Manual acceptance still to run
 
-The **T-S** and **T-X4** rows under "Test plan" above, in full, on a corrected
-APK — including the T-S16 to T-S28 rows the first pass sent back. The
-automated suites cover the logic; those rows cover the device, and every one
-of them is still outstanding.
+Most of it has been run. `docs/N3-verification.md` maps every row to what the
+second pass actually did: seventeen passed whole, seven in part, six were not
+reached, one is pending a second phone and one moved to N4.
+
+What is left on a device:
+
+1. **T-S5, on two phones.** The concurrency check. `StockWriteTest` and the
+   emulator suite cover the transaction and the rules in code; that coverage
+   is real and it stands, but it is not this check and does not replace it.
+2. **The second-device half of T-S24 and T-S27** — a note, and a pin order,
+   seen from a second phone.
+3. **T-S2c, T-S2d, T-S4, T-S9, T-S20 and T-X4** — the rows the second pass did
+   not reach. Outstanding, not failed.
+
+Until 1 is done, N3 is "single-device staging verification passed; physical
+two-device concurrency verification pending", not closed.
 
 ## Out of scope for N3
 
 Purchase requirements, including raising one from an out-of-stock row, are N4.
+So are the **manual** Purchase checks: creating a requirement, and its urgency
+colour and its note surviving a restart and appearing on another device. They
+cannot be performed while Purchase is view-only, so T-S25 moves to N4 rather
+than being recorded as passed. The automated rendering tests — `PurchaseRowTest`
+and `AppearanceTest` — stand as automated evidence only.
 Quotation creation and numbering are N5. Product and category administration is
 N6. The calculators are N7. The production migration and cutover are N8. No
 production read or write happens in N3, and the v9 rules stay staging-only.

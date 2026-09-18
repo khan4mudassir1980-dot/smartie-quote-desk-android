@@ -1,0 +1,153 @@
+# N3 Our Stock — verification record
+
+The second staging manual pass has been run. This is the evidence for it, row
+by row against `docs/N3-plan.md`, and the record of what is **not** covered.
+
+Reported to this session on 2026-09-18. Run by the Owner against
+`smartie-quote-desk-staging`, on **one physical Android phone**, using
+`app-staging-debug.apk` from
+[run #58](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35313430384)
+— the corrected build carrying the fixes for the seven UI defects the first
+pass sent back. Nothing in this session touched either Firebase project: this
+container holds no credential for either, by design.
+
+**State: single-device staging verification passed; physical two-device
+concurrency verification pending.**
+
+## What the pass confirmed
+
+| Area | Result |
+|---|---|
+| The seven defects the first pass sent back | All fixed on the device |
+| Adding stock, in both modes | Passed |
+| Keyboard, focus and accidental dismissal | Passed |
+| Stock card layout, pending delta and History | Passed |
+| Status thresholds, and the refusal below zero | Passed |
+| The Done transaction, and what History recorded | Passed |
+| Persistence across a restart | Passed, on the one phone |
+| Offline behaviour, and reconnection | Passed |
+| Worker, Staff and Owner separation | Passed, from the device |
+| Pinned-product drag reorder | Passed |
+| Two-device concurrency | **Not run — no second phone** |
+
+## Row by row
+
+Statuses mean exactly what they say. **Passed** is a row the evidence covers
+whole. **Passed in part** is a row whose clauses were not all exercised, and
+the evidence column says which half was. **Not run** is a row this pass did
+not reach — not a failure, and not a pass either.
+
+| Row | Status | Evidence, as reported |
+|---|---|---|
+| T-S1 | Passed | A successful Done transaction, and History showing the correct previous value, delta and next value |
+| T-S2 | Passed | Out status only at zero |
+| T-S2b | Passed | Quantity cannot go below zero |
+| T-S2c | Not run | A no-op edit writing nothing was not exercised |
+| T-S2d | Not run | A reorder-level-only edit producing one `min` movement was not exercised on its own |
+| T-S3 | Passed in part | Low when the quantity equals the reorder level. The one-below and one-above steps were not separately reported |
+| T-S4 | Not run | Tapping the Low and Out tiles to filter and to clear was not reported |
+| T-S5 | **Pending** | Two phones, same row. **A second Android phone was not available.** See below |
+| T-S6 | Passed in part | Staff can adjust stock and change the reorder level, and get neither the exact-quantity field nor Archive. The rules refusing a forced `set` stays emulator-covered, not device-shown |
+| T-S7 | Passed | Owner edit of exact quantity, reorder level and note, with History showing previous, delta and next |
+| T-S8 | Passed | A Worker sees permitted stock data and gets no mutation control, no History, no Products and no prices |
+| T-S9 | Not run | A pending delta surviving a force stop and reopen was not separately reported |
+| T-S10 | Passed in part | Manual stock creation with quantity, reorder level and note. The duplicate half — adding the same manual item twice and being refused — was not reported |
+| T-S11 | Passed in part | A stock pin survives a restart. Three pins leading the list in pin order, and writing no history rows, were not separately reported |
+| T-S12 | Passed | Offline, cached stock stays readable |
+| T-S13 | Passed | Offline, Done is refused with "Internet required to change stock", and the pending change stays safe |
+| T-S14 | Passed | Reconnection does not auto-commit |
+| T-S15 | Passed | A manual Done after reconnection succeeds |
+| T-X4 | Not run | The 360×640 and 412×915 screen sizes and the 1.0 and 1.3 font scales were not reported |
+| T-S16 | Passed | Add Stock shows only From Products and Manual Item to begin with |
+| T-S17 | Passed | Catalogue search and product selection; the modes' forms are separate |
+| T-S18 | Passed | Choosing a product, then creating catalogue stock with quantity, reorder level and note |
+| T-S19 | Passed | Manual stock creation with its own fields; catalogue and manual fields no longer appear together |
+| T-S20 | Not run | Clearing the Stock search focus when Add Stock opens was not separately reported |
+| T-S21 | Passed | With the keyboard up, Back closes the keyboard without dismissing the sheet |
+| T-S22 | Passed in part | An outside tap does not dismiss the Add or Edit sheet. A second Back press with the keyboard already down was not separately reported; it is the same dialog property |
+| T-S23 | Passed | The stored quantity stays authoritative before Done, and the pending delta is clearly shown |
+| T-S24 | Passed in part | A saved note is visible and survives a restart **on the one phone**. The second-device half was not run |
+| T-S25 | **Deferred to N4** | Purchase is view-only until N4, so creating a requirement, its urgency colour and its note cannot be exercised by hand. See below |
+| T-S26 | Passed | The pinned-product arrows are gone, and six-dot long-press drag reorder works |
+| T-S27 | Passed in part | Pin order survives a restart **on the one phone**. The second-device half was not run |
+| T-S28 | Passed | A solid full-width purple header line |
+
+Seventeen rows passed whole, seven in part, six were not run, one is pending a
+second device and one is deferred to N4.
+
+## Verified, with no numbered row in the plan
+
+**Owner Archive / Stop tracking works, and survives a restart.** The plan
+names Archive only from the other side — T-S8, that a Worker is offered none —
+so there was no row for an Owner using it. The pass exercised it anyway and it
+behaved, which is recorded here rather than dropped for want of a row. It is
+not backfilled into the table as a numbered pass.
+
+## What is pending
+
+**T-S5 — two phones, the same row, `+3` and `−1` without refreshing.** Not
+run, because a second Android phone was not available. This is the row that
+shows the Firestore transaction doing its job against a real second writer:
+the final quantity correct, and two audit rows rather than one.
+
+It is **not** substituted by anything. `StockWriteTest` drives the transaction
+body with a faked document, including a replayed body, and the emulator suite
+covers what the rules accept and refuse. That coverage is real and it stands,
+but it is not the physical two-device check and must not be recorded as it.
+Until T-S5 is run on two phones, N3's concurrency behaviour is verified in
+code and unverified on devices.
+
+## What was not part of this pass
+
+Six rows above were not reached: T-S2c, T-S2d, T-S4, T-S9, T-S20 and T-X4.
+They are not failures and they are not passes; they are outstanding, and they
+are tracked here alongside T-S5 rather than being quietly dropped.
+
+**Whether the v9 rules were deployed to staging before this pass is not stated
+in the evidence.** The writes the pass performed were accepted by whatever
+rules staging is currently running. `docs/N3-plan.md` still carries the
+deployment step; it stays there until someone confirms it has been done.
+
+## Purchase, and why its rows are N4's
+
+Purchase is deliberately view-only until N4: the screen reads requirements and
+shows them, and nothing in the app creates, edits or closes one. So the manual
+checks that need a real requirement — creating one, its urgency colour
+persisting, its note persisting — **could not be performed and are not
+recorded as passed**. They move to N4, where the writing exists to exercise
+them.
+
+What does exist is automated rendering evidence, and it is recorded as
+automated evidence only:
+
+| Automated | What it shows |
+|---|---|
+| `PurchaseRowTest` | A saved note renders on the card, and no empty note line appears when there is none |
+| `PurchaseRowTest` | Each urgency renders with the Owner's wording on the card |
+| `AppearanceTest` | Very urgent is red, can-wait is yellow, not-needed-now is green, and the three are three distinct colours |
+
+Rendering a record is not the same as a requirement created on a device and
+still correct after a restart. The first is what the tests show; the second is
+N4's to verify.
+
+## Staging data after the pass
+
+The temporary manual and catalogue stock rows created during verification were
+**archived** afterwards, so staging carries no leftover test stock. Archiving
+is `off: true` plus an `archive` movement, so the rows are hidden rather than
+deleted and their history survives — which is the intended behaviour, not a
+cleanup gap.
+
+## Automated coverage behind this
+
+359 Kotlin tests across 35 classes, 43 Firestore rules tests against the
+emulator, and 26 catalogue-import tests — green on
+[run #58](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35313430384)
+for the head this APK was built from. That coverage is what makes a single
+manual pass sufficient for the rows it did reach. It is not what makes T-S5
+unnecessary.
+
+## Production safety
+
+Production Firebase was not read or written during this pass or this session.
+Staging remains the only write target.

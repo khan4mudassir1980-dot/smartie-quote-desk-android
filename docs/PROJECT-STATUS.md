@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-18.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `f4cb42e` — [run #57](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35312864658), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `846bf79` — [run #58](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35313430384), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -23,7 +23,8 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N0 Foundation | **Complete** |
 | N1 Auth & Team | **Complete** |
 | N2 Products | **Complete and verified** |
-| N3 Our Stock | **Open.** Built and green, but **the first staging manual pass found blocking UI defects**. Those are fixed; N3 stays open until a corrected APK passes a second manual pass |
+| N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** Not fully closed: T-S5 needs two phones |
+| N3.1 Stock Photo/Camera | Not started. **Its plan is the current next action**; nothing is to be implemented until that plan is approved |
 | N4–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -32,38 +33,55 @@ above; it is the last head CI has verified, not necessarily the tip.
   "order identical in PWA" check **after** a reorder, which needs a PWA build
   pointed at the staging project. None exists.
 
-### The first N3 staging manual pass
+### The two N3 staging manual passes
 
-The APK installed and Our Stock opened without its development banner, so the
-build and the wiring were sound. The pass then found **seven blocking UI
-defects**, all of them in the interface rather than in the transaction or the
-rules: Add stock showed the catalogue search, its results and the manual-item
-fields at once with the buttons below a list; the search box behind the dialog
-kept the focus, so the keyboard stayed up, and back or a tap outside threw
-away what had been typed; the stock card's controls sat in a second card that
-read as an unrelated thing, with nothing saying its middle figure was a
-pending change and no History action; saved notes were never displayed, on
-Our Stock or on Purchase; Purchase urgency was invisible without opening Edit;
-the pinned shelf reordered through `↑`/`↓` buttons; and the header carried a
-saffron/white/green line.
+**The first pass** found seven blocking UI defects — all in the interface, none
+in the transaction or the rules. All seven were fixed, with regression
+coverage for each: 359 Kotlin tests across 35 classes, up from 310 across 26,
+plus the unchanged 43 emulator tests and 26 importer tests.
 
-All seven are fixed, with regression coverage for each — 359 Kotlin tests
-across 35 classes, up from 310 across 26, plus the unchanged 43 emulator tests
-and 26 importer tests. Nothing in the settled N3 domain, transaction or rules
-changed. **A second manual pass on a corrected APK is what closes N3.** The
-APK to use is `app-staging-debug.apk` from run #57's `smartie-native-apks`
-artifact.
+**The second pass**, on the corrected run #58 APK, ran on **one physical
+Android phone** and passed. Seventeen plan rows passed whole and seven in
+part; the seven defects are confirmed fixed on the device, along with the
+status thresholds, the refusal below zero, the Done transaction and what
+History recorded, restart persistence, the offline and reconnection sequence,
+the Worker/Staff/Owner separation, Archive, and the drag reorder.
+
+**What that pass did not cover, and is not claimed:**
+
+- **T-S5, the two-phone concurrency check** — not run, because a second
+  Android phone was not available. `StockWriteTest` and the emulator suite
+  cover the transaction and the rules in code; that is real coverage and it
+  stands, but it is **not** the physical two-device check and does not
+  substitute for it.
+- **Six rows this pass did not reach** — T-S2c, T-S2d, T-S4, T-S9, T-S20 and
+  T-X4. Outstanding, not failed.
+- **The second-device half** of T-S24 and T-S27, for the same reason as T-S5.
+- **Purchase (T-S25)** — Purchase is view-only until N4, so a real requirement,
+  its urgency colour and its note cannot be exercised by hand. Those manual
+  checks belong to N4. The automated rendering tests are recorded as
+  **automated evidence only**.
+
+Row by row, with the evidence for each, in `docs/N3-verification.md`.
 
 ## Current next action
 
-**Deploy the v9 rules to staging, then run the T-S manual pass again on the
-corrected APK.** Nothing has been deployed and no Firebase project has been
-touched by any session. Until that pass runs, N3 is not delivered.
+**Prepare the N3.1 Stock Photo/Camera plan, for review before anything is
+built.** A plan only: no camera code, no permission entries, no dependency, no
+Firebase access, until it is approved — the same sequence N3 followed.
 
-The steps, in order, are in `docs/N3-plan.md` under "Staging deployment". The
-`stockMoves` composite index is not needed for History as it is built — the
-read orders by `at` alone and filters by key in memory — so it deploys with
-the first feature that queries a single key's movements directly.
+N3's outstanding device work is **tracked, not closed**, and does not become
+this action: T-S5 on two phones, the six rows the second pass did not reach,
+and the second-device halves of T-S24 and T-S27. They are listed with their
+evidence in `docs/N3-verification.md`, and they come back as soon as a second
+phone is available.
+
+Also still recorded in `docs/N3-plan.md` under "Staging deployment": whether
+the v9 rules have been deployed to staging is not stated in the pass evidence,
+so that step stays open until someone confirms it. The `stockMoves` composite
+index is not needed for History as it is built — the read orders by `at` alone
+and filters by key in memory — so it deploys with the first feature that
+queries a single key's movements directly.
 
 ## Decisions that bind future work
 
@@ -163,6 +181,7 @@ manual-to-catalogue link; do not give it a meaning.
 | `docs/N2-delivery.md` | N2 scope, what is deliberately not in it, acceptance |
 | `docs/N2-verification.md` | The import evidence, what price parity rests on, what stays blocked |
 | `docs/N3-plan.md` | The N3 plan: resolved V8C4 facts, the transaction contract, decisions and test plan |
+| `docs/N3-verification.md` | The second manual pass, row by row: what passed, what is pending, what is N4's |
 | `tools/catalogue-import/README.md` | How the import runs, its guards, and rollback |
 | `firestore/firestore.rules` | The v9 rules — staging only; production keeps V8C4 |
 

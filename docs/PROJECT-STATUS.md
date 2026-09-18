@@ -1,14 +1,14 @@
 # Project status
 
 **The single current-status record. Read this before planning or changing
-anything.** Last updated 2026-09-17.
+anything.** Last updated 2026-09-18.
 
 ## Where the work is
 
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `30541bd` — [run #54](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35222458290), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `d11b5da` — [run #55](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35224973508), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -23,7 +23,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N0 Foundation | **Complete** |
 | N1 Auth & Team | **Complete** |
 | N2 Products | **Complete and verified** |
-| N3 Our Stock | **Batch A and batch B built and green.** Not yet deployed or manually tested against staging |
+| N3 Our Stock | **Open.** Built and green, but **the first staging manual pass found blocking UI defects**. Those are fixed; N3 stays open until a corrected APK passes a second manual pass |
 | N4–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -32,14 +32,35 @@ above; it is the last head CI has verified, not necessarily the tip.
   "order identical in PWA" check **after** a reorder, which needs a PWA build
   pointed at the staging project. None exists.
 
+### The first N3 staging manual pass
+
+The APK installed and Our Stock opened without its development banner, so the
+build and the wiring were sound. The pass then found **seven blocking UI
+defects**, all of them in the interface rather than in the transaction or the
+rules: Add stock showed the catalogue search, its results and the manual-item
+fields at once with the buttons below a list; the search box behind the dialog
+kept the focus, so the keyboard stayed up, and back or a tap outside threw
+away what had been typed; the stock card's controls sat in a second card that
+read as an unrelated thing, with nothing saying its middle figure was a
+pending change and no History action; saved notes were never displayed, on
+Our Stock or on Purchase; Purchase urgency was invisible without opening Edit;
+the pinned shelf reordered through `↑`/`↓` buttons; and the header carried a
+saffron/white/green line.
+
+All seven are fixed, with regression coverage for each. Nothing in the settled
+N3 domain, transaction or rules changed. **A second manual pass on a corrected
+APK is what closes N3.**
+
 ## Current next action
 
-**Deploy the `stockMoves` index and the v9 rules to staging, then run the
-T-S manual pass.** N3 is written and its automated coverage is green, but
-nothing has been deployed and no Firebase project has been touched by any
-session. Until that pass runs, N3 is not delivered.
+**Deploy the v9 rules to staging, then run the T-S manual pass again on the
+corrected APK.** Nothing has been deployed and no Firebase project has been
+touched by any session. Until that pass runs, N3 is not delivered.
 
-The steps, in order, are in `docs/N3-plan.md` under "Staging deployment".
+The steps, in order, are in `docs/N3-plan.md` under "Staging deployment". The
+`stockMoves` composite index is not needed for History as it is built — the
+read orders by `at` alone and filters by key in memory — so it deploys with
+the first feature that queries a single key's movements directly.
 
 ## Decisions that bind future work
 
@@ -77,6 +98,14 @@ not a `/stockMoves` action.
 **Below zero is rejected, never clamped**, and the movement id and `at` are
 generated once before the transaction and reused if Firestore replays it.
 
+**A sheet holding typed values is not dismissible by accident.** Add stock
+and Edit pass `DialogProperties(dismissOnBackPress = false,
+dismissOnClickOutside = false)`; Cancel, or a save that succeeds, is the only
+way out. Opening either one clears the focus behind it first, and choosing a
+catalogue product clears it again, so the keyboard is never left over the
+dialog's own fields. History holds nothing typed, so back and a tap outside
+still close it.
+
 **Compose dialog bodies are extracted as panels.** A Compose `Dialog` opens
 its own window with its own recomposer, which the Robolectric test clock does
 not drive, so any test that opens one spins until Espresso times out. Each
@@ -94,6 +123,14 @@ long shelf count survives the app being killed, and it commits only when the
 person presses Done — never on reconnect, never on restart. It is cleared only
 when its own transaction succeeds; a failure keeps it for a retry, and a mixed
 save says what actually happened rather than "Saved".
+
+**The pinned shelf reorders by dragging, never by arrows.** A six-dot handle
+on a pinned card, long-press to drag, one write when the finger lifts. The
+drop arithmetic is `PinDrag.targetIndex` and the list change is
+`ProductPins.reorderTo`, both pure and unit-tested; the handle carries named
+"Move up" and "Move down" accessibility actions so the moves stay reachable
+without the buttons coming back. The cap is still fifteen, and a reorder can
+never breach it because it neither adds nor drops a key.
 
 **Product identity for stock is immutable.** `ProductRecord.stockKey` decides
 it — the stored `key`, else `group|seedModel`, else `group|model` for a legacy

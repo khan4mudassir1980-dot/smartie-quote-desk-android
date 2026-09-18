@@ -493,7 +493,7 @@ movement whose document id differs from its `id` field refused.
 | T-S5 | Two phones, same row, +3 and −1 without refreshing | Final quantity is correct; two audit rows |
 | T-S6 | Edit as Staff | No exact-quantity field; the rules refuse a forced `set` |
 | T-S7 | Edit as Administrator with a reason | `set` row in history with the reason |
-| T-S8 | Sign in as a Worker | Rows visible by **model** (no catalogue name — expected); no stepper, Edit, pin, Add or History |
+| T-S8 | Sign in as a Worker | Rows visible by descriptive `name` where one has been written, and by model where the row is still the PWA's; no price anywhere; no stepper, Edit, pin, Add, Archive or History |
 | T-S9 | Pending delta, force stop, reopen | The pending delta is still there, uncommitted |
 | T-S10 | Add a manual item, then add it again | The second is refused, not merged |
 | T-S11 | Pin three rows | They lead the list in the order pinned; no history rows |
@@ -503,14 +503,39 @@ movement whose document id differs from its `id` field refused.
 | T-S15 | Then press Done | It commits, once, with the right `prev` and `next` |
 | T-X4 | 360×640 and 412×915, font scale 1.0 and 1.3 | Nothing clipped; the stepper and Done reachable |
 
+### The second pass: what the first one sent back
+
+The first pass installed and opened Our Stock, then found seven blocking UI
+defects. They are fixed, and these rows are what the second pass adds. Every
+row above still has to be re-run on the corrected APK.
+
+| ID | Test | Pass |
+|---|---|---|
+| T-S16 | Open Add stock | Two options only — From Products and Manual Item — and no fields belonging to either |
+| T-S17 | From Products | A search, a bounded scrolling list of results each showing its model or code **and** its product name, and Add item nowhere until a product is chosen |
+| T-S18 | Choose a product | It is shown as chosen, with Change product beside it, and the starting quantity, reorder level, note and Add item appear |
+| T-S19 | Manual Item | Model or code, item name, unit, quantity, reorder level, note and Add item — and no catalogue results anywhere |
+| T-S20 | Type in the Stock search, then open Add stock | The keyboard goes away with the focus; it does not come back over the dialog |
+| T-S21 | Half-fill Add stock, press back once with the keyboard up | Only the keyboard closes; the dialog and every typed value are still there |
+| T-S22 | Press back again, then tap outside the dialog | Neither closes it; Cancel does |
+| T-S23 | Look at a tracked row | One card: the stored quantity captioned "in stock", the stepper captioned "Pending change", and Pin, Edit and History under the same rule |
+| T-S24 | Save a note on a stock row, then restart the app and open it on a second device | The note is on the card in both places |
+| T-S25 | Look at an open Purchase requirement with a note | The note is on the card, and its urgency is red, yellow or green without opening Edit |
+| T-S26 | Pin three products, long-press a handle and drag one | It lifts, and drops into the new position; nothing is added to the quotation and nothing is unpinned |
+| T-S27 | Restart, and open Products on a second device | The dragged order is the order everywhere |
+| T-S28 | Look at any screen header | One solid purple line, full width, with no orange or green anywhere |
+
 ## Staging deployment, and what is left
 
 Nothing below has been done. No session has accessed either Firebase project.
 
-1. **Deploy the composite index.** Per-item history queries `stockMoves` by
-   `key` ordered by `at`. `firestore.indexes.json` declares it; it has never
-   been deployed. From `firestore/`, against **staging only**:
-   `firebase deploy --only firestore:indexes`.
+1. **The composite index is not needed yet.** `firestore.indexes.json`
+   declares `stockMoves` by `key` ordered by `at`, for a per-item history
+   query. History as built does not use it: it reads the recent movements
+   ordered by `at` alone — a single-field index every project has — and picks
+   one key's rows out in memory. So there is nothing to deploy here until a
+   feature queries one key's movements directly, and no manual pass is
+   blocked on it.
 2. **Deploy the v9 rules to staging.** They now carry the `noPriceData()` and
    `safeName()` guards and the `note` action, and staging is running the
    version deployed before those existed. From `firestore/`, against
@@ -519,12 +544,14 @@ Nothing below has been done. No session has accessed either Firebase project.
 3. **Build and install the staging APK** — `./gradlew assembleStagingDebug`,
    or take `app-staging-debug.apk` from the CI run's `smartie-native-apks`
    artifact.
-4. **Run the T-S manual pass below**, as Owner, as Staff and as a Worker.
+4. **Run the T-S manual pass above**, as Owner, as Staff and as a Worker.
 
 ## Manual acceptance still to run
 
-Every row below is outstanding. The automated suites cover the logic; these
-cover the device.
+The **T-S** and **T-X4** rows under "Test plan" above, in full, on a corrected
+APK — including the T-S16 to T-S28 rows the first pass sent back. The
+automated suites cover the logic; those rows cover the device, and every one
+of them is still outstanding.
 
 ## Out of scope for N3
 

@@ -5,12 +5,20 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Category
@@ -36,8 +44,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -71,6 +82,7 @@ import `in`.smartie.quotedesk.ui.stock.StockViewModel
 import `in`.smartie.quotedesk.ui.team.TeamScreen
 import `in`.smartie.quotedesk.ui.team.TeamViewModel
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
+import `in`.smartie.quotedesk.ui.theme.bottomNavMinHeight
 import `in`.smartie.quotedesk.ui.theme.SmartieColors
 
 @Composable
@@ -110,14 +122,14 @@ fun SmartieApp(container: AppContainer, sessionViewModel: SessionViewModel) {
     }
 }
 
-private data class BottomDestination(
+internal data class BottomDestination(
     val route: String,
     val label: String,
     val icon: ImageVector,
     val isVisible: (Member) -> Boolean,
 )
 
-private val bottomDestinations = listOf(
+internal val bottomDestinations = listOf(
     BottomDestination("products", "Products", Icons.Outlined.Category, Permissions::canViewProducts),
     BottomDestination("stock", "Our Stock", Icons.Outlined.Inventory2, Permissions::canViewStock),
     BottomDestination("purchase", "Purchase", Icons.Outlined.ShoppingCart, Permissions::canViewPurchase),
@@ -138,7 +150,6 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
     val startRoute = if (Permissions.canViewProducts(member)) "products" else "stock"
     val entry by navController.currentBackStackEntryAsState()
     val route = entry?.destination?.route
-    val dimens = LocalSmartieDimens.current
     val context = LocalContext.current
 
     LaunchedEffect(data) { data.messages.collect { snackbar.showSnackbar(it) } }
@@ -157,33 +168,19 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
         },
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
-            NavigationBar(
-                containerColor = SmartieColors.Panel,
-                modifier = Modifier.height(dimens.bottomNavHeight + 24.dp),
-            ) {
-                visible.forEach { destination ->
-                    NavigationBarItem(
-                        selected = route == destination.route,
-                        onClick = {
-                            navController.navigate(destination.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(destination.icon, contentDescription = destination.label) },
-                        label = {
-                            Text(
-                                destination.label,
-                                style = MaterialTheme.typography.labelSmall,
-                                maxLines = 1,
-                            )
-                        },
-                    )
-                }
-            }
+            SmartieBottomBar(
+                destinations = visible,
+                selectedRoute = route,
+                onSelect = { destination ->
+                    navController.navigate(destination.route) {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                },
+            )
         },
     ) { padding ->
         Column(Modifier.padding(padding)) {
@@ -318,3 +315,82 @@ private fun Context.shareInvite() {
     }
     runCatching { startActivity(Intent.createChooser(intent, "Share app link")) }
 }
+
+/**
+ * The bottom navigation.
+ *
+ * **The system navigation's inset is padding under the bar, never height
+ * taken out of it.** `NavigationBar` applies `WindowInsets.navigationBars`
+ * *inside* its own height, so a forced `.height(h)` on it leaves the items
+ * `h - inset` to lay out in. That is what put the icons and labels behind
+ * the system navigation on a second phone: three-button navigation is a
+ * ~48dp inset, and out of an 80dp bar that leaves 32dp for a row that needs
+ * more — while the same code looks right on a gesture-navigation phone
+ * where the inset is a fraction of that.
+ *
+ * So the bar declares no insets of its own and the [Box] around it takes
+ * the horizontal and bottom **safe-drawing** insets instead. That covers
+ * three-button and gesture navigation alike, and a display cutout in
+ * landscape, with nothing measured per device and no hard-coded fudge.
+ *
+ * The compact PWA height is a **minimum**, not a cap. Pinning the bar to it
+ * is the same mistake in smaller print: an icon, its indicator and a label
+ * need about 76dp, so a hard 56dp clips the label off the bottom. So the
+ * bar takes whatever its content needs and never less than the compact
+ * height — which grows with the effective font scale, as the label does.
+ * `Scaffold` measures what this returns, inset included, so the last row of
+ * a list and the stopped-item history below it clear the bar as well.
+ */
+@Composable
+internal fun SmartieBottomBar(
+    destinations: List<BottomDestination>,
+    selectedRoute: String?,
+    onSelect: (BottomDestination) -> Unit,
+    modifier: Modifier = Modifier,
+    /**
+     * What the system navigation takes. A parameter only so a test can hand
+     * it a three-button phone's 48dp and check the items are still their own
+     * height rather than 48dp shorter; nothing passes it in the app.
+     */
+    insets: WindowInsets = WindowInsets.safeDrawing.only(
+        WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
+    ),
+) {
+    val dimens = LocalSmartieDimens.current
+    val minHeight = bottomNavMinHeight(
+        base = dimens.bottomNavHeight,
+        fontScale = LocalDensity.current.fontScale,
+    )
+    Box(
+        modifier
+            .fillMaxWidth()
+            .background(SmartieColors.Panel)
+            .windowInsetsPadding(insets)
+            .semantics { contentDescription = BOTTOM_NAV_LABEL },
+    ) {
+        NavigationBar(
+            containerColor = SmartieColors.Panel,
+            // Consumed by the Box above. See the note on this function.
+            windowInsets = WindowInsets(0, 0, 0, 0),
+            modifier = Modifier.heightIn(min = minHeight),
+        ) {
+            destinations.forEach { destination ->
+                NavigationBarItem(
+                    selected = selectedRoute == destination.route,
+                    onClick = { onSelect(destination) },
+                    icon = { Icon(destination.icon, contentDescription = destination.label) },
+                    label = {
+                        Text(
+                            destination.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                        )
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** Names the bar for a screen reader, and gives the tests its bounds. */
+const val BOTTOM_NAV_LABEL: String = "Main navigation"

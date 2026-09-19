@@ -32,7 +32,9 @@ data class SmartieDimens(
     val gapM: Dp = 12.dp,
     val gapL: Dp = 16.dp,
     /** Keeps list content clear of the bottom bar, snackbars and the quote bar. */
-    val listBottomInset: Dp = 88.dp
+    val listBottomInset: Dp = 88.dp,
+    /** The back-to-top control: its size **is** its touch target. */
+    val backToTopSize: Dp = 48.dp
 )
 
 /** Narrow-screen (<= 360dp) variant: only the stepper shrinks, as in the PWA. */
@@ -41,5 +43,21 @@ fun SmartieDimens.forWidth(widthDp: Int): SmartieDimens =
         stepperButtonWidth = stepperButtonWidthNarrow,
         stepperHeight = stepperHeightNarrow
     ) else this
+
+/**
+ * The **least** tall the bottom navigation's own content may be, at a given
+ * font scale. Not a cap: an icon, its indicator and a label need more than
+ * the compact height, and pinning the bar to it clips the label off.
+ *
+ * The system navigation's inset is **not** part of this. It is padding
+ * *under* the bar, never height taken out of it — confusing the two is what
+ * put the icons and labels behind the system navigation on a second phone.
+ * See `SmartieBottomBar`.
+ *
+ * It rises with the effective font scale, as the label does, and never falls
+ * below the compact height the PWA uses. Nothing here is measured per device.
+ */
+fun bottomNavMinHeight(base: Dp, fontScale: Float): Dp =
+    base * fontScale.coerceIn(1f, MAX_EFFECTIVE_FONT_SCALE)
 
 val LocalSmartieDimens = staticCompositionLocalOf { SmartieDimens() }

@@ -1,14 +1,22 @@
 package `in`.smartie.quotedesk.ui
 
 import android.app.Application
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.height
+import androidx.compose.ui.unit.width
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import `in`.smartie.quotedesk.ui.stock.EditStockPanel
+import `in`.smartie.quotedesk.ui.stock.OFFLINE_LABEL
+import `in`.smartie.quotedesk.ui.stock.REMOVE_FROM_STOCK
 import `in`.smartie.quotedesk.ui.theme.SmartieTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -61,19 +69,60 @@ class StockRolesScreenTest {
             .assertExists()
         assertTrue(compose.onAllNodesWithText("Exact quantity").fetchSemanticsNodes().isEmpty())
         compose.onNodeWithContentDescription("Reorder level").assertExists()
-        // Stop tracking is an Administrator action.
-        assertTrue(compose.onAllNodesWithText("Stop tracking").fetchSemanticsNodes().isEmpty())
+        // Removing an item is an Owner-and-Administrator action, as
+        // stopping tracking was. The permission did not move.
+        assertTrue(
+            compose.onAllNodesWithText(REMOVE_FROM_STOCK).fetchSemanticsNodes().isEmpty()
+        )
     }
 
     @Test
-    fun `an Administrator gets the exact quantity field and Stop tracking`() {
+    fun `an Administrator gets the exact quantity field and Remove from stock`() {
+        var removed = 0
         compose.setContent {
             SmartieTheme {
-                EditStockPanel(motor, adminCaps, online = true, onSave = { _, _, _ -> }, onRemove = {}, onCancel = {})
+                EditStockPanel(
+                    motor, adminCaps, online = true,
+                    onSave = { _, _, _ -> }, onRemove = { removed++ }, onCancel = {}
+                )
             }
         }
         compose.onNodeWithContentDescription("Exact quantity").assertExists()
-        compose.onNodeWithContentDescription("Stop tracking this item").assertExists()
+
+        // Displayed, not merely present: the zero-width Photo control passed
+        // an existence check while being invisible and unreachable.
+        val remove = compose.onNodeWithContentDescription(REMOVE_FROM_STOCK)
+        remove.assertIsDisplayed()
+
+        // And a finger's worth of it, however small it looks.
+        val bounds = remove.getUnclippedBoundsInRoot()
+        assertTrue("width was ${bounds.width}", bounds.width >= 48.dp)
+        assertTrue("height was ${bounds.height}", bounds.height >= 48.dp)
+
+        remove.performClick()
+        assertEquals("the sheet asks; it does not remove", 1, removed)
+    }
+
+    @Test
+    fun `offline the Administrator cannot reach Remove from stock`() {
+        var removed = 0
+        compose.setContent {
+            SmartieTheme {
+                EditStockPanel(
+                    motor, adminCaps, online = false,
+                    onSave = { _, _, _ -> }, onRemove = { removed++ }, onCancel = {}
+                )
+            }
+        }
+        // Still there, still readable, and it does nothing — removing needs a
+        // transaction, and there is no offline queue for one.
+        assertTrue(
+            "the control says why it does nothing",
+            compose.onAllNodesWithContentDescription(OFFLINE_LABEL)
+                .fetchSemanticsNodes().isNotEmpty()
+        )
+        compose.onNodeWithText(REMOVE_FROM_STOCK).performClick()
+        assertEquals(0, removed)
     }
 
     @Test

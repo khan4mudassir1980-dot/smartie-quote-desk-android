@@ -1,5 +1,8 @@
 package `in`.smartie.quotedesk.ui.products
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,31 +13,43 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import `in`.smartie.quotedesk.data.mapping.Money
 import `in`.smartie.quotedesk.data.model.ProductRecord
@@ -50,6 +65,7 @@ import `in`.smartie.quotedesk.domain.RoleTitles
 import `in`.smartie.quotedesk.domain.PinDrag
 import `in`.smartie.quotedesk.domain.ProductPins
 import `in`.smartie.quotedesk.domain.QuoteDraft
+import `in`.smartie.quotedesk.domain.ScrollToTop
 import `in`.smartie.quotedesk.ui.AppDataViewModel
 import `in`.smartie.quotedesk.ui.components.CompactStepper
 import `in`.smartie.quotedesk.ui.components.DragHandle
@@ -164,6 +180,19 @@ fun ProductsCatalogue(
     val dimens = LocalSmartieDimens.current
     var showDraft by remember { mutableStateOf(false) }
 
+    // The catalogue is long — every shelf, every card. `derivedStateOf` so a
+    // scroll recomposes the one control rather than the whole page.
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val backToTop by remember {
+        derivedStateOf {
+            ScrollToTop.visible(
+                firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
+            )
+        }
+    }
+
     // Which pinned card is being dragged, how far it has travelled, and the
     // heights it has to travel over. The heights are a plain map: nothing
     // reads them until the finger lifts, so they must not cause recomposition.
@@ -173,12 +202,17 @@ fun ProductsCatalogue(
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 start = dimens.screenPadding,
                 end = dimens.screenPadding,
                 top = dimens.gapM,
-                bottom = dimens.listBottomInset,
+                // Room for the quote bar **and** the back-to-top control above
+                // it, reserved whether or not the control is showing: a
+                // padding that changed as it appeared would shift the last
+                // card under the thumb that was reaching for it.
+                bottom = dimens.listBottomInset + dimens.backToTopSize + dimens.gapS,
             ),
             verticalArrangement = Arrangement.spacedBy(dimens.gapS),
         ) {
@@ -338,15 +372,30 @@ fun ProductsCatalogue(
             }
         }
 
-        QuoteBar(
-            lineCount = draft.lineCount,
-            total = Money.formatRupees(draft.total, decimals = 0),
-            needsRate = draft.needsRateCount,
-            onOpen = { showDraft = true },
+        // One stack at the bottom, so the control can never land on the quote
+        // bar: it sits above it, and both sit inside the content area the
+        // scaffold has already kept clear of the bottom navigation and the
+        // system navigation below that.
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
+                .fillMaxWidth()
                 .padding(horizontal = dimens.screenPadding, vertical = dimens.gapS),
-        )
+            verticalArrangement = Arrangement.spacedBy(dimens.gapS),
+            horizontalAlignment = Alignment.End,
+        ) {
+            BackToTopButton(
+                visible = backToTop,
+                onClick = { scope.launch { listState.animateScrollToItem(0) } },
+            )
+            QuoteBar(
+                lineCount = draft.lineCount,
+                total = Money.formatRupees(draft.total, decimals = 0),
+                needsRate = draft.needsRateCount,
+                onOpen = { showDraft = true },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 
     if (showDraft) {
@@ -358,6 +407,47 @@ fun ProductsCatalogue(
                 actions.onClearDraft()
                 showDraft = false
             },
+        )
+    }
+}
+
+/**
+ * Back to the top of the catalogue.
+ *
+ * Small, and only there once there is somewhere to go back from — see
+ * [ScrollToTop]. It **scrolls and nothing else**: the search text, the
+ * Dealer/Contractor/Client tier, the load filter, the pinned order and the
+ * draft quotation are all held elsewhere and are untouched by a tap.
+ *
+ * Its size is its touch target, so there is no invisible ring around it that
+ * swallows a tap meant for a card.
+ *
+ * Products only. The other tabs' lists are short enough to thumb back up,
+ * and a floating control on each of them would be five things to miss.
+ */
+@Composable
+internal fun BackToTopButton(
+    visible: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (!visible) return
+    val dimens = LocalSmartieDimens.current
+    Box(
+        modifier
+            .size(dimens.backToTopSize)
+            .shadow(3.dp, CircleShape)
+            .clip(CircleShape)
+            .background(SmartieColors.Panel)
+            .border(dimens.hairline, SmartieColors.PurpleLine, CircleShape)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = ScrollToTop.LABEL },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            Icons.Filled.KeyboardArrowUp,
+            contentDescription = null,
+            tint = SmartieColors.Purple,
         )
     }
 }

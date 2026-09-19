@@ -12,6 +12,7 @@ import `in`.smartie.quotedesk.data.mapping.Keys
 import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.StockMove
 import `in`.smartie.quotedesk.data.model.StockRecord
+import `in`.smartie.quotedesk.data.model.StoppedStockRecord
 import `in`.smartie.quotedesk.domain.StockBoard
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.Role
@@ -111,6 +112,10 @@ internal fun ComposeContentTestRule.showStock(
     products: List<ProductRecord> = emptyList(),
     movements: List<StockMove> = emptyList(),
     photo: StockPhotoUi = StockPhotoUi(),
+    stopped: List<StoppedStockRecord> = emptyList(),
+    historyExpanded: Boolean = false,
+    removing: StockRecord? = null,
+    clearing: Boolean = false,
     actions: StockActions = StockActions()
 ) {
     setContent {
@@ -123,11 +128,36 @@ internal fun ComposeContentTestRule.showStock(
                 products = products,
                 movements = movements,
                 photo = photo,
+                stopped = stopped,
+                historyExpanded = historyExpanded,
+                removing = removing,
+                clearing = clearing,
                 actions = actions
             )
         }
     }
 }
+
+/** One stopped-item history entry, as the reader would have produced it. */
+internal fun stoppedRecord(
+    id: String,
+    model: String,
+    name: String,
+    quantity: Double = 4.0,
+    manual: Boolean = false,
+    at: Long = 1_700_000_000_000L,
+    group: String = "gateMotors"
+): StoppedStockRecord = StoppedStockRecord(
+    id = id,
+    key = Keys.productKey(group, model),
+    name = name,
+    model = model,
+    unit = "each",
+    quantity = quantity,
+    manual = manual,
+    at = at,
+    removedByUid = "uid_admin"
+)
 
 internal fun ComposeContentTestRule.scrollToText(text: String) {
     onNode(hasScrollAction()).performScrollToNode(hasText(text, substring = true))

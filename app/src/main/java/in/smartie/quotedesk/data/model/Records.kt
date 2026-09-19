@@ -323,3 +323,33 @@ data class NumberingRecord(
     val updatedAt: Long = 0L,
     val updatedBy: String = ""
 )
+
+/**
+ * One removal, as it survives the item.
+ *
+ * Deliberately small, and deliberately *not* a hidden copy of the stock row.
+ * [quantity] is the last quantity, which the history shows; [at] and
+ * [removedByUid] are internal — ordering needs the first and the rules need
+ * the second — and **neither is ever rendered**. There is no note, no photo,
+ * no reorder level, no pin and no price here, because the removal promised
+ * those were permanently deleted.
+ */
+data class StoppedStockRecord(
+    val id: String,
+    val key: String,
+    val name: String = "",
+    val model: String = "",
+    val unit: String = "each",
+    val quantity: Double = 0.0,
+    val manual: Boolean = false,
+    /** Internal: latest-first ordering only. Never shown. */
+    val at: Long = 0L,
+    /** Internal: the rules require it. Never shown. */
+    val removedByUid: String = ""
+) {
+    /** "Manual" or "Catalogue" — the only source wording the history shows. */
+    val source: String get() = if (manual) "Manual" else "Catalogue"
+
+    /** What to call the row: its name, else its model, else its key. */
+    val label: String get() = name.ifBlank { model.ifBlank { key } }
+}

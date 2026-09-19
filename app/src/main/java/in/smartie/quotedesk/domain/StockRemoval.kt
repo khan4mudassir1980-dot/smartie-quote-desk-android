@@ -35,6 +35,9 @@ object StockRemoval {
 
     const val NOT_ALLOWED: String = "Only an Owner or Administrator can remove an item from stock"
 
+    const val NOT_ALLOWED_CLEAR: String =
+        "Only an Owner or Administrator can clear stopped-item history"
+
     /**
      * The id a legacy conversion writes under.
      *

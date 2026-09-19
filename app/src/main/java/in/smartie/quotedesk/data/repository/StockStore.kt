@@ -109,7 +109,6 @@ class FirestoreStockStore(private val firestore: FirebaseFirestore) : StockStore
 
                     override fun stoppedExists(docId: String): Boolean =
                         transaction.get(firestore.collection(STOPPED).document(docId)).exists()
-                    }
                 }
             )
         }.await()

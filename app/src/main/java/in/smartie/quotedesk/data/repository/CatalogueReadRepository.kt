@@ -8,10 +8,12 @@ import `in`.smartie.quotedesk.data.mapping.toProductCategories
 import `in`.smartie.quotedesk.data.mapping.toProductRecord
 import `in`.smartie.quotedesk.data.mapping.toStockMove
 import `in`.smartie.quotedesk.data.mapping.toStockRecord
+import `in`.smartie.quotedesk.data.mapping.toStoppedStockRecord
 import `in`.smartie.quotedesk.data.model.ProductCategoryRecord
 import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.StockMove
 import `in`.smartie.quotedesk.data.model.StockRecord
+import `in`.smartie.quotedesk.data.model.StoppedStockRecord
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -44,14 +46,39 @@ class CatalogueReadRepository(private val firestore: FirebaseFirestore) {
         firestore.collection("teamSettings").document("productPins").docDataFlow()
             .map { document -> document?.get("keys").asStringList() }
 
-    fun observeStock(): Flow<List<StockRecord>> =
+    /**
+     * Every `/stock` document, including the ones the old stop-tracking left
+     * behind with `off: true`.
+     *
+     * Exposed so one listener can serve both the board and the legacy sweep.
+     * A second listener over the same collection would double what this
+     * screen costs against a shared daily read quota, to read rows the first
+     * one already has.
+     */
+    fun observeAllStock(): Flow<List<StockRecord>> =
         firestore.collection("stock").docDataFlow().map { documents ->
             documents
                 .map { it.toStockRecord() }
-                // `off:1` means the item stopped being tracked.
-                .filterNot { it.archived }
                 .sortedWith(compareByDescending<StockRecord> { it.pinned }.thenBy { it.name.lowercase() })
         }
+
+    fun observeStock(): Flow<List<StockRecord>> =
+        // `off:1` means the item stopped being tracked.
+        observeAllStock().map { rows -> rows.filterNot { it.archived } }
+
+    /**
+     * What has been removed from stock, latest first.
+     *
+     * Read-only and read by everybody who may see stock. `serverAt` orders
+     * it — the server's clock, not eight phones' — and the ordering is the
+     * only thing the timestamp is for: the history shows no date and no time.
+     */
+    fun observeStoppedStock(limit: Long = 200): Flow<List<StoppedStockRecord>> =
+        firestore.collection("stoppedStock")
+            .orderBy("serverAt", Query.Direction.DESCENDING)
+            .limit(limit)
+            .docDataFlow()
+            .map { documents -> documents.map { it.toStoppedStockRecord() } }
 
     fun observeRecentMovements(limit: Long = 300): Flow<List<StockMove>> =
         firestore.collection("stockMoves")

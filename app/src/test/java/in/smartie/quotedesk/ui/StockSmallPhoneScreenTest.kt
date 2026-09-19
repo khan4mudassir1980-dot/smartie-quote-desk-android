@@ -72,7 +72,7 @@ class StockSmallPhoneScreenTest {
                     capabilities = adminCaps,
                     online = true,
                     onSave = { _, _, _ -> },
-                    onStopTracking = {},
+                    onRemove = {},
                     onCancel = {}
                 )
             }

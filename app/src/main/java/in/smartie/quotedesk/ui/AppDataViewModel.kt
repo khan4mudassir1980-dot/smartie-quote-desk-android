@@ -12,6 +12,7 @@ import `in`.smartie.quotedesk.data.model.PurchaseRecord
 import `in`.smartie.quotedesk.data.model.QuotationRecord
 import `in`.smartie.quotedesk.data.model.StockMove
 import `in`.smartie.quotedesk.data.model.StockRecord
+import `in`.smartie.quotedesk.data.model.StoppedStockRecord
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.Permissions
 import kotlinx.coroutines.flow.Flow
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 /**
@@ -53,9 +55,44 @@ class AppDataViewModel(
     val pinnedKeys = quotingOnly(container.catalogueRepository.observePinnedKeys())
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList<String>())
 
-    /** Every role, Workers included, may see stock. */
-    val stock = container.catalogueRepository.observeStock()
+    /**
+     * Every `/stock` row, the hidden `off: true` ones included.
+     *
+     * One listener, two lists. Filtering here rather than subscribing twice
+     * keeps the board's cost what it always was: the legacy sweep below
+     * reads nothing the board has not already paid for.
+     */
+    private val allStock = container.catalogueRepository.observeAllStock()
         .guarded(emptyList<StockRecord>())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Every role, Workers included, may see stock. */
+    val stock = allStock
+        .map { rows -> rows.filterNot { it.archived } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Rows the old "stop tracking" left behind: invisible on the board, and
+     * still blocking their own re-add with "already exists".
+     *
+     * Only an Owner or Administrator can do anything about one, and the rules
+     * agree, so nobody else is even shown the list.
+     */
+    val legacyStopped = (
+        if (Permissions.canStopTrackingStock(member)) {
+            allStock.map { rows -> rows.filter { it.archived } }
+        } else {
+            flowOf(emptyList<StockRecord>())
+        }
+        )
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Stopped-item history. Read-only, and readable by every role that may
+     * see stock at all — the rules say `member()`, the same as `/stock`.
+     */
+    val stoppedStock = container.catalogueRepository.observeStoppedStock()
+        .guarded(emptyList<StoppedStockRecord>())
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**

@@ -14,6 +14,7 @@ import `in`.smartie.quotedesk.data.repository.FirestoreStockStore
 import `in`.smartie.quotedesk.data.repository.ProductPinsRepository
 import `in`.smartie.quotedesk.data.repository.StockPhotoRepository
 import `in`.smartie.quotedesk.data.repository.StockWriteRepository
+import `in`.smartie.quotedesk.data.repository.StoppedStockRepository
 import java.io.File
 
 class AppContainer(
@@ -34,6 +35,9 @@ class AppContainer(
     val operationsRepository = OperationsReadRepository(firestore)
     val productPinsRepository = ProductPinsRepository(auth, firestore)
     val stockWriteRepository = StockWriteRepository(FirestoreStockStore(firestore))
+
+    /** Clearing stopped-item history; the only write it has. */
+    val stoppedStockRepository = StoppedStockRepository(firestore)
 
     /**
      * One per application, so both photo caches are shared by every screen: a

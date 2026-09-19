@@ -8,7 +8,9 @@ import `in`.smartie.quotedesk.core.StockPendingStore
 import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.StockRecord
 import `in`.smartie.quotedesk.data.repository.FirestoreFailures
+import `in`.smartie.quotedesk.data.model.StoppedStockRecord
 import `in`.smartie.quotedesk.data.repository.StockPhotoRepository
+import `in`.smartie.quotedesk.data.repository.StoppedStockRepository
 import `in`.smartie.quotedesk.data.repository.StockWriteRepository
 import `in`.smartie.quotedesk.data.repository.StockWriteResult
 import `in`.smartie.quotedesk.domain.Member
@@ -17,6 +19,7 @@ import `in`.smartie.quotedesk.domain.StockEntry
 import `in`.smartie.quotedesk.domain.StockFilter
 import `in`.smartie.quotedesk.domain.StockPendingCodec
 import `in`.smartie.quotedesk.domain.StockPhotoImage
+import `in`.smartie.quotedesk.domain.StockRemoval
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,6 +48,7 @@ class StockViewModel(
     private val drafts: StockPendingStore,
     onlineFlow: Flow<Boolean>,
     private val photos: StockPhotoRepository? = null,
+    private val history: StoppedStockRepository? = null,
     private val report: (Throwable) -> Unit = {}
 ) : ViewModel() {
 
@@ -66,6 +70,18 @@ class StockViewModel(
     /** Which photo sheet is open, and what it holds. See [StockPhotoFlow]. */
     private val _photo = MutableStateFlow(StockPhotoUi())
     val photo: StateFlow<StockPhotoUi> = _photo.asStateFlow()
+
+    /** The row whose removal is being confirmed, if any. */
+    private val _removing = MutableStateFlow<StockRecord?>(null)
+    val removing: StateFlow<StockRecord?> = _removing.asStateFlow()
+
+    /** Whether the stopped-item history is open. Collapsed by default. */
+    private val _historyExpanded = MutableStateFlow(false)
+    val historyExpanded: StateFlow<Boolean> = _historyExpanded.asStateFlow()
+
+    /** Whether the clear-history confirmation is open. */
+    private val _clearing = MutableStateFlow(false)
+    val clearing: StateFlow<Boolean> = _clearing.asStateFlow()
 
     /**
      * Collected **eagerly**, not [SharingStarted.WhileSubscribed].
@@ -234,16 +250,128 @@ class StockViewModel(
         }
     }
 
-    fun stopTracking(record: StockRecord, note: String = "") {
-        if (!requireOnline()) return
+    // --- removal --------------------------------------------------------------
+
+    /** Opening the confirmation. Nothing is written by asking. */
+    fun askRemove(record: StockRecord) {
         if (!Permissions.canStopTrackingStock(member)) {
             emit(NOT_ALLOWED)
             return
         }
+        _removing.value = record
+    }
+
+    /** Cancel. Explicitly writes nothing, which is the point of the sheet. */
+    fun cancelRemove() {
+        _removing.value = null
+    }
+
+    /**
+     * Confirm. The row, its photo and its photo cache go; a small record
+     * stays. There is no Restore, by decision — see [StockRemoval].
+     */
+    fun removeFromStock() {
+        val record = _removing.value ?: return
+        if (!requireOnline()) return
         if (record.key in _saving.value) return
         launchSave(setOf(record.key)) {
-            runCatching { writes.stopTracking(member, record, note) }
-                .onSuccess { emit(STOPPED) }
+            runCatching { writes.removeFromStock(member, record) }
+                .onSuccess {
+                    // The bytes on disk outlive the document unless told.
+                    photos?.forget(record)
+                    _removing.value = null
+                    emit(if (it == StockWriteResult.WRITTEN) REMOVED else NOTHING_CHANGED)
+                }
+                .onFailure {
+                    // The sheet stays open so it can be tried again.
+                    emit(failureOf(Result.failure<Unit>(it)))
+                }
+        }
+    }
+
+    // --- rows the old stop-tracking left behind -----------------------------
+
+    /** Document ids already attempted this session, so a sweep runs once. */
+    private val sweptLegacy = mutableSetOf<String>()
+
+    /**
+     * Finish what "stop tracking" started.
+     *
+     * A row written with `off: true` is invisible on the board and still
+     * refuses its own re-add with "already exists" — the `SIE-EXTRECEIVER`
+     * defect. There is no second identity scheme here and no new collection:
+     * the row is put through exactly the removal above, under a **fixed** id
+     * derived from its own document id, so a retry after a failure lands on
+     * the document the first attempt wrote instead of writing a second one.
+     *
+     * Only an Owner or Administrator reaches this, because only they may
+     * delete a stock row, and the rules say the same. For anybody else the
+     * list is empty and nothing is attempted. A row that is **not** marked
+     * is never touched: [StockWriteRepository.convertLegacyStopped] returns
+     * without writing unless `archived` is set.
+     *
+     * Silent on success — nothing visible changed, an invisible row stopped
+     * being in the way. A failure leaves the row exactly where it was, so it
+     * is still recoverable and the next sweep tries again.
+     */
+    fun convertLegacyStopped(rows: List<StockRecord>) {
+        if (rows.isEmpty() || !Permissions.canStopTrackingStock(member)) return
+        if (!online.value) return
+        val outstanding = rows.filter { it.archived && sweptLegacy.add(it.documentId) }
+        if (outstanding.isEmpty()) return
+        viewModelScope.launch {
+            for (row in outstanding) {
+                runCatching { writes.convertLegacyStopped(member, row) }
+                    .onFailure {
+                        // Retryable: let the next sweep have another go.
+                        sweptLegacy.remove(row.documentId)
+                        report(it)
+                    }
+            }
+        }
+    }
+
+    // --- stopped-item history ---------------------------------------------
+
+    fun toggleHistory() {
+        _historyExpanded.value = !_historyExpanded.value
+    }
+
+    fun askClearHistory() {
+        if (!Permissions.canStopTrackingStock(member)) {
+            emit(NOT_ALLOWED)
+            return
+        }
+        _clearing.value = true
+    }
+
+    fun cancelClearHistory() {
+        _clearing.value = false
+    }
+
+    /**
+     * Clear the history, and **only** the history.
+     *
+     * Deleted in batches, because a Firestore batch caps at 500 writes and
+     * this list is not guaranteed to stay small. A batch that fails leaves
+     * the batches before it deleted and the rest in place — which is safe
+     * because every entry is independent, and a retry finishes the job.
+     */
+    fun clearHistory(entries: List<StoppedStockRecord>) {
+        if (!Permissions.canStopTrackingStock(member)) {
+            emit(NOT_ALLOWED)
+            return
+        }
+        if (!requireOnline()) return
+        val ids = entries.map { it.id }
+        _clearing.value = false
+        if (ids.isEmpty()) {
+            emit(NOTHING_TO_CLEAR)
+            return
+        }
+        viewModelScope.launch {
+            runCatching { history?.clear(member, ids) }
+                .onSuccess { emit(HISTORY_CLEARED) }
                 .onFailure { emit(failureOf(Result.failure<Unit>(it))) }
         }
     }
@@ -447,6 +575,7 @@ class StockViewModel(
             drafts = container.devicePreferences,
             onlineFlow = container.connectivity.online,
             photos = container.stockPhotoRepository,
+            history = container.stoppedStockRepository,
             report = container.errorReporter::report
         ) as T
     }
@@ -459,13 +588,22 @@ class StockViewModel(
         const val ADDED = "Added to stock"
         const val PINNED = "Pinned"
         const val UNPINNED = "Unpinned"
-        const val STOPPED = "Stopped tracking"
         const val CLEARED = "Pending changes cleared"
         const val NOTHING_CHANGED = "Nothing to save"
         const val SAVE_FAILED = "Could not save — try again"
         const val PHOTO_SAVED = "Photo saved"
         const val PHOTO_REMOVED = "Photo removed"
         const val NOT_ALLOWED_PHOTO = "You do not have permission to change photos"
+        const val NOTHING_TO_CLEAR = "There is nothing to clear"
+
+        /**
+         * The removal wording lives beside the panels that show it, in
+         * [StockRemovalPanels.kt], so a message and the control it answers
+         * cannot drift apart. Re-exported here for the tests that read
+         * everything else off this companion.
+         */
+        val REMOVED_MESSAGE: String = REMOVED
+        val HISTORY_CLEARED_MESSAGE: String = HISTORY_CLEARED
 
         /** The same wording every disabled photo control carries. */
         const val PHOTO_OFFLINE_MESSAGE = PHOTO_OFFLINE

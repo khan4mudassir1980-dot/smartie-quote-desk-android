@@ -5,6 +5,7 @@ import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.StockMove
 import `in`.smartie.quotedesk.data.model.StockPhotoRecord
 import `in`.smartie.quotedesk.data.model.StockRecord
+import `in`.smartie.quotedesk.data.model.StoppedStockRecord
 
 fun DocData.toProductRecord(): ProductRecord {
     val key = stringOrNull("id", "key") ?: id
@@ -128,3 +129,22 @@ fun DocData.toStockMove(): StockMove {
         at = millis("at", "serverAt")
     )
 }
+
+/**
+ * A `/stoppedStock` document.
+ *
+ * Reads only what the history shows plus the two internals it needs. A note
+ * or a photo field in the document — which the rules refuse — would be
+ * ignored here as well, so neither layer can leak one into the UI.
+ */
+fun DocData.toStoppedStockRecord(): StoppedStockRecord = StoppedStockRecord(
+    id = stringOrNull("id") ?: id,
+    key = stringOrNull("key") ?: id,
+    name = string("name"),
+    model = string("model"),
+    unit = string("unit", default = "each"),
+    quantity = double("q", "quantity"),
+    manual = bool("manual"),
+    at = millis("at", "serverAt"),
+    removedByUid = string("byUid")
+)

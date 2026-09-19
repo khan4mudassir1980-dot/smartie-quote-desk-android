@@ -23,6 +23,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -451,12 +452,15 @@ class StockViewModelTest {
     }
 
     @Test
-    fun `Staff cannot stop tracking`() = runTest {
+    fun `the displayed Manager cannot remove an item from stock`() = runTest {
         val store = Store(mapOf(motor.documentId to 7.0))
         val model = viewModel(member = staff, store = store)
         val messages = messagesOf(model)
-        model.stopTracking(motor)
+
+        model.askRemove(motor)
+
         assertEquals(listOf(StockViewModel.NOT_ALLOWED), messages)
+        assertNull("the confirmation never opens", model.removing.value)
         assertEquals(0, store.transactions)
     }
 }

@@ -2,7 +2,9 @@ package `in`.smartie.quotedesk.ui.stock
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -11,6 +13,8 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -56,6 +60,7 @@ import `in`.smartie.quotedesk.data.mapping.Money
 import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.StockMove
 import `in`.smartie.quotedesk.data.model.StockRecord
+import `in`.smartie.quotedesk.data.model.StoppedStockRecord
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.domain.StockBoard
@@ -95,7 +100,6 @@ data class StockActions(
     val onSaveAll: () -> Unit = {},
     val onEdit: (StockRecord, Double, Double, String) -> Unit = { _, _, _, _ -> },
     val onTogglePin: (StockRecord) -> Unit = {},
-    val onStopTracking: (StockRecord) -> Unit = {},
     val onAddProduct: (ProductRecord, Double, Double, String) -> Unit = { _, _, _, _ -> },
     val onAddManual: (String, String, String, Double, Double, String) -> Unit =
         { _, _, _, _, _, _ -> },
@@ -111,7 +115,11 @@ data class StockActions(
      */
     val loadPhoto: suspend (StockRecord) -> ByteArray? = { null },
     /** What the photo sheets can do. */
-    val photo: StockPhotoActions = StockPhotoActions()
+    val photo: StockPhotoActions = StockPhotoActions(),
+    /** Opening the removal confirmation for a row. */
+    val onAskRemove: (StockRecord) -> Unit = {},
+    /** What the removal confirmation and the history section can do. */
+    val removal: StockRemovalActions = StockRemovalActions()
 )
 
 /** What the screen may show this person, straight from [Permissions]. */
@@ -126,7 +134,13 @@ data class StockCapabilities(
     /** Taking, replacing and removing a photo: Owner, Administrator, Staff. */
     val photoManage: Boolean = false,
     /** Seeing one. Everybody who may read `/stock`, Workers included. */
-    val photoView: Boolean = false
+    val photoView: Boolean = false,
+    /**
+     * Clearing stopped-item history. The same Owner-and-Administrator pair
+     * that may remove an item in the first place — reading the history is
+     * everybody's, emptying it is not.
+     */
+    val clearHistory: Boolean = false
 ) {
     /** A Worker gets no control at all — not even a disabled one. */
     val anyControl: Boolean get() = adjust || reorderLevel || pin || stopTracking
@@ -152,7 +166,8 @@ data class StockCapabilities(
             stopTracking = Permissions.canStopTrackingStock(member),
             history = Permissions.canViewStockHistory(member),
             photoManage = Permissions.canManageStockPhoto(member),
-            photoView = Permissions.canViewStockPhoto(member)
+            photoView = Permissions.canViewStockPhoto(member),
+            clearHistory = Permissions.canStopTrackingStock(member)
         )
     }
 }
@@ -169,6 +184,19 @@ fun StockScreen(data: AppDataViewModel, viewModel: StockViewModel) {
     val online by viewModel.online.collectAsStateWithLifecycle()
 
     val photo by viewModel.photo.collectAsStateWithLifecycle()
+
+    val stopped by data.stoppedStock.collectAsStateWithLifecycle()
+    val legacyStopped by data.legacyStopped.collectAsStateWithLifecycle()
+    val historyExpanded by viewModel.historyExpanded.collectAsStateWithLifecycle()
+    val removing by viewModel.removing.collectAsStateWithLifecycle()
+    val clearing by viewModel.clearing.collectAsStateWithLifecycle()
+
+    // Rows the old "stop tracking" left hidden in `/stock`. Converting one is
+    // idempotent and only an Owner or Administrator can, so this is safe to
+    // run whenever the list changes; for everyone else it is always empty.
+    LaunchedEffect(legacyStopped, online) {
+        viewModel.convertLegacyStopped(legacyStopped)
+    }
 
     val view = remember(stock, query, filter, pending) {
         StockBoard.build(stock, query, filter, pending)
@@ -219,6 +247,10 @@ fun StockScreen(data: AppDataViewModel, viewModel: StockViewModel) {
         products = products,
         movements = movements,
         photo = photo,
+        stopped = stopped,
+        historyExpanded = historyExpanded,
+        removing = removing,
+        clearing = clearing,
         actions = StockActions(
             onQueryChange = viewModel::setQuery,
             onFilter = viewModel::toggleFilter,
@@ -231,7 +263,6 @@ fun StockScreen(data: AppDataViewModel, viewModel: StockViewModel) {
                 viewModel.edit(record, quantity, reorder, note)
             },
             onTogglePin = viewModel::togglePin,
-            onStopTracking = { viewModel.stopTracking(it) },
             onAddProduct = { product, quantity, reorder, note ->
                 viewModel.addFromProduct(product, quantity, reorder, note)
             },
@@ -240,6 +271,18 @@ fun StockScreen(data: AppDataViewModel, viewModel: StockViewModel) {
             },
             onOpenPhoto = viewModel::openPhoto,
             loadPhoto = viewModel::loadPhoto,
+            onAskRemove = viewModel::askRemove,
+            removal = StockRemovalActions(
+                onRemove = viewModel::removeFromStock,
+                onCancel = {
+                    // One Cancel for both confirmations, and it writes nothing.
+                    viewModel.cancelRemove()
+                    viewModel.cancelClearHistory()
+                },
+                onToggleHistory = viewModel::toggleHistory,
+                onClearHistory = viewModel::askClearHistory,
+                onConfirmClear = { viewModel.clearHistory(stopped) }
+            ),
             photo = StockPhotoActions(
                 onTakePhoto = {
                     val target = StockImage.captureTarget(context)
@@ -280,6 +323,10 @@ fun StockBoardScreen(
     products: List<ProductRecord> = emptyList(),
     movements: List<StockMove> = emptyList(),
     photo: StockPhotoUi = StockPhotoUi(),
+    stopped: List<StoppedStockRecord> = emptyList(),
+    historyExpanded: Boolean = false,
+    removing: StockRecord? = null,
+    clearing: Boolean = false,
     actions: StockActions = StockActions()
 ) {
     val dimens = LocalSmartieDimens.current
@@ -428,6 +475,18 @@ fun StockBoardScreen(
                 onHistory = { openSheet { showingHistory = row.record } }
             )
         }
+
+        // The very bottom of the board, after every row: a record of what is
+        // gone, collapsed until somebody asks for it. Read-only for everyone.
+        item(key = "stopped-history") {
+            StoppedHistorySection(
+                entries = stopped,
+                expanded = historyExpanded,
+                canClear = capabilities.clearHistory,
+                online = online,
+                actions = actions.removal
+            )
+        }
     }
 
     editing?.let { record ->
@@ -442,11 +501,27 @@ fun StockBoardScreen(
                 actions.onEdit(record, quantity, reorder, note)
                 editing = null
             },
-            onStopTracking = {
-                actions.onStopTracking(record)
+            onRemove = {
+                // The Edit sheet closes and the confirmation takes over:
+                // removing is permanent, and it should not be one tap away
+                // from a sheet somebody opened to change a number.
                 editing = null
+                actions.onAskRemove(record)
             }
         )
+    }
+
+    removing?.let { record ->
+        StockRemoveDialog(
+            record = record,
+            online = online,
+            saving = record.key in saving,
+            actions = actions.removal
+        )
+    }
+
+    if (clearing) {
+        ClearHistoryDialog(count = stopped.size, actions = actions.removal)
     }
 
     if (adding) {
@@ -498,6 +573,38 @@ fun StockBoardScreen(
  * preview: that holds a picture somebody has taken and not yet saved, and
  * throwing it away by accident would mean walking back to the shelf.
  */
+/**
+ * Removing an item. Back and a tap outside close it, because nothing has been
+ * typed and closing writes nothing.
+ */
+@Composable
+private fun StockRemoveDialog(
+    record: StockRecord,
+    online: Boolean,
+    saving: Boolean,
+    actions: StockRemovalActions
+) {
+    AlertDialog(
+        onDismissRequest = actions.onCancel,
+        confirmButton = {},
+        title = { Text(REMOVE_TITLE) },
+        text = {
+            StockRemoveConfirmPanel(online = online, saving = saving, actions = actions)
+        }
+    )
+}
+
+/** Clearing the history, with the number of entries in the question. */
+@Composable
+private fun ClearHistoryDialog(count: Int, actions: StockRemovalActions) {
+    AlertDialog(
+        onDismissRequest = actions.onCancel,
+        confirmButton = {},
+        title = { Text(CLEAR_HISTORY) },
+        text = { ClearHistoryConfirmPanel(count = count, actions = actions) }
+    )
+}
+
 @Composable
 private fun StockPhotoDialog(
     state: StockPhotoUi,
@@ -911,7 +1018,7 @@ private fun EditStockDialog(
     online: Boolean,
     onDismiss: () -> Unit,
     onSave: (Double, Double, String) -> Unit,
-    onStopTracking: () -> Unit
+    onRemove: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -923,7 +1030,7 @@ private fun EditStockDialog(
                 capabilities = capabilities,
                 online = online,
                 onSave = onSave,
-                onStopTracking = onStopTracking,
+                onRemove = onRemove,
                 onCancel = onDismiss
             )
         },
@@ -947,7 +1054,7 @@ internal fun EditStockPanel(
     capabilities: StockCapabilities,
     online: Boolean,
     onSave: (Double, Double, String) -> Unit,
-    onStopTracking: () -> Unit,
+    onRemove: () -> Unit,
     onCancel: () -> Unit
 ) {
     var quantity by rememberSaveable(record.key) {
@@ -999,15 +1106,29 @@ internal fun EditStockPanel(
                 placeholder = "Why, or where it is kept",
                 modifier = Modifier.semantics { contentDescription = "Reason or shared note" }
             )
+        },
+        header = {
+            // Small, and out of the way of Save — removing an item is
+            // permanent and should not sit under the thumb that was reaching
+            // for the primary action. It is **visually** compact only: the
+            // 48dp minimum touch target below is what a finger gets.
             if (capabilities.stopTracking) {
-                SmartieGhostButton(
-                    text = "Stop tracking",
-                    onClick = onStopTracking,
-                    enabled = online,
-                    modifier = Modifier.semantics {
-                        contentDescription = "Stop tracking this item"
-                    }
-                )
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                    Text(
+                        REMOVE_FROM_STOCK,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (online) SmartieColors.Danger else SmartieColors.Steel2,
+                        modifier = Modifier
+                            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                            .wrapContentSize(Alignment.Center)
+                            .clickable(enabled = online, onClick = onRemove)
+                            .padding(horizontal = 4.dp)
+                            .semantics {
+                                contentDescription =
+                                    if (online) REMOVE_FROM_STOCK else OFFLINE_LABEL
+                            }
+                    )
+                }
             }
         },
         online = online,
@@ -1278,12 +1399,15 @@ internal fun AddStockPanel(
 private fun PanelWithActions(
     fields: @Composable () -> Unit,
     online: Boolean,
-    actions: @Composable () -> Unit
+    actions: @Composable () -> Unit,
+    /** Sits above the scrolling fields and stays put, for a small action. */
+    header: @Composable () -> Unit = {}
 ) {
     Column(
         Modifier.heightIn(max = sheetBodyHeight()),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        header()
         Column(
             Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp)

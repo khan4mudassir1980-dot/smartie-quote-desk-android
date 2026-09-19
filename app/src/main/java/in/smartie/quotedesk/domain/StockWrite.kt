@@ -59,6 +59,13 @@ object StockWrite {
     const val ACTION_SET = "set"
     const val ACTION_MIN = "min"
     const val ACTION_ADD = "add"
+
+    /**
+     * Historical only. The PWA writes it, and rows stopped before N3.1
+     * carry it, so the reader must still understand it — but nothing in
+     * this app writes it any more: removing an item deletes the row, and
+     * nothing moved, so nothing is logged. See `StockRemoval`.
+     */
     const val ACTION_ARCHIVE = "archive"
 
     /** `/stock` only. A pin moves nothing, so it logs nothing. */
@@ -375,47 +382,6 @@ object StockWrite {
             ) + mapOf(
                 "pinned" to pinned,
                 "pinOrder" to if (pinned) at.toDouble() else 0.0
-            )
-        )
-    }
-
-    /**
-     * Stop tracking a row: `off: true`, and an `archive` movement so the
-     * history records who stopped and when. Administrator only, which the
-     * repository checks and the rules enforce.
-     */
-    fun stopTracking(
-        record: StockRecord,
-        storedQuantity: Double,
-        note: String,
-        author: StockAuthor,
-        at: Long,
-        movementId: String
-    ): StockWritePlan {
-        if (record.archived) return StockWritePlan.NoChange
-        val trimmedNote = note.trim().ifBlank { "Stopped tracking" }
-        return StockWritePlan.Write(
-            stockDocId = record.documentId,
-            stock = stockFields(
-                record = record,
-                quantity = storedQuantity,
-                reorderLevel = record.reorderLevel,
-                lastAction = ACTION_ARCHIVE,
-                note = trimmedNote,
-                author = author,
-                at = at
-            ) + mapOf("off" to true),
-            movementDocId = movementId,
-            movement = movementFields(
-                id = movementId,
-                record = record,
-                action = ACTION_ARCHIVE,
-                previous = storedQuantity,
-                next = storedQuantity,
-                reorderLevel = record.reorderLevel,
-                note = trimmedNote,
-                author = author,
-                at = at
             )
         )
     }

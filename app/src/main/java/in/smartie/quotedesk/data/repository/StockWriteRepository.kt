@@ -134,25 +134,6 @@ class StockWriteRepository(
         }
     }
 
-    /** Stop tracking a row. Administrator only; the rules agree. */
-    suspend fun stopTracking(
-        member: Member,
-        record: StockRecord,
-        note: String = ""
-    ): StockWriteResult {
-        require(Permissions.canStopTrackingStock(member)) { NOT_ALLOWED_ARCHIVE }
-        return commit(member) { transaction, author, at, movementId ->
-            StockWrite.stopTracking(
-                record = record,
-                storedQuantity = storedQuantity(transaction, record),
-                note = note,
-                author = author,
-                at = at,
-                movementId = movementId
-            )
-        }
-    }
-
     // --- removal ------------------------------------------------------------
 
     /**
@@ -410,7 +391,6 @@ class StockWriteRepository(
         val NOT_ALLOWED_EDIT = "Only $STOCK_WRITERS can edit stock"
         val NOT_ALLOWED_EXACT = "Only $ADMINS can set an exact quantity"
         val NOT_ALLOWED_PIN = "Only $STOCK_WRITERS can pin stock"
-        val NOT_ALLOWED_ARCHIVE = "Only $ADMINS can stop tracking an item"
         val NOT_ALLOWED_PHOTO = "Only $STOCK_WRITERS can change a photo"
     }
 }

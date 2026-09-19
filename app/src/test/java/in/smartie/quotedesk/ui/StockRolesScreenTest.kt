@@ -54,7 +54,7 @@ class StockRolesScreenTest {
     fun `Staff get Edit but no exact quantity field`() {
         compose.setContent {
             SmartieTheme {
-                EditStockPanel(motor, staffCaps, online = true, onSave = { _, _, _ -> }, onStopTracking = {}, onCancel = {})
+                EditStockPanel(motor, staffCaps, online = true, onSave = { _, _, _ -> }, onRemove = {}, onCancel = {})
             }
         }
         compose.onNodeWithText("Only an Owner or Administrator can set an exact quantity.")
@@ -69,7 +69,7 @@ class StockRolesScreenTest {
     fun `an Administrator gets the exact quantity field and Stop tracking`() {
         compose.setContent {
             SmartieTheme {
-                EditStockPanel(motor, adminCaps, online = true, onSave = { _, _, _ -> }, onStopTracking = {}, onCancel = {})
+                EditStockPanel(motor, adminCaps, online = true, onSave = { _, _, _ -> }, onRemove = {}, onCancel = {})
             }
         }
         compose.onNodeWithContentDescription("Exact quantity").assertExists()
@@ -84,7 +84,7 @@ class StockRolesScreenTest {
                 EditStockPanel(
                     motor, adminCaps, online = true,
                     onSave = { q, r, n -> edited = Triple(q, r, n) },
-                    onStopTracking = {}, onCancel = {}
+                    onRemove = {}, onCancel = {}
                 )
             }
         }
@@ -98,7 +98,7 @@ class StockRolesScreenTest {
     fun `offline the edit panel cannot be saved and says why`() {
         compose.setContent {
             SmartieTheme {
-                EditStockPanel(motor, adminCaps, online = false, onSave = { _, _, _ -> }, onStopTracking = {}, onCancel = {})
+                EditStockPanel(motor, adminCaps, online = false, onSave = { _, _, _ -> }, onRemove = {}, onCancel = {})
             }
         }
         compose.onNodeWithText("Save").assertIsNotEnabled()

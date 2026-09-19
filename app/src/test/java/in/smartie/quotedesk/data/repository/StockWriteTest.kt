@@ -412,39 +412,6 @@ class StockWriteTest {
         assertEquals(0, store.bodyRuns)
     }
 
-    @Test
-    fun `stopping tracking switches the row off and logs an archive movement`() = runTest {
-        val store = FakeStore(storedWith(7.0))
-        repository(store).stopTracking(admin, record, note = "Discontinued")
-
-        val stock = store.stock.single()
-        assertEquals(true, stock.data["off"])
-        assertEquals(StockWrite.ACTION_ARCHIVE, stock.data["lastAction"])
-
-        val movement = store.movements.single().data
-        assertEquals(StockWrite.ACTION_ARCHIVE, movement["action"])
-        assertEquals(7.0, movement["prev"])
-        assertEquals(7.0, movement["next"])
-        assertEquals(0.0, movement["delta"])
-        assertEquals("Discontinued", movement["note"])
-    }
-
-    @Test
-    fun `stopping tracking is an Administrator action`() = runTest {
-        val store = FakeStore(storedWith(7.0))
-        val failure = runCatching { repository(store).stopTracking(staff, record) }.exceptionOrNull()
-        assertTrue(failure is IllegalArgumentException)
-        assertEquals(0, store.bodyRuns)
-    }
-
-    @Test
-    fun `stopping tracking a row already off writes nothing`() = runTest {
-        val store = FakeStore(storedWith(7.0))
-        val result = repository(store).stopTracking(admin, record.copy(archived = true))
-        assertEquals(StockWriteResult.NO_CHANGE, result)
-        assertTrue(store.stock.isEmpty() && store.movements.isEmpty())
-    }
-
     // --- create -----------------------------------------------------------
 
     @Test

@@ -7,6 +7,7 @@ import `in`.smartie.quotedesk.core.AppContainer
 import `in`.smartie.quotedesk.core.StockPendingStore
 import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.StockRecord
+import `in`.smartie.quotedesk.data.repository.StockPhotoRepository
 import `in`.smartie.quotedesk.data.repository.StockWriteRepository
 import `in`.smartie.quotedesk.data.repository.StockWriteResult
 import `in`.smartie.quotedesk.domain.Member
@@ -14,6 +15,7 @@ import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.domain.StockEntry
 import `in`.smartie.quotedesk.domain.StockFilter
 import `in`.smartie.quotedesk.domain.StockPendingCodec
+import `in`.smartie.quotedesk.domain.StockPhotoImage
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,6 +43,7 @@ class StockViewModel(
     private val writes: StockWriteRepository,
     private val drafts: StockPendingStore,
     onlineFlow: Flow<Boolean>,
+    private val photos: StockPhotoRepository? = null,
     private val report: (Throwable) -> Unit = {}
 ) : ViewModel() {
 
@@ -58,6 +61,10 @@ class StockViewModel(
     /** Keys with a write in flight, so a second tap on Done does nothing. */
     private val _saving = MutableStateFlow<Set<String>>(emptySet())
     val saving: StateFlow<Set<String>> = _saving.asStateFlow()
+
+    /** Which photo sheet is open, and what it holds. See [StockPhotoFlow]. */
+    private val _photo = MutableStateFlow(StockPhotoUi())
+    val photo: StateFlow<StockPhotoUi> = _photo.asStateFlow()
 
     /**
      * Collected **eagerly**, not [SharingStarted.WhileSubscribed].
@@ -240,7 +247,114 @@ class StockViewModel(
         }
     }
 
+    // --- photos -------------------------------------------------------------
+
+    /**
+     * The bytes to draw for a row, or null when there are none to draw.
+     *
+     * Straight through to the repository, which answers from memory, then
+     * from disk, and only then spends a Firestore read. A row with no photo
+     * is not asked about at all — the screen does not call this for one.
+     */
+    suspend fun loadPhoto(record: StockRecord): ByteArray? =
+        photos?.let { runCatching { it.load(record) }.getOrNull() }
+
+    /** Tapping a thumbnail, or the Photo button on a row without one. */
+    fun openPhoto(record: StockRecord) {
+        _photo.value = StockPhotoFlow.open(record, canManagePhoto())
+    }
+
+    fun closePhoto() {
+        _photo.value = StockPhotoFlow.closed()
+    }
+
+    /** Replace: back to choosing a source, with the row kept. */
+    fun replacePhoto() {
+        if (!requirePhotoOnline()) return
+        _photo.value = StockPhotoFlow.replace(_photo.value)
+    }
+
+    /** The camera or the picker has been launched; show the person that. */
+    fun awaitingPhoto() {
+        _photo.value = StockPhotoFlow.awaiting(_photo.value)
+    }
+
+    /** What the camera or the picker produced, already compressed. */
+    fun photoPrepared(image: StockPhotoImage?) {
+        _photo.value = StockPhotoFlow.prepared(_photo.value, image)
+    }
+
+    /** Backed out without choosing anything. Nothing was written. */
+    fun photoAbandoned() {
+        _photo.value = StockPhotoFlow.abandoned(_photo.value)
+    }
+
+    /**
+     * Confirm. **This is the only path from a photo to Firestore**, and it
+     * runs once: a second tap while the first is in flight does nothing.
+     */
+    fun confirmPhoto() {
+        val current = _photo.value
+        val record = current.record ?: return
+        val image = current.prepared ?: return
+        if (current.saving || !requirePhotoAllowed() || !requirePhotoOnline()) return
+        _photo.value = StockPhotoFlow.saving(current)
+        viewModelScope.launch {
+            runCatching { writes.setPhoto(member, record, image) }
+                .onSuccess {
+                    // The row's revision has moved, so whatever is cached for
+                    // it is now the old picture. One read replaces it; that is
+                    // cheaper than risking the wrong photograph on a shelf.
+                    photos?.forget(record)
+                    _photo.value = StockPhotoFlow.closed()
+                    emit(PHOTO_SAVED)
+                }
+                .onFailure {
+                    _photo.value = StockPhotoFlow.failed(_photo.value)
+                    emit(failureOf(Result.failure<Unit>(it)))
+                }
+        }
+    }
+
+    /** Take the photo off a row. The revision still advances. */
+    fun removePhoto() {
+        val current = _photo.value
+        val record = current.record ?: return
+        if (current.saving || !requirePhotoAllowed() || !requirePhotoOnline()) return
+        _photo.value = StockPhotoFlow.saving(current)
+        viewModelScope.launch {
+            runCatching { writes.removePhoto(member, record) }
+                .onSuccess {
+                    photos?.forget(record)
+                    _photo.value = StockPhotoFlow.closed()
+                    emit(PHOTO_REMOVED)
+                }
+                .onFailure {
+                    _photo.value = StockPhotoFlow.failed(_photo.value)
+                    emit(failureOf(Result.failure<Unit>(it)))
+                }
+        }
+    }
+
+    private fun requirePhotoAllowed(): Boolean {
+        if (canManagePhoto()) return true
+        emit(NOT_ALLOWED_PHOTO)
+        return false
+    }
+
+    private fun requirePhotoOnline(): Boolean {
+        if (online.value) return true
+        emit(PHOTO_OFFLINE_MESSAGE)
+        return false
+    }
+
     // --- what the screen may offer -----------------------------------------
+
+    /** Owner, Administrator and Staff; the rules agree. */
+    fun canManagePhoto(): Boolean = Permissions.canManageStockPhoto(member)
+
+    /** Everyone who may read `/stock`, Workers included. */
+    fun canViewPhoto(): Boolean = Permissions.canViewStockPhoto(member)
 
     fun canAdjust(): Boolean = Permissions.canAdjustStock(member)
 
@@ -318,6 +432,7 @@ class StockViewModel(
             writes = container.stockWriteRepository,
             drafts = container.devicePreferences,
             onlineFlow = container.connectivity.online,
+            photos = container.stockPhotoRepository,
             report = container.errorReporter::report
         ) as T
     }
@@ -334,5 +449,11 @@ class StockViewModel(
         const val CLEARED = "Pending changes cleared"
         const val NOTHING_CHANGED = "Nothing to save"
         const val SAVE_FAILED = "Could not save — try again"
+        const val PHOTO_SAVED = "Photo saved"
+        const val PHOTO_REMOVED = "Photo removed"
+        const val NOT_ALLOWED_PHOTO = "You do not have permission to change photos"
+
+        /** The same wording every disabled photo control carries. */
+        const val PHOTO_OFFLINE_MESSAGE = PHOTO_OFFLINE
     }
 }

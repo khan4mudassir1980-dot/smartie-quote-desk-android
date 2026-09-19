@@ -21,18 +21,27 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
@@ -48,6 +57,7 @@ import `in`.smartie.quotedesk.data.model.StockRecord
 import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.domain.StockBoard
 import `in`.smartie.quotedesk.domain.StockFilter
+import `in`.smartie.quotedesk.domain.StockPhotoImage
 import `in`.smartie.quotedesk.domain.StockRow
 import `in`.smartie.quotedesk.domain.StockStatus
 import `in`.smartie.quotedesk.domain.StockView
@@ -64,6 +74,10 @@ import `in`.smartie.quotedesk.ui.components.SummaryTile
 import `in`.smartie.quotedesk.ui.components.Tag
 import `in`.smartie.quotedesk.ui.components.TagTone
 import `in`.smartie.quotedesk.ui.components.clickableNoRipple
+import `in`.smartie.quotedesk.util.StockImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
 import `in`.smartie.quotedesk.ui.theme.SmartieColors
 
@@ -81,7 +95,20 @@ data class StockActions(
     val onStopTracking: (StockRecord) -> Unit = {},
     val onAddProduct: (ProductRecord, Double, Double, String) -> Unit = { _, _, _, _ -> },
     val onAddManual: (String, String, String, Double, Double, String) -> Unit =
-        { _, _, _, _, _, _ -> }
+        { _, _, _, _, _, _ -> },
+    /** Tapping a thumbnail, or the Photo button on a row without one. */
+    val onOpenPhoto: (StockRecord) -> Unit = {},
+    /**
+     * The bytes to draw for a row.
+     *
+     * A suspending read rather than a value, because a photo is fetched
+     * lazily as its card comes into view and answered from a cache far more
+     * often than from Firestore. The default returns nothing, which is what
+     * keeps this screen drivable in a test with no repository at all.
+     */
+    val loadPhoto: suspend (StockRecord) -> ByteArray? = { null },
+    /** What the photo sheets can do. */
+    val photo: StockPhotoActions = StockPhotoActions()
 )
 
 /** What the screen may show this person, straight from [Permissions]. */
@@ -92,13 +119,17 @@ data class StockCapabilities(
     val pin: Boolean = false,
     val stopTracking: Boolean = false,
     /** Reading `/stockMoves`, which the rules refuse a Worker. */
-    val history: Boolean = false
+    val history: Boolean = false,
+    /** Taking, replacing and removing a photo: Owner, Administrator, Staff. */
+    val photoManage: Boolean = false,
+    /** Seeing one. Everybody who may read `/stock`, Workers included. */
+    val photoView: Boolean = false
 ) {
     /** A Worker gets no control at all — not even a disabled one. */
     val anyControl: Boolean get() = adjust || reorderLevel || pin || stopTracking
 
     /** Whether the card needs its controls row at all. */
-    val anyRowAction: Boolean get() = anyControl || history
+    val anyRowAction: Boolean get() = anyControl || history || photoManage
 }
 
 @Composable
@@ -112,10 +143,48 @@ fun StockScreen(data: AppDataViewModel, viewModel: StockViewModel) {
     val saving by viewModel.saving.collectAsStateWithLifecycle()
     val online by viewModel.online.collectAsStateWithLifecycle()
 
+    val photo by viewModel.photo.collectAsStateWithLifecycle()
+
     val view = remember(stock, query, filter, pending) {
         StockBoard.build(stock, query, filter, pending)
     }
     val byKey = remember(stock) { stock.associateBy { it.key } }
+
+    // --- the camera and the picker ----------------------------------------
+    //
+    // Neither needs a manifest permission: TakePicture hands off to whatever
+    // camera app is installed, and PickVisualMedia is the system photo
+    // picker. Declaring CAMERA would only create a runtime prompt to ask for.
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var captureTarget by remember { mutableStateOf<Uri?>(null) }
+
+    // Compress off the main thread, then hand the bytes to the view model.
+    // Nothing is written here; this only fills the preview.
+    fun prepare(uri: Uri?) {
+        if (uri == null) {
+            viewModel.photoAbandoned()
+            return
+        }
+        scope.launch {
+            // Reading the picture is IO; decoding and compressing it is not,
+            // but they happen in one pass, and IO is the dispatcher that may
+            // block.
+            val prepared = withContext(Dispatchers.IO) {
+                StockImage.prepare(context.contentResolver, uri)
+            }
+            viewModel.photoPrepared(prepared)
+            // The full-size capture has served its purpose.
+            withContext(Dispatchers.IO) { StockImage.clearCaptures(context) }
+        }
+    }
+
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
+        prepare(if (taken) captureTarget else null)
+    }
+    val gallery = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { picked -> prepare(picked) }
 
     StockBoardScreen(
         view = view,
@@ -127,10 +196,13 @@ fun StockScreen(data: AppDataViewModel, viewModel: StockViewModel) {
             reorderLevel = viewModel.canSetReorderLevel(),
             pin = viewModel.canPin(),
             stopTracking = viewModel.canStopTracking(),
-            history = viewModel.canViewHistory()
+            history = viewModel.canViewHistory(),
+            photoManage = viewModel.canManagePhoto(),
+            photoView = viewModel.canViewPhoto()
         ),
         products = products,
         movements = movements,
+        photo = photo,
         actions = StockActions(
             onQueryChange = viewModel::setQuery,
             onFilter = viewModel::toggleFilter,
@@ -149,7 +221,27 @@ fun StockScreen(data: AppDataViewModel, viewModel: StockViewModel) {
             },
             onAddManual = { model, name, unit, quantity, reorder, note ->
                 viewModel.addManual(model, name, "", unit, quantity, reorder, note)
-            }
+            },
+            onOpenPhoto = viewModel::openPhoto,
+            loadPhoto = viewModel::loadPhoto,
+            photo = StockPhotoActions(
+                onTakePhoto = {
+                    val target = StockImage.captureTarget(context)
+                    captureTarget = target
+                    viewModel.awaitingPhoto()
+                    camera.launch(target)
+                },
+                onChooseFromGallery = {
+                    viewModel.awaitingPhoto()
+                    gallery.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                },
+                onConfirm = viewModel::confirmPhoto,
+                onRetake = viewModel::replacePhoto,
+                onRemove = viewModel::removePhoto,
+                onCancel = viewModel::closePhoto
+            )
         )
     )
 }
@@ -171,6 +263,7 @@ fun StockBoardScreen(
     capabilities: StockCapabilities = StockCapabilities(),
     products: List<ProductRecord> = emptyList(),
     movements: List<StockMove> = emptyList(),
+    photo: StockPhotoUi = StockPhotoUi(),
     actions: StockActions = StockActions()
 ) {
     val dimens = LocalSmartieDimens.current
@@ -366,6 +459,100 @@ fun StockBoardScreen(
             onDismiss = { showingHistory = null }
         )
     }
+
+    if (photo.isOpen) {
+        StockPhotoDialog(
+            state = photo,
+            capabilities = capabilities,
+            online = online,
+            actions = actions
+        )
+    }
+}
+
+/**
+ * Whichever photo sheet is open.
+ *
+ * One dialog rather than three, because only one stage is ever current and
+ * three would be three chances for two of them to be open at once. The
+ * bodies are the internal panels the tests drive; this holds no logic beyond
+ * choosing between them.
+ *
+ * Back and a tap outside close the looking stages. They do **not** close the
+ * preview: that holds a picture somebody has taken and not yet saved, and
+ * throwing it away by accident would mean walking back to the shelf.
+ */
+@Composable
+private fun StockPhotoDialog(
+    state: StockPhotoUi,
+    capabilities: StockCapabilities,
+    online: Boolean,
+    actions: StockActions
+) {
+    val record = state.record ?: return
+    val name = StockBoard.displayName(record)
+    val dismissible = state.stage != PhotoStage.PREVIEW && !state.saving
+
+    AlertDialog(
+        onDismissRequest = { if (dismissible) actions.photo.onCancel() },
+        properties = DialogProperties(
+            dismissOnBackPress = dismissible,
+            dismissOnClickOutside = dismissible
+        ),
+        confirmButton = {},
+        title = { Text(photoTitle(state.stage, name)) },
+        text = {
+            when (state.stage) {
+                PhotoStage.VIEW -> StockPhotoViewPanel(
+                    image = rememberStockPhoto(record, actions.loadPhoto),
+                    name = name,
+                    canManage = capabilities.photoManage,
+                    online = online,
+                    saving = state.saving,
+                    actions = actions.photo
+                )
+                PhotoStage.SOURCE -> StockPhotoSourcePanel(
+                    online = online,
+                    canRemove = record.hasPhoto,
+                    actions = actions.photo
+                )
+                PhotoStage.PREVIEW -> StockPhotoPreviewPanel(
+                    prepared = state.prepared,
+                    preview = rememberPrepared(state.prepared),
+                    online = online,
+                    saving = state.saving,
+                    refusal = state.refusal,
+                    actions = actions.photo
+                )
+                PhotoStage.CLOSED -> Unit
+            }
+        }
+    )
+}
+
+/**
+ * The bytes that will be written, decoded once so the person sees them.
+ *
+ * Takes a nullable and handles null itself rather than being called inside a
+ * `?.let`, so the call site is unconditional: a composable that remembers
+ * must be reached the same way on every pass.
+ */
+@Composable
+private fun rememberPrepared(image: StockPhotoImage?): ImageBitmap? {
+    var bitmap by remember(image) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(image) {
+        bitmap = if (image == null) null else withContext(Dispatchers.Default) {
+            StockImage.decodePreview(image.bytes)?.asImageBitmap()
+        }
+    }
+    return bitmap
+}
+
+internal fun photoTitle(stage: PhotoStage, name: String): String = when (stage) {
+    PhotoStage.VIEW -> name
+    PhotoStage.SOURCE -> "Photo of $name"
+    PhotoStage.PREVIEW -> "Save this photo?"
+    PhotoStage.CLOSED -> ""
 }
 
 /**
@@ -404,6 +591,17 @@ private fun StockRowCard(
                 verticalAlignment = Alignment.Top,
                 horizontalArrangement = Arrangement.spacedBy(dimens.gapM)
             ) {
+                // Only a row that says it has a photo asks for one. A row
+                // with `hasPhoto: false` renders nothing here and spends no
+                // read discovering that, which is the whole point of the flag
+                // sitting on the stock document.
+                if (capabilities.photoView && row.record.hasPhoto) {
+                    StockPhotoThumbnail(
+                        image = rememberStockPhoto(row.record, actions.loadPhoto),
+                        name = row.name,
+                        onOpen = { actions.onOpenPhoto(row.record) }
+                    )
+                }
                 Column(Modifier.weight(1f)) {
                     Text(
                         row.name,
@@ -532,6 +730,19 @@ private fun StockRowCard(
                         }
                     )
                 }
+                // A row that already has one is reached by its thumbnail;
+                // this is the way in for a row that has none. Enabled
+                // offline, because looking is not changing — the sheet it
+                // opens is where the offline wording lives.
+                if (capabilities.photoManage && !row.record.hasPhoto) {
+                    SmartieGhostButton(
+                        text = PHOTO_BUTTON,
+                        onClick = { actions.onOpenPhoto(row.record) },
+                        modifier = Modifier.semantics {
+                            contentDescription = "Add a photo of ${row.name}"
+                        }
+                    )
+                }
             }
 
             if (row.hasPending && capabilities.adjust) {
@@ -563,6 +774,35 @@ private fun StockRowCard(
             }
         }
     }
+}
+
+/**
+ * The decoded photo for a row, fetched as the card comes into view.
+ *
+ * Keyed on the row's **identity and revision together**, so a replacement
+ * starts a new load and a scroll past an unchanged row starts none. The
+ * decode is on a worker thread because a WebP decode on the main thread is a
+ * dropped frame per card.
+ *
+ * Call this only for a row that has a photo. A row with `hasPhoto: false`
+ * must not reach here — not because it would be wrong, but because it would
+ * be a load nobody asked for.
+ */
+@Composable
+private fun rememberStockPhoto(
+    record: StockRecord,
+    load: suspend (StockRecord) -> ByteArray?
+): ImageBitmap? {
+    var image by remember(record.documentId, record.photoRev) {
+        mutableStateOf<ImageBitmap?>(null)
+    }
+    LaunchedEffect(record.documentId, record.photoRev) {
+        val bytes = load(record) ?: return@LaunchedEffect
+        image = withContext(Dispatchers.Default) {
+            StockImage.decodePreview(bytes)?.asImageBitmap()
+        }
+    }
+    return image
 }
 
 /** One card holds one item: its details, its pending line and its controls. */

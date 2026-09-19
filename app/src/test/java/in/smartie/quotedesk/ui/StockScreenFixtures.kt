@@ -17,6 +17,7 @@ import `in`.smartie.quotedesk.domain.StockFilter
 import `in`.smartie.quotedesk.ui.stock.StockActions
 import `in`.smartie.quotedesk.ui.stock.StockBoardScreen
 import `in`.smartie.quotedesk.ui.stock.StockCapabilities
+import `in`.smartie.quotedesk.ui.stock.StockPhotoUi
 import `in`.smartie.quotedesk.ui.theme.SmartieTheme
 
 /**
@@ -38,7 +39,9 @@ internal fun stockRecord(
     pinned: Boolean = false,
     pinOrder: Double = 0.0,
     note: String = "",
-    group: String = "gateMotors"
+    group: String = "gateMotors",
+    hasPhoto: Boolean = false,
+    photoRev: Double = 0.0
 ): StockRecord {
     val key = Keys.productKey(group, model)
     return StockRecord(
@@ -52,7 +55,9 @@ internal fun stockRecord(
         pinned = pinned,
         pinOrder = pinOrder,
         note = note,
-        unit = "each"
+        unit = "each",
+        hasPhoto = hasPhoto,
+        photoRev = photoRev
     )
 }
 
@@ -62,8 +67,14 @@ internal val stockShelf = listOf(
     stockRecord("SIE3000", "Boom barrier", quantity = 0.0, reorder = 2.0)
 )
 
-internal val staffCaps =
-    StockCapabilities(adjust = true, reorderLevel = true, pin = true, history = true)
+internal val staffCaps = StockCapabilities(
+    adjust = true,
+    reorderLevel = true,
+    pin = true,
+    history = true,
+    photoManage = true,
+    photoView = true
+)
 
 internal val adminCaps = StockCapabilities(
     adjust = true,
@@ -71,11 +82,19 @@ internal val adminCaps = StockCapabilities(
     reorderLevel = true,
     pin = true,
     stopTracking = true,
-    history = true
+    history = true,
+    photoManage = true,
+    photoView = true
 )
 
-/** A Worker: `/stock` is readable, `/stockMoves` is not, nothing is writable. */
-internal val workerCaps = StockCapabilities()
+/**
+ * A Worker: `/stock` is readable, `/stockMoves` is not, nothing is writable.
+ *
+ * `photoView` is on, because a Worker on the shelf is exactly who a picture
+ * is for; `photoManage` is off, and they get no control rather than a
+ * disabled one.
+ */
+internal val workerCaps = StockCapabilities(photoView = true)
 
 internal fun ComposeContentTestRule.showStock(
     stock: List<StockRecord> = stockShelf,
@@ -87,6 +106,7 @@ internal fun ComposeContentTestRule.showStock(
     capabilities: StockCapabilities = staffCaps,
     products: List<ProductRecord> = emptyList(),
     movements: List<StockMove> = emptyList(),
+    photo: StockPhotoUi = StockPhotoUi(),
     actions: StockActions = StockActions()
 ) {
     setContent {
@@ -98,6 +118,7 @@ internal fun ComposeContentTestRule.showStock(
                 capabilities = capabilities,
                 products = products,
                 movements = movements,
+                photo = photo,
                 actions = actions
             )
         }

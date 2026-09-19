@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-19.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `02b3edf` — [run #77](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35436896487), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `ea5a417` — [run #81](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35439461751), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -175,7 +175,7 @@ The role-to-capability mapping moved into `StockCapabilities.forMember`, and
 the screen test fixtures derive from it rather than restating it, so every
 existing stock screen test now runs against the mapping the app uses.
 
-**566 Kotlin test methods across 52 classes**; 60 emulator tests; 26
+**597 Kotlin test methods across 54 classes**; 60 emulator tests; 26
 importer tests.
 
 ## Current next action
@@ -197,9 +197,9 @@ passed:
 | T-P13 | Two phones replacing the same row's photo at once — needs a second phone |
 | T-P15 | Delete a photographed row as an Administrator; the photo document must go with it |
 
-The APK for these is `smartie-native-apks` from the first green run at or
-after the title change; the run #73 artifact carries the layout defect and
-must not be used. **N3.1 is not closed** and must not be described as
+The APK for these is `smartie-native-apks` from **[run #81](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35439461751)** at
+`ea5a417`, which carries the renamed job titles; the run #73 artifact carries
+the layout defect and must not be used. **N3.1 is not closed** and must not be described as
 verified until these have run.
 
 N3's outstanding device work is **tracked, not closed**, and does not become

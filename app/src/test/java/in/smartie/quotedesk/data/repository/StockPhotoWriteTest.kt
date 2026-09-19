@@ -22,7 +22,12 @@ import org.junit.Test
  */
 class StockPhotoWriteTest {
 
-    private class Written(val docId: String, val data: Map<String, Any?>?)
+    private class Written(
+        val docId: String,
+        val data: Map<String, Any?>?,
+        /** Only a merge leaves the rest of the row — note, pin, archive — alone. */
+        val merge: Boolean = false
+    )
 
     private class FakeStore(
         private var stored: Map<String, Any?>? = null,
@@ -50,7 +55,7 @@ class StockPhotoWriteTest {
                         return stored
                     }
                     override fun writeStock(docId: String, data: Map<String, Any?>, merge: Boolean) {
-                        stock += Written(docId, data)
+                        stock += Written(docId, data, merge)
                     }
                     override fun writeMovement(docId: String, data: Map<String, Any?>) {
                         movements += Written(docId, data)
@@ -132,6 +137,11 @@ class StockPhotoWriteTest {
         assertEquals(StockWrite.LAST_ACTION_PHOTO, stock["lastAction"])
         assertFalse("archiving is untouched", stock.containsKey("off"))
         assertFalse("pinning is untouched", stock.containsKey("pinned"))
+        assertFalse("the note is untouched", stock.containsKey("stockNote"))
+        // Naming the fields is only half of it: a write that replaced the
+        // document would drop every field not listed above, note and pin
+        // included, and the assertions here could not tell the difference.
+        assertTrue("a photo write must merge", store.stock.single().merge)
     }
 
     @Test
@@ -179,6 +189,7 @@ class StockPhotoWriteTest {
         assertEquals(false, stock["hasPhoto"])
         assertEquals(3.0, stock["photoRev"])
         assertTrue(store.movements.isEmpty())
+        assertTrue("a removal must merge too", store.stock.single().merge)
     }
 
     @Test

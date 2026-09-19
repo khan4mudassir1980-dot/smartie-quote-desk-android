@@ -71,6 +71,11 @@ class StockPhotoViewModelTest {
                     photoWrites += docId
                 }
                 override fun deletePhoto(docId: String) { photoDeletes += docId }
+                override fun deleteStock(docId: String) =
+                    throw AssertionError("a quantity or photo write must not delete the row")
+                override fun writeStopped(docId: String, data: Map<String, Any?>) =
+                    throw AssertionError("a quantity or photo write must not write history")
+                override fun stoppedExists(docId: String) = false
             })
     }
 

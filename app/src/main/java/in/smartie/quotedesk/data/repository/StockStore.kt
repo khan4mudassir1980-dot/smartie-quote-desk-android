@@ -43,6 +43,19 @@ interface StockTransaction {
 
     /** Removing a photo. Paired with the stock write that clears `hasPhoto`. */
     fun deletePhoto(docId: String)
+
+    /**
+     * Deleting the stock row itself — a **permanent** removal, paired in the
+     * same commit with the history document below and with the photo above.
+     * The rules refuse a history entry whose row is still there afterwards.
+     */
+    fun deleteStock(docId: String)
+
+    /** The immutable `/stoppedStock` record that outlives the removed row. */
+    fun writeStopped(docId: String, data: Map<String, Any?>)
+
+    /** Whether a `/stoppedStock` entry already exists, for an idempotent retry. */
+    fun stoppedExists(docId: String): Boolean
 }
 
 /**
@@ -85,6 +98,18 @@ class FirestoreStockStore(private val firestore: FirebaseFirestore) : StockStore
                     override fun deletePhoto(docId: String) {
                         transaction.delete(firestore.collection(PHOTOS).document(docId))
                     }
+
+                    override fun deleteStock(docId: String) {
+                        transaction.delete(firestore.collection(STOCK).document(docId))
+                    }
+
+                    override fun writeStopped(docId: String, data: Map<String, Any?>) {
+                        transaction.set(firestore.collection(STOPPED).document(docId), resolve(data))
+                    }
+
+                    override fun stoppedExists(docId: String): Boolean =
+                        transaction.get(firestore.collection(STOPPED).document(docId)).exists()
+                    }
                 }
             )
         }.await()
@@ -111,5 +136,6 @@ class FirestoreStockStore(private val firestore: FirebaseFirestore) : StockStore
         const val STOCK = "stock"
         const val MOVES = "stockMoves"
         const val PHOTOS = "stockPhotos"
+        const val STOPPED = "stoppedStock"
     }
 }

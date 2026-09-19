@@ -266,6 +266,51 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // --- stopped-item history ------------------------------------------
+    //
+    // What survives when an item is removed from stock. Deliberately a
+    // **separate, immutable** collection rather than a flag on /stock: the
+    // old `off: true` flag left the row alive, invisible to the board and
+    // still blocking a re-add with "already exists", with no way back.
+    //
+    // One document per removal event, with its own id, so repeated
+    // add-then-remove cycles for the same key stay distinct.
+    match /stoppedStock/{id} {
+      function stockPath() {
+        return /databases/$(database)/documents/stock/$(request.resource.data.stockDoc);
+      }
+
+      // Everyone who may see stock may see what was removed from it.
+      allow read: if member();
+
+      // Written **only** as part of removing the row, by the role that was
+      // always allowed to stop tracking an item: Owner and Administrator.
+      // `!existsAfter(stockPath())` is the cross-document half — history for
+      // an item that is still on the board cannot be fabricated.
+      allow create: if admin()
+                    && request.resource.data.id == id
+                    && request.resource.data.key is string
+                    && request.resource.data.stockDoc is string
+                    && request.resource.data.q is number
+                    && request.resource.data.manual is bool
+                    && request.resource.data.at is number
+                    && request.resource.data.byUid == mine()
+                    && noPriceData() && safeName()
+                    // The quantity, the note and the photo are gone for good:
+                    // none of them may be smuggled into the record that
+                    // outlives them.
+                    && !request.resource.data.keys().hasAny(
+                         ['note','stockNote','bytes','hasPhoto','photoRev','min','pinned'])
+                    && !existsAfter(stockPath());
+
+      // Immutable. History that can be edited is not history.
+      allow update: if false;
+
+      // Clearing it is an Owner and Administrator action, the same pair that
+      // may remove an item in the first place.
+      allow delete: if admin();
+    }
+
     // --- purchase ------------------------------------------------------
 
     function revOk() {

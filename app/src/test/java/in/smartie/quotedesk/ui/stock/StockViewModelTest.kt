@@ -73,6 +73,13 @@ class StockViewModelTest {
 
                 override fun deletePhoto(docId: String) =
                     throw AssertionError("a quantity write must not delete a photo")
+
+                // A quantity change is not a removal, in either direction.
+                override fun deleteStock(docId: String) =
+                    throw AssertionError("a quantity write must not delete the row")
+                override fun writeStopped(docId: String, data: Map<String, Any?>) =
+                    throw AssertionError("a quantity write must not write history")
+                override fun stoppedExists(docId: String) = false
             })
         }
     }
@@ -305,6 +312,9 @@ class StockViewModelTest {
                     override fun writeMovement(docId: String, data: Map<String, Any?>) = Unit
                     override fun writePhoto(docId: String, data: Map<String, Any?>) = Unit
                     override fun deletePhoto(docId: String) = Unit
+                    override fun deleteStock(docId: String) = Unit
+                    override fun writeStopped(docId: String, data: Map<String, Any?>) = Unit
+                    override fun stoppedExists(docId: String) = false
                 })
             }
         }

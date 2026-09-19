@@ -63,6 +63,13 @@ class StockWriteTest {
                         throw AssertionError("a quantity write must not touch a photo")
                     override fun deletePhoto(docId: String) =
                         throw AssertionError("a quantity write must not delete a photo")
+
+                    // A quantity change is not a removal, in either direction.
+                    override fun deleteStock(docId: String) =
+                        throw AssertionError("a quantity write must not delete the row")
+                    override fun writeStopped(docId: String, data: Map<String, Any?>) =
+                        throw AssertionError("a quantity write must not write history")
+                    override fun stoppedExists(docId: String) = false
                 })
                 stockAttempts += stockWrites
                 movementAttempts += movementWrites

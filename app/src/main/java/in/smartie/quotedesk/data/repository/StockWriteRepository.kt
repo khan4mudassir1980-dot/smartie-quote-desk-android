@@ -10,6 +10,8 @@ import `in`.smartie.quotedesk.domain.StockAuthor
 import `in`.smartie.quotedesk.domain.StockEntry
 import `in`.smartie.quotedesk.domain.StockPhotoImage
 import `in`.smartie.quotedesk.domain.StockPhotoPlan
+import `in`.smartie.quotedesk.domain.StockRemoval
+import `in`.smartie.quotedesk.domain.StockRemovalPlan
 import `in`.smartie.quotedesk.domain.StockWrite
 import `in`.smartie.quotedesk.domain.StockWritePlan
 
@@ -151,6 +153,92 @@ class StockWriteRepository(
         }
     }
 
+    // --- removal ------------------------------------------------------------
+
+    /**
+     * **Permanently** remove an item from stock.
+     *
+     * Replaces the old "stop tracking", which wrote `off: true` and left the
+     * document in place — invisible to the board, still refusing a re-add
+     * with "already exists", and with no route back. See [StockRemoval].
+     *
+     * One transaction does all of it: the history document is written, the
+     * photo is deleted when there is one, and the stock row is deleted. A
+     * failure anywhere leaves the item and its photo exactly as they were —
+     * there is no half-removed state, and no history entry without a removal.
+     *
+     * **No movement is written.** Nothing moved; the quantity was not
+     * adjusted, it ceased to exist along with the row.
+     */
+    suspend fun removeFromStock(member: Member, record: StockRecord): StockWriteResult {
+        require(Permissions.canStopTrackingStock(member)) { StockRemoval.NOT_ALLOWED }
+        return commitRemoval(member, record) { stored, author, at, eventId ->
+            StockRemoval.remove(
+                record = record,
+                stillThere = stored != null,
+                storedQuantity = stored?.quantity ?: record.quantity,
+                hasStoredPhoto = stored?.hasPhoto ?: record.hasPhoto,
+                author = author,
+                at = at,
+                eventId = eventId
+            )
+        }
+    }
+
+    /**
+     * Convert a row left behind by the old stop-tracking behaviour.
+     *
+     * Idempotent by construction: the event id is derived from the stock
+     * document id, and the history document is written only when it is not
+     * already there, so a retry after a partial failure finishes the job
+     * rather than doubling the record. A row that is **not** marked with the
+     * legacy flag is never touched.
+     */
+    suspend fun convertLegacyStopped(member: Member, record: StockRecord): StockWriteResult {
+        require(Permissions.canStopTrackingStock(member)) { StockRemoval.NOT_ALLOWED }
+        if (!record.archived) return StockWriteResult.NO_CHANGE
+        val eventId = StockRemoval.legacyEventId(record.documentId)
+        return commitRemoval(member, record, eventId) { stored, author, at, id ->
+            StockRemoval.remove(
+                record = record,
+                stillThere = stored != null,
+                storedQuantity = stored?.quantity ?: record.quantity,
+                hasStoredPhoto = stored?.hasPhoto ?: record.hasPhoto,
+                author = author,
+                at = at,
+                eventId = id
+            )
+        }
+    }
+
+    private suspend fun commitRemoval(
+        member: Member,
+        record: StockRecord,
+        eventId: String = StockRemoval.EVENT_PREFIX + Keys.generateId(""),
+        plan: (StoredStock?, StockAuthor, Long, String) -> StockRemovalPlan
+    ): StockWriteResult {
+        val author = StockAuthor(name = member.name.ifBlank { member.email }, uid = member.uid)
+        val at = now()
+        return store.transaction { transaction ->
+            val raw = transaction.readStock(record.documentId)
+            val stored = raw?.let { storedOf(it, record) }
+            when (val outcome = plan(stored, author, at, eventId)) {
+                StockRemovalPlan.NoChange -> StockWriteResult.NO_CHANGE
+                is StockRemovalPlan.Remove -> {
+                    // Written only when it is not already there, so a retried
+                    // conversion completes rather than duplicating. A fresh
+                    // removal's id is random, so this is always false for one.
+                    if (!transaction.stoppedExists(outcome.eventId)) {
+                        transaction.writeStopped(outcome.eventId, outcome.event)
+                    }
+                    outcome.photoDocId?.let { transaction.deletePhoto(it) }
+                    transaction.deleteStock(outcome.stockDocId)
+                    StockWriteResult.WRITTEN
+                }
+            }
+        }
+    }
+
     // --- photos ------------------------------------------------------------
 
     /**
@@ -236,6 +324,18 @@ class StockWriteRepository(
         }
     }
 
+    /** The stored fields as this repository reads them. One read, reused. */
+    private fun storedOf(stored: Map<String, Any?>, record: StockRecord): StoredStock = StoredStock(
+        quantity = number(stored["q"] ?: stored["quantity"], record.quantity),
+        reorderLevel = number(stored["min"] ?: stored["reorderLevel"], record.reorderLevel),
+        photoRev = number(stored["photoRev"], record.photoRev),
+        hasPhoto = when (val flag = stored["hasPhoto"]) {
+            is Boolean -> flag
+            is Number -> flag.toDouble() != 0.0
+            else -> record.hasPhoto
+        }
+    )
+
     /** One read, and the record as the fallback when the row is not there yet. */
     private fun readStored(transaction: StockTransaction, record: StockRecord): StoredStock {
         val stored = transaction.readStock(record.documentId)
@@ -245,16 +345,7 @@ class StockWriteRepository(
                 photoRev = record.photoRev,
                 hasPhoto = record.hasPhoto
             )
-        return StoredStock(
-            quantity = number(stored["q"] ?: stored["quantity"], record.quantity),
-            reorderLevel = number(stored["min"] ?: stored["reorderLevel"], record.reorderLevel),
-            photoRev = number(stored["photoRev"], record.photoRev),
-            hasPhoto = when (val flag = stored["hasPhoto"]) {
-                is Boolean -> flag
-                is Number -> flag.toDouble() != 0.0
-                else -> record.hasPhoto
-            }
-        )
+        return storedOf(stored, record)
     }
 
     /** An imported row can hold a number as a string; tolerate it here too. */

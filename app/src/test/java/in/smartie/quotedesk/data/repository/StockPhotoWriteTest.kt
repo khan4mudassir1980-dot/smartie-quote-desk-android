@@ -66,6 +66,11 @@ class StockPhotoWriteTest {
                     override fun deletePhoto(docId: String) {
                         photos += Written(docId, null)
                     }
+                    override fun deleteStock(docId: String) =
+                        throw AssertionError("a photo write must not delete the row")
+                    override fun writeStopped(docId: String, data: Map<String, Any?>) =
+                        throw AssertionError("a photo write must not write history")
+                    override fun stoppedExists(docId: String) = false
                 })
             }
             return last as T

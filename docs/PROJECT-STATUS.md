@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-19.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `d43c08c` — [run #71](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35432545049), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `3fd420f` — [run #72](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35433020684), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -73,7 +73,7 @@ Row by row, with the evidence for each, in `docs/N3-verification.md`.
 
 ### What N3.1 built
 
-CI-green at `d43c08c`, [run #71](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35432545049).
+CI-green at `3fd420f`, [run #72](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35433020684).
 
 | Batch | Commit | What landed |
 |---|---|---|
@@ -85,6 +85,7 @@ CI-green at `d43c08c`, [run #71](https://github.com/khan4mudassir1980-dot/smarti
 | — | `214dd0b` | `StockPhotoWriteTest` asserts the photo write **merges**; the fake store had been discarding that flag |
 | D.5 | `e617249` | The **persistent** photo cache: `StockPhotoDisk` naming, `DiskStockPhotoFiles`, a three-layer repository |
 | E | `9a1b4b0` | Thumbnails on cards, the larger view, the pure `StockPhotoFlow`, the camera and picker wiring |
+| E | `3fd420f` | `FirestoreFailures`: an exhausted daily quota is named, rather than reported as "Quota exceeded" |
 
 **553 Kotlin test methods across 51 classes**, up from 359 across 37 before
 N3.1; **60 Firestore emulator tests**, up from 43; the 26 importer tests

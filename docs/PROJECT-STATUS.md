@@ -23,8 +23,8 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N0 Foundation | **Complete** |
 | N1 Auth & Team | **Complete** |
 | N2 Products | **Complete and verified** |
-| N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** Not fully closed: T-S5 needs two phones |
-| N3.1 Stock Photo | **Seven of fifteen photo rows passed on one physical phone** (run #77, `02b3edf`); the run #73 clipping defect is confirmed fixed on a device. **Eight rows remain open** — T-P4, T-P6, T-P7, T-P11 (now partly covered), T-P12, T-P13, T-P14, T-P15 — so N3.1 is **not closed**. Rules and the index exemption are deployed to staging (Owner-confirmed history, not a fresh read) |
+| N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
+| N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (contract withdrawn and replaced), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. Rules and the index exemption are deployed to staging (Owner-confirmed history, not a fresh read); **the `/stoppedStock` rules are new and not yet deployed** |
 | N4–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -199,35 +199,73 @@ Manager writes `staff`" rests on `TeamRoleSelectorScreenTest` asserting the
 `wireValue` each selection carries; and Owner and Administrator permissions
 were not re-exercised, only their titles confirmed unchanged.
 
+### The N3/N3.1 stabilization work, and what the second phone found
+
+**Three photo rows closed on a device, one blocked, one contract replaced.**
+T-P4 passed — a compressed photo kept a printed label and model readable, so
+the 80 KiB ceiling serves this business rather than merely fitting under it.
+T-P6 passed: a manual item's photo survived a restart. T-P11 passed **whole**,
+end to end as a stored `staff` (displayed **Manager**), and the removed photo
+did not come back after a restart. T-P7 is **blocked**, not failed: a
+display-model rename needs the Products & Categories editing screen, which is
+N6 and in development.
+
+**A second phone was used, and it did not run T-P13 or T-S5.** The app worked
+on it — a functional pass on a second device, recorded as one. But neither of
+those rows is about owning two phones; both are about two devices writing the
+**same** row at the same moment, and nobody performed a simultaneous photo
+replacement or quantity change. Both stay pending.
+
+**What the second phone did find** was the bottom navigation overlapping the
+system navigation, traced and fixed — see *A window inset is padding, never
+height* below.
+
+**The archive finding, and the end of "Stop tracking".** Stopping tracking
+wrote `off: true` and left the stock document in place. The board filters
+`off` rows out, so the row vanished; `create` still read the document and
+refused with "This item is already in stock"; and nothing in the app read or
+unset `off`, so there was no route back. `SIE-EXTRECEIVER` is the reported
+case. The Owner **withdrew** the archive/un-archive expectation, and T-P12's
+acceptance contract is replaced by permanent removal, a read-only stopped-item
+history, and a fresh re-add. The contract is in `docs/N3.1-plan.md`; none of
+it has been run on a device yet.
+
+| Commit | What landed |
+|---|---|
+| `0a5d3f5` | The removal data layer: `StockRemoval`, `/stoppedStock` rules and 23 emulator tests, the transaction, the legacy-conversion plan |
+| `15a35d0` | The screen: Remove from stock on the Edit sheet, the stopped-item history at the foot of the board, Clear history, the legacy sweep, `StoppedStockRepository`. `StockWrite.stopTracking` deleted |
+| `de040f5` | The bottom-navigation inset fix, the Products back-to-top control, and the regression coverage for both |
+
 ## Current next action
 
-**Run the eight N3.1 photo rows that have not been run.**
+**Deploy the new `/stoppedStock` rules to staging, then run the five
+outstanding photo rows and the replaced T-P12 contract on a device.**
 
-Seven passed on one phone with the run #77 APK, and the run #73 clipping
-defect is confirmed fixed on a device. What is left is not implied by what
-passed:
+The rules must go first: nothing in the removal path works against staging
+until `/stoppedStock` is deployed, and the replacement APK is useless without
+them. The exact command is in `docs/N3.1-plan.md` and is the Owner's to run —
+no session holds a credential for either project.
+
+Then, on a device:
 
 | Row | What it checks |
 |---|---|
-| **T-P4** | Photograph real stock off the real shelves, including one item identified by printed text. **The acceptance check for image quality**, and the row that decides whether the 80 KiB ceiling serves this business |
+| **T-P12 (replaced)** | Remove a photographed row permanently: the row, its photo document and its cached bytes gone; one read-only history entry left; the catalogue product untouched; the same product addable again, fresh; **no** quantity movement written. And `SIE-EXTRECEIVER` freed |
 | **T-P14** | Scroll the whole board, leave, return, scroll again, against the Firebase console's usage tab. **The assumption every usage figure rests on**, measured rather than trusted |
-| T-P6 | A photo on a manual item |
-| T-P7 | A display-model rename, then reopen the row — the photo must still be there |
-| T-P11 | Add, replace and remove **as** a stored `staff` (the person the app now calls **Manager**). The role-title pass confirmed that account *has* those controls; using them end to end is the half still open |
-| T-P12 | Archive a photographed row, then un-archive it |
-| T-P13 | Two phones replacing the same row's photo at once — needs a second phone |
-| T-P15 | Delete a photographed row as an Administrator; the photo document must go with it |
+| T-P15 | Remove a photographed row as an Administrator; the photo document must go with it |
+| T-P13 | Two phones replacing the same row's photo **at the same moment** — not two phones, the same moment |
+| T-P7 | **Blocked until N6.** A display-model rename needs the Products & Categories editing screen, which does not exist yet. Do not attempt it, and do not record it as failed |
 
-The APK for these is `smartie-native-apks` from **[run #81](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35439461751)** at
-`ea5a417`, which carries the renamed job titles; the run #73 artifact carries
-the layout defect and must not be used. **N3.1 is not closed** and must not be described as
-verified until these have run.
+Also on the device, because a second phone found it: the bottom navigation
+clear of the system navigation in both three-button and gesture navigation,
+and the Products back-to-top control.
 
-N3's outstanding device work is **tracked, not closed**, and does not become
-this action: T-S5 on two phones, the six rows the second pass did not reach,
-and the second-device halves of T-S24 and T-S27. They are listed with their
-evidence in `docs/N3-verification.md`, and they come back as soon as a second
-phone is available. N3.1 must not be the reason they slip.
+**N3.1 is not closed** and must not be described as verified until these have
+run. N3's outstanding device work is **tracked, not closed**, and does not
+become this action: T-S5 on two phones, the six rows the second pass did not
+reach, and the second-device halves of T-S24 and T-S27. They are listed with
+their evidence in `docs/N3-verification.md`. N3.1 must not be the reason they
+slip.
 
 ## Decisions that bind future work
 
@@ -382,6 +420,54 @@ miss rather than a wrong picture, and held under 40 MiB by least-recently-used
 eviction. A revision that cannot be named exactly is not cached on disk at
 all, because rounding two revisions to one name is how a replaced photograph
 would come back.
+
+**Removing stock is permanent, and there is no archive.** "Stop tracking"
+wrote `off: true` and left the document in place: the row vanished from the
+board, `create` still found it and refused with "already exists", and nothing
+in the app could read or unset the flag. A hidden document that blocks its own
+replacement is worse than no document. Removal now deletes the stock row and
+its photo document, and writes one immutable `/stoppedStock` record, all in
+**one** transaction. **No `/stockMoves` entry is written** — nothing moved.
+There is no Restore and no un-archive, by the Owner's decision; the catalogue
+product is untouched, so the same identity is added again as a **fresh** row.
+`StockWrite.stopTracking` is deleted rather than deprecated, so no new row can
+be left in that state; `ACTION_ARCHIVE` survives as a read-only constant
+because the PWA writes it and older rows carry it.
+
+**A history entry outlives the promise that the item's data was deleted.** So
+`/stoppedStock` carries the name, the model, Manual or Catalogue and the last
+quantity, and nothing else. `at`, `serverAt` and `byUid` are internal —
+ordering needs the timestamps, the rules need the uid — and **none of them is
+rendered**: no date, no time, no "stopped by", no photo, no price, no note.
+The rules refuse a create carrying any of them, and the domain asserts the
+same list. The rules also refuse history for an item still on the board
+(`!existsAfter(/stock/$(stockDoc))` in the same commit) and refuse any edit to
+an entry, ever. The reverse direction — that deleting a row *must* write
+history — is **not** enforceable, because a fresh event id is random and a
+rule cannot name it; the transaction is what guarantees that half, and no
+document here may claim the rules do.
+
+**A legacy `off: true` row converts under a deterministic id.** The event id
+for a conversion is derived from the stock document id, and the history
+document is written only when it is not already there, so a retry after a
+partial failure finishes the job instead of doubling the record. A fresh
+removal uses a random id, because two genuine add-then-remove cycles for one
+key are two distinct events. A row that is not marked is never touched, and a
+failure leaves it exactly where it was.
+
+**A window inset is padding, never height taken out of a bar.** Material's
+`NavigationBar` applies `WindowInsets.navigationBars` *inside* its own height,
+so pinning it to a fixed height lays the items out in `height − inset`. At
+80dp that is about 56dp on a gesture phone, which looks right, and about 32dp
+on a three-button phone, which is the overlap the second phone found — and the
+`+ 24.dp` that had been added to the height was the device-specific fudge
+hiding it. The bar declares no insets of its own; the Box around it takes the
+horizontal and bottom **safe-drawing** insets, which covers three-button,
+gesture and a landscape cutout alike. The compact PWA height is a **minimum**
+and never a cap, because an icon, its indicator and a label need more than
+56dp, and it rises with the effective font scale as the label does. Nothing is
+measured per device, and `SmartieBottomBar` takes its insets as a parameter so
+the three-button case is a test rather than a second phone.
 
 **Product identity for stock is immutable.** `ProductRecord.stockKey` decides
 it — the stored `key`, else `group|seedModel`, else `group|model` for a legacy

@@ -154,10 +154,14 @@ N4's to verify.
 ## Staging data after the pass
 
 The temporary manual and catalogue stock rows created during verification were
-**archived** afterwards, so staging carries no leftover test stock. Archiving
-is `off: true` plus an `archive` movement, so the rows are hidden rather than
-deleted and their history survives — which is the intended behaviour, not a
-cleanup gap.
+**archived** afterwards, so staging carries no leftover test stock on the
+board.
+
+**That paragraph was true and the behaviour behind it was wrong.** Archiving
+wrote `off: true` and left every one of those documents in `/stock`, hidden
+but present — which is precisely the defect recorded under *The archive
+finding* below. Those rows are the legacy rows the compatibility path
+converts; they are not a clean-up that already happened.
 
 ## Automated coverage behind this
 
@@ -186,12 +190,9 @@ restart, quantity, reorder level and note all preserved, no photo entry in
 Stock History, and a stored `worker` — the person the app now calls **Staff**
 — able to view the photo with no Photo, Replace or Remove control.
 
-That is seven of the fifteen photo rows. **Eight did not run** and are tracked
-in `docs/N3.1-plan.md`: T-P4 image quality on real shelves, T-P6 a manual
-item, T-P7 a display-model rename, T-P11 a stored `staff` (displayed
-**Manager**), T-P12 archive and un-archive, T-P13 the two-phone race, T-P14
-the console quota measurement, and T-P15 the Administrator cascade delete.
-**Neither N3 nor N3.1 is closed.**
+That was seven of the fifteen photo rows. **A second physical pass has since
+closed three more, and changed what one of them means.** The detail is below
+and in `docs/N3.1-plan.md`. **Neither N3 nor N3.1 is closed.**
 
 **Role titles in this document** name the stored roles — `owner`, `admin`,
 `staff`, `worker` — because that is what the rules and the documents use.
@@ -244,6 +245,80 @@ Neither gap is a reason to doubt the change — the stored values, the rules and
 every permission predicate are untouched, and the emulator's permission matrix
 is green — but neither has been physically performed, and this record does not
 say otherwise.
+
+## The second physical pass, and the second phone
+
+**Owner-confirmed, on physical Android phones.** Three photo rows closed, one
+is blocked by a screen that does not exist yet, one had its acceptance
+contract withdrawn and replaced, and a second phone found a real defect
+without running the row it might be mistaken for.
+
+| Row | Status | Evidence, as reported |
+|---|---|---|
+| T-P4 | **Passed** | Real stock photographed off the shelves. The compressed photo kept the printed label and the model readable — the clause the acceptance check exists for. The 80 KiB ceiling serves this business |
+| T-P6 | **Passed** | A photo on a manual item survived an app restart |
+| T-P11 | **Passed** | End to end as a stored `staff` — displayed **Manager**. Add, Replace and Remove all worked, and the removed photo did not come back after a restart. Run #81 had confirmed the controls were *present*; this is the write half, so the row is now whole |
+| T-P7 | **Not run — blocked** | A display-model rename needs the Products & Categories editing screen. That screen is **N6** and still in development, so there is nothing to rename with. Not a failure; it cannot be attempted until N6 exists |
+| T-P12 | **Withdrawn and replaced** | The archive/un-archive expectation was withdrawn by Owner decision. See below. Not run against the replacement contract |
+| T-P13 | **Pending** | Two phones replacing one row's photo **at the same time**. Not performed — see the note on the second phone |
+| T-P14 | **Pending** | The console usage measurement. Not measured |
+| T-P15 | **Pending** | The Administrator cascade delete. Not exercised on a device |
+
+### The archive finding — a one-way hidden duplicate
+
+**Reported from the run #81 build.** `SIE-EXTRECEIVER` had been stopped, so it
+was gone from the board — and it could not be added back. Add stock still
+offered the catalogue product, the form offered zero defaults because it knew
+nothing of the hidden row, and saving was refused with "This item is already
+in stock".
+
+The cause, traced in the code rather than guessed: stopping tracking wrote
+`off: true` and left the stock document in place. `observeStock` filters `off`
+rows out, so the board never showed it; `StockWriteRepository.create` reads the
+document and finds it, so `StockWrite.create` refused. Nothing in the app read
+or unset `off`, so there was no route back. Every temporary row "archived"
+after the second N3 pass is in the same state.
+
+**The Owner withdrew the archive/un-archive expectation.** Removal is now
+permanent, and T-P12's acceptance contract is replaced by the one in
+`docs/N3.1-plan.md`: the row, its photo document and its cached bytes deleted;
+a read-only stopped-item history entry left behind; the catalogue product
+untouched; the same identity addable again, fresh; and **no** quantity
+movement written on removal. Legacy `off: true` rows convert themselves to
+history entries and stop blocking their own re-add.
+
+The entry recorded above under *Verified, with no numbered row in the plan* —
+"Owner Archive / Stop tracking works, and survives a restart" — stands as a
+record of what was observed, and is now **superseded**: what it observed
+working is the behaviour this finding removed.
+
+### The second phone — what it did, and what it did not
+
+The Owner installed the build on a second physical Android phone. The app
+worked there: the screens rendered and the functions behaved. That is a
+functional pass on a second device and it is recorded as one.
+
+**It found a defect.** The bottom navigation overlapped the system
+navigation — traced to `NavigationBar` applying the navigation-bar inset
+inside a height the app had pinned, so a three-button phone's ~48dp inset came
+out of the items rather than sitting under them. Fixed, with the three-button
+case now a test rather than a second phone.
+
+**It did not run T-P13, and it did not run T-S5.** Neither row is about owning
+two phones; both are about two devices writing the **same** row at the same
+moment. No simultaneous photo replacement and no simultaneous quantity change
+was performed. Both rows stay pending, and nothing in this pass may be read as
+covering them.
+
+## What is still open after all of this
+
+- **N3:** T-S5 (two phones, one row), the second-device halves of T-S24 and
+  T-S27, and the six rows the second pass never reached — T-S2c, T-S2d, T-S4,
+  T-S9, T-S20 and T-X4. T-S25 remains N4's.
+- **N3.1:** T-P7 (blocked on N6), T-P12 against its replacement contract,
+  T-P13, T-P14 and T-P15.
+
+**Neither phase is closed**, and neither may be described as verified.
 
 ## Production safety
 

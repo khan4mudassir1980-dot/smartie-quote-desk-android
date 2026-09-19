@@ -146,7 +146,7 @@ class StockPhotoViewModelTest {
     }
 
     @Test
-    fun `Staff may manage photos; a Worker may only see them`() = runTest {
+    fun `Staff may manage photos and a Worker may only see them`() = runTest {
         assertTrue(viewModel(member = staff).canManagePhoto())
         assertFalse(viewModel(member = worker).canManagePhoto())
         assertTrue("a picture is exactly what a Worker needs", viewModel(member = worker).canViewPhoto())

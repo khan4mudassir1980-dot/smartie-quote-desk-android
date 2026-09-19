@@ -21,6 +21,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import `in`.smartie.quotedesk.domain.StockPhotoImage
 import `in`.smartie.quotedesk.ui.components.SmartieGhostButton
 import `in`.smartie.quotedesk.ui.components.SmartiePrimaryButton
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
@@ -105,15 +106,21 @@ internal fun StockPhotoSourcePanel(
 /**
  * What was taken, before anything is written.
  *
- * [preview] null with no [refusal] means the picture is still being prepared;
- * a [refusal] means it cannot be stored and says why. Either way **Add photo**
+ * [prepared] is the compressed image that **will be written** — it, not
+ * [preview], decides whether there is anything to confirm. The two are
+ * separate on purpose: the bitmap exists only to be drawn, and tying the
+ * confirm button to it would mean a picture that failed to render could not
+ * be saved even though its bytes were ready.
+ *
+ * [prepared] null with no [refusal] means it is still being prepared; a
+ * [refusal] means it cannot be stored and says why. Either way **Add photo**
  * is unavailable, so nothing reaches Firestore that the person has not seen
  * and confirmed.
  */
 @Composable
 internal fun StockPhotoPreviewPanel(
-    preview: ImageBitmap?,
-    sizeBytes: Int = 0,
+    prepared: StockPhotoImage?,
+    preview: ImageBitmap? = null,
     online: Boolean = true,
     saving: Boolean = false,
     refusal: String? = null,
@@ -139,7 +146,7 @@ internal fun StockPhotoPreviewPanel(
                 )
             } else {
                 Text(
-                    refusal ?: "Preparing the picture…",
+                    refusal ?: PREPARING,
                     style = MaterialTheme.typography.bodyLarge,
                     color = if (refusal != null) SmartieColors.Danger else SmartieColors.Steel
                 )
@@ -153,9 +160,9 @@ internal fun StockPhotoPreviewPanel(
                 color = SmartieColors.Danger,
                 modifier = Modifier.semantics { contentDescription = REFUSAL_LABEL }
             )
-        } else if (sizeBytes > 0) {
+        } else if (prepared != null) {
             Text(
-                "${(sizeBytes + 1023) / 1024} KB, stored with the item",
+                storedSize(prepared.size),
                 style = MaterialTheme.typography.labelMedium,
                 color = SmartieColors.Steel2
             )
@@ -167,7 +174,7 @@ internal fun StockPhotoPreviewPanel(
             SmartiePrimaryButton(
                 text = if (saving) "Saving…" else ADD_PHOTO,
                 onClick = actions.onConfirm,
-                enabled = preview != null && refusal == null && online && !saving,
+                enabled = prepared != null && refusal == null && online && !saving,
                 modifier = Modifier.semantics {
                     contentDescription = when {
                         !online -> PHOTO_OFFLINE
@@ -181,6 +188,12 @@ internal fun StockPhotoPreviewPanel(
         }
     }
 }
+
+/**
+ * Whole kibibytes, rounded up — the same unit the 80 KiB ceiling is in,
+ * written "KB" because that is how a shop floor reads it.
+ */
+internal fun storedSize(bytes: Int): String = "${(bytes + 1023) / 1024} KB, stored with the item"
 
 @Composable
 private fun OfflineLine() {
@@ -200,4 +213,5 @@ internal const val ADD_PHOTO: String = "Add photo"
 internal const val RETAKE: String = "Choose another"
 internal const val REMOVE_PHOTO: String = "Remove photo"
 internal const val PREVIEW_LABEL: String = "Photo preview"
+internal const val PREPARING: String = "Preparing the picture…"
 internal const val REFUSAL_LABEL: String = "Why this picture cannot be saved"

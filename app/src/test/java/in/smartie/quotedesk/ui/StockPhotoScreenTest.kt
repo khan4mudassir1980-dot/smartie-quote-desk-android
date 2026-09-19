@@ -1,7 +1,6 @@
 package `in`.smartie.quotedesk.ui
 
 import android.app.Application
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -11,9 +10,11 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import `in`.smartie.quotedesk.domain.StockPhotoImage
 import `in`.smartie.quotedesk.ui.stock.ADD_PHOTO
 import `in`.smartie.quotedesk.ui.stock.CHOOSE_FROM_GALLERY
 import `in`.smartie.quotedesk.ui.stock.PHOTO_OFFLINE
+import `in`.smartie.quotedesk.ui.stock.PREPARING
 import `in`.smartie.quotedesk.ui.stock.REMOVE_PHOTO
 import `in`.smartie.quotedesk.ui.stock.RETAKE
 import `in`.smartie.quotedesk.ui.stock.StockPhotoActions
@@ -33,6 +34,12 @@ import org.robolectric.annotation.Config
  * `docs/PROJECT-STATUS.md`.
  *
  * The point most of these make: **nothing is written before confirmation**.
+ *
+ * Every preview test leaves the drawn bitmap null. That is deliberate and not
+ * a shortcut around Robolectric's graphics: the sheet's confirm button is tied
+ * to the *bytes that will be written*, never to the bitmap, so a picture whose
+ * preview could not be rendered is still savable and one that renders without
+ * prepared bytes is still not.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(application = Application::class, qualifiers = "w412dp-h915dp")
@@ -41,7 +48,8 @@ class StockPhotoScreenTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private fun stubPreview() = ImageBitmap(48, 36)
+    /** Bytes of the size a real compressed photo would be; content is immaterial here. */
+    private fun prepared(size: Int = 40_000) = StockPhotoImage(ByteArray(size), 800, 600)
 
     // --- choosing a source -------------------------------------------------
 
@@ -118,8 +126,7 @@ class StockPhotoScreenTest {
         compose.setContent {
             SmartieTheme {
                 StockPhotoPreviewPanel(
-                    preview = stubPreview(),
-                    sizeBytes = 40_000,
+                    prepared = prepared(),
                     actions = StockPhotoActions(onConfirm = { confirmed++ })
                 )
             }
@@ -136,7 +143,7 @@ class StockPhotoScreenTest {
         compose.setContent {
             SmartieTheme {
                 StockPhotoPreviewPanel(
-                    preview = stubPreview(),
+                    prepared = prepared(),
                     actions = StockPhotoActions(
                         onConfirm = { events += "WRITTEN" },
                         onRetake = { events += "retake" },
@@ -153,7 +160,9 @@ class StockPhotoScreenTest {
 
     @Test
     fun `a picture still being prepared cannot be confirmed`() {
-        compose.setContent { SmartieTheme { StockPhotoPreviewPanel(preview = null) } }
+        compose.setContent { SmartieTheme { StockPhotoPreviewPanel(prepared = null) } }
+
+        compose.onNodeWithText(PREPARING).assertIsDisplayed()
         compose.onNodeWithText(ADD_PHOTO).assertIsNotEnabled()
     }
 
@@ -162,7 +171,7 @@ class StockPhotoScreenTest {
         compose.setContent {
             SmartieTheme {
                 StockPhotoPreviewPanel(
-                    preview = stubPreview(),
+                    prepared = prepared(),
                     refusal = "That picture could not be made small enough"
                 )
             }
@@ -175,7 +184,7 @@ class StockPhotoScreenTest {
     @Test
     fun `offline the preview cannot be confirmed and says why`() {
         compose.setContent {
-            SmartieTheme { StockPhotoPreviewPanel(preview = stubPreview(), online = false) }
+            SmartieTheme { StockPhotoPreviewPanel(prepared = prepared(), online = false) }
         }
 
         compose.onNodeWithText(ADD_PHOTO).assertIsNotEnabled()
@@ -188,7 +197,7 @@ class StockPhotoScreenTest {
         compose.setContent {
             SmartieTheme {
                 StockPhotoPreviewPanel(
-                    preview = stubPreview(),
+                    prepared = prepared(),
                     saving = true,
                     actions = StockPhotoActions(onConfirm = { confirmed++ })
                 )
@@ -201,9 +210,13 @@ class StockPhotoScreenTest {
 
     @Test
     fun `the size is shown in whole kilobytes so the cost is not a surprise`() {
-        compose.setContent {
-            SmartieTheme { StockPhotoPreviewPanel(preview = stubPreview(), sizeBytes = 40_960) }
-        }
+        compose.setContent { SmartieTheme { StockPhotoPreviewPanel(prepared = prepared(40_960)) } }
         compose.onNodeWithText("40 KB, stored with the item").assertExists()
+    }
+
+    @Test
+    fun `a size that is not a whole number of kilobytes rounds up`() {
+        compose.setContent { SmartieTheme { StockPhotoPreviewPanel(prepared = prepared(40_961)) } }
+        compose.onNodeWithText("41 KB, stored with the item").assertExists()
     }
 }

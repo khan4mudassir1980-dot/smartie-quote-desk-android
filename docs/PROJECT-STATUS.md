@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-19.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `ea5a417` — [run #81](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35439461751), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `f5a4961` — [run #87](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35458715257), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -235,6 +235,19 @@ it has been run on a device yet.
 | `0a5d3f5` | The removal data layer: `StockRemoval`, `/stoppedStock` rules and 23 emulator tests, the transaction, the legacy-conversion plan |
 | `15a35d0` | The screen: Remove from stock on the Edit sheet, the stopped-item history at the foot of the board, Clear history, the legacy sweep, `StoppedStockRepository`. `StockWrite.stopTracking` deleted |
 | `de040f5` | The bottom-navigation inset fix, the Products back-to-top control, and the regression coverage for both |
+| `f5a4961` | The four failures run #86 found, all in the source: a `semantics` node placed below a padding reports the padded *inside*, and a `clickable` placed below a size only takes pointers over what is below it |
+
+**697 Kotlin test methods across 65 classes**, up from 597 across 52 before
+this work; **86 Firestore emulator tests**, up from 60; the 26 importer tests
+unchanged. Both counts are measured from the tree — test methods by `@Test`,
+classes by the files that hold one.
+
+**The staging APK for the next physical pass** is `smartie-native-apks` from
+[run #87](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35458715257)
+at `f5a4961`. It carries the removal path, the stopped-item history, the
+bottom-navigation fix and the back-to-top control. **It will not work until
+the `/stoppedStock` rules are deployed** — every removal is refused by the
+rules until then.
 
 ## Current next action
 

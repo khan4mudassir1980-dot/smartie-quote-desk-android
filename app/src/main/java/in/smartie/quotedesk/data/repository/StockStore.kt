@@ -1,5 +1,6 @@
 package `in`.smartie.quotedesk.data.repository
 
+import com.google.firebase.firestore.Blob
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -32,6 +33,16 @@ interface StockTransaction {
     fun writeStock(docId: String, data: Map<String, Any?>, merge: Boolean)
 
     fun writeMovement(docId: String, data: Map<String, Any?>)
+
+    /**
+     * The photo document, written in the **same** transaction as its stock
+     * row. The two must never be written apart: the rules refuse a commit
+     * that leaves them disagreeing.
+     */
+    fun writePhoto(docId: String, data: Map<String, Any?>)
+
+    /** Removing a photo. Paired with the stock write that clears `hasPhoto`. */
+    fun deletePhoto(docId: String)
 }
 
 /**
@@ -63,14 +74,35 @@ class FirestoreStockStore(private val firestore: FirebaseFirestore) : StockStore
                     override fun writeMovement(docId: String, data: Map<String, Any?>) {
                         transaction.set(firestore.collection(MOVES).document(docId), resolve(data))
                     }
+
+                    override fun writePhoto(docId: String, data: Map<String, Any?>) {
+                        // Written whole rather than merged: a photo document
+                        // is replaced outright, never patched, so no field of
+                        // a previous image can survive under a new one.
+                        transaction.set(firestore.collection(PHOTOS).document(docId), resolve(data))
+                    }
+
+                    override fun deletePhoto(docId: String) {
+                        transaction.delete(firestore.collection(PHOTOS).document(docId))
+                    }
                 }
             )
         }.await()
 
-    /** Swaps the marker, and drops a null rather than writing one. */
+    /**
+     * Swaps the marker, and drops a null rather than writing one.
+     *
+     * A `ByteArray` is wrapped as a Firestore [Blob] here, for the same reason
+     * the timestamp marker is swapped here: nothing above this file imports
+     * Firebase.
+     */
     private fun resolve(data: Map<String, Any?>): Map<String, Any> = buildMap {
         for ((field, value) in data) {
-            val resolved = if (value === ServerTimestamp) FieldValue.serverTimestamp() else value
+            val resolved = when {
+                value === ServerTimestamp -> FieldValue.serverTimestamp()
+                value is ByteArray -> Blob.fromBytes(value)
+                else -> value
+            }
             if (resolved != null) put(field, resolved)
         }
     }
@@ -78,5 +110,6 @@ class FirestoreStockStore(private val firestore: FirebaseFirestore) : StockStore
     private companion object {
         const val STOCK = "stock"
         const val MOVES = "stockMoves"
+        const val PHOTOS = "stockPhotos"
     }
 }

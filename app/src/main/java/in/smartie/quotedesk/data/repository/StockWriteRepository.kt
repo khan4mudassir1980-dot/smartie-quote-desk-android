@@ -6,6 +6,8 @@ import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.domain.StockAuthor
 import `in`.smartie.quotedesk.domain.StockEntry
+import `in`.smartie.quotedesk.domain.StockPhotoImage
+import `in`.smartie.quotedesk.domain.StockPhotoPlan
 import `in`.smartie.quotedesk.domain.StockWrite
 import `in`.smartie.quotedesk.domain.StockWritePlan
 
@@ -147,6 +149,119 @@ class StockWriteRepository(
         }
     }
 
+    // --- photos ------------------------------------------------------------
+
+    /**
+     * Attach or replace a photo. Owner, Administrator and Staff; the rules
+     * agree.
+     *
+     * Both documents go in **one** transaction, so the pair can never be seen
+     * or left disagreeing, and the rules refuse a commit in which they do. The
+     * revision read inside the transaction is what the new one is built from,
+     * so two devices replacing at once resolve on a monotonic counter rather
+     * than on whose clock is right: whichever commits second re-runs against
+     * the first's data and lands one higher.
+     */
+    suspend fun setPhoto(
+        member: Member,
+        record: StockRecord,
+        image: StockPhotoImage
+    ): StockWriteResult {
+        require(Permissions.canManageStockPhoto(member)) { NOT_ALLOWED_PHOTO }
+        return commitPhoto(member, record) { stored, author, at ->
+            StockWrite.setPhoto(
+                record = record,
+                storedQuantity = stored.quantity,
+                storedReorderLevel = stored.reorderLevel,
+                storedPhotoRev = stored.photoRev,
+                image = image,
+                author = author,
+                at = at
+            )
+        }
+    }
+
+    /** Take a photo off a row. The revision still advances. */
+    suspend fun removePhoto(member: Member, record: StockRecord): StockWriteResult {
+        require(Permissions.canManageStockPhoto(member)) { NOT_ALLOWED_PHOTO }
+        return commitPhoto(member, record) { stored, author, at ->
+            StockWrite.removePhoto(
+                record = record,
+                storedQuantity = stored.quantity,
+                storedReorderLevel = stored.reorderLevel,
+                storedPhotoRev = stored.photoRev,
+                hasStoredPhoto = stored.hasPhoto,
+                author = author,
+                at = at
+            )
+        }
+    }
+
+    /**
+     * What the transaction found on the stock row.
+     *
+     * Read **once** per attempt: `transaction.get()` on the same document
+     * twice is two reads, and this runs against a shared daily quota.
+     */
+    private data class StoredStock(
+        val quantity: Double,
+        val reorderLevel: Double,
+        val photoRev: Double,
+        val hasPhoto: Boolean
+    )
+
+    private suspend fun commitPhoto(
+        member: Member,
+        record: StockRecord,
+        plan: (StoredStock, StockAuthor, Long) -> StockPhotoPlan
+    ): StockWriteResult {
+        val author = StockAuthor(name = member.name.ifBlank { member.email }, uid = member.uid)
+        val at = now()
+        return store.transaction { transaction ->
+            val stored = readStored(transaction, record)
+            when (val outcome = plan(stored, author, at)) {
+                is StockPhotoPlan.Refused -> throw IllegalStateException(outcome.message)
+                StockPhotoPlan.NoChange -> StockWriteResult.NO_CHANGE
+                is StockPhotoPlan.Write -> {
+                    // The photo first, then the row that points at it. Order
+                    // is immaterial inside a transaction; both land together.
+                    if (outcome.photo == null) transaction.deletePhoto(outcome.photoDocId)
+                    else transaction.writePhoto(outcome.photoDocId, outcome.photo)
+                    transaction.writeStock(outcome.stockDocId, outcome.stock, merge = true)
+                    StockWriteResult.WRITTEN
+                }
+            }
+        }
+    }
+
+    /** One read, and the record as the fallback when the row is not there yet. */
+    private fun readStored(transaction: StockTransaction, record: StockRecord): StoredStock {
+        val stored = transaction.readStock(record.documentId)
+            ?: return StoredStock(
+                quantity = record.quantity,
+                reorderLevel = record.reorderLevel,
+                photoRev = record.photoRev,
+                hasPhoto = record.hasPhoto
+            )
+        return StoredStock(
+            quantity = number(stored["q"] ?: stored["quantity"], record.quantity),
+            reorderLevel = number(stored["min"] ?: stored["reorderLevel"], record.reorderLevel),
+            photoRev = number(stored["photoRev"], record.photoRev),
+            hasPhoto = when (val flag = stored["hasPhoto"]) {
+                is Boolean -> flag
+                is Number -> flag.toDouble() != 0.0
+                else -> record.hasPhoto
+            }
+        )
+    }
+
+    /** An imported row can hold a number as a string; tolerate it here too. */
+    private fun number(value: Any?, fallback: Double): Double = when (value) {
+        is Number -> value.toDouble()
+        is String -> value.trim().toDoubleOrNull() ?: fallback
+        else -> fallback
+    }
+
     /**
      * Runs one plan in one transaction.
      *
@@ -194,5 +309,6 @@ class StockWriteRepository(
         const val NOT_ALLOWED_EXACT = "Only an Owner or Administrator can set an exact quantity"
         const val NOT_ALLOWED_PIN = "Only an Owner, Administrator or Staff can pin stock"
         const val NOT_ALLOWED_ARCHIVE = "Only an Owner or Administrator can stop tracking an item"
+        const val NOT_ALLOWED_PHOTO = "Only an Owner, Administrator or Staff can change a photo"
     }
 }

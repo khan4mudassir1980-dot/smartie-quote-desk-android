@@ -56,6 +56,13 @@ class StockWriteTest {
                     override fun writeMovement(docId: String, data: Map<String, Any?>) {
                         movementWrites += Recorded(docId, data)
                     }
+                    // Photos are this fake's business only in so far as a
+                    // quantity write must never reach them; StockPhotoWriteTest
+                    // drives them properly.
+                    override fun writePhoto(docId: String, data: Map<String, Any?>) =
+                        throw AssertionError("a quantity write must not touch a photo")
+                    override fun deletePhoto(docId: String) =
+                        throw AssertionError("a quantity write must not delete a photo")
                 })
                 stockAttempts += stockWrites
                 movementAttempts += movementWrites

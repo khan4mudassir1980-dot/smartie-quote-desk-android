@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-19.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `3fd420f` — [run #72](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35433020684), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `02b3edf` — [run #77](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35436896487), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -24,7 +24,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N1 Auth & Team | **Complete** |
 | N2 Products | **Complete and verified** |
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** Not fully closed: T-S5 needs two phones |
-| N3.1 Stock Photo | **Batches A–E built; manual testing BLOCKED by a confirmed staging defect.** The run #73 APK showed no Photo control on a real device: the card's controls were a non-wrapping `Row` and the button was measured at zero width and clipped. Fixed in `51712c5`. **The rules and index exemption are now deployed to staging** (Owner-confirmed). Manual testing stays blocked until the replacement APK is installed; no photo manual row has been run |
+| N3.1 Stock Photo | **Batches A–E built; manual testing BLOCKED by a confirmed staging defect.** The run #73 APK showed no Photo control on a real device: the card's controls were a non-wrapping `Row` and the button was measured at zero width and clipped. Fixed across `51712c5`, `4b98185` and `02b3edf`; the photo action now lives in the card's picture slot. **The rules and index exemption are deployed to staging** (Owner-confirmed). Manual testing stays blocked until the replacement APK from run #77 is installed; no photo manual row has been run |
 | N4–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -144,12 +144,34 @@ latent defect the new button only made visible.
 semantics tree, and a zero-width node is still in it. Every photo assertion
 was about presence; none was about layout.
 
-**Fixed in `51712c5`**: the controls are a `FlowRow` and wrap instead of
-clipping. `StockPhotoWiringScreenTest` now asserts layout at 360×640 —
+**Fixed across three commits**, because the first attempt cost something it
+should not have:
+
+- `51712c5` made the controls a `FlowRow` so they wrap instead of clipping.
+  That made the button visible — and pushed every manager's card onto a
+  second line of controls. CI caught the cost: three board tests failed
+  because taller cards meant fewer rows fitted the viewport, which is a real
+  regression on a screen built to be scanned down a shelf.
+- `4b98185` moved the photo action into the card's **picture slot** instead:
+  a bordered 56dp tile where the thumbnail would be. It is more obvious than
+  a fourth button, competes with nothing for the controls line, and costs no
+  height, because the name column beside it is already taller than 56dp. The
+  controls stay a `FlowRow` — with the photo action gone they hold what they
+  held before N3.1, so the card height is unchanged, and the latent History
+  overflow at 360dp is fixed anyway.
+- `02b3edf` drew the tile with `Icons.Filled.AddAPhoto` rather than a text
+  "+", which was indistinguishable from the stepper's increment both to the
+  tests and to a person on a board where "+" already means "one more".
+
+**The coverage.** `StockPhotoWiringScreenTest` asserts layout at 360×640 —
 displayed, at least 48dp wide — for Owner, Administrator and Staff, absent
-for a Worker, and unclipped for Pin, Edit, History and the stepper beside it.
+for a Worker, and unclipped for Pin, Edit, History and the stepper below it.
 The role-to-capability mapping moved into `StockCapabilities.forMember`, and
-the screen test fixtures derive from it rather than restating it.
+the screen test fixtures derive from it rather than restating it, so every
+existing stock screen test now runs against the mapping the app uses.
+
+**566 Kotlin test methods across 52 classes**; 60 emulator tests; 26
+importer tests.
 
 ## Current next action
 
@@ -157,10 +179,10 @@ the screen test fixtures derive from it rather than restating it.
 
 The rules and the index exemption are deployed — that step is done. What
 stands between here and T-P1 is the corrected APK: the run #73 artifact has a
-known defect and **must not be used for manual testing**. Take the artifact
-from the first green run at or after `51712c5`, install it over the staging
-app, and confirm on Our Stock that a row without a photo now shows a **Photo**
-action.
+known defect and **must not be used for manual testing**. Take `smartie-native-apks` from
+**[run #77](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35436896487)** at `02b3edf`, install it over the staging app, and
+confirm on Our Stock that a row without a photo now shows a bordered
+**Photo** tile where its picture would be.
 
 Then work T-P1…T-P15 in `docs/N3.1-plan.md`. Two rows carry more weight than
 the rest: **T-P4**, photographing real stock off the real shelves including
@@ -251,6 +273,11 @@ children past the available width are measured at zero and clipped, and they
 stay in the semantics tree while being invisible on the device. That is how
 the Photo button shipped in run #73 with every test green. Card controls are
 a `FlowRow`, and any control added to one must wrap rather than disappear.
+
+**A stock card's height is a feature.** Our Stock is scanned down a shelf, so
+anything that makes every card taller thins the board. A new per-row
+affordance belongs in space the card already reserves — the picture slot, a
+tag row — rather than as another control on the line below.
 
 **A UI test that asserts a control exists has asserted nothing about whether
 anyone can see it.** `assertExists()` and `performClick()` read the semantics

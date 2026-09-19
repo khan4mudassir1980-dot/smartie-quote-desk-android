@@ -24,7 +24,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N1 Auth & Team | **Complete** |
 | N2 Products | **Complete and verified** |
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** Not fully closed: T-S5 needs two phones |
-| N3.1 Stock Photo | **Batches A–E built and CI-green; not deployed and not manually verified.** The feature is now reachable: thumbnails on cards, a larger view, take/choose/replace/remove for Owner, Administrator and Staff, view-only for Workers. The photo cache is now persistent as well as in memory. Staging still runs the `d11b5da` rules; the new rules and the index exemption are **undeployed**, so a photo write against staging today would be refused. No photo manual row has been run |
+| N3.1 Stock Photo | **Batches A–E built; manual testing BLOCKED by a confirmed staging defect.** The run #73 APK showed no Photo control on a real device: the card's controls were a non-wrapping `Row` and the button was measured at zero width and clipped. Fixed in `51712c5`. **The rules and index exemption are now deployed to staging** (Owner-confirmed). Manual testing stays blocked until the replacement APK is installed; no photo manual row has been run |
 | N4–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -63,11 +63,14 @@ the Worker/Staff/Owner separation, Archive, and the drag reorder.
   **automated evidence only**.
 
 **The rules and indexes were deployed to staging**, from an extracted
-`d11b5da` tree, before the run #55 APK was installed — Owner-confirmed. Both
-files are byte-identical between `d11b5da` and now, so what went up is what
-this repository holds. That is **deployment history, not a fresh read of the
-live ruleset**: nobody has read the deployed rules back, and no session holds
-a credential to do it.
+`d11b5da` tree, before the run #55 APK was installed — Owner-confirmed. That
+is **deployment history, not a fresh read of the live ruleset**: nobody has
+read the deployed rules back, and no session holds a credential to do it.
+
+**The N3.1 rules and index exemption have since been deployed to staging as
+well** — Owner-confirmed, both deployments reported successful. Same
+distinction: it is deployment history, not a fresh read. No session has read
+the live ruleset back, and none holds a credential to.
 
 Row by row, with the evidence for each, in `docs/N3-verification.md`.
 
@@ -103,31 +106,72 @@ N3.1 photo rows `T-P1`…`T-P15` are different series. A bare `T-P` number in
 this file means the photo series unless it is next to the 403-item parity
 criterion.
 
+### The first N3.1 staging pass: blocked by a layout defect
+
+The run #73 artifact was downloaded, renamed `SMARTIE-N3-PHOTO-RUN73.apk`,
+installed over the staging app, and confirmed to be the staging build. On Our
+Stock, **Pin, Edit and History appeared and no Photo control did** — no
+button, no camera affordance, no thumbnail placeholder anywhere.
+
+**It was not a stale APK.** Run #73 built `1deb44f`, which carries batch E
+(`9a1b4b0`) in its ancestry, and the tree at that commit contains
+`PHOTO_BUTTON`, `photoManage` and `StockPhotoThumbnail`. `app/src/` has only
+`main` and `test` source sets, so no flavour could have replaced the screen.
+The APK contained the feature.
+
+**It was not a permission.** `canManageStockPhoto` *is* `canAdjustStock`, the
+same predicate behind `canPinStock`. Pin being visible proves `photoManage`
+was true.
+
+**It was the layout.** The card's controls were a `Row`, which does not wrap.
+Once the children exceed the available width Compose measures the remainder
+against zero and the card's `clip` hides them, while they stay in the
+semantics tree. Card content width is the screen less 24dp of list padding,
+30dp of card padding and the 3dp accent bar:
+
+| Screen | Card content | Controls need | Photo |
+|---|---|---|---|
+| 360dp | 303dp | 429dp | clipped |
+| 393dp | 336dp | 433dp | clipped |
+| 412dp | 355dp | 433dp | clipped |
+
+Photo was the last child, so it was the one that disappeared — at every
+width, not only narrow ones. The same arithmetic shows History needing
+354–358dp, so **History was already being clipped before photos existed**, a
+latent defect the new button only made visible.
+
+**Why the tests passed.** `assertExists()` and `performClick()` read the
+semantics tree, and a zero-width node is still in it. Every photo assertion
+was about presence; none was about layout.
+
+**Fixed in `51712c5`**: the controls are a `FlowRow` and wrap instead of
+clipping. `StockPhotoWiringScreenTest` now asserts layout at 360×640 —
+displayed, at least 48dp wide — for Owner, Administrator and Staff, absent
+for a Worker, and unclipped for Pin, Edit, History and the stepper beside it.
+The role-to-capability mapping moved into `StockCapabilities.forMember`, and
+the screen test fixtures derive from it rather than restating it.
+
 ## Current next action
 
-**Deploy the N3.1 rules and index exemption to staging.** One step, and it is
-the Owner's — no session holds a credential for it. From this repository's
-`firestore/` directory:
+**Install the replacement staging APK and run the N3.1 photo manual rows.**
 
-```
-firebase.cmd deploy --only firestore:rules   --project smartie-quote-desk-staging
-firebase.cmd deploy --only firestore:indexes --project smartie-quote-desk-staging
-```
+The rules and the index exemption are deployed — that step is done. What
+stands between here and T-P1 is the corrected APK: the run #73 artifact has a
+known defect and **must not be used for manual testing**. Take the artifact
+from the first green run at or after `51712c5`, install it over the staging
+app, and confirm on Our Stock that a row without a photo now shows a **Photo**
+action.
 
-Until that is done the staging project still runs the `d11b5da` ruleset, which
-has no `/stockPhotos` block at all — every photo write would be refused. The
-ordering is sequencing rather than a correctness gate for the exemption (writes
-do not fail without it), but the **rules** genuinely must land before any build
-that writes a photo reaches a device.
+Then work T-P1…T-P15 in `docs/N3.1-plan.md`. Two rows carry more weight than
+the rest: **T-P4**, photographing real stock off the real shelves including
+one item identified by printed text, which is the acceptance check for image
+quality and the row that decides whether the 80 KiB ceiling serves this
+business; and **T-P14**, scroll the whole board, leave, return and scroll
+again, which checks the no-repeat-download assumption the usage figures rest
+on rather than trusting it.
 
-Batch E is **built**, so the deployment is now the only thing between here
-and a staging APK that can actually take a photograph. What follows it
-belongs to `docs/N3.1-plan.md`, not to this action: the photo manual rows
-T-P1…T-P15, run on a real phone against staging, with T-P4 — photographing
-real stock off the real shelves — the row that decides whether the 80 KiB
-ceiling serves this business, and T-P14 — scroll the board, leave, return,
-scroll again — the row that checks the usage assumption rather than trusting
-it.
+N3.1 is **not** manually verified and must not be described as such until
+those rows have run on a device.
 
 N3's outstanding device work is **tracked, not closed**, and does not become
 this action: T-S5 on two phones, the six rows the second pass did not reach,
@@ -135,9 +179,6 @@ and the second-device halves of T-S24 and T-S27. They are listed with their
 evidence in `docs/N3-verification.md`, and they come back as soon as a second
 phone is available. N3.1 must not be the reason they slip. T-P13, the
 two-phone photo race, joins them and is pending from the start.
-
-Image quality stays where revision 2 put it: **T-P4, a manual acceptance check
-on real stock off the real shelves.** No automated test claims it.
 
 ## Decisions that bind future work
 
@@ -204,6 +245,24 @@ not drive, so any test that opens one spins until Espresso times out. Each
 dialog body — fields and actions together — is an internal panel the tests
 drive directly; the `AlertDialog` is a wrapper holding no logic. Keep it that
 way for any dialog added later.
+
+**A row of controls wraps; it never clips.** A Compose `Row` does not wrap —
+children past the available width are measured at zero and clipped, and they
+stay in the semantics tree while being invisible on the device. That is how
+the Photo button shipped in run #73 with every test green. Card controls are
+a `FlowRow`, and any control added to one must wrap rather than disappear.
+
+**A UI test that asserts a control exists has asserted nothing about whether
+anyone can see it.** `assertExists()` and `performClick()` read the semantics
+tree, which a zero-size node is still in. A control that must be reachable is
+asserted with `assertIsDisplayed()` and a minimum width, at **360×640** — the
+narrowest phone this app supports and the width at which a card's controls
+overflow first.
+
+**One mapping from a role to a set of controls.** `StockCapabilities.forMember`
+is it; `StockViewModel.capabilities()` reaches it and the screen takes the
+result. Test fixtures derive from that function rather than restating it, so a
+screen test cannot pass against a second copy of the rules.
 
 **Robolectric test classes stay small.** Its native-object registry is a fixed
 16,777,216-entry array per JVM and a Compose composition consumes many entries,

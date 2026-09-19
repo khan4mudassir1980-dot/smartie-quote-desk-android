@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-19.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `35d136c` — [run #65](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35428058225), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `214dd0b` — [run #67](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35428927752), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -73,7 +73,7 @@ Row by row, with the evidence for each, in `docs/N3-verification.md`.
 
 ### What N3.1 batches A–D actually built
 
-CI-green at `35d136c`, [run #65](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35428058225).
+CI-green at `214dd0b`, [run #67](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35428927752).
 
 | Batch | Commit | What landed |
 |---|---|---|
@@ -82,6 +82,7 @@ CI-green at `35d136c`, [run #65](https://github.com/khan4mudassir1980-dot/smarti
 | C | `67234ae` | The two-document transaction, `StockPhotoCache`, `StockPhotoRepository` |
 | D | `58f7e38` | Capture, gallery pick, EXIF rotation, WebP encoding, the FileProvider entry, the source and preview sheets |
 | — | `35d136c` | The preview sheet's confirm button keyed to the prepared bytes rather than the drawn bitmap |
+| — | `214dd0b` | `StockPhotoWriteTest` asserts the photo write **merges**; the fake store had been discarding that flag |
 
 **440 Kotlin test methods across 43 classes**, up from 359 across 37; **60
 Firestore emulator tests**, up from 43; the 26 importer tests unchanged.

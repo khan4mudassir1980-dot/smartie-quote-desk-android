@@ -17,6 +17,9 @@ smartie-quote-desk-staging.p12
 firestore/node_modules/
 node_modules/
 
+# Written by `firebase emulators:exec` when the rules suite runs locally.
+firestore/firestore-debug.log
+
 # Catalogue import: seed, exports, staging backups and reports never ship,
 # and a service-account key never enters the working tree.
 tools/catalogue-import/out/

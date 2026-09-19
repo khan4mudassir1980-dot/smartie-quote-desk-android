@@ -351,6 +351,15 @@ class StockViewModel(
 
     // --- what the screen may offer -----------------------------------------
 
+    /**
+     * Everything the board may show this person, as one value.
+     *
+     * The screen takes this rather than calling the eight predicates below
+     * itself, so there is exactly one mapping from a role to a set of
+     * controls and a test can hold it to account per role.
+     */
+    fun capabilities(): StockCapabilities = StockCapabilities.forMember(member)
+
     /** Owner, Administrator and Staff; the rules agree. */
     fun canManagePhoto(): Boolean = Permissions.canManageStockPhoto(member)
 

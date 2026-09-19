@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -54,6 +56,7 @@ import `in`.smartie.quotedesk.data.mapping.Money
 import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.StockMove
 import `in`.smartie.quotedesk.data.model.StockRecord
+import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.domain.StockBoard
 import `in`.smartie.quotedesk.domain.StockFilter
@@ -130,6 +133,28 @@ data class StockCapabilities(
 
     /** Whether the card needs its controls row at all. */
     val anyRowAction: Boolean get() = anyControl || history || photoManage
+
+    companion object {
+        /**
+         * What this person may do, in **one** place.
+         *
+         * The screen used to assemble this inline from six view-model calls,
+         * which meant the role-to-capability mapping — the thing that decides
+         * whether a control is rendered at all — had no test of its own. It
+         * does now, per role, and the screen and the tests read the same
+         * function rather than two copies of it.
+         */
+        fun forMember(member: Member): StockCapabilities = StockCapabilities(
+            adjust = Permissions.canAdjustStock(member),
+            exactQuantity = Permissions.canSetExactQuantity(member),
+            reorderLevel = Permissions.canSetReorderLevel(member),
+            pin = Permissions.canPinStock(member),
+            stopTracking = Permissions.canStopTrackingStock(member),
+            history = Permissions.canViewStockHistory(member),
+            photoManage = Permissions.canManageStockPhoto(member),
+            photoView = Permissions.canViewStockPhoto(member)
+        )
+    }
 }
 
 @Composable
@@ -190,16 +215,7 @@ fun StockScreen(data: AppDataViewModel, viewModel: StockViewModel) {
         view = view,
         online = online,
         saving = saving,
-        capabilities = StockCapabilities(
-            adjust = viewModel.canAdjust(),
-            exactQuantity = viewModel.canSetExactQuantity(),
-            reorderLevel = viewModel.canSetReorderLevel(),
-            pin = viewModel.canPin(),
-            stopTracking = viewModel.canStopTracking(),
-            history = viewModel.canViewHistory(),
-            photoManage = viewModel.canManagePhoto(),
-            photoView = viewModel.canViewPhoto()
-        ),
+        capabilities = viewModel.capabilities(),
         products = products,
         movements = movements,
         photo = photo,
@@ -563,6 +579,7 @@ internal fun photoTitle(stage: PhotoStage, name: String): String = when (stage) 
  * is styled as such; the stepper's middle figure is captioned "Pending change"
  * so it can never be mistaken for it.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun StockRowCard(
     row: StockRow,
@@ -677,10 +694,18 @@ private fun StockRowCard(
             // than in a second card that read as an unrelated thing.
             HorizontalDivider(color = SmartieColors.Rule)
 
-            Row(
+            // **A flow, not a row.** A `Row` does not wrap: once its children
+            // exceed the card's width the remainder are measured at zero and
+            // clipped, and they stay in the semantics tree while being
+            // invisible on the device — which is exactly how the Photo button
+            // shipped in run #73 without anyone's test noticing. The stepper
+            // alone is 130–134dp and each button 58–83dp, so on a 360dp phone
+            // three controls already overflow. Anything added here must wrap
+            // rather than disappear.
+            FlowRow(
                 Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(dimens.gapS)
+                horizontalArrangement = Arrangement.spacedBy(dimens.gapS),
+                verticalArrangement = Arrangement.spacedBy(dimens.gapS)
             ) {
                 if (capabilities.adjust) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {

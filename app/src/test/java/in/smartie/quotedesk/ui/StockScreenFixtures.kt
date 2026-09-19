@@ -13,6 +13,8 @@ import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.StockMove
 import `in`.smartie.quotedesk.data.model.StockRecord
 import `in`.smartie.quotedesk.domain.StockBoard
+import `in`.smartie.quotedesk.domain.Member
+import `in`.smartie.quotedesk.domain.Role
 import `in`.smartie.quotedesk.domain.StockFilter
 import `in`.smartie.quotedesk.ui.stock.StockActions
 import `in`.smartie.quotedesk.ui.stock.StockBoardScreen
@@ -67,34 +69,36 @@ internal val stockShelf = listOf(
     stockRecord("SIE3000", "Boom barrier", quantity = 0.0, reorder = 2.0)
 )
 
-internal val staffCaps = StockCapabilities(
-    adjust = true,
-    reorderLevel = true,
-    pin = true,
-    history = true,
-    photoManage = true,
-    photoView = true
-)
-
-internal val adminCaps = StockCapabilities(
-    adjust = true,
-    exactQuantity = true,
-    reorderLevel = true,
-    pin = true,
-    stopTracking = true,
-    history = true,
-    photoManage = true,
-    photoView = true
-)
+/**
+ * The four roles, so a test can go through the same mapping the screen uses
+ * rather than hand-assembling a capability set that agrees with nothing.
+ */
+internal val owner = Member(uid = "uid_owner", name = "Omar", role = Role.OWNER)
+internal val admin = Member(uid = "uid_admin", name = "Asha", role = Role.ADMIN)
+internal val staff = Member(uid = "uid_staff", name = "Sam", role = Role.STAFF)
+internal val worker = Member(uid = "uid_worker", name = "Wes", role = Role.WORKER)
 
 /**
- * A Worker: `/stock` is readable, `/stockMoves` is not, nothing is writable.
+ * Capability sets **derived from the real mapping**, not written out by hand.
  *
- * `photoView` is on, because a Worker on the shelf is exactly who a picture
- * is for; `photoManage` is off, and they get no control rather than a
- * disabled one.
+ * They used to be hand-assembled literals, which meant every screen test
+ * agreed with a second copy of the rules rather than with the copy the app
+ * runs. Going through `forMember` is what makes these tests cover the wiring:
+ * a role that quietly loses a control loses it here too.
+ *
+ * For the record, what they come to — Staff: adjust, reorder level, pin,
+ * history, and photos, but no exact quantity and no stop-tracking.
+ * Administrator: all of it. Worker: nothing writable, `/stockMoves`
+ * unreadable, and `photoView` on, because a Worker on the shelf is exactly
+ * who a picture is for — no control, rather than a disabled one.
  */
-internal val workerCaps = StockCapabilities(photoView = true)
+internal val ownerCaps = StockCapabilities.forMember(owner)
+
+internal val adminCaps = StockCapabilities.forMember(admin)
+
+internal val staffCaps = StockCapabilities.forMember(staff)
+
+internal val workerCaps = StockCapabilities.forMember(worker)
 
 internal fun ComposeContentTestRule.showStock(
     stock: List<StockRecord> = stockShelf,

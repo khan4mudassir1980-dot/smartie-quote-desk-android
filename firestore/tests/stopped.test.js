@@ -183,6 +183,64 @@ test('the displayed Manager and Staff may not clear it', async () => {
   await assertFails(as(testEnv, UIDS.worker).collection('stoppedStock').doc(EVENT).delete());
 });
 
+// --- the whole removal, as the app commits it ----------------------------
+
+async function givenPhotographedStock() {
+  // One `context.firestore()` per context: compat applies emulator settings
+  // on each call and refuses the second once the instance has been used.
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await db.collection('stock').doc(STOCK)
+      .set({ ...stockRow(UIDS.admin), hasPhoto: true, photoRev: 3 });
+    await db.collection('stockPhotos').doc(STOCK)
+      .set({
+        key: STOCK, rev: 3, w: 800, h: 600,
+        bytes: firebase.firestore.Blob.fromUint8Array(new Uint8Array(1024)),
+        by: 'Tester', byUid: UIDS.admin, at: Date.now(),
+      });
+  });
+}
+
+test('a photographed row goes in one commit: history, photo and row', async () => {
+  await givenPhotographedStock();
+
+  const db = as(testEnv, UIDS.admin);
+  const batch = db.batch();
+  batch.set(db.collection('stoppedStock').doc(EVENT), event(UIDS.admin));
+  batch.delete(db.collection('stockPhotos').doc(STOCK));
+  batch.delete(db.collection('stock').doc(STOCK));
+
+  await assertSucceeds(batch.commit());
+});
+
+test('the row cannot go without its photo, even with history written', async () => {
+  // `/stock` refuses a delete that leaves its photo document behind, so a
+  // removal that forgets the photo cannot commit at all.
+  await givenPhotographedStock();
+
+  const db = as(testEnv, UIDS.admin);
+  const batch = db.batch();
+  batch.set(db.collection('stoppedStock').doc(EVENT), event(UIDS.admin));
+  batch.delete(db.collection('stock').doc(STOCK));
+
+  await assertFails(batch.commit());
+});
+
+test('a removal writes no movement, and cannot smuggle one in', async () => {
+  // Nothing moved, so nothing is logged. A movement claiming a delta the
+  // quantity never took is refused by the /stockMoves rules in any case.
+  await givenStock();
+  const db = as(testEnv, UIDS.admin);
+  const batch = db.batch();
+  batch.set(db.collection('stoppedStock').doc(EVENT), event(UIDS.admin));
+  batch.delete(db.collection('stock').doc(STOCK));
+  await assertSucceeds(batch.commit());
+
+  const moves = await as(testEnv, UIDS.admin).collection('stockMoves')
+    .where('key', '==', STOCK).get();
+  assert.equal(moves.size, 0, 'removing an item must log no movement');
+});
+
 // --- what removal must not touch -----------------------------------------
 
 test('removing an item leaves the catalogue product alone', async () => {

@@ -364,9 +364,14 @@ internal fun SmartieBottomBar(
     Box(
         modifier
             .fillMaxWidth()
+            // **Before** the inset padding, not after. A semantics node
+            // reports the bounds at its own position in the chain, so a
+            // description added below the padding would describe only the
+            // inner region — and a test asking where the bar ends would be
+            // told where its content ends, which is the very thing at issue.
+            .semantics { contentDescription = BOTTOM_NAV_LABEL }
             .background(SmartieColors.Panel)
-            .windowInsetsPadding(insets)
-            .semantics { contentDescription = BOTTOM_NAV_LABEL },
+            .windowInsetsPadding(insets),
     ) {
         NavigationBar(
             containerColor = SmartieColors.Panel,

@@ -435,13 +435,15 @@ internal fun BackToTopButton(
     val dimens = LocalSmartieDimens.current
     Box(
         modifier
+            // Outermost, so the bounds a test reads are the control's own and
+            // not whatever is left inside the decoration.
+            .semantics { contentDescription = ScrollToTop.LABEL }
             .size(dimens.backToTopSize)
             .shadow(3.dp, CircleShape)
             .clip(CircleShape)
             .background(SmartieColors.Panel)
             .border(dimens.hairline, SmartieColors.PurpleLine, CircleShape)
-            .clickable(onClick = onClick)
-            .semantics { contentDescription = ScrollToTop.LABEL },
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(

@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.sizeIn
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -1114,20 +1113,31 @@ internal fun EditStockPanel(
             // 48dp minimum touch target below is what a finger gets.
             if (capabilities.stopTracking) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                    Text(
-                        REMOVE_FROM_STOCK,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (online) SmartieColors.Danger else SmartieColors.Steel2,
-                        modifier = Modifier
-                            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-                            .wrapContentSize(Alignment.Center)
-                            .clickable(enabled = online, onClick = onRemove)
-                            .padding(horizontal = 4.dp)
+                    // The description and the touch target go on the **box**,
+                    // outermost. A semantics node reports the bounds at its
+                    // own position in the chain, and a `clickable` below a
+                    // size only takes pointers over what is below it — so
+                    // hanging either off the Text would give a 48dp target
+                    // that is really the width of the words.
+                    Box(
+                        Modifier
                             .semantics {
                                 contentDescription =
                                     if (online) REMOVE_FROM_STOCK else OFFLINE_LABEL
                             }
-                    )
+                            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                            .clickable(enabled = online, onClick = onRemove),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            REMOVE_FROM_STOCK,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (online) SmartieColors.Danger else SmartieColors.Steel2,
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
+                    }
                 }
             }
         },

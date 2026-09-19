@@ -7,6 +7,7 @@ import `in`.smartie.quotedesk.core.AppContainer
 import `in`.smartie.quotedesk.core.StockPendingStore
 import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.StockRecord
+import `in`.smartie.quotedesk.data.repository.FirestoreFailures
 import `in`.smartie.quotedesk.data.repository.StockPhotoRepository
 import `in`.smartie.quotedesk.data.repository.StockWriteRepository
 import `in`.smartie.quotedesk.data.repository.StockWriteResult
@@ -409,6 +410,10 @@ class StockViewModel(
     private fun failureOf(outcome: Result<*>): String {
         val throwable = outcome.exceptionOrNull() ?: return SAVE_FAILED
         report(throwable)
+        // An exhausted daily quota is worth naming. Firestore calls it "Quota
+        // exceeded", which reads as though somebody could pay for more; on
+        // Spark nobody can, and it passes at the daily reset.
+        FirestoreFailures.message(throwable)?.let { return it }
         return throwable.message?.takeIf { it.isNotBlank() } ?: SAVE_FAILED
     }
 

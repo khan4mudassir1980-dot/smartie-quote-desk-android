@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-19.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `214dd0b` — [run #67](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35428927752), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `d43c08c` — [run #71](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35432545049), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -24,7 +24,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N1 Auth & Team | **Complete** |
 | N2 Products | **Complete and verified** |
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** Not fully closed: T-S5 needs two phones |
-| N3.1 Stock Photo | **Batches A–D built and CI-green; not reachable from the UI and not deployed.** Rules, index exemption, pure domain, the two-document transaction, the revision-matched cache and the capture/preview sheets all exist and are tested. **Batch E — thumbnail on the card, larger view, wiring — is not written**, so nothing in the running app can add, show or remove a photo. Staging still runs the `d11b5da` rules; the new rules and the exemption are **undeployed** |
+| N3.1 Stock Photo | **Batches A–E built and CI-green; not deployed and not manually verified.** The feature is now reachable: thumbnails on cards, a larger view, take/choose/replace/remove for Owner, Administrator and Staff, view-only for Workers. The photo cache is now persistent as well as in memory. Staging still runs the `d11b5da` rules; the new rules and the index exemption are **undeployed**, so a photo write against staging today would be refused. No photo manual row has been run |
 | N4–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -71,9 +71,9 @@ a credential to do it.
 
 Row by row, with the evidence for each, in `docs/N3-verification.md`.
 
-### What N3.1 batches A–D actually built
+### What N3.1 built
 
-CI-green at `214dd0b`, [run #67](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35428927752).
+CI-green at `d43c08c`, [run #71](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35432545049).
 
 | Batch | Commit | What landed |
 |---|---|---|
@@ -83,14 +83,16 @@ CI-green at `214dd0b`, [run #67](https://github.com/khan4mudassir1980-dot/smarti
 | D | `58f7e38` | Capture, gallery pick, EXIF rotation, WebP encoding, the FileProvider entry, the source and preview sheets |
 | — | `35d136c` | The preview sheet's confirm button keyed to the prepared bytes rather than the drawn bitmap |
 | — | `214dd0b` | `StockPhotoWriteTest` asserts the photo write **merges**; the fake store had been discarding that flag |
+| D.5 | `e617249` | The **persistent** photo cache: `StockPhotoDisk` naming, `DiskStockPhotoFiles`, a three-layer repository |
+| E | `9a1b4b0` | Thumbnails on cards, the larger view, the pure `StockPhotoFlow`, the camera and picker wiring |
 
-**440 Kotlin test methods across 43 classes**, up from 359 across 37; **60
-Firestore emulator tests**, up from 43; the 26 importer tests unchanged.
+**553 Kotlin test methods across 51 classes**, up from 359 across 37 before
+N3.1; **60 Firestore emulator tests**, up from 43; the 26 importer tests
+unchanged.
 
-**What is deliberately absent.** Batch E is not written, so no screen opens
-these sheets and no card shows a thumbnail. The feature is unreachable from
-the running app by design, and the photo manual rows cannot begin until it
-exists.
+**What is deliberately absent.** Nothing has been deployed and no photo
+manual row (T-P1…T-P15) has been run. The feature works in tests and has
+never been exercised on a real phone against staging.
 
 **Nothing was deployed and no Firebase project was accessed.** The rules and
 the index exemption sit in the repository only.
@@ -117,13 +119,14 @@ ordering is sequencing rather than a correctness gate for the exemption (writes
 do not fail without it), but the **rules** genuinely must land before any build
 that writes a photo reaches a device.
 
-What follows is batch E, and it belongs to the phase row above and to
-`docs/N3.1-plan.md`, not to this action: the thumbnail on the stock card, the
-larger view, the capability gate that hides add/replace/remove from a Worker,
-the offline guard and the cache-first lazy load. Nothing built so far is wired
-to a screen, which is deliberate — the photo manual rows cannot start until
-batch E exists, and a half-wired feature on a staging phone would produce
-findings about itself rather than about the design.
+Batch E is **built**, so the deployment is now the only thing between here
+and a staging APK that can actually take a photograph. What follows it
+belongs to `docs/N3.1-plan.md`, not to this action: the photo manual rows
+T-P1…T-P15, run on a real phone against staging, with T-P4 — photographing
+real stock off the real shelves — the row that decides whether the 80 KiB
+ceiling serves this business, and T-P14 — scroll the board, leave, return,
+scroll again — the row that checks the usage assumption rather than trusting
+it.
 
 N3's outstanding device work is **tracked, not closed**, and does not become
 this action: T-S5 on two phones, the six rows the second pass did not reach,
@@ -232,12 +235,25 @@ photo change writes `lastAction: "photo"` and **never** a `/stockMoves`
 document; `q` and `min` are written back from the value read inside the
 transaction, never from the screen.
 
-**A cached photo is keyed by stock identity *and* revision.** A matching `rev`
-is served without a read; a mismatched one is never served; `hasPhoto: false`
-discards the bytes without spending a read. A fetched document whose `rev` is
-*behind* the row is discarded too. That is what keeps unchanged photos from
-being downloaded repeatedly, and it is the assumption the whole usage
-calculation rests on.
+**A cached photo is keyed by stock identity *and* revision, in memory and on
+disk.** A matching `rev` is served without a read; a mismatched one is never
+served; `hasPhoto: false` discards the bytes without spending a read. A
+fetched document whose `rev` is *behind* the row is discarded too. That is
+what keeps unchanged photos from being downloaded repeatedly, and it is the
+assumption the whole usage calculation rests on.
+
+**Firestore's own persistence is not a substitute for our cache, because it
+is not free.** A `get()` its local cache answers is still a billed document
+read. Persistence buys *availability* offline, not cost, and no document or
+comment in this repository may treat the two as the same thing. Photo bytes
+therefore live in an app-private, no-backup directory under
+`noBackupFilesDir`, one file per row named by hashed document id and
+revision, written through a `.part` rename so a killed process cannot leave
+a torn file, checked on the way back out so a cleared or corrupted file is a
+miss rather than a wrong picture, and held under 40 MiB by least-recently-used
+eviction. A revision that cannot be named exactly is not cached on disk at
+all, because rounding two revisions to one name is how a replaced photograph
+would come back.
 
 **Product identity for stock is immutable.** `ProductRecord.stockKey` decides
 it — the stored `key`, else `group|seedModel`, else `group|model` for a legacy

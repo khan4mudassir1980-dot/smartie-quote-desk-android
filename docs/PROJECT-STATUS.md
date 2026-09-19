@@ -1,14 +1,14 @@
 # Project status
 
 **The single current-status record. Read this before planning or changing
-anything.** Last updated 2026-09-18.
+anything.** Last updated 2026-09-19.
 
 ## Where the work is
 
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `c01b9c0` — [run #61](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35350654406), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `35d136c` — [run #65](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35428058225), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -24,7 +24,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N1 Auth & Team | **Complete** |
 | N2 Products | **Complete and verified** |
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** Not fully closed: T-S5 needs two phones |
-| N3.1 Stock Photo | **Planned for Spark, not started.** `docs/N3.1-plan.md` at revision 2, with the Owner's five corrections applied. Awaiting approval. Nothing implemented, no dependency added, no Firebase project touched |
+| N3.1 Stock Photo | **Batches A–D built and CI-green; not reachable from the UI and not deployed.** Rules, index exemption, pure domain, the two-document transaction, the revision-matched cache and the capture/preview sheets all exist and are tested. **Batch E — thumbnail on the card, larger view, wiring — is not written**, so nothing in the running app can add, show or remove a photo. Staging still runs the `d11b5da` rules; the new rules and the exemption are **undeployed** |
 | N4–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -71,29 +71,68 @@ a credential to do it.
 
 Row by row, with the evidence for each, in `docs/N3-verification.md`.
 
+### What N3.1 batches A–D actually built
+
+CI-green at `35d136c`, [run #65](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35428058225).
+
+| Batch | Commit | What landed |
+|---|---|---|
+| A | `69d0fce` | `/stockPhotos` rules, the cross-document consistency guards, `'photo'` as a `/stock` `lastAction`, the `bytes` index exemption |
+| B | `dcba479` | Pure `StockPhoto` (sizing, EXIF, the quality ladder, refusals), `Permissions`, `StockRecord.hasPhoto`/`photoRev`, the `StockWrite` photo planner |
+| C | `67234ae` | The two-document transaction, `StockPhotoCache`, `StockPhotoRepository` |
+| D | `58f7e38` | Capture, gallery pick, EXIF rotation, WebP encoding, the FileProvider entry, the source and preview sheets |
+| — | `35d136c` | The preview sheet's confirm button keyed to the prepared bytes rather than the drawn bitmap |
+
+**440 Kotlin test methods across 43 classes**, up from 359 across 37; **60
+Firestore emulator tests**, up from 43; the 26 importer tests unchanged.
+
+**What is deliberately absent.** Batch E is not written, so no screen opens
+these sheets and no card shows a thumbnail. The feature is unreachable from
+the running app by design, and the photo manual rows cannot begin until it
+exists.
+
+**Nothing was deployed and no Firebase project was accessed.** The rules and
+the index exemption sit in the repository only.
+
+**A numbering collision to keep straight:** N2's parity row `T-P1` and the
+N3.1 photo rows `T-P1`…`T-P15` are different series. A bare `T-P` number in
+this file means the photo series unless it is next to the 403-item parity
+criterion.
+
 ## Current next action
 
-**Review `docs/N3.1-plan.md` revision 2 and approve or amend it.** The five
-corrections are applied: the index-entry claim is withdrawn as wrong, the
-quota figures are corrected and separated into daily operations, monthly
-transfer and stored capacity, the usage section is now reproducible formulas,
-revision-matched caching is specified, and the consistency rules, conflict
-behaviour, archive behaviour and orphan guarantees are defined.
+**Deploy the N3.1 rules and index exemption to staging.** One step, and it is
+the Owner's — no session holds a credential for it. From this repository's
+`firestore/` directory:
 
-Image quality is no longer argued on paper. It is **T-P4, a manual acceptance
-check on real stock off the real shelves**, and it is the row that decides
-whether the 80 KiB ceiling serves this business.
+```
+firebase.cmd deploy --only firestore:rules   --project smartie-quote-desk-staging
+firebase.cmd deploy --only firestore:indexes --project smartie-quote-desk-staging
+```
 
-Nothing is to be built until the plan is approved. The previous "deploy the
-index exemption before anything writes" constraint is **withdrawn** — writes
-do not fail without it; indexed values are truncated at 1,500 bytes. The
-exemption still ships in batch A, for index storage and write cost.
+Until that is done the staging project still runs the `d11b5da` ruleset, which
+has no `/stockPhotos` block at all — every photo write would be refused. The
+ordering is sequencing rather than a correctness gate for the exemption (writes
+do not fail without it), but the **rules** genuinely must land before any build
+that writes a photo reaches a device.
+
+What follows is batch E, and it belongs to the phase row above and to
+`docs/N3.1-plan.md`, not to this action: the thumbnail on the stock card, the
+larger view, the capability gate that hides add/replace/remove from a Worker,
+the offline guard and the cache-first lazy load. Nothing built so far is wired
+to a screen, which is deliberate — the photo manual rows cannot start until
+batch E exists, and a half-wired feature on a staging phone would produce
+findings about itself rather than about the design.
 
 N3's outstanding device work is **tracked, not closed**, and does not become
 this action: T-S5 on two phones, the six rows the second pass did not reach,
 and the second-device halves of T-S24 and T-S27. They are listed with their
 evidence in `docs/N3-verification.md`, and they come back as soon as a second
-phone is available. N3.1 must not be the reason they slip.
+phone is available. N3.1 must not be the reason they slip. T-P13, the
+two-phone photo race, joins them and is pending from the start.
+
+Image quality stays where revision 2 put it: **T-P4, a manual acceptance check
+on real stock off the real shelves.** No automated test claims it.
 
 ## Decisions that bind future work
 
@@ -179,6 +218,25 @@ drop arithmetic is `PinDrag.targetIndex` and the list change is
 "Move up" and "Move down" accessibility actions so the moves stay reachable
 without the buttons coming back. The cap is still fifteen, and a reorder can
 never breach it because it neither adds nor drops a key.
+
+**A photo is a separate document, and the two are written together.**
+`/stockPhotos/{stockDocId}` holds the bytes; `/stock` holds only `hasPhoto` and
+a monotonic `photoRev`. Image bytes never enter a stock document — the mobile
+SDKs have no `select()`, so a photo on the row would be downloaded by every
+device on every board read. Both documents move in **one** transaction and the
+rules refuse a commit that leaves them disagreeing: metadata claiming a photo
+that is not there, a photo the row does not claim, mismatched revisions, a
+`photoRev` going backwards, or a stock row deleted out from under its photo. A
+photo change writes `lastAction: "photo"` and **never** a `/stockMoves`
+document; `q` and `min` are written back from the value read inside the
+transaction, never from the screen.
+
+**A cached photo is keyed by stock identity *and* revision.** A matching `rev`
+is served without a read; a mismatched one is never served; `hasPhoto: false`
+discards the bytes without spending a read. A fetched document whose `rev` is
+*behind* the row is discarded too. That is what keeps unchanged photos from
+being downloaded repeatedly, and it is the assumption the whole usage
+calculation rests on.
 
 **Product identity for stock is immutable.** `ProductRecord.stockKey` decides
 it — the stored `key`, else `group|seedModel`, else `group|model` for a legacy

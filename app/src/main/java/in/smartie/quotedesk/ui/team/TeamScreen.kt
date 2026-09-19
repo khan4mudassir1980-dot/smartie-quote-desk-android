@@ -350,11 +350,18 @@ internal fun RoleMenu(person: Member, options: List<Role>, onSelect: (Role) -> U
  */
 @Composable
 internal fun RoleOptions(options: List<Role>, current: Role, onSelect: (Role) -> Unit) {
-    options.forEach { role ->
-        DropdownMenuItem(
-            text = { Text(RoleTitles.of(role)) },
-            onClick = { if (role != current) onSelect(role) },
-        )
+    // Its own Column, so the options stack whoever renders them. Without one
+    // they inherit the caller's layout — and a caller that provides none puts
+    // every item at the same place, overlapping, where the last one silently
+    // swallows every tap. `DropdownMenu` happens to supply a Column; nothing
+    // about this list should depend on that.
+    Column {
+        options.forEach { role ->
+            DropdownMenuItem(
+                text = { Text(RoleTitles.of(role)) },
+                onClick = { if (role != current) onSelect(role) },
+            )
+        }
     }
 }
 

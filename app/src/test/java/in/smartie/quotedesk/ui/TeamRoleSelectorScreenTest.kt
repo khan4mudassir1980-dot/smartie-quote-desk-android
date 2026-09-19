@@ -53,6 +53,21 @@ class TeamRoleSelectorScreenTest {
     // --- what the menu offers -----------------------------------------------
 
     @Test
+    fun `every option gets its own place, so a tap reaches the one tapped`() {
+        // The options once rendered with no layout of their own, which stacked
+        // all three at the same spot: every tap landed on the last item while
+        // the labels all still read correctly. Overlap is the failure mode
+        // that looks like success, so it is asserted directly.
+        showOptions(Role.WORKER, mutableListOf())
+
+        val tops = listOf("Administrator", "Manager", "Staff").map {
+            compose.onNodeWithText(it).fetchSemanticsNode().positionInRoot.y
+        }
+        assertEquals("three options need three positions", 3, tops.toSet().size)
+        assertTrue("and in the order they were given", tops == tops.sorted())
+    }
+
+    @Test
     fun `the menu offers the new titles`() {
         showOptions(Role.WORKER, mutableListOf())
 

@@ -60,13 +60,28 @@ class StockPhotoCardScreenTest {
     }
 
     @Test
-    fun `a row without a photo shows no slot at all`() {
+    fun `a row without a photo shows no thumbnail`() {
         compose.showStock(stock = listOf(plain), capabilities = staffCaps)
         assertTrue(
-            "an empty frame where there was never a picture is worse than nothing",
+            "a frame pretending to hold a picture that does not exist is worse than nothing",
             compose.onAllNodesWithContentDescription("No photo showing for Swing gate motor")
                 .fetchSemanticsNodes().isEmpty()
         )
+    }
+
+    @Test
+    fun `a Worker sees nothing at all in the picture slot of a bare row`() {
+        compose.showStock(stock = listOf(plain), capabilities = workerCaps)
+        for (description in listOf(
+            "No photo showing for Swing gate motor",
+            "Add a photo of Swing gate motor"
+        )) {
+            assertTrue(
+                "a Worker must not see $description",
+                compose.onAllNodesWithContentDescription(description)
+                    .fetchSemanticsNodes().isEmpty()
+            )
+        }
     }
 
     @Test
@@ -111,7 +126,7 @@ class StockPhotoCardScreenTest {
     }
 
     @Test
-    fun `a row without a photo offers Staff a way to add one`() {
+    fun `a row without a photo offers Staff the add tile`() {
         val opened = mutableListOf<String>()
         compose.showStock(
             stock = listOf(plain),
@@ -124,7 +139,7 @@ class StockPhotoCardScreenTest {
     }
 
     @Test
-    fun `a row that already has one is reached by its picture, not a button`() {
+    fun `a row that already has one shows the picture, not the add tile`() {
         compose.showStock(stock = listOf(photographed), capabilities = staffCaps)
         assertTrue(
             "two ways in would be one too many",
@@ -139,5 +154,18 @@ class StockPhotoCardScreenTest {
             "no control at all, not a disabled one",
             compose.onAllNodesWithText(PHOTO_BUTTON).fetchSemanticsNodes().isEmpty()
         )
+    }
+
+    @Test
+    fun `the add tile does not ask for a photo that does not exist`() {
+        val asked = mutableListOf<String>()
+        compose.showStock(
+            stock = listOf(plain),
+            capabilities = staffCaps,
+            actions = StockActions(loadPhoto = loader(asked))
+        )
+        compose.waitForIdle()
+
+        assertTrue("an empty slot is not a reason to spend a read", asked.isEmpty())
     }
 }

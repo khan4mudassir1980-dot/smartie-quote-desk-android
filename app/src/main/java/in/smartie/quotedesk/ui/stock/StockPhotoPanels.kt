@@ -2,6 +2,7 @@ package `in`.smartie.quotedesk.ui.stock
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -265,6 +266,49 @@ internal fun StockPhotoThumbnail(
 }
 
 /**
+ * The way in for a row that has **no** photo yet.
+ *
+ * It sits in the same 56dp slot the thumbnail uses, for two reasons. The
+ * picture-shaped hole is where somebody looks for a picture, which makes it
+ * more obvious than a fourth button; and it costs the card no extra height,
+ * where a fifth control in the row below would have pushed the controls onto
+ * a second line and thinned out a board whose whole job is to be scanned.
+ *
+ * Shown only to someone who may actually add one — a Worker sees nothing
+ * here rather than something disabled.
+ */
+@Composable
+internal fun StockAddPhotoTile(
+    name: String,
+    onOpen: () -> Unit = {}
+) {
+    val dimens = LocalSmartieDimens.current
+    Column(
+        Modifier
+            .size(THUMBNAIL)
+            .clip(RoundedCornerShape(dimens.radius))
+            .background(SmartieColors.Panel2)
+            .border(dimens.hairline, SmartieColors.PurpleLine, RoundedCornerShape(dimens.radius))
+            .clickable(onClick = onOpen)
+            .semantics { contentDescription = addPhotoLabel(name) },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            "+",
+            style = MaterialTheme.typography.titleMedium,
+            color = SmartieColors.Purple
+        )
+        Text(
+            PHOTO_BUTTON,
+            style = MaterialTheme.typography.labelMedium,
+            color = SmartieColors.Purple,
+            maxLines = 1
+        )
+    }
+}
+
+/**
  * The photo at a size worth looking at.
  *
  * Everyone who can see the row can see this. **Replace** and **Remove** are
@@ -345,6 +389,8 @@ internal fun StockPhotoViewPanel(
 
 /** How a photo is named to a screen reader, and when there is not one. */
 internal fun photoLabel(name: String): String = "Photo of $name"
+
+internal fun addPhotoLabel(name: String): String = "Add a photo of $name"
 
 internal fun photoMissing(name: String): String = "No photo showing for $name"
 

@@ -30,6 +30,10 @@ import org.robolectric.annotation.Config
  * displayed, and wide enough to be a button. `assertIsDisplayed()` fails on a
  * zero-size node, which is precisely the failure that shipped.
  *
+ * The action itself has moved into the picture slot in the card's top row,
+ * where it competes with nothing and costs no height; the controls below are
+ * a `FlowRow` so they wrap rather than clip. Both halves are asserted here.
+ *
  * 360×640 is the narrowest phone this app supports, and the width at which
  * the old row overflowed worst.
  */
@@ -75,9 +79,10 @@ class StockPhotoWiringScreenTest {
     }
 
     @Test
-    fun `the controls it shares a line with are not clipped either`() {
-        // The same overflow was already eating History before photos existed.
-        // Wrapping is what fixes both, so both are asserted.
+    fun `the controls below it are not clipped either`() {
+        // The same overflow was already eating History at this width before
+        // photos existed. Wrapping the controls fixes that too, and the photo
+        // action no longer competes with them for the line at all.
         compose.showStock(stock = listOf(plain), capabilities = adminCaps)
 
         assertUsable("Pin Swing gate motor")

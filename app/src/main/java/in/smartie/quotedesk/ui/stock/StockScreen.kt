@@ -608,13 +608,23 @@ private fun StockRowCard(
                 verticalAlignment = Alignment.Top,
                 horizontalArrangement = Arrangement.spacedBy(dimens.gapM)
             ) {
-                // Only a row that says it has a photo asks for one. A row
-                // with `hasPhoto: false` renders nothing here and spends no
-                // read discovering that, which is the whole point of the flag
+                // The picture slot. Only a row that says it has a photo asks
+                // for one — a row with `hasPhoto: false` spends no read
+                // discovering that, which is the whole point of the flag
                 // sitting on the stock document.
+                //
+                // A row without one shows the way to add it **here**, in the
+                // picture-shaped hole, rather than as another button below:
+                // that is where somebody looks for a picture, and it costs
+                // the card no height on a board built to be scanned.
                 if (capabilities.photoView && row.record.hasPhoto) {
                     StockPhotoThumbnail(
                         image = rememberStockPhoto(row.record, actions.loadPhoto),
+                        name = row.name,
+                        onOpen = { actions.onOpenPhoto(row.record) }
+                    )
+                } else if (capabilities.photoManage) {
+                    StockAddPhotoTile(
                         name = row.name,
                         onOpen = { actions.onOpenPhoto(row.record) }
                     )
@@ -752,19 +762,6 @@ private fun StockRowCard(
                         onClick = onHistory,
                         modifier = Modifier.semantics {
                             contentDescription = "History for ${row.name}"
-                        }
-                    )
-                }
-                // A row that already has one is reached by its thumbnail;
-                // this is the way in for a row that has none. Enabled
-                // offline, because looking is not changing — the sheet it
-                // opens is where the offline wording lives.
-                if (capabilities.photoManage && !row.record.hasPhoto) {
-                    SmartieGhostButton(
-                        text = PHOTO_BUTTON,
-                        onClick = { actions.onOpenPhoto(row.record) },
-                        modifier = Modifier.semantics {
-                            contentDescription = "Add a photo of ${row.name}"
                         }
                     )
                 }

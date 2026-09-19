@@ -198,6 +198,53 @@ the console quota measurement, and T-P15 the Administrator cascade delete.
 Stored `staff` is displayed **Manager** and stored `worker` is displayed
 **Staff**; nothing stored changed with those titles.
 
+## The role-title pass, on the run #81 APK
+
+**Owner-confirmed, on one physical phone**, against the staging build at
+`ea5a417`. The two renamed titles were checked on a real device, both for what
+they read and for what the accounts behind them could still do.
+
+**What the titles read.**
+
+| Stored role | Displayed | Confirmed |
+|---|---|---|
+| `worker` | **Staff** | Yes |
+| `staff` | **Manager** | Yes |
+| `admin` | Administrator | Unchanged |
+| `owner` | Owner / Administrator | Unchanged |
+
+No old user-visible **Worker** title appeared anywhere in the Team UI that was
+checked. The role selector showed Administrator, Manager and Staff, each once,
+with no overlap and no ambiguous option — which is the on-device counterpart
+of the overlap defect `ea5a417` fixed in the tests.
+
+**What the accounts could still do.** This is the half that matters, because
+the whole claim of the change is that it moved words and nothing else.
+
+- The account now titled **Staff** (stored `worker`) kept exactly the old
+  Worker permissions: Products and prices unavailable; stock and saved photos
+  viewable; **no** Photo, Replace, Remove, quantity-changing or Edit control.
+- The account now titled **Manager** (stored `staff`) kept exactly the old
+  Staff permissions: Products and prices available; stock quantity and Edit
+  controls available; Photo, Replace and Remove controls available. No
+  unexpected gain or loss was observed.
+
+**So the change is confirmed display-only — in the cases physically tested.**
+Two things that phrase deliberately does not cover:
+
+- **The selector's write path was not exercised on the device.** Nobody
+  changed a teammate's role through the menu and then read the stored value
+  back, so "choosing Manager writes `staff`" rests on
+  `TeamRoleSelectorScreenTest`, which asserts the `wireValue` each selection
+  carries. That is real coverage and it is not a device check.
+- **Owner and Administrator permissions were not re-exercised** on a device in
+  this pass; only their titles were confirmed unchanged.
+
+Neither gap is a reason to doubt the change — the stored values, the rules and
+every permission predicate are untouched, and the emulator's permission matrix
+is green — but neither has been physically performed, and this record does not
+say otherwise.
+
 ## Production safety
 
 Production Firebase was not read or written during this pass or this session.

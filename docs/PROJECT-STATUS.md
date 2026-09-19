@@ -24,7 +24,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N1 Auth & Team | **Complete** |
 | N2 Products | **Complete and verified** |
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** Not fully closed: T-S5 needs two phones |
-| N3.1 Stock Photo | **Seven of fifteen photo rows passed on one physical phone** (run #77, `02b3edf`); the run #73 clipping defect is confirmed fixed on a device. **Eight rows have not run** — T-P4, T-P6, T-P7, T-P11, T-P12, T-P13, T-P14, T-P15 — so N3.1 is **not closed**. Rules and the index exemption are deployed to staging (Owner-confirmed history, not a fresh read) |
+| N3.1 Stock Photo | **Seven of fifteen photo rows passed on one physical phone** (run #77, `02b3edf`); the run #73 clipping defect is confirmed fixed on a device. **Eight rows remain open** — T-P4, T-P6, T-P7, T-P11 (now partly covered), T-P12, T-P13, T-P14, T-P15 — so N3.1 is **not closed**. Rules and the index exemption are deployed to staging (Owner-confirmed history, not a fresh read) |
 | N4–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -178,6 +178,27 @@ existing stock screen test now runs against the mapping the app uses.
 **597 Kotlin test methods across 54 classes**; 60 emulator tests; 26
 importer tests.
 
+### The role-title pass, on run #81
+
+**Owner-confirmed, one physical phone, staging build `ea5a417`.** A stored
+`worker` reads **Staff** and a stored `staff` reads **Manager**; Owner and
+Administrator are unchanged; no old **Worker** title appeared in the Team UI
+that was checked; and the role selector showed Administrator, Manager and
+Staff exactly once each, with no overlap or ambiguous option.
+
+The permissions behind the titles were checked on the device and had not
+moved: the account titled **Staff** still has no Products, no Photo, Replace,
+Remove, quantity or Edit control, and can still view stock and saved photos;
+the account titled **Manager** still has Products, quantity, Edit, Photo,
+Replace and Remove. No unexpected gain or loss.
+
+**The change is display-only in the cases physically tested.** Two things
+that sentence does not cover, both recorded in `docs/N3-verification.md`: no
+role was actually *changed* through the selector on the device, so "choosing
+Manager writes `staff`" rests on `TeamRoleSelectorScreenTest` asserting the
+`wireValue` each selection carries; and Owner and Administrator permissions
+were not re-exercised, only their titles confirmed unchanged.
+
 ## Current next action
 
 **Run the eight N3.1 photo rows that have not been run.**
@@ -192,7 +213,7 @@ passed:
 | **T-P14** | Scroll the whole board, leave, return, scroll again, against the Firebase console's usage tab. **The assumption every usage figure rests on**, measured rather than trusted |
 | T-P6 | A photo on a manual item |
 | T-P7 | A display-model rename, then reopen the row — the photo must still be there |
-| T-P11 | Sign in as a stored `staff` (the person the app now calls **Manager**) and add, replace and remove |
+| T-P11 | Add, replace and remove **as** a stored `staff` (the person the app now calls **Manager**). The role-title pass confirmed that account *has* those controls; using them end to end is the half still open |
 | T-P12 | Archive a photographed row, then un-archive it |
 | T-P13 | Two phones replacing the same row's photo at once — needs a second phone |
 | T-P15 | Delete a photographed row as an Administrator; the photo document must go with it |

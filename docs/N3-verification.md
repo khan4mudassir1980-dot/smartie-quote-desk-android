@@ -168,6 +168,36 @@ for the head this APK was built from. That coverage is what makes a single
 manual pass sufficient for the rows it did reach. It is not what makes T-S5
 unnecessary.
 
+## The N3.1 photo pass, and the deployment behind it
+
+**Owner-confirmed deployment history.** The N3.1 Firestore rules and the index
+exemption were deployed to `smartie-quote-desk-staging` by the Owner and both
+deployments reported success. As with the `d11b5da` deployment recorded above,
+this is **deployment history, not a fresh read of the live ruleset**: nobody
+has read the deployed rules back, and no session holds a credential to do it.
+Production was untouched.
+
+**The first physical photo pass** ran on the run #77 APK (`02b3edf`), on one
+phone, and passed: the Photo tile visible and unclipped, camera and gallery
+selection, preview with a cancel that wrote nothing, add, thumbnail and larger
+view, persistence across a restart, offline viewing of a cached photo with
+every mutation control disabled, replace, remove that stayed removed across a
+restart, quantity, reorder level and note all preserved, no photo entry in
+Stock History, and a stored `worker` — the person the app now calls **Staff**
+— able to view the photo with no Photo, Replace or Remove control.
+
+That is seven of the fifteen photo rows. **Eight did not run** and are tracked
+in `docs/N3.1-plan.md`: T-P4 image quality on real shelves, T-P6 a manual
+item, T-P7 a display-model rename, T-P11 a stored `staff` (displayed
+**Manager**), T-P12 archive and un-archive, T-P13 the two-phone race, T-P14
+the console quota measurement, and T-P15 the Administrator cascade delete.
+**Neither N3 nor N3.1 is closed.**
+
+**Role titles in this document** name the stored roles — `owner`, `admin`,
+`staff`, `worker` — because that is what the rules and the documents use.
+Stored `staff` is displayed **Manager** and stored `worker` is displayed
+**Staff**; nothing stored changed with those titles.
+
 ## Production safety
 
 Production Firebase was not read or written during this pass or this session.

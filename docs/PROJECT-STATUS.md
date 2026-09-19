@@ -24,7 +24,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N1 Auth & Team | **Complete** |
 | N2 Products | **Complete and verified** |
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** Not fully closed: T-S5 needs two phones |
-| N3.1 Stock Photo | **Batches A–E built; manual testing BLOCKED by a confirmed staging defect.** The run #73 APK showed no Photo control on a real device: the card's controls were a non-wrapping `Row` and the button was measured at zero width and clipped. Fixed across `51712c5`, `4b98185` and `02b3edf`; the photo action now lives in the card's picture slot. **The rules and index exemption are deployed to staging** (Owner-confirmed). Manual testing stays blocked until the replacement APK from run #77 is installed; no photo manual row has been run |
+| N3.1 Stock Photo | **Seven of fifteen photo rows passed on one physical phone** (run #77, `02b3edf`); the run #73 clipping defect is confirmed fixed on a device. **Eight rows have not run** — T-P4, T-P6, T-P7, T-P11, T-P12, T-P13, T-P14, T-P15 — so N3.1 is **not closed**. Rules and the index exemption are deployed to staging (Owner-confirmed history, not a fresh read) |
 | N4–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -106,7 +106,7 @@ N3.1 photo rows `T-P1`…`T-P15` are different series. A bare `T-P` number in
 this file means the photo series unless it is next to the 403-item parity
 criterion.
 
-### The first N3.1 staging pass: blocked by a layout defect
+### The run #73 layout defect, and the pass that followed it
 
 The run #73 artifact was downloaded, renamed `SMARTIE-N3-PHOTO-RUN73.apk`,
 installed over the staging app, and confirmed to be the staging build. On Our
@@ -163,6 +163,11 @@ should not have:
   "+", which was indistinguishable from the stepper's increment both to the
   tests and to a person on a board where "+" already means "one more".
 
+**Confirmed fixed on a device.** The run #77 APK was installed on a physical
+phone and the Photo tile appeared, unclipped. Seven photo rows passed in that
+same pass; eight did not run. The detail is in `docs/N3.1-plan.md` and
+`docs/N3-verification.md`.
+
 **The coverage.** `StockPhotoWiringScreenTest` asserts layout at 360×640 —
 displayed, at least 48dp wide — for Owner, Administrator and Staff, absent
 for a Worker, and unclipped for Pin, Edit, History and the stepper below it.
@@ -175,32 +180,33 @@ importer tests.
 
 ## Current next action
 
-**Install the replacement staging APK and run the N3.1 photo manual rows.**
+**Run the eight N3.1 photo rows that have not been run.**
 
-The rules and the index exemption are deployed — that step is done. What
-stands between here and T-P1 is the corrected APK: the run #73 artifact has a
-known defect and **must not be used for manual testing**. Take `smartie-native-apks` from
-**[run #77](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35436896487)** at `02b3edf`, install it over the staging app, and
-confirm on Our Stock that a row without a photo now shows a bordered
-**Photo** tile where its picture would be.
+Seven passed on one phone with the run #77 APK, and the run #73 clipping
+defect is confirmed fixed on a device. What is left is not implied by what
+passed:
 
-Then work T-P1…T-P15 in `docs/N3.1-plan.md`. Two rows carry more weight than
-the rest: **T-P4**, photographing real stock off the real shelves including
-one item identified by printed text, which is the acceptance check for image
-quality and the row that decides whether the 80 KiB ceiling serves this
-business; and **T-P14**, scroll the whole board, leave, return and scroll
-again, which checks the no-repeat-download assumption the usage figures rest
-on rather than trusting it.
+| Row | What it checks |
+|---|---|
+| **T-P4** | Photograph real stock off the real shelves, including one item identified by printed text. **The acceptance check for image quality**, and the row that decides whether the 80 KiB ceiling serves this business |
+| **T-P14** | Scroll the whole board, leave, return, scroll again, against the Firebase console's usage tab. **The assumption every usage figure rests on**, measured rather than trusted |
+| T-P6 | A photo on a manual item |
+| T-P7 | A display-model rename, then reopen the row — the photo must still be there |
+| T-P11 | Sign in as a stored `staff` (the person the app now calls **Manager**) and add, replace and remove |
+| T-P12 | Archive a photographed row, then un-archive it |
+| T-P13 | Two phones replacing the same row's photo at once — needs a second phone |
+| T-P15 | Delete a photographed row as an Administrator; the photo document must go with it |
 
-N3.1 is **not** manually verified and must not be described as such until
-those rows have run on a device.
+The APK for these is `smartie-native-apks` from the first green run at or
+after the title change; the run #73 artifact carries the layout defect and
+must not be used. **N3.1 is not closed** and must not be described as
+verified until these have run.
 
 N3's outstanding device work is **tracked, not closed**, and does not become
 this action: T-S5 on two phones, the six rows the second pass did not reach,
 and the second-device halves of T-S24 and T-S27. They are listed with their
 evidence in `docs/N3-verification.md`, and they come back as soon as a second
-phone is available. N3.1 must not be the reason they slip. T-P13, the
-two-phone photo race, joins them and is pending from the start.
+phone is available. N3.1 must not be the reason they slip.
 
 ## Decisions that bind future work
 
@@ -273,6 +279,20 @@ children past the available width are measured at zero and clipped, and they
 stay in the semantics tree while being invisible on the device. That is how
 the Photo button shipped in run #73 with every test green. Card controls are
 a `FlowRow`, and any control added to one must wrap rather than disappear.
+
+**A job title is not a role.** Stored `staff` is displayed **Manager** and
+stored `worker` is displayed **Staff**. The wire values, the enum, the
+security rules, the PWA and every permission predicate keep the original
+vocabulary, because that is what is in the documents and a rename would need
+a migration to a live team. `RoleTitles` is the only place a role becomes
+words — not `Member.roleLabel`, not a `when` block in a screen, which is how
+three copies of the mapping once existed. When reading this codebase, take
+`Role.STAFF` to mean Manager and `Role.WORKER` to mean Staff.
+
+**Technical documents name stored roles.** The plan, the verification record
+and the rules say `staff` and `worker` because that is what they are about.
+Each carries the display-title table beside it rather than pretending the
+stored roles changed.
 
 **A stock card's height is a feature.** Our Stock is scanned down a shelf, so
 anything that makes every card taller thins the board. A new per-row

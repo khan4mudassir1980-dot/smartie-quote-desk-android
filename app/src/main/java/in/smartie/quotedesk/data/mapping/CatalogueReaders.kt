@@ -3,6 +3,7 @@ package `in`.smartie.quotedesk.data.mapping
 import `in`.smartie.quotedesk.data.model.ProductCategoryRecord
 import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.StockMove
+import `in`.smartie.quotedesk.data.model.StockPhotoRecord
 import `in`.smartie.quotedesk.data.model.StockRecord
 
 fun DocData.toProductRecord(): ProductRecord {
@@ -77,9 +78,30 @@ fun DocData.toStockRecord(): StockRecord {
         linkedKey = string("linkedKey"),
         note = string("stockNote", "note"),
         name = string("name", "manualName"),
+        hasPhoto = bool("hasPhoto"),
+        photoRev = double("photoRev"),
         model = string("model", "manualModel", default = split?.second.orEmpty()),
         group = string("group", default = split?.first.orEmpty()),
         schemaVersion = int("schemaVersion")
+    )
+}
+
+/**
+ * The photo document. Returns null when there is nothing usable in it, so a
+ * half-written document can never be shown as an image.
+ */
+fun DocData.toStockPhotoRecord(): StockPhotoRecord? {
+    val image = bytes("bytes")?.takeIf { it.isNotEmpty() } ?: return null
+    return StockPhotoRecord(
+        documentId = id,
+        key = string("key"),
+        bytes = image,
+        width = int("w", "width"),
+        height = int("h", "height"),
+        rev = double("rev"),
+        by = string("by"),
+        byUid = string("byUid"),
+        at = millis("at", "serverAt")
     )
 }
 

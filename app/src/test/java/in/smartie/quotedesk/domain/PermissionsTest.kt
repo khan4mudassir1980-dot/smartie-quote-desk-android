@@ -108,6 +108,30 @@ class PermissionsTest {
         assertFalse(Permissions.canStopTrackingStock(staff))
     }
 
+    @Test
+    fun `a photo is a stock change, so the stock writers manage it`() {
+        listOf(primaryOwner, additionalOwner, admin, staff).forEach {
+            assertTrue(it.uid, Permissions.canManageStockPhoto(it))
+        }
+        assertFalse(Permissions.canManageStockPhoto(worker))
+    }
+
+    @Test
+    fun `a worker sees photos, exactly as they see stock`() {
+        listOf(primaryOwner, additionalOwner, admin, staff, worker).forEach {
+            assertTrue(it.uid, Permissions.canViewStockPhoto(it))
+        }
+        // Viewing is not managing, and the rules draw the same line.
+        assertFalse(Permissions.canManageStockPhoto(worker))
+    }
+
+    @Test
+    fun `a switched-off account neither sees nor manages a photo`() {
+        val off = staff.copy(active = false)
+        assertFalse(Permissions.canViewStockPhoto(off))
+        assertFalse(Permissions.canManageStockPhoto(off))
+    }
+
     // --- purchase ----------------------------------------------------------
 
     @Test

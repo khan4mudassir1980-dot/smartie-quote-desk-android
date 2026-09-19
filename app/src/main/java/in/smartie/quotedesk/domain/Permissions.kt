@@ -86,6 +86,16 @@ object Permissions {
 
     fun canViewStockHistory(member: Member): Boolean = member.active && !isWorker(member)
 
+    /**
+     * A photo is a stock change, so it follows the stock writers: Owner,
+     * Administrator and Staff. The rules agree — `/stockPhotos` writes need
+     * `stockWriter()`.
+     */
+    fun canManageStockPhoto(member: Member): Boolean = canAdjustStock(member)
+
+    /** Everyone active sees photos, Workers included, exactly as they see stock. */
+    fun canViewStockPhoto(member: Member): Boolean = canViewStock(member)
+
     // --- purchase ----------------------------------------------------------
 
     fun canViewPurchase(member: Member): Boolean = member.active

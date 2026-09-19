@@ -73,6 +73,12 @@ object StockWrite {
      */
     const val LAST_ACTION_NOTE = "note"
 
+    /**
+     * A photo change. Like `note`, it is a `/stock` action and **never** a
+     * `/stockMoves` one: a photograph is not a movement.
+     */
+    const val LAST_ACTION_PHOTO = "photo"
+
     fun belowZero(available: Double): String =
         "$BELOW_ZERO_PREFIX ${trim(available)} left — somebody else took some while you were counting"
 
@@ -189,6 +195,91 @@ object StockWrite {
                 author = author,
                 at = at
             )
+        )
+    }
+
+    /**
+     * Attach or replace a photo.
+     *
+     * Two documents, one transaction, and **no movement**: nothing moved. The
+     * stored quantity and reorder level are re-asserted from what the
+     * transaction read, so a photo can never disturb a count, and the write is
+     * a merge so every other field on the row survives untouched.
+     *
+     * [storedPhotoRev] is the revision read inside the transaction, never the
+     * one the screen was showing. The new revision is always one higher, which
+     * is what makes a racing replacement resolve deterministically and what
+     * lets another device tell a stale cached image from a current one.
+     */
+    fun setPhoto(
+        record: StockRecord,
+        storedQuantity: Double,
+        storedReorderLevel: Double,
+        storedPhotoRev: Double,
+        image: StockPhotoImage,
+        author: StockAuthor,
+        at: Long
+    ): StockPhotoPlan {
+        StockPhoto.refusal(image.bytes)?.let { return StockPhotoPlan.Refused(it) }
+        val rev = storedPhotoRev + 1.0
+        return StockPhotoPlan.Write(
+            stockDocId = record.documentId,
+            stock = stockFields(
+                record = record,
+                quantity = storedQuantity,
+                reorderLevel = storedReorderLevel,
+                lastAction = LAST_ACTION_PHOTO,
+                note = "",
+                author = author,
+                at = at
+            ) + mapOf("hasPhoto" to true, "photoRev" to rev),
+            photoDocId = StockPhoto.documentId(record.key),
+            photo = mapOf(
+                "key" to record.key,
+                "bytes" to image.bytes,
+                "w" to image.width.toDouble(),
+                "h" to image.height.toDouble(),
+                "rev" to rev,
+                "by" to author.name,
+                "byUid" to author.uid,
+                "at" to at,
+                "serverAt" to ServerTimestamp
+            ),
+            rev = rev
+        )
+    }
+
+    /**
+     * Take a photo off a row.
+     *
+     * The revision still advances, so a device that never saw the removal
+     * cannot mistake the copy it is holding for a current one.
+     */
+    fun removePhoto(
+        record: StockRecord,
+        storedQuantity: Double,
+        storedReorderLevel: Double,
+        storedPhotoRev: Double,
+        hasStoredPhoto: Boolean,
+        author: StockAuthor,
+        at: Long
+    ): StockPhotoPlan {
+        if (!hasStoredPhoto) return StockPhotoPlan.NoChange
+        val rev = storedPhotoRev + 1.0
+        return StockPhotoPlan.Write(
+            stockDocId = record.documentId,
+            stock = stockFields(
+                record = record,
+                quantity = storedQuantity,
+                reorderLevel = storedReorderLevel,
+                lastAction = LAST_ACTION_PHOTO,
+                note = "",
+                author = author,
+                at = at
+            ) + mapOf("hasPhoto" to false, "photoRev" to rev),
+            photoDocId = StockPhoto.documentId(record.key),
+            photo = null,
+            rev = rev
         )
     }
 

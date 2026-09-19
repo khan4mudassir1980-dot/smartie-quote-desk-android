@@ -122,3 +122,6 @@ fun DocData.string(vararg names: String, default: String = ""): String =
 fun DocData.stringOrNull(vararg names: String): String? = first(*names).asStringOrNull()
 
 fun DocData.map(name: String): Map<String, Any?> = this[name].asMapOrNull() ?: emptyMap()
+
+/** Firestore `bytes`, already unwrapped from its Blob by the adapter. */
+fun DocData.bytes(name: String): ByteArray? = this[name] as? ByteArray

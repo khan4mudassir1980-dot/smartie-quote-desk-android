@@ -113,10 +113,62 @@ data class StockRecord(
     val name: String = "",
     val model: String = "",
     val group: String = "",
+    /**
+     * Whether a `/stockPhotos` document exists for this row. The bytes never
+     * live here: the board reads every stock document, and the mobile SDKs
+     * have no way to fetch a document without one of its fields.
+     */
+    val hasPhoto: Boolean = false,
+    /**
+     * Monotonic. Advances on every set, replace and remove, and is what tells
+     * a cached image from a stale one without consulting a clock.
+     */
+    val photoRev: Double = 0.0,
     val schemaVersion: Int = 0
 ) {
     val isOut: Boolean get() = quantity <= 0.0
     val isLow: Boolean get() = !isOut && reorderLevel > 0.0 && quantity <= reorderLevel
+}
+
+/**
+ * One stock item's photo, in its own document so the board never downloads
+ * image bytes with the stock list.
+ *
+ * Not a data class: [bytes] would give it an identity comparison nobody
+ * expects, so equality is written out below.
+ */
+class StockPhotoRecord(
+    val documentId: String,
+    val key: String,
+    val bytes: ByteArray,
+    val width: Int = 0,
+    val height: Int = 0,
+    /** Must equal the stock row's `photoRev` for this image to be shown. */
+    val rev: Double = 0.0,
+    val by: String = "",
+    val byUid: String = "",
+    val at: Long = 0L
+) {
+    override fun equals(other: Any?): Boolean = this === other || (
+        other is StockPhotoRecord &&
+            documentId == other.documentId && key == other.key &&
+            width == other.width && height == other.height && rev == other.rev &&
+            by == other.by && byUid == other.byUid && at == other.at &&
+            bytes.contentEquals(other.bytes)
+        )
+
+    override fun hashCode(): Int {
+        var result = documentId.hashCode()
+        result = 31 * result + key.hashCode()
+        result = 31 * result + bytes.contentHashCode()
+        result = 31 * result + width
+        result = 31 * result + height
+        result = 31 * result + rev.hashCode()
+        return result
+    }
+
+    override fun toString(): String =
+        "StockPhotoRecord($documentId, rev=$rev, ${width}x$height, ${bytes.size} bytes)"
 }
 
 data class StockMove(

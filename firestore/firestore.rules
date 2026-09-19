@@ -159,6 +159,27 @@ service cloud.firestore {
     // --- stock ---------------------------------------------------------
 
     match /stock/{key} {
+      function photoDoc() {
+        return /databases/$(database)/documents/stockPhotos/$(key);
+      }
+
+      // The photo lives in its own document; these two fields are the only
+      // trace of it here. They must agree with that document **in the same
+      // commit**, so neither can be written without the other.
+      function photoMetaOk() {
+        return request.resource.data.get('hasPhoto', false) == false
+          ? !existsAfter(photoDoc())
+          : (existsAfter(photoDoc())
+             && getAfter(photoDoc()).data.rev == request.resource.data.get('photoRev', 0));
+      }
+
+      // Monotonic, so a device that has been offline can tell a stale cached
+      // image from a current one without consulting a clock.
+      function photoRevMonotonic() {
+        return request.resource.data.get('photoRev', 0)
+          >= (resource == null ? 0 : resource.data.get('photoRev', 0));
+      }
+
       // Workers read stock without ever being able to read /products. The
       // V8C4 document carries no descriptive name, so the native app writes
       // one additively — see noPriceData() above for the line that keeps a
@@ -170,7 +191,8 @@ service cloud.firestore {
                     && request.resource.data.t is number
                     && request.resource.data.byUid == mine()
                     && noPriceData() && safeName()
-                    && (admin() || request.resource.data.lastAction in ['in','out','min','add','pin','note']);
+                    && photoMetaOk() && photoRevMonotonic()
+                    && (admin() || request.resource.data.lastAction in ['in','out','min','add','pin','note','photo']);
       allow update: if stockWriter()
                     && request.resource.data.q is number && request.resource.data.q >= 0
                     && request.resource.data.min is number && request.resource.data.min >= 0
@@ -178,11 +200,53 @@ service cloud.firestore {
                     && request.resource.data.byUid == mine()
                     && request.resource.data.key == resource.data.key
                     && noPriceData() && safeName()
+                    && photoMetaOk() && photoRevMonotonic()
                     // Setting an exact quantity stays with Owner and
                     // Administrator; Staff use the +/- actions, the reorder
-                    // level (`min`) and the note-only save (`note`).
-                    && (admin() || request.resource.data.lastAction in ['in','out','min','add','pin','note']);
-      allow delete: if admin();
+                    // level (`min`), the note-only save (`note`) and a photo
+                    // change (`photo`).
+                    && (admin() || request.resource.data.lastAction in ['in','out','min','add','pin','note','photo']);
+      // A row may not be deleted out from under its photo: the photo document
+      // has to go in the same commit.
+      allow delete: if admin() && !existsAfter(photoDoc());
+    }
+
+    // --- stock photos ---------------------------------------------------
+    //
+    // One optional photo per tracked item, in its own document so that the
+    // board — which reads every /stock document — never downloads image bytes
+    // it did not ask for. The mobile SDKs have no `select()` projection, so a
+    // photo on /stock could not have been opted out of.
+    //
+    // The document id is the /stock document id, which is derived from the
+    // immutable stock key, so a display rename can never orphan a photo.
+    match /stockPhotos/{stockDoc} {
+      function stockPath() {
+        return /databases/$(database)/documents/stock/$(stockDoc);
+      }
+      function stockAfter() { return getAfter(stockPath()).data; }
+
+      // Every active member may see a photo, Workers included. They may read
+      // /stock already; bytes carry no price, and noPriceData() keeps it so.
+      allow read: if member();
+
+      allow create, update: if stockWriter()
+                    && request.resource.data.bytes is bytes
+                    && request.resource.data.bytes.size() <= 81920
+                    && request.resource.data.key is string
+                    && request.resource.data.rev is number
+                    && request.resource.data.byUid == mine()
+                    && noPriceData()
+                    // The stock row must claim this exact revision, in the
+                    // same commit. A photo document cannot appear alone.
+                    && stockAfter().hasPhoto == true
+                    && stockAfter().photoRev == request.resource.data.rev;
+
+      // Removing a photo, and the cascade when an Administrator deletes the
+      // whole row: the stock document is gone after that commit, so there is
+      // no `hasPhoto` left to read.
+      allow delete: if stockWriter()
+                    && (!existsAfter(stockPath()) || stockAfter().hasPhoto == false);
     }
 
     match /stockMoves/{id} {

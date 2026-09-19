@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddAPhoto
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -294,10 +297,15 @@ internal fun StockAddPhotoTile(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text(
-            "+",
-            style = MaterialTheme.typography.titleMedium,
-            color = SmartieColors.Purple
+        // An icon, not a "+" character. A text "+" is indistinguishable from
+        // the stepper's increment to anything reading the semantics tree —
+        // including the tests — and ambiguous to a person on a board where
+        // "+" already means "one more of these".
+        Icon(
+            imageVector = Icons.Filled.AddAPhoto,
+            contentDescription = null,
+            tint = SmartieColors.Purple,
+            modifier = Modifier.size(20.dp)
         )
         Text(
             PHOTO_BUTTON,

@@ -1,6 +1,7 @@
 package `in`.smartie.quotedesk.ui
 
 import android.app.Application
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -154,6 +155,17 @@ class StockPhotoCardScreenTest {
             "no control at all, not a disabled one",
             compose.onAllNodesWithText(PHOTO_BUTTON).fetchSemanticsNodes().isEmpty()
         )
+    }
+
+    @Test
+    fun `the add tile does not impersonate the stepper's plus`() {
+        // It carried a text "+" for one commit, which made
+        // `onNodeWithText("+")` ambiguous with the increment button and broke
+        // the pending-change test. An icon carries no text semantics, so the
+        // stepper's "+" stays the only one on the card.
+        compose.showStock(stock = listOf(plain), capabilities = staffCaps)
+
+        compose.onAllNodesWithText("+").assertCountEquals(1)
     }
 
     @Test

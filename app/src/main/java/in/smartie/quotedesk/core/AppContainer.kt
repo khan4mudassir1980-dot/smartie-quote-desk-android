@@ -9,10 +9,12 @@ import `in`.smartie.quotedesk.data.repository.PeopleRepository
 import `in`.smartie.quotedesk.data.repository.CatalogueReadRepository
 import `in`.smartie.quotedesk.data.repository.OperationsReadRepository
 import `in`.smartie.quotedesk.data.repository.FirestoreStockPhotoStore
+import `in`.smartie.quotedesk.data.repository.DiskStockPhotoFiles
 import `in`.smartie.quotedesk.data.repository.FirestoreStockStore
 import `in`.smartie.quotedesk.data.repository.ProductPinsRepository
 import `in`.smartie.quotedesk.data.repository.StockPhotoRepository
 import `in`.smartie.quotedesk.data.repository.StockWriteRepository
+import java.io.File
 
 class AppContainer(
     context: Context,
@@ -34,8 +36,20 @@ class AppContainer(
     val stockWriteRepository = StockWriteRepository(FirestoreStockStore(firestore))
 
     /**
-     * One per application, so the revision-matched cache is shared by every
-     * screen: a photo fetched once is not fetched again anywhere.
+     * One per application, so both photo caches are shared by every screen: a
+     * photo fetched once is not fetched again anywhere.
+     *
+     * The files live under `noBackupFilesDir`, which is app-private and
+     * **excluded from Android's automatic backup**. That is deliberate: these
+     * are a local copy of something Firestore already holds, so backing them
+     * up would spend the person's backup quota to restore a cache that the
+     * first sync would rebuild anyway — and would carry stock photos into a
+     * Google backup nobody asked for.
      */
-    val stockPhotoRepository = StockPhotoRepository(FirestoreStockPhotoStore(firestore))
+    val stockPhotoRepository = StockPhotoRepository(
+        photos = FirestoreStockPhotoStore(firestore),
+        files = DiskStockPhotoFiles(
+            File(context.applicationContext.noBackupFilesDir, "stock-photos")
+        )
+    )
 }

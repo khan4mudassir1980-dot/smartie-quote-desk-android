@@ -14,9 +14,11 @@ import `in`.smartie.quotedesk.data.model.StockRecord
  *   downloaded again and again, and the whole usage estimate in
  *   `docs/N3.1-plan.md` rests on it.
  *
- * Least-recently-used, bounded, and deliberately in memory only: Firestore's
- * own persistence is what makes a photo survive a restart, and duplicating it
- * here would spend the device's disk twice over.
+ * Least-recently-used and bounded. This layer is **memory only and dies with
+ * the process** — surviving a restart is `DiskStockPhotoFiles`'s job, and it
+ * exists because Firestore's own persistence is not a substitute: a `get()`
+ * its local cache answers is still a billed document read. This cache is the
+ * fast layer in front of the disk, not the durable one.
  */
 class StockPhotoCache(private val maxEntries: Int = DEFAULT_ENTRIES) {
 

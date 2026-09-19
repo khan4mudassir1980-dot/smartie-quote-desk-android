@@ -191,6 +191,9 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.9.0")
     implementation("androidx.core:core-ktx:1.16.0")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+    // Stock photos: orientation. ImageDecoder applies EXIF itself but is
+    // API 28+, and minSdk here is 23.
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
 
     implementation(platform("com.google.firebase:firebase-bom:33.15.0"))
     implementation("com.google.firebase:firebase-auth")

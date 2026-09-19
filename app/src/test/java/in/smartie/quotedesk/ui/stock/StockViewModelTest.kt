@@ -66,6 +66,13 @@ class StockViewModelTest {
                 override fun writeMovement(docId: String, data: Map<String, Any?>) {
                     movementWrites += docId
                 }
+
+                // The view model's quantity paths must never reach a photo.
+                override fun writePhoto(docId: String, data: Map<String, Any?>) =
+                    throw AssertionError("a quantity write must not touch a photo")
+
+                override fun deletePhoto(docId: String) =
+                    throw AssertionError("a quantity write must not delete a photo")
             })
         }
     }
@@ -296,6 +303,8 @@ class StockViewModelTest {
                     override fun readStock(docId: String) = mapOf<String, Any?>("q" to 7.0)
                     override fun writeStock(docId: String, data: Map<String, Any?>, merge: Boolean) = Unit
                     override fun writeMovement(docId: String, data: Map<String, Any?>) = Unit
+                    override fun writePhoto(docId: String, data: Map<String, Any?>) = Unit
+                    override fun deletePhoto(docId: String) = Unit
                 })
             }
         }

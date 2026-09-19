@@ -31,6 +31,7 @@ import `in`.smartie.quotedesk.domain.PeopleFilter
 import `in`.smartie.quotedesk.domain.PeopleStatusFilter
 import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.domain.Role
+import `in`.smartie.quotedesk.domain.RoleTitles
 import `in`.smartie.quotedesk.ui.components.ConfirmDialog
 import `in`.smartie.quotedesk.ui.components.EmptyState
 import `in`.smartie.quotedesk.ui.components.ListRow
@@ -97,8 +98,8 @@ fun TeamScreen(
                         color = SmartieColors.Ink,
                     )
                     Text(
-                        "Share the app with them. They choose Continue with Google and enter as a " +
-                            "Worker; an Owner or Administrator then sets their role.",
+                        "Share the app with them. They choose Continue with Google and enter as " +
+                            "${RoleTitles.STAFF}; an Owner or Administrator then sets their role.",
                         style = MaterialTheme.typography.bodySmall,
                         color = SmartieColors.Steel,
                         modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
@@ -201,7 +202,8 @@ private fun ConfirmationFor(
         is PendingAction.Remove -> ConfirmDialog(
             title = "Remove member?",
             message = "Remove $name from this team.",
-            warning = "If they sign in again later, a fresh Worker profile will be created.",
+            warning = "If they sign in again later, a fresh ${RoleTitles.STAFF} profile " +
+                "will be created.",
             confirmText = "Remove member",
             requireTypedText = name,
             danger = true,
@@ -212,8 +214,8 @@ private fun ConfirmationFor(
         is PendingAction.Revoke -> ConfirmDialog(
             title = "Emergency revoke Owner?",
             message = "Remove Owner access from $name.",
-            warning = "This immediately changes the account to Worker and switches it off. " +
-                "They cannot enter again until switched on.",
+            warning = "This immediately changes the account to ${RoleTitles.STAFF} and " +
+                "switches it off. They cannot enter again until switched on.",
             confirmText = "Revoke access",
             requireTypedText = name,
             danger = true,
@@ -232,9 +234,9 @@ private fun ConfirmationFor(
 
         is PendingAction.Demote -> ConfirmDialog(
             title = "Change protected Owner role?",
-            message = "$name will become ${roleLabel(action.role)}.",
+            message = "$name will become ${RoleTitles.of(action.role)}.",
             warning = "They will lose Owner-level control immediately.",
-            confirmText = "Change to ${roleLabel(action.role)}",
+            confirmText = "Change to ${RoleTitles.of(action.role)}",
             onConfirm = onConfirm,
             onDismiss = onDismiss,
         )
@@ -315,31 +317,55 @@ private fun PersonRow(
 }
 
 @Composable
-private fun RoleMenu(person: Member, options: List<Role>, onSelect: (Role) -> Unit) {
+internal fun RoleMenu(person: Member, options: List<Role>, onSelect: (Role) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Column {
         SmartieGhostButton(
-            text = "Role: ${roleLabel(person.role)}",
+            text = "Role: ${RoleTitles.of(person.role)}",
             onClick = { expanded = true },
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            options.forEach { role ->
-                DropdownMenuItem(
-                    text = { Text(roleLabel(role)) },
-                    onClick = {
-                        expanded = false
-                        if (role != person.role) onSelect(role)
-                    },
-                )
-            }
+            RoleOptions(
+                options = options,
+                current = person.role,
+                onSelect = { role ->
+                    expanded = false
+                    onSelect(role)
+                },
+            )
         }
+    }
+}
+
+/**
+ * The options themselves, extracted for the same reason every dialog body in
+ * this app is: a `DropdownMenu` renders into its own popup window with its own
+ * recomposer, which the Robolectric test clock does not drive. The wrapper
+ * above holds the open/closed state and nothing else; this holds the mapping
+ * that matters and the tests drive it directly.
+ *
+ * Each item shows [RoleTitles.of] and hands back the **[Role] itself**, so a
+ * title can never be written to Firestore: what is stored is the enum's
+ * `wireValue`, untouched by any rename.
+ */
+@Composable
+internal fun RoleOptions(options: List<Role>, current: Role, onSelect: (Role) -> Unit) {
+    options.forEach { role ->
+        DropdownMenuItem(
+            text = { Text(RoleTitles.of(role)) },
+            onClick = { if (role != current) onSelect(role) },
+        )
     }
 }
 
 @Composable
 private fun AuditRow(entry: TeamAuditEntry) {
+    // `detail.from` and `detail.to` hold **stored wire values** — "staff",
+    // "worker" — written by this app and by the PWA. They are translated for
+    // reading here and nowhere else; nothing about what was written changes.
     val detail = if (entry.detailFrom.isNotBlank() || entry.detailTo.isNotBlank()) {
-        " (${entry.detailFrom} to ${entry.detailTo})"
+        " (${RoleTitles.ofWireValue(entry.detailFrom)} to " +
+            "${RoleTitles.ofWireValue(entry.detailTo)})"
     } else {
         ""
     }
@@ -360,13 +386,6 @@ private fun AuditRow(entry: TeamAuditEntry) {
             )
         }
     }
-}
-
-private fun roleLabel(role: Role): String = when (role) {
-    Role.OWNER -> "Owner / Administrator"
-    Role.ADMIN -> "Administrator"
-    Role.STAFF -> "Staff"
-    Role.WORKER -> "Worker"
 }
 
 private fun formatMoment(millis: Long): String =

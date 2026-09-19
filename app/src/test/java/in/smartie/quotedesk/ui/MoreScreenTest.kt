@@ -58,11 +58,37 @@ class MoreScreenTest {
         }
 
         compose.onNodeWithText("About & legal").assertExists()
+        // A stored `worker` wears the **Staff** badge on their own account
+        // card. The stored role, and everything it may do, is unchanged.
+        compose.onNodeWithText("Staff").assertExists()
+        assertEquals(
+            "the old title must be gone from the account card",
+            0,
+            compose.onAllNodesWithText("Worker").fetchSemanticsNodes().size
+        )
         // A Worker used to be offered Team and met the screen's refusal.
         assertEquals(0, compose.onAllNodesWithText("Team").fetchSemanticsNodes().size)
         assertEquals(0, compose.onAllNodesWithText("Settings").fetchSemanticsNodes().size)
         assertEquals(0, compose.onAllNodesWithText("Parties").fetchSemanticsNodes().size)
         assertEquals(0, compose.onAllNodesWithText("Quotation history").fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun `a stored staff wears the Manager badge on their own account card`() {
+        val manager = Member(
+            uid = "uid_staff", email = "staff@example.invalid", name = "Mo Kapoor",
+            role = Role.STAFF,
+        )
+        compose.setContent {
+            SmartieTheme { MoreScreen(member = manager, onOpen = {}, onSignOut = {}) }
+        }
+
+        compose.onNodeWithText("Manager").assertExists()
+        assertEquals(
+            "the role this used to be called must not appear beside the new one",
+            0,
+            compose.onAllNodesWithText("Staff").fetchSemanticsNodes().size
+        )
     }
 
     @Test

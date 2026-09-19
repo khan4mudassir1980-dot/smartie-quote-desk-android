@@ -78,7 +78,9 @@ class ProductsScreenTest {
     @Test
     fun `a worker sees the guard and nothing else`() {
         render(canView = false)
-        compose.onNodeWithText("Products and prices are not part of a Worker account.").assertExists()
+        // Stored `worker`, displayed "Staff". The account is unchanged.
+        compose.onNodeWithText("Products and prices are not part of a Staff account.")
+            .assertExists()
         assertEquals(0, compose.onAllNodesWithText("Search").fetchSemanticsNodes().size)
         assertEquals(0, compose.onAllNodesWithText("Product Categories").fetchSemanticsNodes().size)
         assertEquals(0, compose.onAllNodesWithText("Sliding Gate Motors").fetchSemanticsNodes().size)

@@ -38,14 +38,19 @@ data class Member(
 
     val isOwner: Boolean get() = ownerRank != OwnerRank.NONE || role == Role.OWNER
 
-    /** "Owner / Administrator" for both owners, as the PWA labels them. */
+    /**
+     * What to call this person on a badge.
+     *
+     * Both Owner positions read "Owner / Administrator", as the PWA labels
+     * them — which is why this is not simply [RoleTitles.of]: an `ADMIN` who
+     * holds an Owner position wears the Owner badge.
+     *
+     * The words come from [RoleTitles] and nowhere else. Note that a stored
+     * `STAFF` reads **Manager** and a stored `WORKER` reads **Staff**; the
+     * stored values are unchanged.
+     */
     val roleLabel: String
-        get() = when {
-            isOwner -> "Owner / Administrator"
-            role == Role.ADMIN -> "Administrator"
-            role == Role.STAFF -> "Staff"
-            else -> "Worker"
-        }
+        get() = if (isOwner) RoleTitles.OWNER_BADGE else RoleTitles.of(role)
 
     /** "Primary" or "Additional" beneath the owner label. */
     val ownerSubLabel: String?

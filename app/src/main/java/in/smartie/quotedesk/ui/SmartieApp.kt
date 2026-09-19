@@ -51,6 +51,8 @@ import `in`.smartie.quotedesk.BuildConfig
 import `in`.smartie.quotedesk.R
 import `in`.smartie.quotedesk.core.AppContainer
 import `in`.smartie.quotedesk.domain.Member
+import `in`.smartie.quotedesk.domain.RoleTitles
+
 import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.ui.components.ConnectivityBanner
 import `in`.smartie.quotedesk.ui.components.SmartieGhostButton
@@ -307,7 +309,7 @@ private fun Context.shareInvite() {
     val link = BuildConfig.APP_SHARE_URL
     val text = buildString {
         append("Join SMARTIE Quote Desk. Open the app and choose Continue with Google; ")
-        append("you enter as a Worker and an Owner or Administrator sets your role.")
+        append("you enter as ${RoleTitles.STAFF} and an Owner or Administrator sets your role.")
         if (link.isNotBlank()) append("\n\n").append(link)
     }
     val intent = Intent(Intent.ACTION_SEND).apply {

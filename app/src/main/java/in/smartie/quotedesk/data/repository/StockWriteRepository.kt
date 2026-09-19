@@ -4,6 +4,8 @@ import `in`.smartie.quotedesk.data.mapping.Keys
 import `in`.smartie.quotedesk.data.model.StockRecord
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.Permissions
+import `in`.smartie.quotedesk.domain.Role
+import `in`.smartie.quotedesk.domain.RoleTitles
 import `in`.smartie.quotedesk.domain.StockAuthor
 import `in`.smartie.quotedesk.domain.StockEntry
 import `in`.smartie.quotedesk.domain.StockPhotoImage
@@ -304,11 +306,20 @@ class StockWriteRepository(
     }
 
     private companion object {
-        const val NOT_ALLOWED_ADJUST = "Only an Owner, Administrator or Staff can change stock"
-        const val NOT_ALLOWED_EDIT = "Only an Owner, Administrator or Staff can edit stock"
-        const val NOT_ALLOWED_EXACT = "Only an Owner or Administrator can set an exact quantity"
-        const val NOT_ALLOWED_PIN = "Only an Owner, Administrator or Staff can pin stock"
-        const val NOT_ALLOWED_ARCHIVE = "Only an Owner or Administrator can stop tracking an item"
-        const val NOT_ALLOWED_PHOTO = "Only an Owner, Administrator or Staff can change a photo"
+        /**
+         * The titles come from [RoleTitles], built from the roles the
+         * permission actually allows, so a message cannot drift from the rule
+         * it describes. `Role.STAFF` reads **Manager**; the stored value is
+         * untouched.
+         */
+        private val STOCK_WRITERS = RoleTitles.anyOf(Role.OWNER, Role.ADMIN, Role.STAFF)
+        private val ADMINS = RoleTitles.anyOf(Role.OWNER, Role.ADMIN)
+
+        val NOT_ALLOWED_ADJUST = "Only $STOCK_WRITERS can change stock"
+        val NOT_ALLOWED_EDIT = "Only $STOCK_WRITERS can edit stock"
+        val NOT_ALLOWED_EXACT = "Only $ADMINS can set an exact quantity"
+        val NOT_ALLOWED_PIN = "Only $STOCK_WRITERS can pin stock"
+        val NOT_ALLOWED_ARCHIVE = "Only $ADMINS can stop tracking an item"
+        val NOT_ALLOWED_PHOTO = "Only $STOCK_WRITERS can change a photo"
     }
 }

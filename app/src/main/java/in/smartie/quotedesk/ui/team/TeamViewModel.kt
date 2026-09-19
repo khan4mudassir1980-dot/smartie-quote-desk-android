@@ -13,6 +13,7 @@ import `in`.smartie.quotedesk.domain.PeopleGroups
 import `in`.smartie.quotedesk.domain.PeopleStatusFilter
 import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.domain.Role
+import `in`.smartie.quotedesk.domain.RoleTitles
 import `in`.smartie.quotedesk.domain.TeamRoles
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,7 +73,7 @@ class TeamViewModel(
     fun roleOptionsFor(target: Member): List<Role> =
         Permissions.roleOptionsFor(viewer, target, ownerCount.value)
 
-    fun changeRole(target: Member, role: Role) = act("${target.name} is now ${label(role)}") {
+    fun changeRole(target: Member, role: Role) = act("${target.name} is now ${RoleTitles.of(role)}") {
         container.peopleRepository.changeRole(viewer, target, role, ownerCount.value)
     }
 
@@ -88,13 +89,6 @@ class TeamViewModel(
 
     fun emergencyRevoke(target: Member) = act("Owner access revoked; account switched off") {
         container.peopleRepository.emergencyRevoke(viewer, target)
-    }
-
-    private fun label(role: Role): String = when (role) {
-        Role.OWNER -> "Owner / Administrator"
-        Role.ADMIN -> "Administrator"
-        Role.STAFF -> "Staff"
-        Role.WORKER -> "Worker"
     }
 
     private fun act(success: String, block: suspend () -> Unit) {

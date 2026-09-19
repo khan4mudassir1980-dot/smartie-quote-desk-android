@@ -33,7 +33,9 @@ import `in`.smartie.quotedesk.ui.components.SmartieField
 import `in`.smartie.quotedesk.ui.components.SmartieGhostButton
 import `in`.smartie.quotedesk.ui.components.SmartiePrimaryButton
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
+import `in`.smartie.quotedesk.domain.RoleTitles
 import `in`.smartie.quotedesk.ui.theme.SmartieColors
+
 
 /**
  * Sign-in, matching the approved PWA: Google first, an existing email and
@@ -81,7 +83,7 @@ fun SignInScreen(
                         color = SmartieColors.Ink,
                     )
                     Text(
-                        "Use your Google account. New members enter securely as Workers.",
+                        "Use your Google account. New members enter securely as ${RoleTitles.STAFF}.",
                         style = MaterialTheme.typography.bodySmall,
                         color = SmartieColors.Steel,
                         modifier = Modifier.padding(top = 2.dp, bottom = 14.dp),
@@ -154,8 +156,8 @@ fun SignInScreen(
                     }
 
                     Text(
-                        "Switched-off accounts stay blocked. A removed member may sign in again " +
-                            "and returns as a Worker.",
+                        "Switched-off accounts stay blocked. A removed member may sign in " +
+                            "again and returns as ${RoleTitles.STAFF}.",
                         style = MaterialTheme.typography.labelMedium,
                         color = SmartieColors.Steel2,
                         modifier = Modifier.padding(top = 14.dp),

@@ -45,6 +45,8 @@ import `in`.smartie.quotedesk.domain.CatalogueEntry
 import `in`.smartie.quotedesk.domain.CatalogueView
 import `in`.smartie.quotedesk.domain.DraftLine
 import `in`.smartie.quotedesk.domain.Permissions
+import `in`.smartie.quotedesk.domain.RoleTitles
+
 import `in`.smartie.quotedesk.domain.PinDrag
 import `in`.smartie.quotedesk.domain.ProductPins
 import `in`.smartie.quotedesk.domain.QuoteDraft
@@ -155,7 +157,7 @@ fun ProductsCatalogue(
     if (!canViewProducts) {
         // The tab is already hidden from a Worker and the rules refuse the
         // read, so this is the third lock rather than the only one (T-P3).
-        EmptyState("Products and prices are not part of a Worker account.")
+        EmptyState("Products and prices are not part of a ${RoleTitles.STAFF} account.")
         return
     }
 

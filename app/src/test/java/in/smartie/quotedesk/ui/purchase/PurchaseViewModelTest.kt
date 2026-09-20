@@ -380,7 +380,9 @@ class PurchaseViewModelTest {
 
         assertEquals(listOf("pr_generated"), model.active.value.map { it.id })
         assertEquals("Remote handsets", model.active.value.single().name)
-        assertEquals(4.0, model.active.value.single().quantity)
+        // Both sides are `Double` here, so JUnit needs a delta — elsewhere
+        // the comparison is against a map value and boxes instead.
+        assertEquals(4.0, model.active.value.single().quantity, 0.0)
     }
 
     @Test

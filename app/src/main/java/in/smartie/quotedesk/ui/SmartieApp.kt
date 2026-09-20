@@ -74,6 +74,7 @@ import `in`.smartie.quotedesk.ui.more.MoreScreen
 import `in`.smartie.quotedesk.ui.more.PlaceholderScreen
 import `in`.smartie.quotedesk.ui.products.ProductsScreen
 import `in`.smartie.quotedesk.ui.products.ProductsViewModel
+import `in`.smartie.quotedesk.ui.purchase.PurchaseViewModel
 import `in`.smartie.quotedesk.ui.screens.PurchaseScreen
 import `in`.smartie.quotedesk.ui.screens.QuotationsScreen
 import `in`.smartie.quotedesk.ui.screens.SignInScreen
@@ -206,7 +207,24 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
                     }
                     StockScreen(data = data, viewModel = stockViewModel)
                 }
-                composable("purchase") { PurchaseScreen(data) }
+                composable("purchase") {
+                    val purchaseViewModel: PurchaseViewModel = viewModel(
+                        key = "purchase-${member.uid}",
+                        // The requirements flow the shell already holds, not a
+                        // second listener: a second one would double the tab's
+                        // cost against a shared daily quota to read rows the
+                        // first already has.
+                        factory = PurchaseViewModel.Factory(
+                            container,
+                            member,
+                            data.requirements,
+                        ),
+                    )
+                    LaunchedEffect(purchaseViewModel) {
+                        purchaseViewModel.messages.collect { snackbar.showSnackbar(it) }
+                    }
+                    PurchaseScreen(viewModel = purchaseViewModel)
+                }
                 composable("quotations") { QuotationsScreen(data) }
                 composable("more") {
                     MoreScreen(

@@ -84,6 +84,7 @@ class PurchaseWriteRepositoryTest {
         rev: Any = 3,
         received: Any? = null,
         receivedBy: String? = null,
+        rcvQty: Any? = null,
         del: Any? = null,
         id: Any? = "pr_one"
     ): Map<String, Any?> = buildMap {
@@ -96,6 +97,7 @@ class PurchaseWriteRepositoryTest {
         if (id != null) put("id", id)
         if (received != null) put("received", received)
         if (receivedBy != null) put("rcvBy", receivedBy)
+        if (rcvQty != null) put("rcvQty", rcvQty)
         if (del != null) put("del", del)
     }
 
@@ -151,9 +153,9 @@ class PurchaseWriteRepositoryTest {
     fun `a requirement that has gone writes nothing and says nothing happened`() = runTest {
         val store = FakeStore(stored = null)
 
-        val result = repository(store).markReceived(admin, onScreen, 4.0)
+        val receipt = repository(store).markReceived(admin, onScreen, 4.0)
 
-        assertEquals(PurchaseWriteResult.NO_CHANGE, result)
+        assertEquals(PurchaseWriteResult.NO_CHANGE, receipt.result)
         assertTrue(store.writes.isEmpty())
     }
 
@@ -319,7 +321,7 @@ class PurchaseWriteRepositoryTest {
         val receives = FakeStore(stored = row())
         assertEquals(
             PurchaseWriteResult.WRITTEN,
-            repository(receives).markReceived(staff, onScreen, 4.0)
+            repository(receives).markReceived(staff, onScreen, 4.0).result
         )
 
         // Reopen is the one restriction the rules cannot express, so this
@@ -367,6 +369,89 @@ class PurchaseWriteRepositoryTest {
 
         assertTrue(failure is IllegalStateException)
         assertEquals("Already received by Omar", failure?.message)
+    }
+
+    // --- what a delivery came to ----------------------------------------------
+
+    @Test
+    fun `a part delivery is reported as part of one, against the stored figures`() = runTest {
+        // The record the screen is holding says 99 needed and nothing
+        // received. Everything the caller is told comes from the document the
+        // transaction read, because the board's figure can be two deliveries
+        // old — which is exactly how somebody gets told a requirement is
+        // finished when it is not.
+        val store = FakeStore(stored = row(qty = 10.0, rcvQty = 3.0))
+
+        val receipt = repository(store).markReceived(admin, onScreen, 2.0)
+
+        assertEquals(PurchaseWriteResult.WRITTEN, receipt.result)
+        assertEquals(5.0, receipt.receivedTotal, 0.0)
+        assertEquals(10.0, receipt.requiredTotal, 0.0)
+        assertEquals(5.0, receipt.remaining, 0.0)
+        assertFalse("five of ten has not finished anything", receipt.complete)
+        assertEquals(5.0, store.writes.single().data["rcvQty"])
+        assertEquals(false, store.writes.single().data["received"])
+    }
+
+    @Test
+    fun `the delivery that finishes it is reported as complete`() = runTest {
+        val store = FakeStore(stored = row(qty = 10.0, rcvQty = 6.0))
+
+        val receipt = repository(store).markReceived(admin, onScreen, 4.0)
+
+        assertTrue(receipt.complete)
+        assertEquals(0.0, receipt.remaining, 0.0)
+        assertEquals(10.0, store.writes.single().data["rcvQty"])
+        assertEquals(true, store.writes.single().data["received"])
+    }
+
+    @Test
+    fun `a legacy string received total is added to, not replaced`() = runTest {
+        // A V8C4 row can hold both figures as strings. The reader coerces
+        // them, and the running total is arithmetic on what it read.
+        val store = FakeStore(stored = row(qty = "10", rcvQty = "4"))
+
+        val receipt = repository(store).markReceived(admin, onScreen, 3.0)
+
+        assertEquals(7.0, receipt.receivedTotal, 0.0)
+        // And the rules' merged post-state still gets a numeric `qty`.
+        assertEquals(10.0, store.writes.single().data["qty"])
+    }
+
+    @Test
+    fun `more than is outstanding is refused against the stored total`() = runTest {
+        val store = FakeStore(stored = row(qty = 10.0, rcvQty = 8.0))
+
+        val failure = runCatching { repository(store).markReceived(admin, onScreen, 5.0) }
+            .exceptionOrNull()
+
+        assertEquals(PurchaseWrite.moreThanRemaining(2.0), failure?.message)
+        assertTrue("a refused delivery writes nothing", store.writes.isEmpty())
+    }
+
+    @Test
+    fun `the total needed cannot be edited below the stored received total`() = runTest {
+        val store = FakeStore(stored = row(qty = 10.0, rcvQty = 6.0))
+
+        val failure =
+            runCatching { repository(store).edit(admin, onScreen, "X", 5.0, UrgencyV2.NORMAL, "") }
+                .exceptionOrNull()
+
+        assertEquals(PurchaseWrite.belowReceived(6.0), failure?.message)
+        assertTrue(store.writes.isEmpty())
+    }
+
+    @Test
+    fun `editing the total down to what has arrived closes the requirement`() = runTest {
+        val store = FakeStore(stored = row(qty = 10.0, rcvQty = 6.0))
+
+        val result = repository(store).edit(admin, onScreen, "X", 6.0, UrgencyV2.NORMAL, "")
+
+        assertEquals(PurchaseWriteResult.WRITTEN, result)
+        val data = store.writes.single().data
+        assertEquals(PurchaseWrite.STATUS_RECEIVED, data["status"])
+        assertEquals(true, data["received"])
+        assertFalse("still never a del key on an update", data.containsKey("del"))
     }
 
     /** Every call a Worker must be refused, so the matrix is asserted on all of them. */

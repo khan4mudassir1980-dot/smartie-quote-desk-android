@@ -32,6 +32,31 @@ data class PurchaseCreated(
 )
 
 /**
+ * What a delivery came to, **decided inside the transaction**.
+ *
+ * `rcvQty` is a cumulative total, so whether a receipt finished a requirement
+ * is not something the screen can work out: the figure it was showing may be
+ * two deliveries old. Both totals are read back out of the plan that was
+ * written, through the same reader the listener uses, so what the person is
+ * told and what Firestore holds are the same document by construction.
+ */
+data class PurchaseReceipt(
+    val result: PurchaseWriteResult,
+    /** The cumulative quantity received once this delivery is counted. */
+    val receivedTotal: Double = 0.0,
+    /** The total required, which a delivery never changes. */
+    val requiredTotal: Double = 0.0
+) {
+    /** Still to come. Never negative. */
+    val remaining: Double get() = (requiredTotal - receivedTotal).coerceAtLeast(0.0)
+
+    /** Whether this delivery was the one that finished it. */
+    val complete: Boolean
+        get() = requiredTotal > 0.0 &&
+            receivedTotal >= requiredTotal - PurchaseRecord.QUANTITY_TOLERANCE
+}
+
+/**
  * The only writer N4 adds.
  *
  * **The transaction contract**, binding on every call below:
@@ -123,15 +148,35 @@ class PurchaseWriteRepository(
         }
     }
 
-    /** It arrived. Owner, Administrator and Staff; the rules agree. */
+    /**
+     * A delivery arrived. Owner, Administrator and Staff; the rules agree.
+     *
+     * [receivedNow] is **this delivery**, not the total. The running total is
+     * computed against the stored document inside the transaction, so two
+     * people receiving parts of the same order resolve to one total rather
+     * than to two opinions about it — and the caller is told what the total
+     * came to, because the board cannot work that out for itself.
+     */
     suspend fun markReceived(
         member: Member,
         record: PurchaseRecord,
-        receivedQuantity: Double
-    ): PurchaseWriteResult {
+        receivedNow: Double
+    ): PurchaseReceipt {
         require(Permissions.canSetPurchaseStatus(member)) { NOT_ALLOWED_RECEIVE }
-        return update(member, record) { stored, author, at ->
-            PurchaseWrite.markReceived(stored, receivedQuantity, author, at)
+        val author = authorOf(member)
+        val at = now()
+        return store.transaction { transaction ->
+            val stored = transaction.read(record.id)?.toPurchaseRecord()
+                ?: return@transaction PurchaseReceipt(PurchaseWriteResult.NO_CHANGE)
+            val plan = PurchaseWrite.markReceived(stored, receivedNow, author, at)
+            val result = commit(transaction, plan)
+            val written = (plan as? PurchasePlan.Write)
+                ?.let { DocData(stored.id, it.data).toPurchaseRecord() }
+            PurchaseReceipt(
+                result = result,
+                receivedTotal = written?.receivedTotal ?: stored.receivedTotal,
+                requiredTotal = written?.quantity ?: stored.quantity
+            )
         }
     }
 

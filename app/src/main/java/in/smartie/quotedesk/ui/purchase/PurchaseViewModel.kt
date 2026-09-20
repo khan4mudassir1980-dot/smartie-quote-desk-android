@@ -10,6 +10,7 @@ import `in`.smartie.quotedesk.core.toAppError
 import `in`.smartie.quotedesk.data.ListenerRetry
 import `in`.smartie.quotedesk.data.retryingListener
 import `in`.smartie.quotedesk.data.repository.FirestoreFailures
+import `in`.smartie.quotedesk.data.mapping.Money
 import `in`.smartie.quotedesk.data.repository.PurchaseWriteRepository
 import `in`.smartie.quotedesk.data.repository.PurchaseWriteResult
 import `in`.smartie.quotedesk.domain.Member
@@ -248,9 +249,32 @@ class PurchaseViewModel(
         write(record.id, SAVED) { writes.setUrgency(member, record, urgency) }
     }
 
-    fun markReceived(record: PurchaseRecord, receivedQuantity: Double) {
+    /**
+     * A delivery arrived. [receivedNow] is **this delivery**, not the total.
+     *
+     * What to say afterwards is decided by the repository, against the stored
+     * document inside the transaction — never here. The board's figure can be
+     * two deliveries old, and telling somebody a requirement is finished when
+     * it is not is the defect this whole batch exists to fix.
+     */
+    fun markReceived(record: PurchaseRecord, receivedNow: Double) {
         if (!requireOnline()) return
-        write(record.id, RECEIVED) { writes.markReceived(member, record, receivedQuantity) }
+        val key = record.id
+        launchWrite(key) {
+            runCatching { writes.markReceived(member, record, receivedNow) }
+                .onSuccess { receipt ->
+                    _pending.value = _pending.value - key
+                    dismiss()
+                    emit(
+                        when {
+                            receipt.result != PurchaseWriteResult.WRITTEN -> NOTHING_CHANGED
+                            receipt.complete -> RECEIVED
+                            else -> partlyReceived(receipt.remaining)
+                        }
+                    )
+                }
+                .onFailure { emit(failureOf(it)) }
+        }
     }
 
     fun reopen(record: PurchaseRecord) {
@@ -389,6 +413,17 @@ class PurchaseViewModel(
         const val ADDED: String = "Requirement added"
         const val SAVED: String = "Saved"
         const val RECEIVED: String = "Marked as received"
+
+        /**
+         * Part of it came, and the rest has not.
+         *
+         * The outstanding figure is in the sentence because that is the thing
+         * somebody has to chase, and because a bare "saved" after a part
+         * delivery reads exactly like the defect this replaced — where the
+         * first delivery closed the whole requirement.
+         */
+        fun partlyReceived(remaining: Double): String =
+            "Part received — ${Money.formatQuantity(remaining)} still to come"
         const val REOPENED: String = "Back on the active list"
         const val REMOVED: String = "Requirement removed"
         const val NOTHING_CHANGED: String = "Nothing to save"

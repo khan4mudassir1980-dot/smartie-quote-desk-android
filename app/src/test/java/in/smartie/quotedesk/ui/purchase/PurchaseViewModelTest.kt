@@ -82,7 +82,8 @@ class PurchaseViewModelTest {
     private fun row(
         qty: Any = 6.0,
         received: Any? = null,
-        receivedBy: String? = null
+        receivedBy: String? = null,
+        rcvQty: Any? = null
     ): Map<String, Any?> = buildMap {
         put("id", "pr_one")
         put("name", "Sliding gate rack")
@@ -93,6 +94,7 @@ class PurchaseViewModelTest {
         put("updated", 1_690_000_000_000L)
         if (received != null) put("received", received)
         if (receivedBy != null) put("rcvBy", receivedBy)
+        if (rcvQty != null) put("rcvQty", rcvQty)
     }
 
     private fun record(
@@ -212,6 +214,93 @@ class PurchaseViewModelTest {
 
         assertEquals(listOf(PurchaseViewModel.ADDED), messages)
         assertEquals("uid_worker", store.writes.single()["byUid"])
+    }
+
+    // --- part deliveries ------------------------------------------------------
+
+    @Test
+    fun `a part delivery says what is still to come, and the row stays open`() = runTest {
+        val store = Store(stored = row(qty = 10.0))
+        val model = viewModel(store = store)
+        val messages = messagesOf(model)
+        model.open(PurchaseSheet.RECEIVE, record())
+
+        model.markReceived(record(), 4.0)
+
+        // Not "Marked as received": the defect this batch fixes is precisely a
+        // first delivery being reported, and treated, as the whole order.
+        assertEquals(listOf(PurchaseViewModel.partlyReceived(6.0)), messages)
+        assertEquals(4.0, store.writes.single()["rcvQty"])
+        assertEquals(false, store.writes.single()["received"])
+        assertFalse("a successful write still closes the panel", model.sheet.value.isOpen)
+    }
+
+    @Test
+    fun `the delivery that completes it says so`() = runTest {
+        val store = Store(stored = row(qty = 10.0, rcvQty = 6.0))
+        val model = viewModel(store = store)
+        val messages = messagesOf(model)
+
+        model.markReceived(record(), 4.0)
+
+        assertEquals(listOf(PurchaseViewModel.RECEIVED), messages)
+        assertEquals("the running total, not the last delivery", 10.0, store.writes.single()["rcvQty"])
+        assertEquals(true, store.writes.single()["received"])
+    }
+
+    @Test
+    fun `what is said is decided by the stored figures, not the screen's`() = runTest {
+        // The record handed in says six are needed and none have arrived. The
+        // document says ten, with nine already in — so this delivery finishes
+        // it, and only the transaction could have known that.
+        val store = Store(stored = row(qty = 10.0, rcvQty = 9.0))
+        val model = viewModel(store = store)
+        val messages = messagesOf(model)
+
+        model.markReceived(record(), 1.0)
+
+        assertEquals(listOf(PurchaseViewModel.RECEIVED), messages)
+    }
+
+    @Test
+    fun `more than is outstanding is refused by name and writes nothing`() = runTest {
+        val store = Store(stored = row(qty = 10.0, rcvQty = 8.0))
+        val model = viewModel(store = store)
+        val messages = messagesOf(model)
+        model.open(PurchaseSheet.RECEIVE, record())
+
+        model.markReceived(record(), 5.0)
+
+        assertEquals(listOf(PurchaseWrite.moreThanRemaining(2.0)), messages)
+        assertEquals(0, store.writes.size)
+        assertTrue("the panel stays open so it can be corrected", model.sheet.value.isOpen)
+    }
+
+    @Test
+    fun `the total needed cannot be edited below what has arrived`() = runTest {
+        val store = Store(stored = row(qty = 10.0, rcvQty = 6.0))
+        val model = viewModel(store = store)
+        val messages = messagesOf(model)
+        model.open(PurchaseSheet.EDIT, record())
+
+        model.edit(record(), "Sliding gate rack", 5.0, UrgencyV2.URGENT, "")
+
+        assertEquals(listOf(PurchaseWrite.belowReceived(6.0)), messages)
+        assertEquals(0, store.writes.size)
+        assertTrue(model.sheet.value.isOpen)
+    }
+
+    @Test
+    fun `editing the total down to what has arrived closes it`() = runTest {
+        val store = Store(stored = row(qty = 10.0, rcvQty = 6.0))
+        val model = viewModel(store = store)
+        val messages = messagesOf(model)
+
+        model.edit(record(), "Sliding gate rack", 6.0, UrgencyV2.URGENT, "")
+
+        assertEquals(listOf(PurchaseViewModel.SAVED), messages)
+        assertEquals(true, store.writes.single()["received"])
+        assertEquals(PurchaseWrite.STATUS_RECEIVED, store.writes.single()["status"])
     }
 
     // --- offline and duplicate taps ------------------------------------------------

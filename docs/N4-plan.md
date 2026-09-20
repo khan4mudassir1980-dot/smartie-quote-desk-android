@@ -158,7 +158,7 @@ app, whose absence we control, plus a one-off backfill. That is N4.x, not N4.
 | **1a** | The green urgency label, display only | Done |
 | **1b** | `PurchaseWrite` — the pure mutation planner, and its tests | Done |
 | **2** | `PurchaseStore` / `PurchaseTransaction` seam, `PurchaseWriteRepository`, `Permissions.canReopenPurchase`, emulator tests | Done |
-| 3 | `PurchaseViewModel` and the panels | Not started |
+| **3** | `PurchaseViewModel` and the panels | Done |
 | 4 | The Purchase tab rebuilt; **closes T-S25** | Not started |
 | 5 | The read-only Purchase History screen | Not started |
 | 6 | The bottom-navigation badge, and close-out | Not started |

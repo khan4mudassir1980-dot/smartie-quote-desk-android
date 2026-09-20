@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-20.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `c681f13` — [run #90](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35497587944), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `fc371da` — [run #94](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35510294933), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -25,7 +25,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N2 Products | **Complete and verified** |
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
-| N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0, 1a, 1b and 2 are done — the label, the pure planner, the store seam, the writer and the emulator proof of the five traps. **Nothing is on a device and nothing is on a screen:** Purchase is still read-only behind its in-development banner, so no N4 row may be called verified |
+| N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0, 1a, 1b, 2 and 3 are done — the label, the pure planner, the store seam, the writer, the emulator proof of the five traps, and now the panels and the view model. **Nothing is on a device yet, and the tab is still read-only behind its in-development banner**, so no N4 row may be called verified |
 | N5–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -323,20 +323,50 @@ written. Nothing was merged to `main` and no pull request exists.
 banner, so **T-S25 stays blocked** on the batch that makes a requirement creatable from a
 screen.
 
+### N4 batch 3, the panels and the view model
+
+Verified at `fc371da`,
+[run #94](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35510294933),
+all three jobs green.
+
+| Commit | What |
+|---|---|
+| `67beb3e` | `PurchaseBoard` — active and closed, newest first, sorted client-side |
+| `a73d762` | `FirestoreFailures` tells contention apart from a refusal |
+| `3cea2fe` | `PurchasePanels` — the six surfaces and the role-to-control mapping |
+| `1b96f1d` | `PurchaseViewModel` over `PurchaseWriteRepository` |
+| `fc371da` | Sheet height shared with the stock sheets; the two panel tests scroll |
+
+**805 Kotlin test methods across 73 classes**, up from 742 across 67 after Batch 2; the 107
+emulator tests and 26 importer tests unchanged — `firestore/` was not touched; still **0
+instrumentation tests**.
+
+**A defect found and fixed on the way.** `PurchaseRecord.isOpen` is `!deleted && !isClosed`,
+so "not open" is not the same as "closed": a removed requirement that was never received is
+neither. The tab's current split is `filter { isOpen }` / `filterNot { isOpen }`, which puts a
+soft-deleted row into "Received and closed". `PurchaseBoard.closed()` filters on
+`!deleted && isClosed` instead. Nothing can reach it yet — no screen is wired to a writer —
+and `PurchaseScreen` is rebuilt in Batch 4, so it was not widened here.
+
+**Reopen is enforced by the app alone**, and three places say so rather than implying
+otherwise: `Permissions.canReopenPurchase`, `PurchaseCapabilities`, and
+`PurchaseViewModel.open`, which refuses to open a panel this person may not act on.
+
+**No rules or index change, nothing deployed, production neither read nor written**, nothing
+merged to `main`, no pull request.
+
 ## Current next action
 
-**N4 Purchase, Batch 3: the `PurchaseViewModel` and the add, edit, receive, reopen and
-remove panels.**
+**N4 Purchase, Batch 4: rebuild the Purchase tab on the panels and the view model — and with
+it N3's T-S25.**
 
-The plan of record is `docs/N4-plan.md`. Batches 0, 1a, 1b and 2 are done and CI-verified at
-`c681f13` (run #90): the label, the pure planner, the `PurchaseStore` seam,
-`PurchaseWriteRepository` and the emulator proof of the five legacy traps. Everything written
-so far is data-shape work — **nothing writes a requirement from a screen yet**, and the
-Purchase tab is still read-only behind its in-development banner.
+The plan of record is `docs/N4-plan.md`. Batches 0 to 3 are done and CI-verified at `fc371da`
+(run #94). What is missing is only the tab: `PurchaseScreen` still renders behind its
+in-development banner and nothing on it reaches `PurchaseViewModel`, so **no requirement can
+yet be created, changed or received from a phone** and no N4 acceptance row can be run.
 
-Batch 3 is the first that touches the interface. It changes no Firestore rule and no index;
-the rules already carry the whole write contract, and Batch 2 proved it against the emulator
-without altering a line of it.
+Batch 4 also carries the `PurchaseScreen` half of the soft-delete defect above. It changes no
+Firestore rule and no index.
 
 What is **not** this action, and must not slip because N4 started:
 

@@ -14,6 +14,8 @@ import `in`.smartie.quotedesk.data.model.UrgencyV2
 import `in`.smartie.quotedesk.domain.PurchaseBoard
 import `in`.smartie.quotedesk.ui.purchase.ADD_REQUIREMENT
 import `in`.smartie.quotedesk.ui.purchase.OFFLINE
+import `in`.smartie.quotedesk.ui.purchase.disabledLabel
+import `in`.smartie.quotedesk.ui.purchase.rowActionLabel
 import `in`.smartie.quotedesk.ui.purchase.PurchaseActions
 import `in`.smartie.quotedesk.ui.purchase.PurchaseCapabilities
 import `in`.smartie.quotedesk.ui.purchase.PurchaseSheet
@@ -187,7 +189,7 @@ class PurchaseBoardScreenTest {
     }
 
     @Test
-    fun `offline the add control is disabled and carries the reason`() {
+    fun `offline every control is disabled and still says which one it is`() {
         var opened: PurchaseSheet? = null
         show(
             listOf(open),
@@ -195,8 +197,22 @@ class PurchaseBoardScreenTest {
             actions = PurchaseActions(onOpen = { sheet, _ -> opened = sheet })
         )
 
-        compose.onNodeWithText(ADD_REQUIREMENT).assertIsNotEnabled()
-        compose.onNodeWithContentDescription(OFFLINE).performClick()
+        // The reason follows the control's own name rather than replacing it.
+        // Offline, a description of just "Internet required…" would read the
+        // same on Add, Edit, Received and Remove, and somebody working by ear
+        // could not tell which control they were on — nor one requirement's
+        // Remove from another's.
+        val add = disabledLabel(ADD_REQUIREMENT)
+        val remove = disabledLabel(rowActionLabel(PurchaseSheet.REMOVE, open.name))
+        assertTrue("the reason has to be there", add.contains(OFFLINE))
+        assertTrue(remove.contains(OFFLINE))
+        assertTrue("and the control still has to be identifiable", add != remove)
+
+        compose.onNodeWithContentDescription(add).assertIsNotEnabled()
+        compose.onNodeWithContentDescription(add).performClick()
+        compose.scrollToDescription(remove)
+        compose.onNodeWithContentDescription(remove).assertIsNotEnabled()
+
         assertEquals("nothing may be opened offline", null, opened)
     }
 }

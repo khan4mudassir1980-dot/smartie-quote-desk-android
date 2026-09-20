@@ -485,7 +485,10 @@ private fun RowAction(
         // own position in the chain, so one placed under the sizing would
         // describe the words rather than the target they sit in.
         modifier = Modifier
-            .semantics { contentDescription = if (online) description else OFFLINE }
+            .semantics {
+                contentDescription =
+                    if (online) description else disabledLabel(description)
+            }
             .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
     )
 }
@@ -691,6 +694,17 @@ internal fun neededLine(record: PurchaseRecord): String =
 
 /** So a test can click an urgency without depending on where its words wrap. */
 internal fun urgencyOptionLabel(urgency: UrgencyV2): String = "Urgency ${urgency.label}"
+
+/**
+ * A control's own description, **and then** why it cannot be used.
+ *
+ * Not the reason on its own: offline, every control on every card would
+ * announce the same sentence, and somebody working by ear could not tell
+ * Edit from Remove — or one requirement's Remove from another's. The name
+ * comes first because that is what identifies the control; the reason
+ * follows because that is what has changed.
+ */
+internal fun disabledLabel(description: String): String = "$description — $OFFLINE"
 
 /**
  * What a screen reader says about a card control.

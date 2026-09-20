@@ -32,7 +32,7 @@ import `in`.smartie.quotedesk.ui.purchase.AddRequirementPanel
 import `in`.smartie.quotedesk.ui.purchase.EDIT_TITLE
 import `in`.smartie.quotedesk.ui.purchase.EditRequirementPanel
 import `in`.smartie.quotedesk.ui.purchase.MarkReceivedPanel
-import `in`.smartie.quotedesk.ui.purchase.OFFLINE
+import `in`.smartie.quotedesk.ui.purchase.disabledLabel
 import `in`.smartie.quotedesk.ui.purchase.PURCHASE_CONFIRM_PROPERTIES
 import `in`.smartie.quotedesk.ui.purchase.PURCHASE_FORM_PROPERTIES
 import `in`.smartie.quotedesk.ui.purchase.PurchaseActions
@@ -139,7 +139,10 @@ internal fun PurchaseBoardScreen(
                     onClick = { actions.onOpen(PurchaseSheet.ADD, null) },
                     enabled = online,
                     modifier = Modifier
-                        .semantics { contentDescription = if (online) ADD_REQUIREMENT else OFFLINE }
+                        .semantics {
+                            contentDescription =
+                                if (online) ADD_REQUIREMENT else disabledLabel(ADD_REQUIREMENT)
+                        }
                         .fillMaxWidth()
                 )
             }

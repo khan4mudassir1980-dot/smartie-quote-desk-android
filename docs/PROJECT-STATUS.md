@@ -25,7 +25,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N2 Products | **Complete and verified** |
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
-| N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done — the tab writes, and every one of the six operations is reachable from it. A manual pass on a phone then found **four real defects**; **all four defect batches — A, B, C and D — are done and CI-verified**. Only the four defects have been seen on a device, so **no N4 acceptance row may be called verified**; the history screen is Batch 5 and the tab badge is Batch 6 |
+| N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. N4.2, creator self-service, is the batch in progress; the history screen is Batch 5 and the tab badge is Batch 6 |
 | N5–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -323,6 +323,42 @@ written. Nothing was merged to `main` and no pull request exists.
 banner, so **T-S25 stays blocked** on the batch that makes a requirement creatable from a
 screen.
 
+### The Batch C staging phone pass
+
+Run by the Owner on a physical Android phone, against the
+`smartie-native-apks` artifact of
+[run #104](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35519935449).
+**Eight things were confirmed, and they are listed here exactly as reported:**
+
+| Confirmed on the phone | What it closes |
+|---|---|
+| Purchase card information and buttons no longer overlap | **Batch A's defect, fixed on a device** |
+| A new requirement appears without restarting the app | **Batch B's defect, fixed on a device** |
+| Open requirements are ordered red, then yellow, then green | **Batch D, confirmed** |
+| Newest first inside the same urgency | **Batch D, confirmed** |
+| A partial receipt leaves the requirement Open | T-R14, **in part** |
+| The received quantity accumulates across deliveries | T-R18, **in part** |
+| The requirement closes when the cumulative received reaches the required quantity | T-R15, **in part** |
+| The build shows **Staging** | The build-identity check |
+
+**What this pass does not claim, and must not be read as claiming.** Only the
+eight lines above were reported. Everything else stays outstanding:
+
+- **No role-specific row is passed.** T-R3, T-R4, T-R5 and T-R6 name what a
+  Staff account, a Manager and an Administrator are each offered, and no role
+  separation was reported. They stay pending.
+- **T-R14, T-R15 and T-R18 passed in part, not whole.** The card's exact
+  wording (`10 required · 4 received · 6 remaining`), the closed card's
+  `10 in`, and the partly received row keeping its place inside its urgency
+  group were not separately reported.
+- **T-R16 and T-R17 were not reported at all** — receiving more than is
+  outstanding, and the two edit guards around the received total.
+- **T-R1, T-R2, T-R11 and T-R13 were not reported**, so **N3's T-S25 stays
+  pending**: the row is about the note and the urgency being legible on the
+  card *without opening Edit*, and that is not one of the eight.
+- **T-R7 to T-R10 and T-R12** wait on Batch 5, Batch 6 and a second phone, as
+  they always did.
+
 ### N4 batch C, partial receipt
 
 Verified at `8030933`,
@@ -489,20 +525,23 @@ merged to `main`, no pull request.
 
 ## Current next action
 
-**Run the N4 manual checks on a phone, from the `smartie-native-apks`
-artifact of run #104.**
+**Implement N4.2 — creator self-service on Purchase requirements.**
 
-All four defects the last manual pass found are fixed and CI-verified, so the
-thing that decides what happens next is a device, not more code. The rows
-ready to run are **T-R1 to T-R6, T-R11, T-R13 — and with T-R2, N3's T-S25** —
-plus **T-R14 to T-R18**, the partial-receipt rows Batch C adds. T-R7 and T-R8
-wait on the history screen (Batch 5), T-R9 and T-R10 on the tab badge
-(Batch 6), and T-R12 on a second phone. The build must show **Staging**.
+A Manager or Staff account may correct a requirement **they raised
+themselves**, while nothing has been received against it: name, note, required
+quantity, urgency, and a soft removal. The moment any quantity arrives the
+record is locked — Staff becomes read-only for it, a Manager may still receive
+the outstanding quantity or close a shortfall, and only an Owner or
+Administrator may make a privileged correction.
 
-Batch 5, the read-only Purchase History screen, can begin in parallel. It
-changes no Firestore rule and no index.
+**Enforced in the Firestore rules, not by hiding a button.** This is the first
+rules change since 20 September, and it makes the rules *stricter* for a
+Manager as well as looser for Staff, so the rules deployment and the APK
+rollout have to happen together. The Owner runs the deployment; this branch
+never deploys.
 
-**No N4 row is passed until it has been run**, and none has.
+The audited plan is in `docs/N4.2-plan.md`. After it, the outstanding phone
+rows — the role-specific ones, T-R16, T-R17, N3's T-S25 — and then Batch 5.
 
 ## Decisions that bind future work
 

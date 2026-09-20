@@ -238,7 +238,8 @@ app, whose absence we control, plus a one-off backfill. That is N4.x, not N4.
 | **B** | A listener that dies comes back; a new requirement shows at once | Done |
 | **C** | **Partial receipt** — cumulative `rcvQty`, and the edit guards around it | Done |
 | **D** | Open requirements ordered by urgency, newest within a colour | Done |
-| 5 | The read-only Purchase History screen | Not started |
+| **4.2** | **Creator self-service** — a Manager or Staff account corrects their own untouched requirement; the record locks on the first receipt. Its own plan: `docs/N4.2-plan.md` | In progress |
+| 5 | The read-only Purchase History screen. **Binding: a Staff account sees only rows where `byUid` is their own uid**, and legacy rows with no `byUid` are not in it — see `docs/N4.2-plan.md` | Not started |
 | 6 | The bottom-navigation badge, and close-out | Not started |
 
 Batches A to D are the four defects the Batch 4 manual pass found on a phone. They were
@@ -281,6 +282,19 @@ To be run on a staging build once Batch 6 lands. None has been run.
 | T-R16 | Receiving more than is still outstanding is refused by name, with the outstanding figure in the sentence |
 | T-R17 | The required total cannot be edited below what has already arrived; setting it **equal** to what has arrived closes the requirement in the same save |
 | T-R18 | Three smaller deliveries against one requirement accumulate rather than replace, and the third closes it |
+
+### What a staging phone pass has actually confirmed
+
+A pass on a physical phone against the run #104 build confirmed **eight
+things**, listed line by line in `docs/PROJECT-STATUS.md` under "The Batch C
+staging phone pass". In summary: all four defect fixes (card overlap, a new
+requirement appearing without a restart, and the red/yellow/green ordering with
+newest first inside a colour), and — **in part** — T-R14, T-R15 and T-R18, the
+three partial-receipt behaviours. The build showed **Staging**.
+
+**No role-specific row is passed**, T-R16 and T-R17 were not reported, and
+**N3's T-S25 remains pending**. A row is passed here only when it has been run
+whole and reported.
 
 ### What can be run on a phone after Batch 4
 

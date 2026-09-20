@@ -163,7 +163,12 @@ object PurchaseAccess {
 
     val ADMINS: String = RoleTitles.anyOf(Role.OWNER, Role.ADMIN)
 
-    const val ALREADY_REMOVED: String = "This requirement has been removed"
+    /**
+     * The planner's own sentence, not a second copy of it. A person who tries
+     * to change a removed requirement should read the same thing whether the
+     * refusal came from here or from `PurchaseWrite`.
+     */
+    const val ALREADY_REMOVED: String = PurchaseWrite.ALREADY_DELETED
 
     val LOCKED_BY_RECEIPT: String =
         "Something has already arrived against this — only $ADMINS can change it now"

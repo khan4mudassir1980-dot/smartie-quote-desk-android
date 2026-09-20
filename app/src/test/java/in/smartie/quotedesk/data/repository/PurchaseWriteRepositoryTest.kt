@@ -5,6 +5,7 @@ import `in`.smartie.quotedesk.data.model.PurchaseRecord
 import `in`.smartie.quotedesk.data.model.UrgencyV2
 import `in`.smartie.quotedesk.domain.DeleteField
 import `in`.smartie.quotedesk.domain.Member
+import `in`.smartie.quotedesk.domain.PurchaseAccess
 import `in`.smartie.quotedesk.domain.PurchaseDraft
 import `in`.smartie.quotedesk.domain.PurchaseWrite
 import `in`.smartie.quotedesk.domain.Role
@@ -86,9 +87,11 @@ class PurchaseWriteRepositoryTest {
         receivedBy: String? = null,
         rcvQty: Any? = null,
         del: Any? = null,
-        id: Any? = "pr_one"
+        id: Any? = "pr_one",
+        byUid: String? = null
     ): Map<String, Any?> = buildMap {
         put("name", "Sliding gate rack")
+        if (byUid != null) put("byUid", byUid)
         put("qty", qty)
         put("urgency", "urgent")
         put("status", if (received == null) "Needed" else "Received")
@@ -300,14 +303,87 @@ class PurchaseWriteRepositoryTest {
     }
 
     @Test
-    fun `a Worker may not change, receive, reopen or remove one`() = runTest {
-        for (attempt in writeAttempts()) {
-            val store = FakeStore(stored = row(received = true))
+    fun `the displayed Staff may never receive or reopen, and is stopped before the wire`() = runTest {
+        // Two things the creator rule does not loosen. The role floor refuses
+        // them, so no transaction is ever opened.
+        for (attempt in privilegedAttempts()) {
+            val store = FakeStore(stored = row(received = true, byUid = worker.uid))
             val failure = runCatching { attempt(repository(store), worker) }.exceptionOrNull()
 
-            assertTrue("a Worker must be refused", failure is IllegalArgumentException)
+            assertTrue("a Staff account must be refused", failure is IllegalArgumentException)
             assertEquals("and nothing may reach the transaction", 0, store.bodyRuns)
         }
+    }
+
+    @Test
+    fun `the displayed Staff corrects the requirement they raised themselves`() = runTest {
+        val mine = row(byUid = worker.uid)
+
+        val edits = FakeStore(stored = mine)
+        assertEquals(
+            PurchaseWriteResult.WRITTEN,
+            repository(edits).edit(worker, onScreen, "Remote handsets", 4.0, UrgencyV2.NORMAL, "")
+        )
+
+        val urgency = FakeStore(stored = mine)
+        assertEquals(
+            PurchaseWriteResult.WRITTEN,
+            repository(urgency).setUrgency(worker, onScreen, UrgencyV2.CRITICAL)
+        )
+
+        val removes = FakeStore(stored = mine)
+        assertEquals(PurchaseWriteResult.WRITTEN, repository(removes).softDelete(worker, onScreen))
+        assertEquals(true, removes.writes.single().data["del"])
+    }
+
+    @Test
+    fun `the displayed Staff is refused somebody else's requirement`() = runTest {
+        for (attempt in creatorAttempts()) {
+            val store = FakeStore(stored = row(byUid = staff.uid))
+            val failure = runCatching { attempt(repository(store), worker) }.exceptionOrNull()
+
+            assertEquals(PurchaseAccess.SOMEBODY_ELSES, failure?.message)
+            assertTrue("a refusal writes nothing", store.writes.isEmpty())
+        }
+    }
+
+    @Test
+    fun `a requirement with no recorded creator belongs to nobody`() = runTest {
+        // Most of what the PWA wrote has no byUid at all. `"" == ""` would
+        // hand every one of those rows to whoever happened to be signed in.
+        for (attempt in creatorAttempts()) {
+            val store = FakeStore(stored = row())
+            val failure = runCatching { attempt(repository(store), worker) }.exceptionOrNull()
+
+            assertEquals(PurchaseAccess.NO_KNOWN_CREATOR, failure?.message)
+            assertTrue(store.writes.isEmpty())
+        }
+    }
+
+    @Test
+    fun `the creator loses their own requirement the moment something arrives`() = runTest {
+        for (attempt in creatorAttempts()) {
+            val store = FakeStore(stored = row(byUid = worker.uid, rcvQty = 4.0))
+            val failure = runCatching { attempt(repository(store), worker) }.exceptionOrNull()
+
+            assertEquals(PurchaseAccess.LOCKED_BY_RECEIPT, failure?.message)
+            assertTrue(store.writes.isEmpty())
+        }
+    }
+
+    @Test
+    fun `ownership is decided by the stored document, not the caller's copy`() = runTest {
+        // The record the screen is holding claims to be theirs. The document
+        // says otherwise, and the document is what the rules will see.
+        val claimed = onScreen.copy(byUid = worker.uid)
+        val store = FakeStore(stored = row(byUid = staff.uid))
+
+        val failure = runCatching {
+            repository(store).edit(worker, claimed, "Mine now", 4.0, UrgencyV2.NORMAL, "")
+        }.exceptionOrNull()
+
+        assertEquals(PurchaseAccess.SOMEBODY_ELSES, failure?.message)
+        assertTrue(store.writes.isEmpty())
     }
 
     @Test
@@ -333,12 +409,133 @@ class PurchaseWriteRepositoryTest {
         )
         assertEquals(0, reopens.bodyRuns)
 
-        val removes = FakeStore(stored = row())
-        assertTrue(
-            runCatching { repository(removes).softDelete(staff, onScreen) }
-                .exceptionOrNull() is IllegalArgumentException
+        // New: a Manager may withdraw the requirement they raised themselves,
+        // while nothing has arrived against it — and no other.
+        val mine = FakeStore(stored = row(byUid = staff.uid))
+        assertEquals(PurchaseWriteResult.WRITTEN, repository(mine).softDelete(staff, onScreen))
+        assertEquals(true, mine.writes.single().data["del"])
+
+        val theirs = FakeStore(stored = row(byUid = worker.uid))
+        assertEquals(
+            PurchaseAccess.SOMEBODY_ELSES,
+            runCatching { repository(theirs).softDelete(staff, onScreen) }.exceptionOrNull()?.message
         )
-        assertEquals(0, removes.bodyRuns)
+        assertTrue(theirs.writes.isEmpty())
+    }
+
+    @Test
+    fun `a Manager loses edit, urgency and remove once anything has arrived`() = runTest {
+        for (attempt in creatorAttempts()) {
+            val store = FakeStore(stored = row(byUid = staff.uid, rcvQty = 4.0))
+            val failure = runCatching { attempt(repository(store), staff) }.exceptionOrNull()
+
+            assertEquals(PurchaseAccess.LOCKED_BY_RECEIPT, failure?.message)
+            assertTrue(store.writes.isEmpty())
+        }
+    }
+
+    @Test
+    fun `but a Manager keeps receiving the outstanding quantity`() = runTest {
+        val store = FakeStore(stored = row(qty = 10.0, rcvQty = 4.0))
+        assertEquals(
+            PurchaseWriteResult.WRITTEN,
+            repository(store).markReceived(staff, onScreen, 6.0).result
+        )
+    }
+
+    @Test
+    fun `an Owner and an Administrator still correct a received requirement`() = runTest {
+        for (privileged in listOf(owner, admin)) {
+            val store = FakeStore(stored = row(qty = 10.0, rcvQty = 4.0))
+            assertEquals(
+                PurchaseWriteResult.WRITTEN,
+                repository(store).edit(privileged, onScreen, "Corrected", 12.0, UrgencyV2.NORMAL, "")
+            )
+        }
+    }
+
+    // --- writing off what is not coming --------------------------------------
+
+    @Test
+    fun `a Manager closes a shortfall at exactly the stored received total`() = runTest {
+        val store = FakeStore(stored = row(qty = 10.0, rcvQty = 7.0))
+
+        assertEquals(PurchaseWriteResult.WRITTEN, repository(store).closeShortfall(staff, onScreen))
+
+        val data = store.writes.single().data
+        assertEquals("the stored receipt, never a figure the caller chose", 7.0, data["qty"])
+        assertEquals(PurchaseWrite.STATUS_RECEIVED, data["status"])
+        assertEquals(true, data["received"])
+        for (field in listOf("rcvQty", "rcvBy", "rcvUid", "rcvAt")) {
+            assertFalse("the receipt is preserved, not rewritten", data.containsKey(field))
+        }
+    }
+
+    @Test
+    fun `there is no way to write off a shortfall at a quantity of your choosing`() = runTest {
+        // The signature is the proof: closeShortfall takes a member and a
+        // record and nothing else. The stale record the screen holds says 99
+        // is needed, and the write uses the stored 7 regardless.
+        val store = FakeStore(stored = row(qty = 10.0, rcvQty = 7.0))
+        repository(store).closeShortfall(staff, onScreen.copy(quantity = 99.0))
+        assertEquals(7.0, store.writes.single().data["qty"])
+    }
+
+    @Test
+    fun `a shortfall is refused when nothing has arrived, and when everything has`() = runTest {
+        // Both ends, and each says what to do instead. The planner owns these
+        // sentences; the repository only decides who may ask.
+        val nothing = FakeStore(stored = row(qty = 10.0))
+        assertEquals(
+            PurchaseWrite.NOTHING_ARRIVED,
+            runCatching { repository(nothing).closeShortfall(staff, onScreen) }
+                .exceptionOrNull()?.message
+        )
+        assertTrue(nothing.writes.isEmpty())
+
+        val whole = FakeStore(stored = row(qty = 10.0, rcvQty = 10.0))
+        assertEquals(
+            PurchaseWrite.NOTHING_OUTSTANDING,
+            runCatching { repository(whole).closeShortfall(staff, onScreen) }
+                .exceptionOrNull()?.message
+        )
+        assertTrue(whole.writes.isEmpty())
+    }
+
+    @Test
+    fun `the displayed Staff can never close a shortfall`() = runTest {
+        val store = FakeStore(stored = row(qty = 10.0, rcvQty = 7.0, byUid = worker.uid))
+        val failure = runCatching { repository(store).closeShortfall(worker, onScreen) }
+            .exceptionOrNull()
+
+        assertTrue("stopped before the wire", failure is IllegalArgumentException)
+        assertEquals(0, store.bodyRuns)
+    }
+
+    @Test
+    fun `a receipt total that is not a number is refused to a Manager by name`() = runTest {
+        // The rules will not compare a string to a number rather than coerce
+        // it, so the app says so in a sentence instead of letting a
+        // permission error come back from a doomed write.
+        for (attempt in listOf<suspend (PurchaseWriteRepository) -> Unit>(
+            { repo -> repo.markReceived(staff, onScreen, 1.0) },
+            { repo -> repo.closeShortfall(staff, onScreen) }
+        )) {
+            val store = FakeStore(stored = row(qty = 10.0, rcvQty = "4"))
+            val failure = runCatching { attempt(repository(store)) }.exceptionOrNull()
+
+            assertEquals(PurchaseWriteRepository.RECEIPT_NOT_NUMERIC, failure?.message)
+            assertTrue(store.writes.isEmpty())
+        }
+    }
+
+    @Test
+    fun `and an Administrator may still rescue it`() = runTest {
+        val store = FakeStore(stored = row(qty = 10.0, rcvQty = "4"))
+        assertEquals(
+            PurchaseWriteResult.WRITTEN,
+            repository(store).markReceived(admin, onScreen, 1.0).result
+        )
     }
 
     @Test
@@ -454,12 +651,17 @@ class PurchaseWriteRepositoryTest {
         assertFalse("still never a del key on an update", data.containsKey("del"))
     }
 
-    /** Every call a Worker must be refused, so the matrix is asserted on all of them. */
-    private fun writeAttempts(): List<suspend (PurchaseWriteRepository, Member) -> Unit> = listOf(
+    /** The three a creator may make on their own untouched requirement. */
+    private fun creatorAttempts(): List<suspend (PurchaseWriteRepository, Member) -> Unit> = listOf(
         { repo, member -> repo.edit(member, onScreen, "X", 2.0, UrgencyV2.NORMAL, "") },
         { repo, member -> repo.setUrgency(member, onScreen, UrgencyV2.CRITICAL) },
+        { repo, member -> repo.softDelete(member, onScreen) }
+    )
+
+    /** The three the creator rule does not loosen for the limited role. */
+    private fun privilegedAttempts(): List<suspend (PurchaseWriteRepository, Member) -> Unit> = listOf(
         { repo, member -> repo.markReceived(member, onScreen, 2.0) },
         { repo, member -> repo.reopen(member, onScreen) },
-        { repo, member -> repo.softDelete(member, onScreen) }
+        { repo, member -> repo.closeShortfall(member, onScreen) }
     )
 }

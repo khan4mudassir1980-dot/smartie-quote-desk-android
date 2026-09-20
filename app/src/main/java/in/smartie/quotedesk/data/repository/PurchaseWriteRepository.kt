@@ -7,6 +7,7 @@ import `in`.smartie.quotedesk.data.model.PurchaseRecord
 import `in`.smartie.quotedesk.data.model.UrgencyV2
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.Permissions
+import `in`.smartie.quotedesk.domain.PurchaseAccess
 import `in`.smartie.quotedesk.domain.PurchaseAuthor
 import `in`.smartie.quotedesk.domain.PurchaseDraft
 import `in`.smartie.quotedesk.domain.PurchasePlan
@@ -77,6 +78,16 @@ data class PurchaseReceipt(
  * caught the write anyway. A second device still showing a requirement as
  * open gets "Already received by Asha" instead of a stale-revision failure.
  *
+ * **Permission is decided twice, and the second time is the one that counts.**
+ * The `require` on the first line of each method is the role floor — it stops
+ * a write the caller's role could never make from opening a transaction at
+ * all. But whether somebody may change *this* requirement depends on the
+ * document: who raised it, and whether anything has been delivered against
+ * it. The board's copy can be two deliveries old, so that question is put to
+ * `PurchaseAccess` against the record read **inside** the transaction. A
+ * screen that is behind refuses with a sentence rather than writing something
+ * the rules would have thrown out.
+ *
  * Writing is **online-only**. A Firestore transaction needs a round trip, so
  * there is no offline queue here and no optimistic local mutation.
  *
@@ -121,7 +132,14 @@ class PurchaseWriteRepository(
         }
     }
 
-    /** The Edit sheet, and the way out of an unusable stored quantity. */
+    /**
+     * The Edit sheet, and the way out of an unusable stored quantity.
+     *
+     * Open to a Manager on any untouched requirement, to anybody on their
+     * **own** untouched one, and to an Owner or Administrator always. The
+     * role floor below only refuses somebody who could never edit anything;
+     * the per-record question is settled against the stored document.
+     */
     suspend fun edit(
         member: Member,
         record: PurchaseRecord,
@@ -130,20 +148,20 @@ class PurchaseWriteRepository(
         urgency: UrgencyV2,
         note: String
     ): PurchaseWriteResult {
-        require(Permissions.canEditPurchase(member)) { NOT_ALLOWED_EDIT }
-        return update(member, record) { stored, author, at ->
+        require(Permissions.canAddPurchase(member)) { NOT_ALLOWED_EDIT }
+        return update(member, record, PurchaseAccess::canEdit) { stored, author, at ->
             PurchaseWrite.edit(stored, name, quantity, urgency, note, author, at)
         }
     }
 
-    /** Just the urgency, from the card. */
+    /** Just the urgency, from the card. It follows the edit exactly. */
     suspend fun setUrgency(
         member: Member,
         record: PurchaseRecord,
         urgency: UrgencyV2
     ): PurchaseWriteResult {
-        require(Permissions.canEditPurchase(member)) { NOT_ALLOWED_EDIT }
-        return update(member, record) { stored, author, at ->
+        require(Permissions.canAddPurchase(member)) { NOT_ALLOWED_EDIT }
+        return update(member, record, PurchaseAccess::canSetUrgency) { stored, author, at ->
             PurchaseWrite.setUrgency(stored, urgency, author, at)
         }
     }
@@ -166,8 +184,13 @@ class PurchaseWriteRepository(
         val author = authorOf(member)
         val at = now()
         return store.transaction { transaction ->
-            val stored = transaction.read(record.id)?.toPurchaseRecord()
+            val doc = transaction.read(record.id)
                 ?: return@transaction PurchaseReceipt(PurchaseWriteResult.NO_CHANGE)
+            // Who may receive is settled by the role floor above; a Staff
+            // account never reaches here, not even for their own requirement.
+            // What is left is the stored figure's type — see below.
+            unreadableReceipt(member, doc)?.let { throw IllegalStateException(it) }
+            val stored = doc.toPurchaseRecord()
             val plan = PurchaseWrite.markReceived(stored, receivedNow, author, at)
             val result = commit(transaction, plan)
             val written = (plan as? PurchasePlan.Write)
@@ -194,11 +217,39 @@ class PurchaseWriteRepository(
         }
     }
 
-    /** A soft delete, and never a hard one. Administrator only. */
+    /**
+     * A soft delete, and never a hard one.
+     *
+     * An Owner or Administrator may remove any requirement. Everybody else
+     * may remove **their own**, and only while nothing has arrived against
+     * it — which is new for a Manager, who could not remove anything at all
+     * before, and for a Staff account, who now has a way to withdraw a
+     * requirement they raised by mistake.
+     */
     suspend fun softDelete(member: Member, record: PurchaseRecord): PurchaseWriteResult {
-        require(Permissions.canDeletePurchase(member)) { NOT_ALLOWED_DELETE }
-        return update(member, record) { stored, author, at ->
+        require(Permissions.canAddPurchase(member)) { NOT_ALLOWED_DELETE }
+        return update(member, record, PurchaseAccess::canRemove) { stored, author, at ->
             PurchaseWrite.softDelete(stored, author, at)
+        }
+    }
+
+    /**
+     * The rest is not coming: close the requirement at what actually arrived.
+     *
+     * Owner, Administrator and Manager, never Staff. The new required total
+     * is the **stored** receipt and is not the caller's to choose — there is
+     * no quantity parameter — and the receipt fields themselves are left
+     * exactly as the delivery recorded them.
+     *
+     * An `ABORTED` conflict is not retried here any more than anywhere else:
+     * somebody else has changed this requirement since it was read, and
+     * writing off a shortfall against a figure that has moved is precisely
+     * what the revision counter exists to stop.
+     */
+    suspend fun closeShortfall(member: Member, record: PurchaseRecord): PurchaseWriteResult {
+        require(Permissions.canSetPurchaseStatus(member)) { NOT_ALLOWED_SHORTFALL }
+        return update(member, record) { stored, author, at ->
+            PurchaseWrite.closeShortfall(stored, author, at)
         }
     }
 
@@ -215,6 +266,12 @@ class PurchaseWriteRepository(
     private suspend fun update(
         member: Member,
         record: PurchaseRecord,
+        // Only the three operations the creator rule governs pass one of
+        // these. For the rest the role floor above is the whole of the
+        // question of *who*, and `PurchaseWrite` answers *whether* with a
+        // sentence of its own — "Already received by Omar" says far more
+        // than a generic refusal would.
+        permits: (Member, PurchaseRecord) -> Boolean = { _, _ -> true },
         plan: (PurchaseRecord, PurchaseAuthor, Long) -> PurchasePlan
     ): PurchaseWriteResult {
         val author = authorOf(member)
@@ -222,8 +279,17 @@ class PurchaseWriteRepository(
         return store.transaction { transaction ->
             // Gone since the board last saw it. Nothing to write, and nothing
             // to complain about.
-            val stored = transaction.read(record.id)?.toPurchaseRecord()
+            val doc = transaction.read(record.id)
                 ?: return@transaction PurchaseWriteResult.NO_CHANGE
+            unreadableReceipt(member, doc)?.let { throw IllegalStateException(it) }
+            val stored = doc.toPurchaseRecord()
+            // Against `stored`, never against `record`. A card can be two
+            // deliveries behind, and the whole of the creator rule — who
+            // raised this, and has anything arrived — is a fact about the
+            // document rather than about what was on screen.
+            if (!permits(member, stored)) {
+                throw IllegalStateException(PurchaseAccess.refusalFor(member, stored))
+            }
             commit(transaction, plan(stored, author, at))
         }
     }
@@ -240,10 +306,32 @@ class PurchaseWriteRepository(
         }
     }
 
+    /**
+     * A stored receipt total the rules will not look at, for anybody but an
+     * Owner or Administrator.
+     *
+     * `rcvQty` is a number everywhere this app writes it, but the PWA has
+     * written strings into this collection before — `pr_received_legacy`
+     * holds `"qty": "10"` — so a string receipt total is not impossible. The
+     * deployed rules refuse to compare one rather than coerce it, because a
+     * mixed-type comparison in a security rule raises an error and the
+     * failure mode is not worth relying on.
+     *
+     * So the app says the same thing in a sentence instead of letting a
+     * permission error come back from a write nobody could have known was
+     * doomed. An Owner or Administrator rescues such a row through the
+     * privileged edit, exactly as they rescue a string `qty`.
+     */
+    private fun unreadableReceipt(member: Member, doc: DocData): String? {
+        if (Permissions.isAdmin(member)) return null
+        val stored = doc.fields["rcvQty"] ?: return null
+        return if (stored is Number) null else RECEIPT_NOT_NUMERIC
+    }
+
     private fun authorOf(member: Member): PurchaseAuthor =
         PurchaseAuthor(name = member.name.ifBlank { member.email }, uid = member.uid)
 
-    private companion object {
+    internal companion object {
         /**
          * The titles come from [RoleTitles], built from the roles the
          * permission actually allows, so a message cannot drift from the rule
@@ -259,9 +347,24 @@ class PurchaseWriteRepository(
          */
         const val NOT_ALLOWED_ADD = "Your account cannot add a requirement"
 
-        val NOT_ALLOWED_EDIT = "Only $PURCHASE_EDITORS can change a requirement"
+        /**
+         * The role floor for a change, which is now "anybody who may add
+         * one": a Staff account may correct the requirement they raised
+         * themselves, so the role alone no longer decides. Which requirement
+         * they may change is `PurchaseAccess`'s answer, given the document.
+         */
+        const val NOT_ALLOWED_EDIT = "Your account cannot change a requirement"
+
         val NOT_ALLOWED_RECEIVE = "Only $PURCHASE_EDITORS can mark a requirement received"
         val NOT_ALLOWED_REOPEN = "Only $ADMINS can reopen a requirement"
-        val NOT_ALLOWED_DELETE = "Only $ADMINS can remove a requirement"
+
+        const val NOT_ALLOWED_DELETE = "Your account cannot remove a requirement"
+
+        val RECEIPT_NOT_NUMERIC =
+            "The received quantity on this requirement was not stored as a number — " +
+                "only $ADMINS can correct it"
+
+        val NOT_ALLOWED_SHORTFALL =
+            "Only $PURCHASE_EDITORS can close a requirement short of what was asked for"
     }
 }

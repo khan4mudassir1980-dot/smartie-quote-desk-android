@@ -273,6 +273,21 @@ data class PurchaseRecord(
     /** Some, but not all — the state the shop floor keeps seeing. */
     val isPartlyReceived: Boolean get() = receivedTotal > 0.0 && !isFullyReceived
 
+    /**
+     * Whether a delivery has been recorded against this requirement **at
+     * all**, by the presence of any receipt field rather than by its value.
+     *
+     * The app writes all four together on a receipt and removes all four
+     * together on a reopen, so any one of them present means a delivery was
+     * recorded — whatever number it carries, and even if the PWA wrote a zero.
+     * This is what closes the record to its creator; see `PurchaseAccess`.
+     */
+    val hasReceipt: Boolean
+        get() = receivedQuantity != null ||
+            receivedBy.isNotBlank() ||
+            receivedByUid.isNotBlank() ||
+            receivedAt > 0L
+
     companion object {
         /**
          * How close two quantities have to be to count as the same.

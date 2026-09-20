@@ -107,10 +107,21 @@ data class PurchaseDraft(
  * ## What is deliberately absent
  *
  * There is **no generic status setter and no cancel**. A status is moved only
- * by the operation that owns it — [markReceived] sets `Received`, [reopen]
- * returns `Needed` — so no caller can invent a state nobody designed. A
+ * by the operation that owns it — [markReceived] sets `Received` when the
+ * running total meets the requirement, [closeShortfall] sets it when the rest
+ * is not coming, [edit] sets it when the required total is corrected down to
+ * what arrived, and [reopen] returns `Needed`. Each of those is a named thing
+ * somebody decided to do, so no caller can invent a state nobody designed. A
  * `Cancelled` requirement written by the PWA still reads and displays
  * correctly; nothing here writes one.
+ *
+ * [closeShortfall] is the **seventh** operation and was added on purpose
+ * rather than by relaxing the six: the received-record lock in
+ * `PurchaseAccess` leaves a Manager unable to correct a partly delivered
+ * requirement, and without a named way to write off the remainder they could
+ * see a finished requirement and never clear it. It takes no quantity — the
+ * new total is the stored receipt — which is what keeps it from being a
+ * status setter wearing a hat.
  */
 object PurchaseWrite {
 
@@ -164,6 +175,20 @@ object PurchaseWrite {
     fun belowReceived(received: Double): String =
         "${Money.formatQuantity(received)} has already arrived — the total needed " +
             "cannot be less than that"
+
+    /**
+     * Nothing has arrived, so there is no shortfall to write off.
+     *
+     * A requirement nobody has delivered against is cancelled by removing it,
+     * which is a different operation with a different confirmation and a
+     * different set of people who may do it.
+     */
+    const val NOTHING_ARRIVED: String =
+        "Nothing has arrived against this yet — remove it instead of closing it"
+
+    /** Everything arrived, so it is not short of anything. */
+    const val NOTHING_OUTSTANDING: String =
+        "Everything asked for has arrived — there is nothing to write off"
 
     // --- creating -----------------------------------------------------------
 
@@ -360,6 +385,53 @@ object PurchaseWrite {
                 "rcvBy" to author.name,
                 "rcvUid" to author.uid,
                 "rcvAt" to at
+            )
+        )
+    }
+
+    /**
+     * The rest is not coming: close the requirement at what actually arrived.
+     *
+     * Ten were wanted, seven came, and the last three are not on their way.
+     * Until this existed the only way to say so was to edit the required
+     * total down to seven — which is now an Owner's or an Administrator's to
+     * do on a row with a receipt, and would have left a Manager able to see a
+     * finished requirement and unable to clear it.
+     *
+     * **It takes no quantity.** The new required total is the stored `rcvQty`
+     * and nothing else, read inside the caller's transaction, so nobody can
+     * write off a delivery by choosing a figure. The receipt itself —
+     * `rcvQty`, `rcvBy`, `rcvUid`, `rcvAt` — is **preserved untouched**: it
+     * records a delivery somebody made, and the person writing off the
+     * remainder is usually not that person. `upBy` and `upUid` record who did
+     * this.
+     *
+     * The seventh named operation, and deliberately still not a generic
+     * status setter: there is one thing this does and it is in its name.
+     */
+    fun closeShortfall(
+        stored: PurchaseRecord,
+        author: PurchaseAuthor,
+        at: Long
+    ): PurchasePlan {
+        if (stored.deleted) return PurchasePlan.Refused(ALREADY_DELETED)
+        if (stored.isClosed) return PurchasePlan.Refused(alreadyReceived(stored.receivedBy))
+        usableQuantity(stored)?.let { return it }
+        val arrived = stored.receivedTotal
+        if (arrived <= 0.0) return PurchasePlan.Refused(NOTHING_ARRIVED)
+        // Guards the other end: a row whose receipt already meets its total
+        // is not short of anything, and rewriting `qty` would be a no-op that
+        // burned a revision.
+        if (arrived >= stored.quantity - TOLERANCE) {
+            return PurchasePlan.Refused(NOTHING_OUTSTANDING)
+        }
+        return PurchasePlan.Write(
+            docId = stored.id,
+            // `base` carries the new required total, which is the whole of
+            // the change: `qty` becomes exactly what arrived.
+            data = base(stored, arrived, author, at) + mapOf(
+                "status" to STATUS_RECEIVED,
+                "received" to true
             )
         )
     }

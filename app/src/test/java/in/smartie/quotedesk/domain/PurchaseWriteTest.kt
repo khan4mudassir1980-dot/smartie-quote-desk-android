@@ -471,6 +471,85 @@ class PurchaseWriteTest {
         )
     }
 
+    // --- writing off what is not coming --------------------------------------
+
+    @Test
+    fun `a shortfall closes the requirement at exactly what arrived`() {
+        val partly = stored(quantity = 10.0, receivedQuantity = 7.0)
+        val data = written(PurchaseWrite.closeShortfall(partly, author, at))
+
+        // The whole of the change: the required total becomes the receipt.
+        assertEquals(7.0, data["qty"])
+        assertEquals(PurchaseWrite.STATUS_RECEIVED, data["status"])
+        assertEquals(true, data["received"])
+        assertEquals("the stored revision plus one, as every update does", 2, data["rev"])
+        assertEquals("and who wrote it off, not who took the delivery in", "Asha", data["upBy"])
+    }
+
+    @Test
+    fun `it takes no quantity, so nobody can write off a delivery`() {
+        // There is no parameter to pass a figure in. The new total is read
+        // from the stored receipt and from nowhere else, which is what keeps
+        // this from being a status setter wearing a hat.
+        val partly = stored(quantity = 10.0, receivedQuantity = 7.0)
+        val data = written(PurchaseWrite.closeShortfall(partly, author, at))
+        assertEquals(partly.receivedTotal, data["qty"])
+    }
+
+    @Test
+    fun `the receipt itself is preserved untouched`() {
+        // Who took the delivery in is not who wrote off the rest, and the
+        // record of a delivery is not the write-off's to rewrite.
+        val partly = stored(quantity = 10.0, receivedQuantity = 7.0)
+        val data = written(PurchaseWrite.closeShortfall(partly, author, at))
+
+        for (field in listOf("rcvQty", "rcvBy", "rcvUid", "rcvAt")) {
+            assertFalse("$field must not be rewritten", data.containsKey(field))
+        }
+    }
+
+    @Test
+    fun `nothing arrived means remove it, not close it`() {
+        assertEquals(
+            PurchasePlan.Refused(PurchaseWrite.NOTHING_ARRIVED),
+            PurchaseWrite.closeShortfall(stored(quantity = 10.0), author, at)
+        )
+    }
+
+    @Test
+    fun `a requirement that is not short of anything is refused`() {
+        assertEquals(
+            PurchasePlan.Refused(PurchaseWrite.NOTHING_OUTSTANDING),
+            PurchaseWrite.closeShortfall(
+                stored(quantity = 10.0, receivedQuantity = 10.0), author, at
+            )
+        )
+    }
+
+    @Test
+    fun `a closed or removed requirement cannot be written off`() {
+        val done = stored(quantity = 10.0, receivedQuantity = 7.0, received = true, receivedBy = "Omar")
+        assertEquals(
+            PurchasePlan.Refused("Already received by Omar"),
+            PurchaseWrite.closeShortfall(done, author, at)
+        )
+        assertEquals(
+            PurchasePlan.Refused(PurchaseWrite.ALREADY_DELETED),
+            PurchaseWrite.closeShortfall(stored(receivedQuantity = 2.0, deleted = true), author, at)
+        )
+    }
+
+    @Test
+    fun `a shortfall carries no del key and re-asserts the id`() {
+        val data = written(
+            PurchaseWrite.closeShortfall(stored(quantity = 10.0, receivedQuantity = 7.0), author, at)
+        )
+        assertFalse(data.containsKey("del"))
+        assertEquals("pr_one", data["id"])
+        assertEquals(at, data["updated"])
+        assertSame(ServerTimestamp, data["serverAt"])
+    }
+
     // --- reopening ----------------------------------------------------------------
 
     @Test
@@ -529,9 +608,11 @@ class PurchaseWriteTest {
         // delivery and `Needed` from reopen, so no caller can invent a state
         // nobody designed. A PWA-written `Cancelled` still reads fine.
         //
-        // `edit` is the third writer of a status and the only one that is not
-        // obvious, so it is named: setting the total needed down to what has
-        // already arrived finishes the requirement, and is tested above.
+        // Three others write a status and each is a named thing somebody
+        // decided to do: `edit` finishes a requirement when the total needed
+        // is corrected down to what arrived, `closeShortfall` finishes one
+        // when the rest is not coming, and `reopen` returns it to Needed.
+        // All three are tested above. There is still no setter.
         val received = written(PurchaseWrite.markReceived(stored(quantity = 6.0), 6.0, author, at))
         val reopened = written(
             PurchaseWrite.reopen(stored(received = true, status = "Received"), author, at)

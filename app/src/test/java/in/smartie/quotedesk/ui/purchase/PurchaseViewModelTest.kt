@@ -14,6 +14,7 @@ import `in`.smartie.quotedesk.domain.PurchaseDraft
 import `in`.smartie.quotedesk.domain.PurchaseWrite
 import `in`.smartie.quotedesk.domain.Role
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +34,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.IOException
 
 /**
  * The Purchase tab's side of the six operations.
@@ -343,6 +345,27 @@ class PurchaseViewModelTest {
         assertTrue(viewModel(member = owner).capabilities().remove)
     }
 
+    /**
+     * A listener that refuses [times] times and then simply waits.
+     *
+     * It has to **stop scheduling retries** once the assertions are made. A
+     * view model's scope is not the test's to cancel, so a flow that failed
+     * for ever would leave a timer task queued, and `runTest` drains the
+     * virtual clock when it finishes — for ever, at full speed.
+     */
+    private fun refusing(times: Int, code: FirebaseFirestoreException.Code): Flow<List<PurchaseRecord>> {
+        // Counted outside the flow: retryWhen re-collects it, so a counter
+        // inside would reset on every attachment and refuse for ever.
+        var refusals = 0
+        return flow {
+            if (refusals < times) {
+                refusals += 1
+                throw FirebaseFirestoreException(code.name, code)
+            }
+            awaitCancellation()
+        }
+    }
+
     // --- the listener, and the row that has to show at once ---------------------
 
     @Test
@@ -435,7 +458,7 @@ class PurchaseViewModelTest {
             attachments += 1
             if (attachments == 1) {
                 emit(listOf(record("pr_first")))
-                throw java.io.IOException("the connection went")
+                throw IOException("the connection went")
             }
             emit(listOf(record("pr_first"), record("pr_second", createdAt = 5_000)))
         }
@@ -454,12 +477,7 @@ class PurchaseViewModelTest {
     @Test
     fun `a persistent refusal is told to the person, not swallowed`() = runTest {
         val reported = mutableListOf<Throwable>()
-        val denied = flow<List<PurchaseRecord>> {
-            throw com.google.firebase.firestore.FirebaseFirestoreException(
-                "denied",
-                com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED
-            )
-        }
+        val denied = refusing(4, FirebaseFirestoreException.Code.PERMISSION_DENIED)
         val model = viewModel(requirements = denied, report = { reported += it })
         val messages = messagesOf(model)
 
@@ -481,12 +499,7 @@ class PurchaseViewModelTest {
 
     @Test
     fun `being signed out elsewhere says so rather than showing nothing`() = runTest {
-        val gone = flow<List<PurchaseRecord>> {
-            throw com.google.firebase.firestore.FirebaseFirestoreException(
-                "unauthenticated",
-                com.google.firebase.firestore.FirebaseFirestoreException.Code.UNAUTHENTICATED
-            )
-        }
+        val gone = refusing(4, FirebaseFirestoreException.Code.UNAUTHENTICATED)
         val model = viewModel(requirements = gone)
         val messages = messagesOf(model)
 

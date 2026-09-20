@@ -146,6 +146,33 @@ class PermissionsTest {
         assertTrue(Permissions.canDeletePurchase(admin))
     }
 
+    @Test
+    fun `reopening is the one purchase action a Manager may not take`() {
+        // The v9 rules let any non-Worker update a requirement, and a reopen is
+        // an ordinary update — so this predicate is the whole of the
+        // enforcement. docs/N4-plan.md records that gap rather than implying it
+        // is closed.
+        listOf(primaryOwner, additionalOwner, admin).forEach {
+            assertTrue(it.uid, Permissions.canReopenPurchase(it))
+        }
+        assertFalse(Permissions.canReopenPurchase(staff))
+        assertFalse(Permissions.canReopenPurchase(worker))
+        // A Manager still marks one received. Reopening is the narrower act.
+        assertTrue(Permissions.canSetPurchaseStatus(staff))
+    }
+
+    @Test
+    fun `a switched-off account touches no requirement at all`() {
+        listOf(admin, staff, worker).map { it.copy(active = false) }.forEach {
+            assertFalse(it.uid, Permissions.canViewPurchase(it))
+            assertFalse(it.uid, Permissions.canAddPurchase(it))
+            assertFalse(it.uid, Permissions.canEditPurchase(it))
+            assertFalse(it.uid, Permissions.canSetPurchaseStatus(it))
+            assertFalse(it.uid, Permissions.canReopenPurchase(it))
+            assertFalse(it.uid, Permissions.canDeletePurchase(it))
+        }
+    }
+
     // --- settings and team -------------------------------------------------
 
     @Test

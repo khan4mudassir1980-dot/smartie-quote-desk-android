@@ -108,6 +108,21 @@ object Permissions {
 
     fun canSetPurchaseStatus(member: Member): Boolean = canEditPurchase(member)
 
+    /**
+     * Reopening a received requirement.
+     *
+     * **The one purchase restriction the rules cannot express.** A reopen is
+     * an ordinary update, and the v9 rules allow any non-Worker to update, so
+     * this predicate is the whole of the enforcement. Tightening the rules
+     * would mean refusing a write that turns `received` from true to false for
+     * anyone but an Administrator — which is only safe once somebody has
+     * confirmed that the V8C4 PWA never offers a Manager an un-receive, and
+     * that question needs the approved source on the Owner's machine.
+     *
+     * Recorded in `docs/N4-plan.md` rather than implied here.
+     */
+    fun canReopenPurchase(member: Member): Boolean = isAdmin(member)
+
     /** Deletion is a restricted soft delete. */
     fun canDeletePurchase(member: Member): Boolean = isAdmin(member)
 

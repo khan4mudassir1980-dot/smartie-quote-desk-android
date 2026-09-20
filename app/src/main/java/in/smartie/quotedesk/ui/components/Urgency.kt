@@ -8,7 +8,7 @@ import `in`.smartie.quotedesk.ui.theme.SmartieColors
 
 /**
  * The one place an urgency becomes a colour: very urgent red, can-wait
- * yellow, not-needed-now green.
+ * yellow, needed-but-not-now green.
  *
  * It is a plain function rather than a `when` inside a composable so the three
  * colours can be asserted in an ordinary unit test — a rendered colour is not

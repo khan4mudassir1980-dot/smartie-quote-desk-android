@@ -28,7 +28,7 @@ class AppearanceTest {
     }
 
     @Test
-    fun `not needed now is green`() {
+    fun `needed but not now is green`() {
         assertEquals(Color(0xFF15803D), urgencyColour(UrgencyV2.NORMAL))
     }
 
@@ -41,7 +41,7 @@ class AppearanceTest {
     fun `the urgency wording is the Owner's, and the wire values are the PWA's`() {
         assertEquals("Very urgent", UrgencyV2.CRITICAL.label)
         assertEquals("Can wait 1-2 days", UrgencyV2.URGENT.label)
-        assertEquals("Not needed now", UrgencyV2.NORMAL.label)
+        assertEquals("Needed, but not now", UrgencyV2.NORMAL.label)
         // The labels are display text; these are what Firestore holds.
         assertEquals(
             listOf("critical", "urgent", "normal"),

@@ -145,7 +145,7 @@ automated evidence only:
 |---|---|
 | `PurchaseRowTest` | A saved note renders on the card, and no empty note line appears when there is none |
 | `PurchaseRowTest` | Each urgency renders with the Owner's wording on the card |
-| `AppearanceTest` | Very urgent is red, can-wait is yellow, not-needed-now is green, and the three are three distinct colours |
+| `AppearanceTest` | Very urgent is red, can-wait is yellow, needed-but-not-now is green, and the three are three distinct colours |
 
 Rendering a record is not the same as a requirement created on a device and
 still correct after a restart. The first is what the tests show; the second is

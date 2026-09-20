@@ -196,7 +196,7 @@ data class StockMove(
 enum class UrgencyV2(val wireValue: String, val label: String) {
     CRITICAL("critical", "Very urgent"),
     URGENT("urgent", "Can wait 1-2 days"),
-    NORMAL("normal", "Not needed now");
+    NORMAL("normal", "Needed, but not now");
 
     companion object {
         fun from(value: String?): UrgencyV2 =

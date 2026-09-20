@@ -78,6 +78,6 @@ class PurchaseRowTest {
     @Test
     fun `the calmest urgency is named too`() {
         show(requirement(urgency = UrgencyV2.NORMAL))
-        compose.onNodeWithText("Not needed now").assertExists()
+        compose.onNodeWithText("Needed, but not now").assertExists()
     }
 }

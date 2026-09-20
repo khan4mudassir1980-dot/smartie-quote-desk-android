@@ -170,6 +170,31 @@ class PurchaseWriteRepositoryTest {
         assertTrue(store.writes.isEmpty())
     }
 
+    @Test
+    fun `creating hands back the document it wrote, not a rebuilt copy`() = runTest {
+        // The board shows this while the transaction's round trip finishes,
+        // so it has to be the document Firestore now holds — read back out of
+        // the plan through the same reader the listener uses, which is what
+        // stops it drifting from what was stored.
+        val store = FakeStore()
+
+        val created = repository(store).create(admin, draft)
+
+        val written = store.writes.single().data
+        val record = created.record!!
+        assertEquals(PurchaseWriteResult.WRITTEN, created.result)
+        assertEquals(written["id"], record.id)
+        assertEquals(written["name"], record.name)
+        assertEquals(written["qty"], record.quantity)
+        assertEquals(written["urgency"], record.urgency.wireValue)
+        assertEquals(written["status"], record.status)
+        assertEquals(written["by"], record.by)
+        assertEquals(written["byUid"], record.byUid)
+        assertEquals(written["t"], record.createdAt)
+        assertEquals(written["rev"], record.revision)
+        assertTrue("a new requirement is open", record.isOpen)
+    }
+
     // --- legacy documents -------------------------------------------------------
 
     @Test
@@ -266,7 +291,7 @@ class PurchaseWriteRepositoryTest {
             val store = FakeStore()
             assertEquals(
                 PurchaseWriteResult.WRITTEN,
-                repository(store).create(member, draft)
+                repository(store).create(member, draft).result
             )
             assertEquals(member.uid, store.writes.single().data["byUid"])
         }

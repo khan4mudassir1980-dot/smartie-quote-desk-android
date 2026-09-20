@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import `in`.smartie.quotedesk.core.AppContainer
+import `in`.smartie.quotedesk.core.AppError
 import `in`.smartie.quotedesk.core.toAppError
+import `in`.smartie.quotedesk.data.retryingListener
 import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.data.model.ProductCategoryRecord
 import `in`.smartie.quotedesk.data.model.ProductRecord
@@ -18,7 +20,6 @@ import `in`.smartie.quotedesk.domain.Permissions
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -39,7 +40,7 @@ class AppDataViewModel(
     val messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
 
     val online = container.connectivity.online
-        .guarded(true)
+        .guarded("the connection")
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     val products = quotingOnly(container.catalogueRepository.observeProducts())
@@ -63,7 +64,7 @@ class AppDataViewModel(
      * reads nothing the board has not already paid for.
      */
     private val allStock = container.catalogueRepository.observeAllStock()
-        .guarded(emptyList<StockRecord>())
+        .guarded("stock")
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Every role, Workers included, may see stock. */
@@ -92,7 +93,7 @@ class AppDataViewModel(
      * see stock at all — the rules say `member()`, the same as `/stock`.
      */
     val stoppedStock = container.catalogueRepository.observeStoppedStock()
-        .guarded(emptyList<StoppedStockRecord>())
+        .guarded("stopped-item history")
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
@@ -107,11 +108,11 @@ class AppDataViewModel(
             flowOf(emptyList())
         }
         )
-        .guarded(emptyList<StockMove>())
+        .guarded("stock history")
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val requirements = container.operationsRepository.observeRequirements()
-        .guarded(emptyList<PurchaseRecord>())
+        .guarded("purchase requirements")
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val quotations = quotingOnly(container.operationsRepository.observeQuotations())
@@ -122,13 +123,57 @@ class AppDataViewModel(
 
     /** Data only quoting roles may read; a Worker gets an empty list. */
     private fun <T> quotingOnly(source: Flow<List<T>>): Flow<List<T>> =
-        (if (Permissions.canQuote(member)) source else flowOf(emptyList())).guarded(emptyList())
+        (if (Permissions.canQuote(member)) source else flowOf(emptyList()))
+            .guarded("products and quotations")
 
-    private fun <T> Flow<T>.guarded(fallback: T): Flow<T> = catch { throwable ->
-        val error = throwable.toAppError()
-        container.errorReporter.report(error)
-        if (!error.isBenign) messages.emit(error.message)
-        emit(fallback)
+    /**
+     * A listener that comes back, and says so when it does not.
+     *
+     * It used to `catch` and emit a fallback, which **ended the flow**. A
+     * `stateIn` whose upstream has completed is never collected again, and
+     * this view model is scoped to the whole signed-in session — so one
+     * transient refusal froze a screen's data for the life of the process,
+     * silently. That is what made a newly added requirement invisible until
+     * the app was closed and reopened.
+     *
+     * Now every failure is reported and the listener is attached again after
+     * a growing wait. **Nothing is replaced with an empty list**: whatever was
+     * last read stays on screen while the retries run, because a list that
+     * failed to refresh is not a list of nothing.
+     *
+     * Silence would be the other way to get this wrong, so once the failures
+     * stop looking like a blip the person is told, once, in the words the
+     * error came with. Before that nothing is said — a listener that drops and
+     * returns must not shout about it.
+     */
+    private fun <T> Flow<T>.guarded(label: String): Flow<T> =
+        retryingListener { throwable, attempt, waitMillis ->
+            val error = throwable.toAppError()
+            container.errorReporter.report(error)
+            if (attempt == PERSISTENT_ATTEMPT) {
+                messages.emit(persistentMessage(label, error, waitMillis))
+            }
+        }
+
+    private companion object {
+        /**
+         * The failure on which the person is told. Zero is the first, so this
+         * is the third — two silent recoveries, then a sentence.
+         */
+        const val PERSISTENT_ATTEMPT = 2L
+
+        /**
+         * A refusal that keeps coming back is worth naming, and an
+         * unauthenticated one is worth naming differently: it means signing
+         * in again, not waiting.
+         */
+        fun persistentMessage(label: String, error: AppError, waitMillis: Long): String = when {
+            error.code == "unauthenticated" ->
+                "Signed out somewhere else — sign in again to see $label"
+            error.code == "permission-denied" ->
+                "This account is not allowed to read $label any more"
+            else -> "Still trying to reach $label — retrying in ${waitMillis / 1_000}s"
+        }
     }
 
     class Factory(

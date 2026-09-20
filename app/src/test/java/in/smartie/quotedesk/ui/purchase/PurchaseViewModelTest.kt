@@ -7,6 +7,7 @@ import `in`.smartie.quotedesk.data.model.UrgencyV2
 import `in`.smartie.quotedesk.data.repository.FirestoreFailures
 import `in`.smartie.quotedesk.data.repository.PurchaseStore
 import `in`.smartie.quotedesk.data.repository.PurchaseTransaction
+import `in`.smartie.quotedesk.data.ListenerRetry
 import `in`.smartie.quotedesk.data.repository.PurchaseWriteRepository
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.PurchaseDraft
@@ -14,11 +15,15 @@ import `in`.smartie.quotedesk.domain.PurchaseWrite
 import `in`.smartie.quotedesk.domain.Role
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -46,7 +51,7 @@ class PurchaseViewModelTest {
     // --- fakes ---------------------------------------------------------------
 
     private class Store(
-        private val stored: Map<String, Any?>? = null,
+        var stored: Map<String, Any?>? = null,
         private val failWith: Throwable? = null
     ) : PurchaseStore {
         val writes = mutableListOf<Map<String, Any?>>()
@@ -107,11 +112,15 @@ class PurchaseViewModelTest {
 
     private val draft = PurchaseDraft(name = "Remote handsets", quantity = 4.0)
 
+    /** Short waits, so a retry test does not have to sit through a minute. */
+    private val fastRetry = ListenerRetry(firstDelayMillis = 10L, maxDelayMillis = 80L)
+
     private fun viewModel(
         member: Member = admin,
         store: Store = Store(),
-        requirements: MutableStateFlow<List<PurchaseRecord>> = MutableStateFlow(emptyList()),
-        online: MutableStateFlow<Boolean> = MutableStateFlow(true)
+        requirements: Flow<List<PurchaseRecord>> = MutableStateFlow(emptyList()),
+        online: MutableStateFlow<Boolean> = MutableStateFlow(true),
+        report: (Throwable) -> Unit = {}
     ) = PurchaseViewModel(
         member = member,
         writes = PurchaseWriteRepository(
@@ -120,7 +129,9 @@ class PurchaseViewModelTest {
             newId = { "pr_generated" }
         ),
         requirements = requirements,
-        onlineFlow = online
+        onlineFlow = online,
+        report = report,
+        retry = fastRetry
     )
 
     private fun TestScope.messagesOf(model: PurchaseViewModel): List<String> {
@@ -330,6 +341,159 @@ class PurchaseViewModelTest {
         assertFalse(viewModel(member = staff).capabilities().reopen)
         assertTrue(viewModel(member = admin).capabilities().reopen)
         assertTrue(viewModel(member = owner).capabilities().remove)
+    }
+
+    // --- the listener, and the row that has to show at once ---------------------
+
+    @Test
+    fun `a created requirement is on the board before the snapshot carries it`() = runTest {
+        // A Firestore transaction is applied on the server and is not
+        // latency-compensated, so the listener says nothing until the round
+        // trip finishes. The board must not wait for it.
+        val rows = MutableStateFlow<List<PurchaseRecord>>(emptyList())
+        val model = viewModel(store = Store(), requirements = rows)
+
+        model.add(PurchaseDraft(name = "Remote handsets", quantity = 4.0))
+
+        assertEquals(listOf("pr_generated"), model.active.value.map { it.id })
+        assertEquals("Remote handsets", model.active.value.single().name)
+        assertEquals(4.0, model.active.value.single().quantity)
+    }
+
+    @Test
+    fun `a created requirement lands at the position its urgency gives it`() = runTest {
+        val existing = record("pr_green", createdAt = 9_000).copy(urgency = UrgencyV2.NORMAL)
+        val rows = MutableStateFlow(listOf(existing))
+        val model = viewModel(requirements = rows)
+
+        model.add(
+            PurchaseDraft(name = "Very urgent one", quantity = 1.0, urgency = UrgencyV2.CRITICAL)
+        )
+
+        assertEquals(
+            "red belongs above green, pending or not",
+            listOf("pr_generated", "pr_green"),
+            model.active.value.map { it.id }
+        )
+    }
+
+    @Test
+    fun `the snapshot replaces the pending row instead of doubling it`() = runTest {
+        val rows = MutableStateFlow<List<PurchaseRecord>>(emptyList())
+        val model = viewModel(requirements = rows)
+        model.add(PurchaseDraft(name = "Remote handsets", quantity = 4.0))
+        assertEquals(1, model.active.value.size)
+
+        // The real document arrives, with the name the server holds.
+        rows.value = listOf(record("pr_generated").copy(name = "Remote handsets"))
+
+        assertEquals(
+            "the same requirement must never be on the board twice",
+            listOf("pr_generated"),
+            model.active.value.map { it.id }
+        )
+    }
+
+    @Test
+    fun `a removal takes the pending row with it`() = runTest {
+        // The one case the snapshot cannot clear: a soft-deleted document is
+        // filtered out of the listener, so it never arrives to displace the
+        // optimistic copy.
+        val rows = MutableStateFlow<List<PurchaseRecord>>(emptyList())
+        val store = Store()
+        val model = PurchaseViewModel(
+            member = admin,
+            writes = PurchaseWriteRepository(store, now = { 1L }, newId = { "pr_one" }),
+            requirements = rows,
+            onlineFlow = MutableStateFlow(true),
+            retry = fastRetry
+        )
+        model.add(PurchaseDraft(name = "Remote handsets", quantity = 4.0))
+        assertEquals(1, model.active.value.size)
+        // The document exists now, as it would once the create committed.
+        store.stored = row()
+
+        model.remove(record("pr_one"))
+
+        assertTrue("a removed requirement must leave the board", model.active.value.isEmpty())
+    }
+
+    @Test
+    fun `a remote change still arrives while nothing is pending`() = runTest {
+        val rows = MutableStateFlow<List<PurchaseRecord>>(emptyList())
+        val model = viewModel(requirements = rows)
+
+        rows.value = listOf(record("pr_elsewhere", createdAt = 5_000))
+
+        assertEquals(listOf("pr_elsewhere"), model.active.value.map { it.id })
+    }
+
+    @Test
+    fun `a listener that drops comes back on its own`() = runTest {
+        var attachments = 0
+        val flaky = flow {
+            attachments += 1
+            if (attachments == 1) {
+                emit(listOf(record("pr_first")))
+                throw java.io.IOException("the connection went")
+            }
+            emit(listOf(record("pr_first"), record("pr_second", createdAt = 5_000)))
+        }
+        val model = viewModel(requirements = flaky)
+
+        advanceTimeBy(200)
+        runCurrent()
+
+        assertTrue("the listener has to attach again by itself", attachments >= 2)
+        assertEquals(
+            listOf("pr_second", "pr_first"),
+            model.active.value.map { it.id }
+        )
+    }
+
+    @Test
+    fun `a persistent refusal is told to the person, not swallowed`() = runTest {
+        val reported = mutableListOf<Throwable>()
+        val denied = flow<List<PurchaseRecord>> {
+            throw com.google.firebase.firestore.FirebaseFirestoreException(
+                "denied",
+                com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED
+            )
+        }
+        val model = viewModel(requirements = denied, report = { reported += it })
+        val messages = messagesOf(model)
+
+        advanceTimeBy(200)
+        runCurrent()
+
+        assertTrue("every failure is reported", reported.size >= 3)
+        assertTrue(
+            "and the person is told once it stops looking like a blip",
+            messages.contains(PurchaseViewModel.LISTENER_REFUSED)
+        )
+        assertEquals(
+            "said once, not on every attempt",
+            1,
+            messages.count { it == PurchaseViewModel.LISTENER_REFUSED }
+        )
+        assertFalse("a refused list is not a loaded empty one", model.loading.value)
+    }
+
+    @Test
+    fun `being signed out elsewhere says so rather than showing nothing`() = runTest {
+        val gone = flow<List<PurchaseRecord>> {
+            throw com.google.firebase.firestore.FirebaseFirestoreException(
+                "unauthenticated",
+                com.google.firebase.firestore.FirebaseFirestoreException.Code.UNAUTHENTICATED
+            )
+        }
+        val model = viewModel(requirements = gone)
+        val messages = messagesOf(model)
+
+        advanceTimeBy(200)
+        runCurrent()
+
+        assertTrue(messages.contains(PurchaseViewModel.LISTENER_SIGNED_OUT))
     }
 
     // --- refusals, conflicts and failures ---------------------------------------------

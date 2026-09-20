@@ -1,5 +1,6 @@
 package `in`.smartie.quotedesk.data.repository
 
+import `in`.smartie.quotedesk.data.mapping.DocData
 import `in`.smartie.quotedesk.data.mapping.Keys
 import `in`.smartie.quotedesk.data.mapping.toPurchaseRecord
 import `in`.smartie.quotedesk.data.model.PurchaseRecord
@@ -15,6 +16,20 @@ import `in`.smartie.quotedesk.domain.RoleTitles
 
 /** Whether a call actually put anything on the wire. */
 enum class PurchaseWriteResult { WRITTEN, NO_CHANGE }
+
+/**
+ * What a create wrote, as well as whether it wrote.
+ *
+ * [record] is the document **exactly as it went on the wire**, read back out
+ * of the plan rather than rebuilt from the draft, so it cannot drift from
+ * what was stored. The board shows it while the transaction's round trip
+ * finishes — a Firestore transaction is applied on the server and is not
+ * latency-compensated, so nothing appears locally until the snapshot returns.
+ */
+data class PurchaseCreated(
+    val result: PurchaseWriteResult,
+    val record: PurchaseRecord?
+)
 
 /**
  * The only writer N4 adds.
@@ -58,22 +73,26 @@ class PurchaseWriteRepository(
      * **update**, which anyone above a Worker may do, so a collision would
      * overwrite somebody else's requirement rather than failing.
      */
-    suspend fun create(member: Member, draft: PurchaseDraft): PurchaseWriteResult {
+    suspend fun create(member: Member, draft: PurchaseDraft): PurchaseCreated {
         require(Permissions.canAddPurchase(member)) { NOT_ALLOWED_ADD }
         val author = authorOf(member)
         val at = now()
         val id = newId()
         return store.transaction { transaction ->
-            commit(
-                transaction,
-                PurchaseWrite.create(
-                    id = id,
-                    draft = draft,
-                    author = author,
-                    at = at,
-                    alreadyExists = transaction.read(id) != null
-                )
+            val plan = PurchaseWrite.create(
+                id = id,
+                draft = draft,
+                author = author,
+                at = at,
+                alreadyExists = transaction.read(id) != null
             )
+            val result = commit(transaction, plan)
+            // Read back out of the plan, through the same reader the listener
+            // uses, so what the board shows and what Firestore holds are the
+            // same document by construction.
+            val written = (plan as? PurchasePlan.Write)
+                ?.let { DocData(id, it.data).toPurchaseRecord() }
+            PurchaseCreated(result, written)
         }
     }
 

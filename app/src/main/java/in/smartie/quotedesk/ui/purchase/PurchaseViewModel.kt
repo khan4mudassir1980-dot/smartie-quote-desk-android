@@ -6,6 +6,9 @@ import androidx.lifecycle.viewModelScope
 import `in`.smartie.quotedesk.core.AppContainer
 import `in`.smartie.quotedesk.data.model.PurchaseRecord
 import `in`.smartie.quotedesk.data.model.UrgencyV2
+import `in`.smartie.quotedesk.core.toAppError
+import `in`.smartie.quotedesk.data.ListenerRetry
+import `in`.smartie.quotedesk.data.retryingListener
 import `in`.smartie.quotedesk.data.repository.FirestoreFailures
 import `in`.smartie.quotedesk.data.repository.PurchaseWriteRepository
 import `in`.smartie.quotedesk.data.repository.PurchaseWriteResult
@@ -19,6 +22,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
@@ -42,10 +46,14 @@ data class PurchaseSheetState(
  * status is moved only by the operation that owns it, so no caller can invent
  * a state nobody designed.
  *
- * **Nothing here is optimistic.** Every list on screen comes from the
- * Firestore listener, and a write changes nothing locally — the document
- * comes back changed, or it does not. Writing is online-only, per project
- * convention, because a transaction needs a round trip.
+ * **Firestore stays the source of truth.** Every list comes from the
+ * listener; the one exception is a requirement this device has just created,
+ * which is held by document id until the snapshot carries it and is then
+ * dropped. It is *added* to what the listener said, never allowed to mask or
+ * override it, so the same requirement cannot appear twice. Nothing else is
+ * optimistic: an edit, a receipt, a reopen and a removal all change the
+ * screen only when the document comes back changed. Writing is online-only,
+ * per project convention, because a transaction needs a round trip.
  *
  * **A conflict is never resolved by trying again.** A purchase write carries
  * `rev = stored.rev + 1`, read inside the transaction, so a retry would be a
@@ -58,7 +66,8 @@ class PurchaseViewModel(
     private val writes: PurchaseWriteRepository,
     requirements: Flow<List<PurchaseRecord>>,
     onlineFlow: Flow<Boolean>,
-    private val report: (Throwable) -> Unit = {}
+    private val report: (Throwable) -> Unit = {},
+    retry: ListenerRetry = ListenerRetry()
 ) : ViewModel() {
 
     val messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
@@ -91,14 +100,64 @@ class PurchaseViewModel(
         .catch { emit(true) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
+    /**
+     * Requirements this app has just written and not yet read back.
+     *
+     * A Firestore transaction is applied on the server and is **not**
+     * latency-compensated, so a created requirement does not reach the local
+     * cache — or this listener — until the round trip finishes. Keyed by
+     * document id, and dropped the moment the snapshot carries that id, so
+     * the same requirement can never be on the board twice.
+     */
+    private val _pending = MutableStateFlow<Map<String, PurchaseRecord>>(emptyMap())
+
+    /**
+     * The listener, and what it takes to keep one alive.
+     *
+     * **It retries rather than ending.** A `catch` that emitted an empty list
+     * used to sit here, and a `stateIn` whose upstream has completed is never
+     * collected again — which is how a listener could die once and stay dead
+     * for the life of the process.
+     */
     private val records: StateFlow<List<PurchaseRecord>> = requirements
         .onEach { _loading.value = false }
-        .catch { throwable ->
+        .retryingListener(retry) { throwable, attempt, waitMillis ->
             report(throwable)
+            // A list that failed to refresh is not an empty list, so nothing
+            // is emitted in its place — but the board must stop saying it is
+            // still loading, because it is not.
             _loading.value = false
-            emit(emptyList())
+            if (attempt == PERSISTENT_ATTEMPT) emit(listenerMessage(throwable, waitMillis))
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /**
+     * What is on the board: what Firestore has said, plus anything written
+     * here that it has not said yet.
+     *
+     * Firestore stays the source of truth — a pending requirement is only
+     * ever *added*, never allowed to mask or override the stored one, and it
+     * is dropped by id as soon as the real document arrives.
+     */
+    private val visible: Flow<List<PurchaseRecord>> = combine(records, _pending) { rows, pending ->
+        if (pending.isEmpty()) {
+            rows
+        } else {
+            val stored = rows.mapTo(HashSet()) { it.id }
+            rows + pending.values.filterNot { it.id in stored }
+        }
+    }
+
+    init {
+        // The snapshot has the last word. Anything it carries is no longer
+        // pending, whether this device wrote it or another one did.
+        viewModelScope.launch {
+            records.collect { rows ->
+                if (_pending.value.isEmpty()) return@collect
+                _pending.value = _pending.value - rows.map { it.id }.toSet()
+            }
+        }
+    }
 
     /**
      * Waiting to be bought, newest first — sorted **here**, never by
@@ -106,12 +165,12 @@ class PurchaseViewModel(
      * it drops rows that have no `t`, and a requirement that silently
      * vanishes from the shop floor is worse than the read cost.
      */
-    val active: StateFlow<List<PurchaseRecord>> = records
+    val active: StateFlow<List<PurchaseRecord>> = visible
         .map { PurchaseBoard.active(it) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Received or cancelled, newest first. A removed one is in neither list. */
-    val closed: StateFlow<List<PurchaseRecord>> = records
+    val closed: StateFlow<List<PurchaseRecord>> = visible
         .map { PurchaseBoard.closed(it) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -156,7 +215,21 @@ class PurchaseViewModel(
             return
         }
         if (!requireOnline()) return
-        write(ADD_KEY, ADDED) { writes.create(member, draft) }
+        launchWrite(ADD_KEY) {
+            runCatching { writes.create(member, draft) }
+                .onSuccess { created ->
+                    // On the board straight away, at the position its own
+                    // urgency and timestamp put it, rather than after a round
+                    // trip a transaction cannot shorten.
+                    created.record?.let { _pending.value = _pending.value + (it.id to it) }
+                    dismiss()
+                    emit(
+                        if (created.result == PurchaseWriteResult.WRITTEN) ADDED
+                        else NOTHING_CHANGED
+                    )
+                }
+                .onFailure { emit(failureOf(it)) }
+        }
     }
 
     fun edit(
@@ -206,16 +279,29 @@ class PurchaseViewModel(
         success: String,
         block: suspend () -> PurchaseWriteResult
     ) {
+        launchWrite(key) {
+            runCatching { block() }
+                .onSuccess { result ->
+                    // Whatever this requirement was waiting to be read back
+                    // as, it has been changed since, so the pending copy is
+                    // stale and goes. A removal takes it off the board here,
+                    // which is the one case the snapshot cannot: a deleted
+                    // document never arrives.
+                    _pending.value = _pending.value - key
+                    dismiss()
+                    emit(if (result == PurchaseWriteResult.WRITTEN) success else NOTHING_CHANGED)
+                }
+                .onFailure { emit(failureOf(it)) }
+        }
+    }
+
+    /** One write at a time per key, whatever it returns. */
+    private fun launchWrite(key: String, block: suspend () -> Unit) {
         if (key in _saving.value) return
         _saving.value = _saving.value + key
         viewModelScope.launch {
             try {
-                runCatching { block() }
-                    .onSuccess { result ->
-                        dismiss()
-                        emit(if (result == PurchaseWriteResult.WRITTEN) success else NOTHING_CHANGED)
-                    }
-                    .onFailure { emit(failureOf(it)) }
+                block()
             } finally {
                 _saving.value = _saving.value - key
             }
@@ -272,6 +358,28 @@ class PurchaseViewModel(
     }
 
     companion object {
+        /**
+         * The failure on which the person is told the board has stopped
+         * refreshing. Zero is the first, so this is the third — two silent
+         * recoveries, then a sentence, because a listener that drops and
+         * comes back must not shout about it.
+         */
+        const val PERSISTENT_ATTEMPT: Long = 2L
+
+        /** Why the board has stopped refreshing, in words worth reading. */
+        fun listenerMessage(throwable: Throwable, waitMillis: Long): String =
+            when (throwable.toAppError().code) {
+                "unauthenticated" -> LISTENER_SIGNED_OUT
+                "permission-denied" -> LISTENER_REFUSED
+                else -> "Still trying to reach the requirements list — " +
+                    "retrying in ${waitMillis / 1_000}s"
+            }
+
+        const val LISTENER_SIGNED_OUT: String =
+            "Signed out somewhere else — sign in again to see requirements"
+        const val LISTENER_REFUSED: String =
+            "This account is not allowed to read requirements any more"
+
         /** The key [saving] uses for the add panel, which has no record yet. */
         const val ADD_KEY: String = "add"
 

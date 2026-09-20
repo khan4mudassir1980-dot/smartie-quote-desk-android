@@ -101,6 +101,80 @@ clear the `rcv*` fields by writing null — and writing zeros is wrong, because
 `DeleteField` is the mirror of `ServerTimestamp`: a marker the pure planner can emit and a
 test can assert, swapped for `FieldValue.delete()` inside the store.
 
+## Partial receipt, and what the PWA actually does
+
+A requirement is very often delivered in pieces: five of ten arrive on Tuesday and the rest
+on Friday. Until Batch C the first of those closed the requirement, because `markReceived`
+wrote `received: true` whatever quantity it was given, and the five still outstanding
+disappeared off the shop floor's list.
+
+Fixing that means writing a **cumulative** `rcvQty`, which is a shared field, so what the
+V8C4 PWA does with it had to be established rather than assumed.
+
+### What the inspector found
+
+`tools/catalogue-import/inspect-v8c4.mjs --purchase` was run by the Owner, read-only, against
+the approved V8C4 `index.html` on the Owner's own machine. That file is deliberately not in
+this repository, so these are the reported verdicts, recorded here as the answers of record:
+
+| Question | Verdict | What it means here |
+|---|---|---|
+| Is a partial `rcvQty` shown while a requirement is still open? | `USED_ONLY_WHEN_RECEIVED` | The PWA only ever renders the figure inside a received branch. A partly received row shows no quantity there — it does not show a wrong one. |
+| Where does the PWA decide a requirement is finished? | `CLOSURE_FROM_RECEIVED_OR_STATUS` | From `received` / `status`, **never** from `rcvQty > 0`. A row carrying `rcvQty: 5`, `received: false`, `status: "Needed"` therefore reads as **open** in the PWA, which is exactly what a partial receipt has to be. |
+| How does the PWA's own receive update the field? | `OVERWRITES` | It writes the figure it was given, discarding whatever total was there. |
+
+The first two make cumulative `rcvQty` **safe to write**: the shape a partial receipt
+produces is read correctly by both apps. The third is a one-way incompatibility, and it is
+the reason for the restriction below.
+
+### The contract
+
+`qty` stays **the total required**, and is never reduced by a receipt.
+
+| | |
+|---|---|
+| `rcvQty` | The **cumulative** quantity received, across every receipt. Absent means none. |
+| `received` / `status` | `false` / `Needed` until the cumulative total reaches `qty`; `true` / `Received` at that point and not before. |
+| Receiving | The panel asks for the quantity that arrived **in this delivery**. The transaction re-reads the stored `qty` and `rcvQty` and writes `stored + now`. |
+| Refusals | Zero or less; and more than is still outstanding. Both are sentences decided against the **stored** document, inside the transaction. |
+| Editing the required total | Refused below the cumulative received total. Set **equal** to it, and the requirement finalises as fully received in the same write. |
+| Reopen | Unchanged: all four `rcv*` fields are removed, so the cumulative total returns to zero and the whole requirement comes back. |
+| `ABORTED` | Still never retried automatically. A conflict on a receipt is two people receiving the same delivery, and guessing which is right is the one thing the revision counter exists to stop. |
+
+**A legacy row stays closed.** `isClosed` is `received || status == "Received" || status ==
+"Cancelled"` and that does not change, so a V8C4 row carrying `received: true` with
+`rcvQty` below `qty` — which the PWA's overwrite makes ordinary — remains closed and is not
+reopened by arithmetic. Quantities keep their string coercion: `"10"` reads as `10.0` on both
+fields, through the same reader as before.
+
+**No rules change and no index change.** The update rule constrains `id`, `qty`, `updated`,
+`rev` and `del`, and says nothing about `rcvQty`, `received` or `status`. A partial payload
+and a completing payload are both ordinary updates, and `firestore/tests/purchase.test.js`
+proves it against the rules as deployed.
+
+### ⚠️ The production cutover restriction
+
+**The PWA and this app must not both write Purchase requirements in the same Firebase
+project.** Two independent reasons, either of which is enough:
+
+1. **The PWA overwrites `rcvQty`.** A PWA receive against a partly received requirement
+   replaces the running total with the quantity of that one delivery, so five already
+   received are silently lost and the requirement can never close by arithmetic.
+2. **The PWA does not follow the `rev` contract** — recorded separately in
+   `docs/PROJECT-STATUS.md`. It never writes `rev`, and `revOk()` reads the merged
+   post-state, so once this app has stamped a requirement the PWA's next update to that same
+   document is refused outright.
+
+This costs nothing today: the native app writes only to `smartie-quote-desk-staging` and the
+PWA runs against production. Before a production cutover, **one** of these must happen:
+
+1. update the PWA so that it accumulates `rcvQty` and carries `rev`; or
+2. retire the PWA, or make it read-only, and move **all** Purchase writers to the native app
+   together.
+
+Splitting the writers across both apps is not a third option, and no partial migration of the
+Purchase tab is safe.
+
 ## Role matrix
 
 | Action | Owner | Admin | stored `staff` (*Manager*) | stored `worker` (*Staff*) | Enforced by |
@@ -160,8 +234,16 @@ app, whose absence we control, plus a one-off backfill. That is N4.x, not N4.
 | **2** | `PurchaseStore` / `PurchaseTransaction` seam, `PurchaseWriteRepository`, `Permissions.canReopenPurchase`, emulator tests | Done |
 | **3** | `PurchaseViewModel` and the panels | Done |
 | **4** | The Purchase tab rebuilt; **unblocks T-S25** | Done |
+| **A** | Card layout — a card's footer no longer overlaps its own text | Done |
+| **B** | A listener that dies comes back; a new requirement shows at once | Done |
+| **C** | **Partial receipt** — cumulative `rcvQty`, and the edit guards around it | Done |
+| **D** | Open requirements ordered by urgency, newest within a colour | Done |
 | 5 | The read-only Purchase History screen | Not started |
 | 6 | The bottom-navigation badge, and close-out | Not started |
+
+Batches A to D are the four defects the Batch 4 manual pass found on a phone. They were
+audited read-only before a line was changed, and each is a separate commit against a separate
+root cause rather than one sweep over the tab.
 
 ## Deferred to N4.1
 
@@ -194,6 +276,11 @@ To be run on a staging build once Batch 6 lands. None has been run.
 | T-R11 | Offline, every write control is disabled and says why; nothing auto-commits on reconnect |
 | T-R12 | **Two phones**, same requirement, both mark received: exactly one succeeds and the other is refused by name, not by a bare permission error. **Pending a second phone**, like T-S5 and T-P13 |
 | T-R13 | A requirement created by the PWA is editable and receivable in the native app — the legacy `qty` rescue, on real data |
+| T-R14 | Ten are needed and five arrive: the card reads **10 required · 5 received · 5 remaining**, stays in Open, and stays inside its own urgency colour |
+| T-R15 | The remaining five arrive: the requirement closes, and the closed card shows **10 in** — not 5 |
+| T-R16 | Receiving more than is still outstanding is refused by name, with the outstanding figure in the sentence |
+| T-R17 | The required total cannot be edited below what has already arrived; setting it **equal** to what has arrived closes the requirement in the same save |
+| T-R18 | Three smaller deliveries against one requirement accumulate rather than replace, and the third closes it |
 
 ### What can be run on a phone after Batch 4
 
@@ -203,6 +290,7 @@ run.** The rest wait on a later batch or on a second phone:
 | Row | Ready after Batch 4? |
 |---|---|
 | T-R1, T-R2 (**N3's T-S25**), T-R3, T-R4, T-R5, T-R6, T-R11, T-R13 | **Yes** |
+| T-R14 to T-R18 | **Yes, after Batch C** — they are the partial-receipt rows and did not exist before it |
 | T-R7, T-R8 | No — the Purchase History screen is Batch 5 |
 | T-R9, T-R10 | No — the tab badge is Batch 6 |
 | T-R12 | No — needs a **second phone**, like T-S5 and T-P13 |

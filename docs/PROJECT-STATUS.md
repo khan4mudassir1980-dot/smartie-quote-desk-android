@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-20.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `9e05bd3` — [run #97](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35511915950), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `9eef41a` — [run #103](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35518126583), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -25,7 +25,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N2 Products | **Complete and verified** |
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
-| N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done — the tab now writes, and every one of the six operations is reachable from it. **Nothing has been run on a device**, so no N4 row may be called verified; the history screen is Batch 5 and the tab badge is Batch 6 |
+| N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done — the tab writes, and every one of the six operations is reachable from it. A manual pass on a phone then found **four real defects**; batches A, B and D are done and CI-verified, and **Batch C, partial receipt, is in progress**. Only the four defects have been seen on a device, so **no N4 acceptance row may be called verified**; the history screen is Batch 5 and the tab badge is Batch 6 |
 | N5–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -323,6 +323,51 @@ written. Nothing was merged to `main` and no pull request exists.
 banner, so **T-S25 stays blocked** on the batch that makes a requirement creatable from a
 screen.
 
+### N4 batches A, B and D, the first three defects from the phone
+
+Verified at `9eef41a`,
+[run #103](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35518126583),
+all three jobs green.
+
+The Batch 4 manual pass found four real defects. They were audited read-only
+before anything changed, and each has its own root cause and its own commit.
+
+| Commit | What |
+|---|---|
+| `8e8a8d2` | **Batch D** — open requirements are read most urgent first, newest within a colour |
+| `e86ade2` | A test imported `assertExists` as though it were an extension; it is a member |
+| `3d3f483` | The V8C4 inspector gained the three `rcvQty` questions, read-only and redacted |
+| `e93b835` | **Batch B** — a listener that dies comes back, and a new requirement shows at once |
+| `7ee2278` | The retry tests stopped draining the virtual clock for ever |
+| `9eef41a` | Two `Double`s compared with a delta, not the deprecated primitive overload |
+
+**Batch A, the overlapping card, is in `8e8a8d2`'s parent work** —
+`ListRow` put its information row and its footer in a `Box`, which stacks its
+children, so every card's control row sat on top of the card's own text on a
+real phone. They are in a `Column` now, and `PurchaseCardLayoutScreenTest`
+compares bounds against bounds: `assertIsDisplayed()` does **not** detect
+occlusion, which is why every test passed while the defect shipped.
+
+**Batch B was two faults in one symptom.** A snapshot listener used to
+*complete* on a benign refusal, and a `stateIn` whose upstream has completed is
+never collected again — `SharingStarted` decides when to start a flow, not when
+to restart one that finished. On top of that, a Firestore transaction is
+applied on the server and is **not** latency-compensated, so a created
+requirement does not reach the local cache at all until the round trip
+finishes. An error is an error now, `retryingListener` survives it with a
+capped doubling wait and reports every failure, and a just-created requirement
+is held by document id until the snapshot carries it.
+
+**866 Kotlin test methods across 81 classes**, up from 805 across 73 after
+Batch 3; 107 emulator tests and 48 importer and tool tests — the importer
+suite grew with `purchase-receipt.test.mjs`, which proves the inspector's
+classifier against synthetic sources, including the two answers it must refuse
+to give. Still **0 instrumentation tests**.
+
+**Nothing deployed, no rules or index change, production neither read nor
+written**, nothing merged to `main`, no pull request. The inspector is
+read-only and the PWA was not modified.
+
 ### N4 batch 4, the tab
 
 Verified at `9e05bd3`,
@@ -397,33 +442,22 @@ merged to `main`, no pull request.
 
 ## Current next action
 
-**Run the N4 Batch 4 manual checks on a phone, from the `smartie-native-apks` artifact of
-run #97.**
+**Finish N4 Batch C — partial receipt — and get CI green on it.**
 
-The plan of record is `docs/N4-plan.md`, which lists exactly which acceptance rows are ready:
-**T-R1 to T-R6, T-R11 and T-R13 — and with T-R2, N3's T-S25.** T-R7 and T-R8 wait on the
-history screen (Batch 5), T-R9 and T-R10 on the tab badge (Batch 6), and T-R12 on a second
-phone.
+The contract is written out in `docs/N4-plan.md` under "Partial receipt, and
+what the PWA actually does", and it is settled: `qty` is the total required,
+`rcvQty` becomes the **cumulative** received total, and a requirement closes
+only when the two meet. It needs no Firestore rule change and no index change,
+which the emulator suite proves against the rules as deployed.
 
-Batch 5, the read-only Purchase History screen, can begin in parallel. It changes no Firestore
-rule and no index.
+After that, the phone run. The N4 acceptance rows ready to run are **T-R1 to
+T-R6, T-R11, T-R13 — and with T-R2, N3's T-S25** — plus **T-R14 to T-R18**,
+the partial-receipt rows Batch C adds. T-R7 and T-R8 wait on the history
+screen (Batch 5), T-R9 and T-R10 on the tab badge (Batch 6), and T-R12 on a
+second phone. The build to use is the `smartie-native-apks` artifact of the run
+that verifies Batch C, and it must show **Staging**.
 
 **No N4 row is passed until it has been run**, and none has.
-
-What is **not** this action, and must not slip because N4 started:
-
-| Still open | Needs |
-|---|---|
-| **T-P12**'s four unreported clauses, **T-P15** | One phone |
-| **T-P14** | The Firebase console's usage tab |
-| **T-S5**, **T-P13** | **A second phone**, writing the *same* row at the *same moment* |
-| T-S2c, T-S2d, T-S4, T-S9, T-S20, T-X4; second-device T-S24 / T-S27 | One or two phones |
-| **T-P7** | **Blocked** until N6 exists. Do not attempt it, and do not record it as failed |
-| T-S25 | N4 itself — it is the row Purchase being writable finally makes possible |
-
-**N3.1 is not closed** and must not be described as verified until its rows have run. N3's
-outstanding device work is **tracked, not closed**; it is listed with its evidence in
-`docs/N3-verification.md`, and N4 must not be the reason it slips.
 
 ## Decisions that bind future work
 
@@ -459,6 +493,42 @@ the app's updates gives up the guard against two devices completing the same
 requirement, while relaxing `revOk()` to accept an unchanged `rev` weakens it
 for everybody. **Neither was taken. N4 changes no rules.** Proved by name in
 `firestore/tests/purchase.test.js` and written out in `docs/N4-plan.md`, trap 5.
+
+**The PWA and the native app must never both write Purchase requirements in
+the same Firebase project.** This is the production cutover restriction, and it
+follows from two independent facts, either of which is enough on its own:
+
+1. **The PWA overwrites `rcvQty`.** The Owner ran
+   `tools/catalogue-import/inspect-v8c4.mjs --purchase` read-only against the
+   approved V8C4 `index.html`, and it reported `OVERWRITES`: a PWA receive
+   replaces the stored figure with the quantity of that one delivery. The
+   native app writes `rcvQty` as a **cumulative** total, so one PWA receive
+   against a partly received requirement silently discards everything received
+   before it, and the requirement can then never close by arithmetic.
+2. **The PWA does not follow the `rev` contract** — the note above. It never
+   writes `rev`, and once this app has stamped a requirement, a PWA update to
+   that same document is refused outright.
+
+Before a native production cutover, **one** of these must happen:
+
+1. update the PWA so that it accumulates `rcvQty` and carries `rev`; or
+2. retire the PWA, or make it read-only, and move **all** Purchase writers to
+   the native app together.
+
+Running both as writers, or migrating the Purchase tab in part, is not a third
+option. It costs nothing today — the native app writes only to
+`smartie-quote-desk-staging`, and the PWA runs against production — and it is
+recorded now so the cutover plan cannot be surprised by it.
+
+**The inspector's other two verdicts are what make cumulative `rcvQty` safe**,
+and they are recorded so nobody re-derives them: the PWA renders a received
+quantity **only inside a received branch** (`USED_ONLY_WHEN_RECEIVED`), and it
+decides a requirement is finished from `received` / `status` and **never** from
+a positive `rcvQty` (`CLOSURE_FROM_RECEIVED_OR_STATUS`). A row carrying
+`rcvQty: 5`, `received: false`, `status: "Needed"` therefore reads as open in
+both apps, which is exactly what a partial receipt must be. The verdicts are
+the Owner's run of the tool, not a reading of the PWA from this machine — the
+approved `index.html` is deliberately not in this repository.
 
 **Stock writing is online-only.** A Firestore transaction that re-reads the
 stored quantity and applies the delta to it. No offline mutation queue, no

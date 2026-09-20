@@ -1,6 +1,7 @@
 package `in`.smartie.quotedesk.domain
 
 import `in`.smartie.quotedesk.data.model.PurchaseRecord
+import `in`.smartie.quotedesk.data.model.UrgencyV2
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -13,17 +14,21 @@ class PurchaseBoardTest {
         createdAt: Long = 0L,
         updatedAt: Long = 0L,
         status: String = "Needed",
+        urgency: UrgencyV2 = UrgencyV2.NORMAL,
         received: Boolean = false,
+        receivedQuantity: Double? = null,
         receivedAt: Long = 0L,
         deleted: Boolean = false
     ) = PurchaseRecord(
         id = id,
         name = id,
         quantity = 1.0,
+        urgency = urgency,
         status = status,
         createdAt = createdAt,
         updatedAt = updatedAt,
         received = received,
+        receivedQuantity = receivedQuantity,
         receivedAt = receivedAt,
         deleted = deleted
     )
@@ -147,6 +152,95 @@ class PurchaseBoardTest {
             received = true
         )
         assertEquals(4_000L, PurchaseBoard.closedAt(record))
+    }
+
+    // --- urgency ------------------------------------------------------------
+
+    @Test
+    fun `red is above yellow is above green`() {
+        val board = PurchaseBoard.active(
+            listOf(
+                record("pr_green", urgency = UrgencyV2.NORMAL, createdAt = 9_000),
+                record("pr_red", urgency = UrgencyV2.CRITICAL, createdAt = 1_000),
+                record("pr_yellow", urgency = UrgencyV2.URGENT, createdAt = 5_000)
+            )
+        )
+        // The newest is green and the oldest is red, so this fails on any
+        // comparator that still puts the clock first.
+        assertEquals(listOf("pr_red", "pr_yellow", "pr_green"), board.map { it.id })
+    }
+
+    @Test
+    fun `inside one urgency the newest is still first`() {
+        val board = PurchaseBoard.active(
+            listOf(
+                record("pr_r_old", urgency = UrgencyV2.CRITICAL, createdAt = 1_000),
+                record("pr_g_new", urgency = UrgencyV2.NORMAL, createdAt = 8_000),
+                record("pr_r_new", urgency = UrgencyV2.CRITICAL, createdAt = 3_000),
+                record("pr_y_old", urgency = UrgencyV2.URGENT, createdAt = 2_000),
+                record("pr_g_old", urgency = UrgencyV2.NORMAL, createdAt = 4_000),
+                record("pr_y_new", urgency = UrgencyV2.URGENT, createdAt = 6_000)
+            )
+        )
+        assertEquals(
+            listOf("pr_r_new", "pr_r_old", "pr_y_new", "pr_y_old", "pr_g_new", "pr_g_old"),
+            board.map { it.id }
+        )
+    }
+
+    @Test
+    fun `a partly received requirement keeps its place in its own colour`() {
+        // Five of ten arrived: still open, still urgent, and it must not drop
+        // below a green one just because something came.
+        val board = PurchaseBoard.active(
+            listOf(
+                record("pr_green", urgency = UrgencyV2.NORMAL, createdAt = 9_000),
+                record(
+                    "pr_part",
+                    urgency = UrgencyV2.CRITICAL,
+                    createdAt = 1_000,
+                    receivedQuantity = 5.0
+                )
+            )
+        )
+        assertEquals(listOf("pr_part", "pr_green"), board.map { it.id })
+    }
+
+    @Test
+    fun `the rank is explicit, so reordering the enum cannot reorder the board`() {
+        assertEquals(0, UrgencyV2.CRITICAL.rank)
+        assertEquals(1, UrgencyV2.URGENT.rank)
+        assertEquals(2, UrgencyV2.NORMAL.rank)
+        // The wire values and the labels are untouched by any of this.
+        assertEquals("critical", UrgencyV2.CRITICAL.wireValue)
+        assertEquals("urgent", UrgencyV2.URGENT.wireValue)
+        assertEquals("normal", UrgencyV2.NORMAL.wireValue)
+        assertEquals("Needed, but not now", UrgencyV2.NORMAL.label)
+    }
+
+    @Test
+    fun `history stays chronological, not urgent`() {
+        // Nothing closed is waiting for anybody, so the colour it once had
+        // must not reorder the record of what happened.
+        val board = PurchaseBoard.closed(
+            listOf(
+                record(
+                    "pr_green_late",
+                    urgency = UrgencyV2.NORMAL,
+                    status = "Received",
+                    received = true,
+                    receivedAt = 9_000
+                ),
+                record(
+                    "pr_red_early",
+                    urgency = UrgencyV2.CRITICAL,
+                    status = "Received",
+                    received = true,
+                    receivedAt = 2_000
+                )
+            )
+        )
+        assertEquals(listOf("pr_green_late", "pr_red_early"), board.map { it.id })
     }
 
     @Test

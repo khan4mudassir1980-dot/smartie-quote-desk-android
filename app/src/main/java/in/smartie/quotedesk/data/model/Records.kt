@@ -192,11 +192,17 @@ data class StockMove(
 /**
  * How badly something is needed. The wire values are the PWA's and never
  * change; the labels are the words the Owner uses for them on the card.
+ *
+ * [rank] is the shop floor's order — red first, then yellow, then green — and
+ * it is **explicit rather than the declaration order**. `ordinal` would work
+ * today and would silently reorder the whole Purchase board the first time
+ * somebody inserted a fourth urgency or tidied these three into alphabetical
+ * order. A number that has to be edited on purpose cannot do that.
  */
-enum class UrgencyV2(val wireValue: String, val label: String) {
-    CRITICAL("critical", "Very urgent"),
-    URGENT("urgent", "Can wait 1-2 days"),
-    NORMAL("normal", "Needed, but not now");
+enum class UrgencyV2(val wireValue: String, val label: String, val rank: Int) {
+    CRITICAL("critical", "Very urgent", 0),
+    URGENT("urgent", "Can wait 1-2 days", 1),
+    NORMAL("normal", "Needed, but not now", 2);
 
     companion object {
         fun from(value: String?): UrgencyV2 =

@@ -17,14 +17,22 @@ import `in`.smartie.quotedesk.data.model.PurchaseRecord
 object PurchaseBoard {
 
     /**
-     * Still waiting to be bought, newest first.
+     * Still waiting to be bought: **most urgent first, newest within that**.
+     *
+     * Red, then yellow, then green, because that is the order the shop floor
+     * works in — a requirement that stops a gate going up today must not sit
+     * below one that is merely wanted this month. Inside a colour the newest
+     * is first, so adding one still puts it where the person who added it
+     * will look.
      *
      * [PurchaseRecord.isOpen] already excludes a soft-deleted row, which is
      * the whole point of a soft delete: the document survives so a PWA device
-     * cannot resurrect it, and nobody sees it again.
+     * cannot resurrect it, and nobody sees it again. A requirement that has
+     * been **partly** received is still open, so it keeps its place in its own
+     * colour rather than dropping to the bottom.
      */
     fun active(records: List<PurchaseRecord>): List<PurchaseRecord> =
-        records.filter { it.isOpen }.sortedWith(NEWEST_ADDED_FIRST)
+        records.filter { it.isOpen }.sortedWith(MOST_URGENT_FIRST)
 
     /**
      * Received or cancelled, newest first — and **never** a removed one.
@@ -54,16 +62,28 @@ object PurchaseBoard {
     }
 
     /**
-     * Ties break on the id, descending.
+     * Urgency, then newest, then the id.
      *
-     * Two requirements added in the same millisecond are possible — a PWA
-     * import writes many with one timestamp — and a comparator that called
-     * them equal would let the list reorder itself between recompositions,
-     * which on a `LazyColumn` keyed by id is a visible jump under the thumb.
+     * The rank comes from [UrgencyV2.rank] rather than the enum's declaration
+     * order, so reordering the enum cannot silently reorder the board.
+     *
+     * Ties break on the id, descending. Two requirements added in the same
+     * millisecond are possible — a PWA import writes many with one timestamp —
+     * and a comparator that called them equal would let the list reorder
+     * itself between recompositions, which on a `LazyColumn` keyed by id is a
+     * visible jump under the thumb.
      */
-    private val NEWEST_ADDED_FIRST: Comparator<PurchaseRecord> =
-        compareByDescending<PurchaseRecord> { addedAt(it) }.thenByDescending { it.id }
+    private val MOST_URGENT_FIRST: Comparator<PurchaseRecord> =
+        compareBy<PurchaseRecord> { it.urgency.rank }
+            .thenByDescending { addedAt(it) }
+            .thenByDescending { it.id }
 
+    /**
+     * History is chronological, not urgent.
+     *
+     * Nothing in the closed list is waiting for anybody, so what matters is
+     * when it stopped being active — not how badly it was once wanted.
+     */
     private val NEWEST_CLOSED_FIRST: Comparator<PurchaseRecord> =
         compareByDescending<PurchaseRecord> { closedAt(it) }.thenByDescending { it.id }
 }

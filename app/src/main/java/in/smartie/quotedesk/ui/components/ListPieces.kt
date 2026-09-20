@@ -74,6 +74,19 @@ fun ListRow(
     meta: String? = null,
     tags: @Composable () -> Unit = {},
     trailing: @Composable () -> Unit = {},
+    /**
+     * Controls under the row, inside the same card.
+     *
+     * **Null rather than an empty lambda**, because the slot carries padding:
+     * an empty one would add it to every card in the app and thin every
+     * board by eight pixels. Null composes nothing at all, so every existing
+     * caller lays out exactly as it did.
+     *
+     * It exists because a requirement's actions belong to its own card, and a
+     * second card per item would thin the board anyway — the same reason a
+     * stock card's height is treated as a feature.
+     */
+    footer: (@Composable () -> Unit)? = null,
     background: Color = SmartieColors.Panel,
     accent: Color? = null,
     onClick: (() -> Unit)? = null
@@ -135,6 +148,7 @@ fun ListRow(
             }
             trailing()
         }
+        if (footer != null) Box(Modifier.padding(top = dimens.gapS)) { footer() }
     }
 }
 

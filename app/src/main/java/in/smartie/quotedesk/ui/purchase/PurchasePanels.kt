@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import `in`.smartie.quotedesk.data.mapping.Money
 import `in`.smartie.quotedesk.data.model.PurchaseRecord
 import `in`.smartie.quotedesk.data.model.UrgencyV2
@@ -610,6 +611,42 @@ private fun OfflineNote() {
 // --- wording --------------------------------------------------------------
 
 internal const val OFFLINE: String = "Internet required to change a requirement"
+
+// --- how a purchase sheet may be closed ----------------------------------
+
+/**
+ * **Back closes a purchase sheet**, and an accidental tap outside does not.
+ *
+ * Both halves are deliberate and they answer different risks. Back is a
+ * person saying "not this" and must close the panel rather than leave the
+ * tab, so it is allowed on every sheet here — the stock sheets refuse it,
+ * and this is the one place the two differ. A tap outside is usually a miss,
+ * and on the two sheets that hold typed values a miss would throw the typing
+ * away, so those are not dismissible that way.
+ *
+ * With the keyboard up the system takes the first Back to close the keyboard,
+ * exactly as N3's T-S21 recorded for stock, so nothing typed is lost to a
+ * single press.
+ */
+internal val PURCHASE_FORM_PROPERTIES: DialogProperties = DialogProperties(
+    dismissOnBackPress = true,
+    dismissOnClickOutside = false
+)
+
+/** A confirmation holds nothing typed, so a tap outside may close it too. */
+internal val PURCHASE_CONFIRM_PROPERTIES: DialogProperties = DialogProperties(
+    dismissOnBackPress = true,
+    dismissOnClickOutside = true
+)
+
+// --- sheet titles ---------------------------------------------------------
+
+internal const val ADD_TITLE: String = "Add a requirement"
+internal const val EDIT_TITLE: String = "Edit requirement"
+internal const val URGENCY_TITLE: String = "How urgently is it needed?"
+internal const val RECEIVE_TITLE: String = "Mark as received"
+internal const val REOPEN_TITLE: String = "Reopen this requirement?"
+internal const val REMOVE_TITLE: String = "Remove this requirement?"
 
 internal const val CANCEL: String = "Cancel"
 

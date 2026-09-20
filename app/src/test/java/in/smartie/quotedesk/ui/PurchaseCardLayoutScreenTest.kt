@@ -23,6 +23,7 @@ import `in`.smartie.quotedesk.ui.components.NOTE_TAG
 import `in`.smartie.quotedesk.ui.purchase.PurchaseCapabilities
 import `in`.smartie.quotedesk.ui.purchase.PurchaseSheet
 import `in`.smartie.quotedesk.ui.purchase.rowActionLabel
+import `in`.smartie.quotedesk.ui.purchase.quantityLine
 import `in`.smartie.quotedesk.ui.screens.PurchaseRow
 import `in`.smartie.quotedesk.ui.theme.SmartieTheme
 import org.junit.Assert.assertTrue
@@ -93,7 +94,7 @@ class PurchaseCardLayoutScreenTest {
     /** The lowest edge of anything that describes the requirement. */
     private fun informationBottom(record: PurchaseRecord): Float = listOf(
         boundsOfText(record.name).bottom,
-        boundsOfText("${record.quantity.toInt()} needed").bottom,
+        boundsOfText(quantityLine(record)).bottom,
         compose.onNodeWithTag(NOTE_TAG).fetchSemanticsNode().boundsInRoot.bottom,
         boundsOfText(record.urgency.label).bottom
     ).maxOrNull() ?: 0f

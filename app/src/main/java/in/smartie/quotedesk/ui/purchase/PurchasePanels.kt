@@ -306,8 +306,19 @@ internal fun SetUrgencyPanel(
 // --- closing and reopening ------------------------------------------------
 
 /**
- * It arrived. The quantity is asked for rather than assumed, because a
- * part delivery is the ordinary case on a site.
+ * A delivery arrived, and it is very often **not** the whole order.
+ *
+ * The field asks for the quantity that came **in this delivery**, so all
+ * three figures are put in front of the person first: what was asked for,
+ * what has already arrived, and what is still to come. It defaults to the
+ * outstanding quantity — the common case is the rest of the order arriving —
+ * and anything smaller and positive is accepted.
+ *
+ * Both refusals are the planner's own sentences rather than a second wording
+ * of the same rules, so what is read here cannot drift from what a write
+ * would come back with. The write still decides against the **stored**
+ * document; this is only what stops somebody typing a figure that was never
+ * going to be accepted.
  */
 @Composable
 internal fun MarkReceivedPanel(
@@ -316,22 +327,24 @@ internal fun MarkReceivedPanel(
     saving: Boolean = false,
     actions: PurchaseActions = PurchaseActions()
 ) {
+    val outstanding = record.remaining
     var received by rememberSaveable(record.id) {
-        mutableStateOf(
-            if (record.quantity > 0.0) Money.formatQuantity(record.quantity) else ""
-        )
+        mutableStateOf(if (outstanding > 0.0) Money.formatQuantity(outstanding) else "")
     }
     val parsed = received.trim().toDoubleOrNull() ?: 0.0
-    val usable = parsed > 0.0
+    val refusal = when {
+        received.isBlank() -> null
+        parsed <= 0.0 -> PurchaseWrite.NOT_POSITIVE
+        parsed > outstanding + PurchaseRecord.QUANTITY_TOLERANCE ->
+            PurchaseWrite.moreThanRemaining(outstanding)
+        else -> null
+    }
+    val usable = parsed > 0.0 && refusal == null
 
     PurchaseFormPanel(
         online = online,
         fields = {
-            Text(
-                neededLine(record),
-                style = MaterialTheme.typography.bodyLarge,
-                color = SmartieColors.Ink
-            )
+            ReceiptSummary(record)
             SmartieField(
                 label = RECEIVED_LABEL,
                 value = received,
@@ -340,11 +353,9 @@ internal fun MarkReceivedPanel(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.semantics { contentDescription = RECEIVED_LABEL }
             )
-            if (!usable && received.isNotBlank()) {
+            if (refusal != null) {
                 Text(
-                    // The planner's own sentence, so what is read here cannot
-                    // drift from what a write would come back with.
-                    PurchaseWrite.NOT_POSITIVE,
+                    refusal,
                     style = MaterialTheme.typography.labelMedium,
                     color = SmartieColors.Warn
                 )
@@ -360,6 +371,45 @@ internal fun MarkReceivedPanel(
             )
         }
     )
+}
+
+/**
+ * The three figures a part delivery turns on, each on its own line.
+ *
+ * Merged into one semantics node per line, so a test reads "Already received
+ * 5" as one sentence rather than hunting two adjacent nodes — and so a screen
+ * reader says the label with its figure instead of a bare number.
+ */
+@Composable
+private fun ReceiptSummary(record: PurchaseRecord) {
+    val dimens = LocalSmartieDimens.current
+    Column(
+        Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(dimens.gapXs)
+    ) {
+        SummaryLine(TOTAL_REQUIRED, record.quantity)
+        SummaryLine(ALREADY_RECEIVED, record.receivedTotal)
+        SummaryLine(REMAINING, record.remaining)
+    }
+}
+
+@Composable
+private fun SummaryLine(label: String, quantity: Double) {
+    Row(
+        modifier = Modifier
+            .semantics(mergeDescendants = true) {
+                contentDescription = summaryLine(label, quantity)
+            }
+            .fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = SmartieColors.Steel)
+        Text(
+            Money.formatQuantity(quantity),
+            style = MaterialTheme.typography.bodyLarge,
+            color = SmartieColors.Ink
+        )
+    }
 }
 
 /**
@@ -659,7 +709,13 @@ internal const val QUANTITY_LABEL: String = "How many"
 internal const val NOTE_LABEL: String = "Note"
 internal const val NOTE_PLACEHOLDER: String = "Where it is for, or anything useful"
 internal const val URGENCY_LABEL: String = "How urgently"
-internal const val RECEIVED_LABEL: String = "How many arrived"
+
+/** "…now", because the field means this delivery and not the running total. */
+internal const val RECEIVED_LABEL: String = "How many arrived now"
+
+internal const val TOTAL_REQUIRED: String = "Total required"
+internal const val ALREADY_RECEIVED: String = "Already received"
+internal const val REMAINING: String = "Remaining"
 
 internal const val ADD_REQUIREMENT: String = "Add requirement"
 internal const val ADDING: String = "Adding…"
@@ -689,8 +745,31 @@ internal const val CONFIRM_RECEIVE: String = "Confirm this requirement has arriv
 internal const val CONFIRM_REOPEN: String = "Confirm reopening this requirement"
 internal const val CONFIRM_REMOVE: String = "Confirm removing this requirement"
 
-internal fun neededLine(record: PurchaseRecord): String =
-    "${Money.formatQuantity(record.quantity)} needed"
+/**
+ * One figure from the receive panel's summary, label and all.
+ *
+ * Shared with the tests, so the wording is asserted where it is written
+ * rather than copied into an assertion that can drift away from it.
+ */
+internal fun summaryLine(label: String, quantity: Double): String =
+    "$label ${Money.formatQuantity(quantity)}"
+
+/**
+ * What a card says about quantities.
+ *
+ * Three figures **only once part of it has arrived**. A requirement nobody
+ * has delivered against reads "10 needed", because "10 required · 0 received
+ * · 10 remaining" is three ways of saying one thing, on every card, for the
+ * ordinary case. A part delivery is the case worth the width.
+ */
+internal fun quantityLine(record: PurchaseRecord): String =
+    if (record.isOpen && record.receivedTotal > 0.0) {
+        "${Money.formatQuantity(record.quantity)} required · " +
+            "${Money.formatQuantity(record.receivedTotal)} received · " +
+            "${Money.formatQuantity(record.remaining)} remaining"
+    } else {
+        "${Money.formatQuantity(record.quantity)} needed"
+    }
 
 /** So a test can click an urgency without depending on where its words wrap. */
 internal fun urgencyOptionLabel(urgency: UrgencyV2): String = "Urgency ${urgency.label}"

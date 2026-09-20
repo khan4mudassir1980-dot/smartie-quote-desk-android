@@ -48,6 +48,7 @@ import `in`.smartie.quotedesk.ui.purchase.RemoveConfirmPanel
 import `in`.smartie.quotedesk.ui.purchase.ReopenConfirmPanel
 import `in`.smartie.quotedesk.ui.purchase.SetUrgencyPanel
 import `in`.smartie.quotedesk.ui.purchase.URGENCY_TITLE
+import `in`.smartie.quotedesk.ui.purchase.quantityLine
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
 import `in`.smartie.quotedesk.ui.theme.SmartieColors
 import java.text.SimpleDateFormat
@@ -287,7 +288,11 @@ internal fun PurchaseRow(
 ) {
     ListRow(
         title = item.name,
-        secondary = "${Money.formatQuantity(item.quantity)} needed",
+        // Three figures once part of it has arrived — what was asked for,
+        // what has come, and what is still to come. That a part delivery
+        // leaves a requirement open is the whole point of it, and the card
+        // has to say so where somebody is standing looking at the list.
+        secondary = quantityLine(item),
         // A note is shown only when there is one: no empty placeholder.
         note = item.note.takeIf { it.isNotBlank() },
         meta = creatorLine(item),
@@ -298,9 +303,12 @@ internal fun PurchaseRow(
             Tag(item.status, if (item.isClosed) TagTone.NEUTRAL else TagTone.PURPLE)
         },
         trailing = {
-            if (item.receivedQuantity != null) {
+            // Only on a closed card. On an open one the secondary line is
+            // already carrying the received figure, and saying it twice in
+            // two different wordings is how a card starts being misread.
+            if (item.isClosed && item.receivedQuantity != null) {
                 Text(
-                    "${Money.formatQuantity(item.receivedQuantity)} in",
+                    "${Money.formatQuantity(item.receivedTotal)} in",
                     style = MaterialTheme.typography.labelMedium,
                     color = SmartieColors.Steel
                 )

@@ -34,7 +34,7 @@ class PurchaseUrgencyOrderScreenTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private val worker = PurchaseCapabilities.forMember(purchaseWorker)
+    private val staffOnly = PurchaseCapabilities.forMember(purchaseWorker)
 
     /** The board over a list the test can change, as the listener would. */
     private fun showing(initial: List<PurchaseRecord>): (List<PurchaseRecord>) -> Unit {
@@ -44,7 +44,8 @@ class PurchaseUrgencyOrderScreenTest {
                 PurchaseBoardScreen(
                     active = PurchaseBoard.active(records),
                     closed = PurchaseBoard.closed(records),
-                    capabilities = worker
+                    capabilities = staffOnly,
+                    capabilitiesFor = capabilitiesFor(purchaseWorker)
                 )
             }
         }

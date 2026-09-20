@@ -70,13 +70,15 @@ class PurchaseCardLayoutScreenTest {
                 "to go back to the supplier twice."
     }
 
-    private val admin = PurchaseCapabilities.forMember(purchaseAdmin)
-
     private fun card(record: PurchaseRecord) {
         compose.setContent {
             SmartieTheme {
                 Box(Modifier.testTag(CARD_HOST).fillMaxWidth().wrapContentHeight()) {
-                    PurchaseRow(item = record, capabilities = admin)
+                    // Asked per record, as the board asks it.
+                    PurchaseRow(
+                        item = record,
+                        capabilities = PurchaseCapabilities.forRecord(purchaseAdmin, record)
+                    )
                 }
             }
         }

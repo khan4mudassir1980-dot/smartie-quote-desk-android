@@ -59,6 +59,8 @@ class PurchaseBoardScreenTest {
         online: Boolean = true,
         capabilities: PurchaseCapabilities =
             PurchaseCapabilities.forMember(purchaseAdmin),
+        capabilitiesFor: (PurchaseRecord) -> PurchaseCapabilities =
+            capabilitiesFor(purchaseAdmin),
         actions: PurchaseActions = PurchaseActions()
     ) {
         compose.setContent {
@@ -69,6 +71,7 @@ class PurchaseBoardScreenTest {
                     loading = loading,
                     online = online,
                     capabilities = capabilities,
+                    capabilitiesFor = capabilitiesFor,
                     actions = actions
                 )
             }

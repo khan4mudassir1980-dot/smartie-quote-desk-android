@@ -14,6 +14,7 @@ import `in`.smartie.quotedesk.data.mapping.Money
 import `in`.smartie.quotedesk.data.repository.PurchaseWriteRepository
 import `in`.smartie.quotedesk.data.repository.PurchaseWriteResult
 import `in`.smartie.quotedesk.domain.Member
+import `in`.smartie.quotedesk.domain.PurchaseAccess
 import `in`.smartie.quotedesk.domain.PurchaseBoard
 import `in`.smartie.quotedesk.domain.PurchaseDraft
 import kotlinx.coroutines.flow.Flow
@@ -175,8 +176,20 @@ class PurchaseViewModel(
         .map { PurchaseBoard.closed(it) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** What this person may do, in one value the screen and its tests share. */
+    /** The screen-wide part, which is now only whether Add is offered. */
     fun capabilities(): PurchaseCapabilities = PurchaseCapabilities.forMember(member)
+
+    /**
+     * What this person may do to **this** requirement.
+     *
+     * Asked per card rather than per screen, because the answer depends on
+     * who raised it and on whether anything has arrived against it. Nothing
+     * caches it: the row recomposes when the snapshot changes and asks again,
+     * which is what makes a creator's controls disappear the instant somebody
+     * else records a delivery.
+     */
+    fun capabilities(record: PurchaseRecord): PurchaseCapabilities =
+        PurchaseCapabilities.forRecord(member, record)
 
     // --- which panel is open -------------------------------------------------
 
@@ -186,20 +199,29 @@ class PurchaseViewModel(
      * between a Manager and a reopen would be the control being hidden.
      */
     fun open(sheet: PurchaseSheet, record: PurchaseRecord? = null) {
-        val allowed = capabilities()
+        if (sheet == PurchaseSheet.ADD) {
+            if (capabilities().add) _sheet.value = PurchaseSheetState(sheet, null)
+            else emit(NOT_ALLOWED_ADD)
+            return
+        }
+        // Everything else is about one requirement, so it is refused — or
+        // not — against that requirement and never against the role alone.
+        if (record == null) return
+        val allowed = capabilities(record)
         val refusal = when (sheet) {
-            PurchaseSheet.ADD -> if (allowed.add) null else NOT_ALLOWED_ADD
+            PurchaseSheet.ADD -> null
             PurchaseSheet.EDIT, PurchaseSheet.URGENCY ->
-                if (allowed.edit) null else NOT_ALLOWED_EDIT
-            PurchaseSheet.RECEIVE -> if (allowed.receive) null else NOT_ALLOWED_EDIT
+                if (allowed.edit) null else PurchaseAccess.refusalFor(member, record)
+            PurchaseSheet.RECEIVE -> if (allowed.receive) null else NOT_ALLOWED_RECEIVE
             PurchaseSheet.REOPEN -> if (allowed.reopen) null else NOT_ALLOWED_REOPEN
-            PurchaseSheet.REMOVE -> if (allowed.remove) null else NOT_ALLOWED_REMOVE
+            PurchaseSheet.REMOVE ->
+                if (allowed.remove) null else PurchaseAccess.refusalFor(member, record)
+            PurchaseSheet.SHORTFALL -> if (allowed.shortfall) null else NOT_ALLOWED_SHORTFALL
         }
         if (refusal != null) {
             emit(refusal)
             return
         }
-        if (sheet != PurchaseSheet.ADD && record == null) return
         _sheet.value = PurchaseSheetState(sheet, record)
     }
 
@@ -285,6 +307,17 @@ class PurchaseViewModel(
     fun remove(record: PurchaseRecord) {
         if (!requireOnline()) return
         write(record.id, REMOVED) { writes.softDelete(member, record) }
+    }
+
+    /**
+     * The rest is not coming. Closes the requirement at what arrived.
+     *
+     * Takes no quantity, here or anywhere below it: the new required total is
+     * the stored receipt, read inside the transaction.
+     */
+    fun closeShortfall(record: PurchaseRecord) {
+        if (!requireOnline()) return
+        write(record.id, CLOSED_SHORT) { writes.closeShortfall(member, record) }
     }
 
     // --- plumbing ---------------------------------------------------------------
@@ -429,9 +462,13 @@ class PurchaseViewModel(
         const val NOTHING_CHANGED: String = "Nothing to save"
         const val SAVE_FAILED: String = "Could not save — try again"
 
+        const val CLOSED_SHORT: String = "Closed at what arrived"
+
         const val NOT_ALLOWED_ADD: String = "Your account cannot add a requirement"
-        const val NOT_ALLOWED_EDIT: String = "Your account cannot change a requirement"
+        const val NOT_ALLOWED_RECEIVE: String =
+            "Your account cannot mark a requirement received"
         const val NOT_ALLOWED_REOPEN: String = "Your account cannot reopen a requirement"
-        const val NOT_ALLOWED_REMOVE: String = "Your account cannot remove a requirement"
+        const val NOT_ALLOWED_SHORTFALL: String =
+            "Your account cannot close a requirement short of what was asked for"
     }
 }

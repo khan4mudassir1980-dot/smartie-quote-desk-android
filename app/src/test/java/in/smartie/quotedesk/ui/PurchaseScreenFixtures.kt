@@ -11,6 +11,7 @@ import `in`.smartie.quotedesk.data.model.PurchaseRecord
 import `in`.smartie.quotedesk.data.model.UrgencyV2
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.Role
+import `in`.smartie.quotedesk.ui.purchase.PurchaseCapabilities
 
 /**
  * Shared by the Purchase tab's screen tests.
@@ -52,6 +53,14 @@ internal fun requirement(
     receivedAt = receivedAt,
     deleted = deleted
 )
+
+/**
+ * What [member] may do to each card, asked exactly as the real screen asks
+ * it: per record, because who raised a requirement and whether anything has
+ * arrived against it are facts about the card and not about the role.
+ */
+internal fun capabilitiesFor(member: Member): (PurchaseRecord) -> PurchaseCapabilities =
+    { record -> PurchaseCapabilities.forRecord(member, record) }
 
 /** Scroll the board until the node carrying [description] is composed. */
 internal fun ComposeContentTestRule.scrollToDescription(description: String) {

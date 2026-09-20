@@ -66,7 +66,7 @@ class PurchaseRolesScreenTest {
             SmartieTheme {
                 PurchaseRowActions(
                     record = record,
-                    capabilities = PurchaseCapabilities.forMember(member),
+                    capabilities = PurchaseCapabilities.forRecord(member, record),
                     actions = actions
                 )
             }
@@ -118,7 +118,10 @@ class PurchaseRolesScreenTest {
         compose.onNodeWithContentDescription(rowActionLabel(PurchaseSheet.REOPEN, received.name))
             .assertIsDisplayed()
             .assertHeightIsAtLeast(48.dp)
-        assertTrue("an Owner may reopen too", PurchaseCapabilities.forMember(owner).reopen)
+        assertTrue(
+            "an Owner may reopen too",
+            PurchaseCapabilities.forRecord(owner, received).reopen
+        )
     }
 
     @Test

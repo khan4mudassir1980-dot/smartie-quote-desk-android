@@ -45,7 +45,8 @@ class PurchaseSmallPhoneScreenTest {
                 PurchaseBoardScreen(
                     active = PurchaseBoard.active(records),
                     closed = PurchaseBoard.closed(records),
-                    capabilities = PurchaseCapabilities.forMember(purchaseAdmin)
+                    capabilities = PurchaseCapabilities.forMember(purchaseAdmin),
+                    capabilitiesFor = capabilitiesFor(purchaseAdmin)
                 )
             }
         }

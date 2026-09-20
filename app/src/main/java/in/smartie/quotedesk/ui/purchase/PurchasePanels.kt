@@ -36,6 +36,7 @@ import `in`.smartie.quotedesk.data.model.PurchaseRecord
 import `in`.smartie.quotedesk.data.model.UrgencyV2
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.Permissions
+import `in`.smartie.quotedesk.domain.PurchaseAccess
 import `in`.smartie.quotedesk.domain.PurchaseDraft
 import `in`.smartie.quotedesk.domain.PurchaseWrite
 import `in`.smartie.quotedesk.ui.components.SmartieField
@@ -77,6 +78,8 @@ data class PurchaseActions(
     val onReceive: (PurchaseRecord, Double) -> Unit = { _, _ -> },
     val onReopen: (PurchaseRecord) -> Unit = {},
     val onRemove: (PurchaseRecord) -> Unit = {},
+    /** Close it at what arrived, writing off the rest. Takes no quantity. */
+    val onCloseShortfall: (PurchaseRecord) -> Unit = {},
     /** Open the panel for one of the above. The screen decides how. */
     val onOpen: (PurchaseSheet, PurchaseRecord?) -> Unit = { _, _ -> },
     /** Close whatever is open. Writes nothing; it is a Cancel button. */
@@ -84,36 +87,60 @@ data class PurchaseActions(
 )
 
 /** Which panel a surface is asking to open. */
-enum class PurchaseSheet { ADD, EDIT, URGENCY, RECEIVE, REOPEN, REMOVE }
+enum class PurchaseSheet { ADD, EDIT, URGENCY, RECEIVE, REOPEN, REMOVE, SHORTFALL }
 
 /**
- * What this person may do to a requirement, in **one** place.
+ * What this person may do **to this requirement**.
  *
- * The same shape as `StockCapabilities`, and for the same reason: the mapping
- * from a role to a set of controls is the thing that decides whether a
- * control is rendered at all, so it gets a test of its own per role rather
- * than being reassembled inline by each surface.
+ * It used to be one value for the whole screen, because the answer used to
+ * depend only on a role. It does not any more: the person who raised a
+ * requirement may correct it while nothing has arrived against it, and a
+ * delivery takes that away again — so the answer is a fact about one card,
+ * and is recomputed for every card from `PurchaseAccess`.
+ *
+ * That is also what makes the controls **disappear the moment a partial
+ * receipt lands**. Nothing watches for it and nothing invalidates anything:
+ * the row recomposes when the snapshot changes, and asks again.
+ *
+ * [forMember] survives for the one genuinely screen-wide question — whether
+ * to offer the Add control at all — and answers nothing else.
  */
 data class PurchaseCapabilities(
-    /** Everybody active, Workers included. */
+    /** Everybody active, a Staff account included. */
     val add: Boolean = false,
     val edit: Boolean = false,
     val receive: Boolean = false,
-    /** **Owner and Administrator only**, and the app is the only enforcement. */
+    /** **Owner and Administrator only.** */
     val reopen: Boolean = false,
-    val remove: Boolean = false
+    val remove: Boolean = false,
+    /** Close it at what arrived. Owner, Administrator and Manager. */
+    val shortfall: Boolean = false
 ) {
-    /** Whether a card needs a control row at all. A Worker's does not. */
-    val anyRowAction: Boolean get() = edit || receive || reopen || remove
+    /** Whether a card needs a control row at all. */
+    val anyRowAction: Boolean get() = edit || receive || reopen || remove || shortfall
 
     companion object {
-        fun forMember(member: Member): PurchaseCapabilities = PurchaseCapabilities(
-            add = Permissions.canAddPurchase(member),
-            edit = Permissions.canEditPurchase(member),
-            receive = Permissions.canSetPurchaseStatus(member),
-            reopen = Permissions.canReopenPurchase(member),
-            remove = Permissions.canDeletePurchase(member)
-        )
+        /** The screen-wide part, which is now only the Add control. */
+        fun forMember(member: Member): PurchaseCapabilities =
+            PurchaseCapabilities(add = Permissions.canAddPurchase(member))
+
+        /**
+         * Everything a card offers, decided against the record it is showing.
+         *
+         * The same predicates the repository re-asks against the stored
+         * document inside its transaction, so a control is never offered for
+         * a write that would be refused — and never hidden for one that
+         * would succeed.
+         */
+        fun forRecord(member: Member, record: PurchaseRecord): PurchaseCapabilities =
+            PurchaseCapabilities(
+                add = Permissions.canAddPurchase(member),
+                edit = PurchaseAccess.canEdit(member, record),
+                receive = PurchaseAccess.canReceive(member, record),
+                reopen = PurchaseAccess.canReopen(member, record),
+                remove = PurchaseAccess.canRemove(member, record),
+                shortfall = PurchaseAccess.canCloseShortfall(member, record)
+            )
     }
 }
 
@@ -436,6 +463,38 @@ internal fun ReopenConfirmPanel(
     )
 }
 
+/**
+ * The rest is not coming.
+ *
+ * A confirmation rather than a form, because there is nothing to type: the
+ * new required total is what already arrived and the panel's job is to say
+ * so plainly. It changes a stored quantity and closes a requirement, so it
+ * spells out both figures and the one that is being written off — "the
+ * remaining 3" is the sentence somebody needs to read before they agree to
+ * lose it.
+ *
+ * Never offered to a Staff account, and never on a requirement that is
+ * untouched or already complete; [PurchaseCapabilities.forRecord] decides.
+ */
+@Composable
+internal fun CloseShortfallPanel(
+    record: PurchaseRecord,
+    online: Boolean = true,
+    saving: Boolean = false,
+    actions: PurchaseActions = PurchaseActions()
+) {
+    ConfirmPanel(
+        question = shortfallWarning(record),
+        detail = record.name.takeIf { it.isNotBlank() },
+        confirmText = if (saving) CLOSING else closeWithLabel(record),
+        confirmDescription = CONFIRM_SHORTFALL,
+        online = online,
+        saving = saving,
+        onConfirm = { actions.onCloseShortfall(record) },
+        onDismiss = actions.onDismiss
+    )
+}
+
 // --- removing -------------------------------------------------------------
 
 /**
@@ -502,6 +561,11 @@ internal fun PurchaseRowActions(
         }
         if (open && capabilities.receive) {
             RowAction(MARK_RECEIVED, PurchaseSheet.RECEIVE, record, online, saving, actions)
+        }
+        // Only on a requirement that is part way there: nothing has arrived
+        // means remove it, and everything has means it closes itself.
+        if (open && capabilities.shortfall) {
+            RowAction(CLOSE_SHORT, PurchaseSheet.SHORTFALL, record, online, saving, actions)
         }
         // Only a closed requirement can come back, and only for the two roles
         // the rules cannot be made to check.
@@ -700,6 +764,7 @@ internal const val URGENCY_TITLE: String = "How urgently is it needed?"
 internal const val RECEIVE_TITLE: String = "Mark as received"
 internal const val REOPEN_TITLE: String = "Reopen this requirement?"
 internal const val REMOVE_TITLE: String = "Remove this requirement?"
+internal const val SHORTFALL_TITLE: String = "Close it at what arrived?"
 
 internal const val CANCEL: String = "Cancel"
 
@@ -729,6 +794,8 @@ internal const val REOPEN: String = "Reopen"
 internal const val REOPENING: String = "Reopening…"
 internal const val REMOVE: String = "Remove"
 internal const val REMOVING: String = "Removing…"
+internal const val CLOSE_SHORT: String = "Close short"
+internal const val CLOSING: String = "Closing…"
 
 internal const val REOPEN_WARNING: String =
     "Put this back on the active list? The received quantity and who received " +
@@ -744,6 +811,29 @@ internal const val CONFIRM_EDIT: String = "Confirm the changes to this requireme
 internal const val CONFIRM_RECEIVE: String = "Confirm this requirement has arrived"
 internal const val CONFIRM_REOPEN: String = "Confirm reopening this requirement"
 internal const val CONFIRM_REMOVE: String = "Confirm removing this requirement"
+internal const val CONFIRM_SHORTFALL: String =
+    "Confirm closing this requirement at what has arrived"
+
+/**
+ * The confirm button, carrying the figure it will write.
+ *
+ * "Close with 7 received" rather than "Confirm": the quantity is the whole
+ * of what this does, and a button that does not name it is a button somebody
+ * presses twice trying to work out what it meant.
+ */
+internal fun closeWithLabel(record: PurchaseRecord): String =
+    "Close with ${Money.formatQuantity(record.receivedTotal)} received"
+
+/**
+ * What closing short actually changes, in two sentences and three figures.
+ *
+ * It rewrites a stored quantity and it loses the difference, so it says both:
+ * what the required total becomes, and what is being written off.
+ */
+internal fun shortfallWarning(record: PurchaseRecord): String =
+    "Required quantity will change from ${Money.formatQuantity(record.quantity)} to " +
+        "${Money.formatQuantity(record.receivedTotal)} and the requirement will be closed. " +
+        "The remaining ${Money.formatQuantity(record.remaining)} will be written off."
 
 /**
  * One figure from the receive panel's summary, label and all.
@@ -798,4 +888,5 @@ internal fun rowActionLabel(sheet: PurchaseSheet, name: String): String = when (
     PurchaseSheet.RECEIVE -> "Mark $name as received"
     PurchaseSheet.REOPEN -> "Reopen $name"
     PurchaseSheet.REMOVE -> "Remove $name"
+    PurchaseSheet.SHORTFALL -> "Close $name at what has arrived"
 }

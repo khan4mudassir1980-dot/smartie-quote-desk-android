@@ -10,6 +10,7 @@ import `in`.smartie.quotedesk.data.repository.PurchaseTransaction
 import `in`.smartie.quotedesk.data.ListenerRetry
 import `in`.smartie.quotedesk.data.repository.PurchaseWriteRepository
 import `in`.smartie.quotedesk.domain.Member
+import `in`.smartie.quotedesk.domain.PurchaseAccess
 import `in`.smartie.quotedesk.domain.PurchaseDraft
 import `in`.smartie.quotedesk.domain.PurchaseWrite
 import `in`.smartie.quotedesk.domain.Role
@@ -83,9 +84,11 @@ class PurchaseViewModelTest {
         qty: Any = 6.0,
         received: Any? = null,
         receivedBy: String? = null,
-        rcvQty: Any? = null
+        rcvQty: Any? = null,
+        byUid: String? = null
     ): Map<String, Any?> = buildMap {
         put("id", "pr_one")
+        if (byUid != null) put("byUid", byUid)
         put("name", "Sliding gate rack")
         put("qty", qty)
         put("urgency", "urgent")
@@ -214,6 +217,114 @@ class PurchaseViewModelTest {
 
         assertEquals(listOf(PurchaseViewModel.ADDED), messages)
         assertEquals("uid_worker", store.writes.single()["byUid"])
+    }
+
+    // --- the creator's own window ----------------------------------------------
+
+    @Test
+    fun `the creator corrects the requirement they raised`() = runTest {
+        val store = Store(stored = row(byUid = worker.uid))
+        val model = viewModel(member = worker, store = store)
+        val messages = messagesOf(model)
+
+        model.edit(record(), "Remote handsets", 4.0, UrgencyV2.NORMAL, "")
+
+        assertEquals(listOf(PurchaseViewModel.SAVED), messages)
+        assertEquals("Remote handsets", store.writes.single()["name"])
+    }
+
+    @Test
+    fun `the creator withdraws their own requirement`() = runTest {
+        val store = Store(stored = row(byUid = worker.uid))
+        val model = viewModel(member = worker, store = store)
+        val messages = messagesOf(model)
+
+        model.remove(record())
+
+        assertEquals(listOf(PurchaseViewModel.REMOVED), messages)
+        assertEquals(true, store.writes.single()["del"])
+    }
+
+    @Test
+    fun `somebody else's requirement is refused by name, and the panel never opens`() = runTest {
+        val store = Store(stored = row(byUid = "uid_someone"))
+        val model = viewModel(member = worker, store = store)
+        val messages = messagesOf(model)
+
+        model.open(PurchaseSheet.EDIT, record().copy(byUid = "uid_someone"))
+        model.edit(record(), "Mine now", 4.0, UrgencyV2.NORMAL, "")
+
+        assertFalse(model.sheet.value.isOpen)
+        assertEquals(
+            listOf(PurchaseAccess.SOMEBODY_ELSES, PurchaseAccess.SOMEBODY_ELSES),
+            messages
+        )
+        assertEquals(0, store.writes.size)
+    }
+
+    @Test
+    fun `a requirement locked by a receipt says so rather than failing silently`() = runTest {
+        val store = Store(stored = row(byUid = worker.uid, rcvQty = 4.0))
+        val model = viewModel(member = worker, store = store)
+        val messages = messagesOf(model)
+
+        model.remove(record())
+
+        assertEquals(listOf(PurchaseAccess.LOCKED_BY_RECEIPT), messages)
+        assertEquals(0, store.writes.size)
+    }
+
+    // --- writing off what is not coming ------------------------------------------
+
+    @Test
+    fun `a Manager closes a shortfall at the stored received total`() = runTest {
+        val store = Store(stored = row(qty = 10.0, rcvQty = 7.0))
+        val model = viewModel(member = staff, store = store)
+        val messages = messagesOf(model)
+        model.open(PurchaseSheet.SHORTFALL, record().copy(quantity = 10.0, receivedQuantity = 7.0))
+
+        model.closeShortfall(record())
+
+        assertEquals(listOf(PurchaseViewModel.CLOSED_SHORT), messages)
+        val written = store.writes.single()
+        assertEquals("the stored receipt, not a figure anybody chose", 7.0, written["qty"])
+        assertEquals(true, written["received"])
+        assertFalse("the receipt is preserved", written.containsKey("rcvQty"))
+        assertFalse("a successful write closes the panel", model.sheet.value.isOpen)
+    }
+
+    @Test
+    fun `a Staff account is never offered the shortfall panel`() = runTest {
+        val store = Store(stored = row(qty = 10.0, rcvQty = 7.0, byUid = worker.uid))
+        val model = viewModel(member = worker, store = store)
+        val messages = messagesOf(model)
+
+        model.open(
+            PurchaseSheet.SHORTFALL,
+            record().copy(byUid = worker.uid, quantity = 10.0, receivedQuantity = 7.0)
+        )
+
+        assertFalse(model.sheet.value.isOpen)
+        assertEquals(listOf(PurchaseViewModel.NOT_ALLOWED_SHORTFALL), messages)
+        assertEquals(0, store.attempts)
+    }
+
+    @Test
+    fun `losing a race on a shortfall says so and is never retried`() = runTest {
+        val store = Store(
+            stored = row(qty = 10.0, rcvQty = 7.0),
+            failWith = FirebaseFirestoreException(
+                "aborted",
+                FirebaseFirestoreException.Code.ABORTED
+            )
+        )
+        val model = viewModel(member = staff, store = store)
+        val messages = messagesOf(model)
+
+        model.closeShortfall(record())
+
+        assertEquals(listOf(FirestoreFailures.WRITE_CONFLICT), messages)
+        assertEquals("one attempt, and no second opinion", 1, store.attempts)
     }
 
     // --- part deliveries ------------------------------------------------------
@@ -384,9 +495,10 @@ class PurchaseViewModelTest {
         val model = viewModel(member = staff, store = reopens)
         val messages = messagesOf(model)
 
-        // The panel will not open, and the operation behind it is refused too —
-        // this predicate is the whole of the enforcement, because the v9 rules
-        // let any non-Worker update a requirement.
+        // The panel will not open, and the operation behind it is refused
+        // too. This used to be the whole of the enforcement; the rules refuse
+        // a Manager's reopen themselves now, because it removes the receipt
+        // and no non-Administrator branch may reduce a received total.
         model.open(PurchaseSheet.REOPEN, record(received = true))
         model.reopen(record(received = true))
 
@@ -425,13 +537,58 @@ class PurchaseViewModelTest {
     }
 
     @Test
-    fun `capabilities say what each role may do`() = runTest {
+    fun `capabilities say what each role may do to this requirement`() = runTest {
+        // Somebody else's requirement, so only the role is speaking.
+        val theirs = record().copy(byUid = "uid_someone")
         assertTrue(viewModel(member = worker).capabilities().add)
-        assertFalse(viewModel(member = worker).capabilities().anyRowAction)
-        assertTrue(viewModel(member = staff).capabilities().receive)
-        assertFalse(viewModel(member = staff).capabilities().reopen)
-        assertTrue(viewModel(member = admin).capabilities().reopen)
-        assertTrue(viewModel(member = owner).capabilities().remove)
+        assertFalse(viewModel(member = worker).capabilities(theirs).anyRowAction)
+        assertTrue(viewModel(member = staff).capabilities(theirs).receive)
+        assertFalse(viewModel(member = staff).capabilities(theirs).reopen)
+        assertFalse("a Manager removes only their own", viewModel(member = staff).capabilities(theirs).remove)
+        assertTrue(viewModel(member = owner).capabilities(theirs).remove)
+    }
+
+    @Test
+    fun `a closed requirement offers an Administrator Reopen and nobody else`() = runTest {
+        val done = record(received = true)
+        assertTrue(viewModel(member = admin).capabilities(done).reopen)
+        assertFalse(viewModel(member = staff).capabilities(done).reopen)
+        assertFalse(viewModel(member = worker).capabilities(done).reopen)
+    }
+
+    @Test
+    fun `the creator's own untouched requirement offers them all three`() = runTest {
+        val mine = record().copy(byUid = worker.uid)
+        val allowed = viewModel(member = worker).capabilities(mine)
+
+        assertTrue(allowed.edit)
+        assertTrue(allowed.remove)
+        assertFalse("receiving is never theirs", allowed.receive)
+        assertFalse(allowed.reopen)
+        assertFalse(allowed.shortfall)
+    }
+
+    @Test
+    fun `and loses all three the moment a snapshot says something arrived`() = runTest {
+        val mine = record().copy(byUid = worker.uid)
+        val partly = mine.copy(receivedQuantity = 4.0, receivedBy = "Sam")
+        val model = viewModel(member = worker)
+
+        assertTrue("before the delivery", model.capabilities(mine).anyRowAction)
+        assertFalse("after it", model.capabilities(partly).anyRowAction)
+    }
+
+    @Test
+    fun `a Manager is offered the shortfall only on a partly received requirement`() = runTest {
+        val model = viewModel(member = staff)
+        val untouched = record()
+        val partly = record().copy(quantity = 10.0, receivedQuantity = 4.0)
+        val whole = record().copy(quantity = 10.0, receivedQuantity = 10.0)
+
+        assertFalse("nothing arrived: remove it instead", model.capabilities(untouched).shortfall)
+        assertTrue(model.capabilities(partly).shortfall)
+        assertFalse("nothing is outstanding", model.capabilities(whole).shortfall)
+        assertFalse("and never a Staff account", viewModel(member = worker).capabilities(partly).shortfall)
     }
 
     /**

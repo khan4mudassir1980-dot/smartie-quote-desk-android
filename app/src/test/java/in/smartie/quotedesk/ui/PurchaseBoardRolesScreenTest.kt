@@ -61,6 +61,7 @@ class PurchaseBoardRolesScreenTest {
                     closed = PurchaseBoard.closed(records),
                     saving = saving,
                     capabilities = PurchaseCapabilities.forMember(member),
+                    capabilitiesFor = capabilitiesFor(member),
                     actions = actions
                 )
             }
@@ -119,8 +120,8 @@ class PurchaseBoardRolesScreenTest {
         assertFalse(offered(PurchaseSheet.REMOVE, done))
         // And the capability behind the controls agrees, so there is no second
         // route into the same operation.
-        assertFalse(PurchaseCapabilities.forMember(purchaseStaff).reopen)
-        assertFalse(PurchaseCapabilities.forMember(purchaseWorker).reopen)
+        assertFalse(PurchaseCapabilities.forRecord(purchaseStaff, done).reopen)
+        assertFalse(PurchaseCapabilities.forRecord(purchaseWorker, done).reopen)
     }
 
     @Test

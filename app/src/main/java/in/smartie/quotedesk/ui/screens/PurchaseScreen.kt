@@ -45,6 +45,8 @@ import `in`.smartie.quotedesk.ui.purchase.RECEIVE_TITLE
 import `in`.smartie.quotedesk.ui.purchase.REMOVE_TITLE
 import `in`.smartie.quotedesk.ui.purchase.REOPEN_TITLE
 import `in`.smartie.quotedesk.ui.purchase.RemoveConfirmPanel
+import `in`.smartie.quotedesk.ui.purchase.SHORTFALL_TITLE
+import `in`.smartie.quotedesk.ui.purchase.CloseShortfallPanel
 import `in`.smartie.quotedesk.ui.purchase.ReopenConfirmPanel
 import `in`.smartie.quotedesk.ui.purchase.SetUrgencyPanel
 import `in`.smartie.quotedesk.ui.purchase.URGENCY_TITLE
@@ -79,6 +81,7 @@ fun PurchaseScreen(viewModel: PurchaseViewModel) {
         onReceive = viewModel::markReceived,
         onReopen = viewModel::reopen,
         onRemove = viewModel::remove,
+        onCloseShortfall = viewModel::closeShortfall,
         onOpen = viewModel::open,
         onDismiss = viewModel::dismiss
     )
@@ -90,6 +93,9 @@ fun PurchaseScreen(viewModel: PurchaseViewModel) {
         saving = saving,
         online = online,
         capabilities = viewModel.capabilities(),
+        // Per card, not per screen: what somebody may do to a requirement
+        // depends on who raised it and on whether anything has arrived.
+        capabilitiesFor = viewModel::capabilities,
         actions = actions
     )
 
@@ -116,7 +122,16 @@ internal fun PurchaseBoardScreen(
     loading: Boolean = false,
     saving: Set<String> = emptySet(),
     online: Boolean = true,
+    /** The screen-wide part — only whether Add is offered. */
     capabilities: PurchaseCapabilities = PurchaseCapabilities(),
+    /**
+     * What each card offers, asked per record.
+     *
+     * Defaulted to the screen-wide value so the existing tests that drive
+     * this board with one capability set still describe what they meant. A
+     * real screen passes the view model's per-record function.
+     */
+    capabilitiesFor: (PurchaseRecord) -> PurchaseCapabilities = { capabilities },
     actions: PurchaseActions = PurchaseActions()
 ) {
     val dimens = LocalSmartieDimens.current
@@ -162,7 +177,7 @@ internal fun PurchaseBoardScreen(
         items(active, key = { it.id }) { item ->
             PurchaseRow(
                 item = item,
-                capabilities = capabilities,
+                capabilities = capabilitiesFor(item),
                 online = online,
                 saving = item.id in saving,
                 actions = actions
@@ -174,7 +189,7 @@ internal fun PurchaseBoardScreen(
             items(closed, key = { it.id }) { item ->
                 PurchaseRow(
                     item = item,
-                    capabilities = capabilities,
+                    capabilities = capabilitiesFor(item),
                     online = online,
                     saving = item.id in saving,
                     actions = actions
@@ -244,6 +259,12 @@ internal fun PurchaseSheets(
         PurchaseSheet.REMOVE -> record?.let {
             PurchaseSheetDialog(REMOVE_TITLE, PURCHASE_CONFIRM_PROPERTIES, actions) {
                 RemoveConfirmPanel(record = it, online = online, saving = busy, actions = actions)
+            }
+        }
+
+        PurchaseSheet.SHORTFALL -> record?.let {
+            PurchaseSheetDialog(SHORTFALL_TITLE, PURCHASE_CONFIRM_PROPERTIES, actions) {
+                CloseShortfallPanel(record = it, online = online, saving = busy, actions = actions)
             }
         }
     }

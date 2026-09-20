@@ -157,7 +157,7 @@ app, whose absence we control, plus a one-off backfill. That is N4.x, not N4.
 | **0** | Record the 20 September staging results; write this plan | Done |
 | **1a** | The green urgency label, display only | Done |
 | **1b** | `PurchaseWrite` — the pure mutation planner, and its tests | Done |
-| 2 | `PurchaseStore` / `PurchaseTransaction` seam, `PurchaseWriteRepository`, `Permissions.canReopenPurchase`, emulator tests | Not started |
+| **2** | `PurchaseStore` / `PurchaseTransaction` seam, `PurchaseWriteRepository`, `Permissions.canReopenPurchase`, emulator tests | Done |
 | 3 | `PurchaseViewModel` and the panels | Not started |
 | 4 | The Purchase tab rebuilt; **closes T-S25** | Not started |
 | 5 | The read-only Purchase History screen | Not started |

@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-20.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `f5a4961` — [run #87](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35458715257), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `c681f13` — [run #90](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35497587944), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -25,7 +25,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N2 Products | **Complete and verified** |
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
-| N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0, 1a and 1b are the data-shape work; nothing is on a device yet |
+| N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0, 1a, 1b and 2 are done — the label, the pure planner, the store seam, the writer and the emulator proof of the five traps. **Nothing is on a device and nothing is on a screen:** Purchase is still read-only behind its in-development banner, so no N4 row may be called verified |
 | N5–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -294,13 +294,49 @@ written by the removal, and that the item left the **Tracked / Low / Out** count
 
 **Neither N3 nor N3.1 is closed**, and neither may be described as verified.
 
+### N4 batches 0 to 2, the data-shape work
+
+Verified at `c681f13`,
+[run #90](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35497587944),
+all three jobs green.
+
+| Commit | What |
+|---|---|
+| `541a4e8` | Batch 0: the 20 September record above, and `docs/N4-plan.md` as the plan of record |
+| `dffe125` | Batch 1a: the green urgency reads **"Needed, but not now"**. Display only — `UrgencyV2.NORMAL.wireValue` is still `normal` |
+| `71ce629` | Batch 1b: `PurchaseWrite`, the pure mutation planner. Six mutations and no more |
+| `cd0fcb9` | Trap 5 corrected: `rev` is **not** opt-in once a row has one. The documentation was wrong and the emulator said so |
+| `8ce113f` | `Permissions.canReopenPurchase` — Owner and Administrator only |
+| `a5204df` | Batch 2: the `PurchaseStore` seam, `FirestorePurchaseStore` and `PurchaseWriteRepository` |
+| `c681f13` | Batch 2: `firestore/tests/purchase.test.js`, 21 tests against the rules as deployed |
+
+**742 Kotlin test methods across 67 classes**, up from 697 across 65 before N4; **107 Firestore
+emulator tests**, up from 86; the 26 importer tests unchanged; still **0 instrumentation tests**.
+Both counts measured from the tree, not carried forward.
+
+**Nothing was deployed, and no rule or index changed.** `firestore/firestore.rules` and
+`firestore/firestore.indexes.json` are byte-for-byte what was deployed to staging on
+20 September; the emulator suite runs against them unmodified. Production was not read and not
+written. Nothing was merged to `main` and no pull request exists.
+
+**No N4 row may be called verified.** Purchase is still read-only behind its in-development
+banner, so **T-S25 stays blocked** on the batch that makes a requirement creatable from a
+screen.
+
 ## Current next action
 
-**N4 Purchase, Batch 1a: change the green urgency label to "Needed, but not now".**
+**N4 Purchase, Batch 3: the `PurchaseViewModel` and the add, edit, receive, reopen and
+remove panels.**
 
-The plan of record is `docs/N4-plan.md`. Batch 0 (this documentation correction) is done;
-1a is a display-only label change and 1b is the pure mutation planner. Neither touches
-Firestore rules, indexes, the UI or any repository.
+The plan of record is `docs/N4-plan.md`. Batches 0, 1a, 1b and 2 are done and CI-verified at
+`c681f13` (run #90): the label, the pure planner, the `PurchaseStore` seam,
+`PurchaseWriteRepository` and the emulator proof of the five legacy traps. Everything written
+so far is data-shape work — **nothing writes a requirement from a screen yet**, and the
+Purchase tab is still read-only behind its in-development banner.
+
+Batch 3 is the first that touches the interface. It changes no Firestore rule and no index;
+the rules already carry the whole write contract, and Batch 2 proved it against the emulator
+without altering a line of it.
 
 What is **not** this action, and must not slip because N4 started:
 
@@ -333,6 +369,24 @@ Firebase requires Blaze even for a default bucket, so image and file storage
 must be solved inside Firestore or not at all, and the daily Spark quotas are
 shared by every feature. Nothing in this repository may promise free operation
 without limits.
+
+**Writing a requirement stamps a `rev`, and that shuts the PWA out of that row.**
+`revOk()` in the purchase rules reads `request.resource.data.keys()`, which on an
+update is the **merged post-state** — so a document that already holds a `rev`
+still holds it after an update that never mentioned one, and `1 == 1 + 1`
+refuses the write. The tolerance covers only a document that has **never**
+carried a `rev`. No V8C4 fixture carries one, so the PWA never writes one:
+the moment this app updates a requirement, a PWA update to that same document
+is refused.
+
+That costs nothing today — the native app writes only to
+`smartie-quote-desk-staging` and the PWA runs against production — and it is
+recorded here because it is the cutover's problem, not N4's. The fix is a rules
+decision for the Owner, and the two options are not equal: dropping `rev` from
+the app's updates gives up the guard against two devices completing the same
+requirement, while relaxing `revOk()` to accept an unchanged `rev` weakens it
+for everybody. **Neither was taken. N4 changes no rules.** Proved by name in
+`firestore/tests/purchase.test.js` and written out in `docs/N4-plan.md`, trap 5.
 
 **Stock writing is online-only.** A Firestore transaction that re-reads the
 stored quantity and applies the delta to it. No offline mutation queue, no

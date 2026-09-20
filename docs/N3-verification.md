@@ -67,13 +67,30 @@ not reach — not a failure, and not a pass either.
 | T-S22 | Passed in part | An outside tap does not dismiss the Add or Edit sheet. A second Back press with the keyboard already down was not separately reported; it is the same dialog property |
 | T-S23 | Passed | The stored quantity stays authoritative before Done, and the pending delta is clearly shown |
 | T-S24 | Passed in part | A saved note is visible and survives a restart **on the one phone**. The second-device half was not run |
-| T-S25 | **Deferred to N4** | Purchase is view-only until N4, so creating a requirement, its urgency colour and its note cannot be exercised by hand. See below |
+| T-S25 | **Unblocked, pending a device run** | No longer deferred: N4 Batch 4 makes a requirement creatable, so the row can now be performed. **It has not been.** See below |
 | T-S26 | Passed | The pinned-product arrows are gone, and six-dot long-press drag reorder works |
 | T-S27 | Passed in part | Pin order survives a restart **on the one phone**. The second-device half was not run |
 | T-S28 | Passed | A solid full-width purple header line |
 
 Seventeen rows passed whole, seven in part, six were not run, one is pending a
-second device and one is deferred to N4.
+second device and one — T-S25 — is unblocked but not yet run.
+
+### T-S25, unblocked by N4 Batch 4
+
+The row is *"Look at an open Purchase requirement with a note — the note is on
+the card, and its urgency is red, yellow or green without opening Edit."* It
+could not be performed at all while the Purchase tab was read-only, because
+nothing in the app could create a requirement to look at. That is no longer
+true: the tab writes, and a Worker can add one.
+
+**The automated half is done and green.** `PurchaseBoardScreenTest` renders a
+requirement carrying a note at its urgency and asserts both are on the card
+without any sheet being opened; `PurchaseRowTest` holds the same for each of
+the three urgencies, by name.
+
+**The manual half has not been run, and this row is not passed.** It needs the
+staging APK on a phone. It is listed in the Batch 4 manual checks in
+`docs/N4-plan.md`.
 
 ## Verified, with no numbered row in the plan
 
@@ -350,7 +367,8 @@ N6 Products & Categories screen.
 
 - **N3:** T-S5 (two phones, one row), the second-device halves of T-S24 and
   T-S27, and the six rows the second pass never reached — T-S2c, T-S2d, T-S4,
-  T-S9, T-S20 and T-X4. T-S25 remains N4's.
+  T-S9, T-S20 and T-X4. **T-S25 is no longer blocked** — N4 Batch 4 makes it
+  performable, and it is waiting on a phone like the rest.
 - **N3.1:** T-P7 (blocked on N6), the four unreported T-P12 clauses above,
   T-P13, T-P14 and T-P15.
 

@@ -159,7 +159,7 @@ app, whose absence we control, plus a one-off backfill. That is N4.x, not N4.
 | **1b** | `PurchaseWrite` — the pure mutation planner, and its tests | Done |
 | **2** | `PurchaseStore` / `PurchaseTransaction` seam, `PurchaseWriteRepository`, `Permissions.canReopenPurchase`, emulator tests | Done |
 | **3** | `PurchaseViewModel` and the panels | Done |
-| 4 | The Purchase tab rebuilt; **closes T-S25** | Not started |
+| **4** | The Purchase tab rebuilt; **unblocks T-S25** | Done |
 | 5 | The read-only Purchase History screen | Not started |
 | 6 | The bottom-navigation badge, and close-out | Not started |
 
@@ -194,3 +194,18 @@ To be run on a staging build once Batch 6 lands. None has been run.
 | T-R11 | Offline, every write control is disabled and says why; nothing auto-commits on reconnect |
 | T-R12 | **Two phones**, same requirement, both mark received: exactly one succeeds and the other is refused by name, not by a bare permission error. **Pending a second phone**, like T-S5 and T-P13 |
 | T-R13 | A requirement created by the PWA is editable and receivable in the native app — the legacy `qty` rescue, on real data |
+
+### What can be run on a phone after Batch 4
+
+The tab writes, so most of the rows above are now performable. **None has been
+run.** The rest wait on a later batch or on a second phone:
+
+| Row | Ready after Batch 4? |
+|---|---|
+| T-R1, T-R2 (**N3's T-S25**), T-R3, T-R4, T-R5, T-R6, T-R11, T-R13 | **Yes** |
+| T-R7, T-R8 | No — the Purchase History screen is Batch 5 |
+| T-R9, T-R10 | No — the tab badge is Batch 6 |
+| T-R12 | No — needs a **second phone**, like T-S5 and T-P13 |
+
+The build to use is the `smartie-native-apks` artifact from the CI run that
+verified Batch 4, and it must show **Staging**.

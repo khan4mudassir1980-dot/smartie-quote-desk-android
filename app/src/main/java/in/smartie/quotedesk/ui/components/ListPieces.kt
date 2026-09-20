@@ -99,56 +99,65 @@ fun ListRow(
         background = background,
         accent = accent
     ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(dimens.gapM)
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = SmartieColors.Ink,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (secondary != null) {
+        // **A Column, and it has to be.** `SmartieCard` puts its content in a
+        // `Box`, which stacks its children — so with two of them the footer
+        // was drawn on top of the information rather than under it, and the
+        // card's `IntrinsicSize.Min` height was the taller of the two rather
+        // than their sum, which clipped the lower text. One child again, and
+        // a card with no footer lays out exactly as it always did.
+        Column(Modifier.fillMaxWidth()) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(dimens.gapM)
+            ) {
+                Column(Modifier.weight(1f)) {
                     Text(
-                        secondary,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = SmartieColors.Steel,
-                        maxLines = 1,
+                        title,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = SmartieColors.Ink,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
+                    if (secondary != null) {
+                        Text(
+                            secondary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SmartieColors.Steel,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (!note.isNullOrBlank()) {
+                        Text(
+                            note,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SmartieColors.Ink2,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                            // A tag, not a content description: a description
+                            // would be read out *instead of* the note.
+                            modifier = Modifier.testTag(NOTE_TAG).padding(top = dimens.gapXs)
+                        )
+                    }
+                    if (meta != null) {
+                        Text(
+                            meta,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = SmartieColors.Steel2,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Box(Modifier.padding(top = dimens.gapXs)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { tags() }
+                    }
                 }
-                if (!note.isNullOrBlank()) {
-                    Text(
-                        note,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = SmartieColors.Ink2,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                        // A tag, not a content description: a description
-                        // would be read out *instead of* the note.
-                        modifier = Modifier.testTag(NOTE_TAG).padding(top = dimens.gapXs)
-                    )
-                }
-                if (meta != null) {
-                    Text(
-                        meta,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = SmartieColors.Steel2,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                Box(Modifier.padding(top = dimens.gapXs)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { tags() }
-                }
+                trailing()
             }
-            trailing()
+            // Its own section under the information, never beside or over it.
+            if (footer != null) Box(Modifier.padding(top = dimens.gapS)) { footer() }
         }
-        if (footer != null) Box(Modifier.padding(top = dimens.gapS)) { footer() }
     }
 }
 

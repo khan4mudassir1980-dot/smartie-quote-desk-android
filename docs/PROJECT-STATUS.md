@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-20.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `8030933` — [run #104](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35519935449), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `924786c` — [run #106](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35523545235), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -25,7 +25,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N2 Products | **Complete and verified** |
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
-| N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. N4.2, creator self-service, is the batch in progress; the history screen is Batch 5 and the tab badge is Batch 6 |
+| N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2, creator self-service, is code complete and CI-verified**, and is waiting on an Owner-run staging rules deployment paired with the APK rollout; the history screen is Batch 5 and the tab badge is Batch 6 |
 | N5–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -323,6 +323,70 @@ written. Nothing was merged to `main` and no pull request exists.
 banner, so **T-S25 stays blocked** on the batch that makes a requirement creatable from a
 screen.
 
+### N4.2, creator self-service
+
+Verified at `924786c`,
+[run #106](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35523545235),
+all three jobs green on the first attempt. The plan of record is
+`docs/N4.2-plan.md`.
+
+| Commit | What |
+|---|---|
+| `25aa549` | The eight things the Batch C phone pass actually confirmed, and the N4.2 plan |
+| `de678b8` | `PurchaseAccess` — the per-record matrix — and `PurchaseWrite.closeShortfall` |
+| `a4fc509` | The repository asks the **stored** document who may change it |
+| `4ac2b71` | Capabilities per card; the Close-short control and its confirmation |
+| `924786c` | The rules, and the emulator suite that proves them |
+
+**What changed, in one paragraph.** The person who raised a requirement may
+correct it — name, note, quantity, urgency — or take it off the list, for as
+long as nothing has been delivered against it. That is new for a Staff
+account, who could previously add a requirement and not even fix a quantity
+they had just mistyped, and new for a Manager, who could not remove anything.
+A delivery then closes the record: Staff is read-only for that requirement, a
+Manager keeps receiving the outstanding quantity and may write off a
+shortfall, and a correction becomes an Owner's or an Administrator's.
+
+**Ownership is `member.uid == record.byUid` and nothing else.** Never a
+display name, never an email. A row whose `byUid` is blank — which is most of
+what the PWA wrote — belongs to nobody, because `"" == ""` would hand every
+legacy requirement to whoever happened to be signed in.
+
+**A reopened requirement is its creator's again**, by the Owner's decision:
+reopen removes the receipt outright and means as good as new. No
+`everReceived` marker was added; the rules can only see the stored document,
+so it would have needed a schema change.
+
+**`closeShortfall` is the seventh named operation** and takes no quantity —
+the new required total is the stored `rcvQty`, read inside the transaction,
+and the receipt fields are preserved. Without it the lock would have left a
+Manager able to see a finished requirement and unable to clear it.
+
+**Writing the rules tests found three real holes in the first draft**, each
+now its own guard: a Manager could un-receive a requirement while leaving the
+receipt in place (a reopen in all but name); could change `qty` to anything
+while "receiving", because every update re-asserts it; and could mark a
+requirement fully received while the receipt fell short of the total.
+
+**Two existing tests asserted the old rules and were inverted, not deleted.**
+A Manager's reopen is refused by the rules now — `docs/N4-plan.md` had
+recorded that since Batch 2 as the one restriction the rules could not
+express — and the limited role may correct the requirement it raised.
+
+**976 Kotlin test methods across 86 classes**, up from 905 across 83 after
+Batch C; **135 emulator tests**, up from 113; 48 importer and tool tests
+unchanged. Still **0 instrumentation tests**.
+
+**⚠️ The rules are changed and NOT deployed.** This is the first rules change
+since 20 September, and it makes the rules **stricter for a Manager** as well
+as looser for Staff. The deployment is the Owner's to run, staging only, and
+it must happen in the same sitting as the APK rollout — a Manager on the
+Batch C build would be offered Edit on a received requirement and be refused
+by the server. Production rules are untouched, production was neither read
+nor written, the PWA was not modified, no role value moved and no account
+changed. Nothing merged to `main`, no pull request, nothing amended or
+force-pushed.
+
 ### The Batch C staging phone pass
 
 Run by the Owner on a physical Android phone, against the
@@ -525,23 +589,29 @@ merged to `main`, no pull request.
 
 ## Current next action
 
-**Implement N4.2 — creator self-service on Purchase requirements.**
+**Deploy the N4.2 rules to staging, and put the new APK on every phone in the
+same sitting.**
 
-A Manager or Staff account may correct a requirement **they raised
-themselves**, while nothing has been received against it: name, note, required
-quantity, urgency, and a soft removal. The moment any quantity arrives the
-record is locked — Staff becomes read-only for it, a Manager may still receive
-the outstanding quantity or close a shortfall, and only an Owner or
-Administrator may make a privileged correction.
+Both halves, together, because the rules get **stricter for a Manager** as
+well as looser for Staff. A Manager still running the Batch C build would be
+offered Edit on a requirement a delivery has reached and would be refused by
+the server. Staff's new abilities are the safe direction — an old build
+simply does not offer them — so it is the Manager restriction that must not
+run ahead of the APK.
 
-**Enforced in the Firestore rules, not by hiding a button.** This is the first
-rules change since 20 September, and it makes the rules *stricter* for a
-Manager as well as looser for Staff, so the rules deployment and the APK
-rollout have to happen together. The Owner runs the deployment; this branch
-never deploys.
+The Owner runs the deployment; this branch never deploys, and production
+rules are not part of it. The build is the `smartie-native-apks` artifact of
+[run #106](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35523545235),
+and it must show **Staging**.
 
-The audited plan is in `docs/N4.2-plan.md`. After it, the outstanding phone
-rows — the role-specific ones, T-R16, T-R17, N3's T-S25 — and then Batch 5.
+Then the phone rows: **T-C1 to T-C15** in `docs/N4.2-plan.md`, plus the N4
+rows the Batch C pass did not reach — every role-specific row, T-R16, T-R17,
+and N3's **T-S25**. Batch 5, the read-only Purchase History screen, comes
+after, and carries a binding requirement: **a Staff account sees only the
+rows it raised**.
+
+**No N4 or N4.2 acceptance row is passed until it has been run.** The Batch C
+pass confirmed eight things and they are listed above; nothing else.
 
 ## Decisions that bind future work
 

@@ -184,16 +184,19 @@ Purchase tab is safe.
 | Edit | ✅ | ✅ | ✅ | ❌ | Rules |
 | Change urgency | ✅ | ✅ | ✅ | ❌ | Rules |
 | Mark received | ✅ | ✅ | ✅ | ❌ | Rules |
-| **Reopen** | ✅ | ✅ | ❌ | ❌ | ⚠️ **The app only** |
+| **Reopen** | ✅ | ✅ | ❌ | ❌ | **Rules, since N4.2** |
 | Soft delete | ✅ | ✅ | ❌ | ❌ | Rules |
 | Hard delete | ❌ | ❌ | ❌ | ❌ | Rules (`allow delete: if false`) |
 
-**Reopen is the one restriction the rules cannot express**, and this document says so rather
-than implying otherwise. A reopen is an ordinary update, and `staff()` may update. Closing it
-in the rules would mean refusing any write that turns `received` from true to false for a
-non-Administrator — which is only safe once somebody has confirmed that the V8C4 PWA never
-offers a Manager an un-receive. That question needs `tools/catalogue-import/inspect-v8c4.mjs`
-and the Owner's machine; until it is answered, the restriction lives in `Permissions` alone.
+**Reopen used to be the one restriction the rules could not express**, and this document said
+so from Batch 2 until N4.2. It is expressed now, and not by a special case: a reopen removes
+`rcvQty`, and no branch below an Administrator may let a received total fall. The app still
+refuses it first, by name, so nobody meets a bare permission error — but the rules are the
+enforcement now rather than the documentation of a gap. See `docs/N4.2-plan.md`.
+
+The wider matrix above is the pre-N4.2 one for the operations N4.2 did not touch. **The
+current matrix is in `docs/N4.2-plan.md`**, which adds the creator's own window and the
+received-record lock.
 
 ## Two hardening candidates, both proved unsafe
 
@@ -238,7 +241,7 @@ app, whose absence we control, plus a one-off backfill. That is N4.x, not N4.
 | **B** | A listener that dies comes back; a new requirement shows at once | Done |
 | **C** | **Partial receipt** — cumulative `rcvQty`, and the edit guards around it | Done |
 | **D** | Open requirements ordered by urgency, newest within a colour | Done |
-| **4.2** | **Creator self-service** — a Manager or Staff account corrects their own untouched requirement; the record locks on the first receipt. Its own plan: `docs/N4.2-plan.md` | In progress |
+| **4.2** | **Creator self-service** — a Manager or Staff account corrects their own untouched requirement; the record locks on the first receipt. Its own plan: `docs/N4.2-plan.md` | Done, **pending a staging rules deployment** |
 | 5 | The read-only Purchase History screen. **Binding: a Staff account sees only rows where `byUid` is their own uid**, and legacy rows with no `byUid` are not in it — see `docs/N4.2-plan.md` | Not started |
 | 6 | The bottom-navigation badge, and close-out | Not started |
 

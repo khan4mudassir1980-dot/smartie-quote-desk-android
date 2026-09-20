@@ -240,6 +240,52 @@ data class PurchaseRecord(
 ) {
     val isClosed: Boolean get() = received || status == "Received" || status == "Cancelled"
     val isOpen: Boolean get() = !deleted && !isClosed
+
+    /**
+     * How many have arrived so far, **across every delivery**.
+     *
+     * `rcvQty` is a running total in this app, not the size of one delivery,
+     * and a missing field means none have arrived — never zero received out
+     * of zero required. A negative or unreadable stored value reads as none
+     * rather than as a debt, because a V8C4 row is not this app's to trust.
+     *
+     * [isClosed] is deliberately **not** derived from this. A legacy row
+     * carrying `received: true` with `rcvQty` below `qty` is ordinary — the
+     * PWA overwrites the field with each delivery — and it stays closed.
+     * Arithmetic must never reopen something a person marked finished.
+     */
+    val receivedTotal: Double
+        get() = receivedQuantity?.takeIf { it.isFinite() && it > 0.0 } ?: 0.0
+
+    /** Still to come. Never negative, whatever a legacy row holds. */
+    val remaining: Double get() = (quantity - receivedTotal).coerceAtLeast(0.0)
+
+    /**
+     * Everything asked for has arrived.
+     *
+     * A row with no usable `quantity` is never "fully received": there is no
+     * total for a delivery to meet, and every write to such a row is refused
+     * until an edit gives it one.
+     */
+    val isFullyReceived: Boolean
+        get() = quantity > 0.0 && receivedTotal >= quantity - QUANTITY_TOLERANCE
+
+    /** Some, but not all — the state the shop floor keeps seeing. */
+    val isPartlyReceived: Boolean get() = receivedTotal > 0.0 && !isFullyReceived
+
+    companion object {
+        /**
+         * How close two quantities have to be to count as the same.
+         *
+         * Quantities are `Double`s typed by hand and then added, so three
+         * deliveries of `0.1` against a requirement for `0.3` do not sum to
+         * exactly `0.3` — and a requirement that will not close because of
+         * the seventeenth decimal place is a defect on a shop floor. The
+         * display rounds to three places, so a millionth is far below
+         * anything anybody can enter or read.
+         */
+        const val QUANTITY_TOLERANCE: Double = 1e-6
+    }
 }
 
 data class PartyRecord(

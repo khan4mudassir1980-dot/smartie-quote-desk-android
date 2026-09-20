@@ -31,6 +31,7 @@ class PurchaseWriteTest {
         status: String = "Needed",
         received: Boolean = false,
         receivedBy: String = "",
+        receivedQuantity: Double? = null,
         deleted: Boolean = false,
         revision: Int = 1
     ) = PurchaseRecord(
@@ -45,6 +46,7 @@ class PurchaseWriteTest {
         createdAt = 1_690_000_000_000L,
         updatedAt = 1_690_000_000_000L,
         received = received,
+        receivedQuantity = receivedQuantity,
         receivedBy = receivedBy,
         deleted = deleted,
         revision = revision
@@ -246,6 +248,80 @@ class PurchaseWriteTest {
     // --- the unusable-quantity rescue ------------------------------------------
 
     @Test
+    fun `the total needed cannot be edited below what has already arrived`() {
+        val partly = stored(quantity = 10.0, receivedQuantity = 5.0)
+        assertEquals(
+            PurchasePlan.Refused(PurchaseWrite.belowReceived(5.0)),
+            PurchaseWrite.edit(partly, partly.name, 4.0, partly.urgency, partly.note, author, at)
+        )
+    }
+
+    @Test
+    fun `setting the total to what has arrived finishes the requirement`() {
+        // Ten were wanted, five came, and the rest is not coming. Correcting
+        // the total to five is how somebody says so, and leaving it open
+        // afterwards would be a list nobody can ever clear.
+        val partly = stored(quantity = 10.0, receivedQuantity = 5.0)
+        val data = written(
+            PurchaseWrite.edit(partly, partly.name, 5.0, partly.urgency, partly.note, author, at)
+        )
+
+        assertEquals(5.0, data["qty"])
+        assertEquals(PurchaseWrite.STATUS_RECEIVED, data["status"])
+        assertEquals(true, data["received"])
+        assertEquals("squared off against the new total", 5.0, data["rcvQty"])
+        // Who received the delivery is not who edited the total, and the
+        // receipt's own author and time are not rewritten by an edit.
+        assertFalse(data.containsKey("rcvBy"))
+        assertFalse(data.containsKey("rcvAt"))
+        assertEquals("Asha", data["upBy"])
+    }
+
+    @Test
+    fun `raising the total above what has arrived keeps the requirement open`() {
+        val partly = stored(quantity = 10.0, receivedQuantity = 5.0)
+        val data = written(
+            PurchaseWrite.edit(partly, partly.name, 12.0, partly.urgency, partly.note, author, at)
+        )
+
+        assertEquals(12.0, data["qty"])
+        assertFalse("nothing here closes it", data.containsKey("received"))
+        assertFalse(data.containsKey("status"))
+    }
+
+    @Test
+    fun `an edit that changes nothing still closes a row whose total is already in`() {
+        // A PWA receive can leave `rcvQty == qty` with the row still open.
+        // `NoChange` there would be a requirement nobody could ever finish.
+        val stuck = stored(quantity = 6.0, receivedQuantity = 6.0)
+        val data = written(
+            PurchaseWrite.edit(stuck, stuck.name, 6.0, stuck.urgency, stuck.note, author, at)
+        )
+
+        assertEquals(true, data["received"])
+        assertEquals(PurchaseWrite.STATUS_RECEIVED, data["status"])
+    }
+
+    @Test
+    fun `an edit to a closed requirement is not turned into a receipt`() {
+        // `receivedTotal` is read on a closed row too, and the finishing
+        // branch must not fire on one that is already finished.
+        val done = stored(
+            quantity = 10.0,
+            receivedQuantity = 10.0,
+            received = true,
+            status = "Received"
+        )
+        val data = written(
+            PurchaseWrite.edit(done, "A different name", 10.0, done.urgency, done.note, author, at)
+        )
+
+        assertEquals("A different name", data["name"])
+        assertFalse("the row was already closed; nothing re-closes it", data.containsKey("received"))
+        assertFalse(data.containsKey("rcvQty"))
+    }
+
+    @Test
     fun `a requirement with no usable quantity refuses every path but edit`() {
         // The rules refuse every update to it until qty is a number, so the
         // app says which one it is rather than surfacing a permission error.
@@ -273,15 +349,109 @@ class PurchaseWriteTest {
     // --- receiving --------------------------------------------------------------
 
     @Test
-    fun `receiving closes the requirement and records who, how many and when`() {
-        val data = written(PurchaseWrite.markReceived(stored(), 5.0, author, at))
+    fun `receiving the lot closes the requirement and records who, how many and when`() {
+        val data = written(PurchaseWrite.markReceived(stored(quantity = 6.0), 6.0, author, at))
 
         assertEquals(PurchaseWrite.STATUS_RECEIVED, data["status"])
         assertEquals(true, data["received"])
-        assertEquals(5.0, data["rcvQty"])
+        assertEquals(6.0, data["rcvQty"])
         assertEquals("Asha", data["rcvBy"])
         assertEquals("uid_admin", data["rcvUid"])
         assertEquals(at, data["rcvAt"])
+    }
+
+    // --- part deliveries ------------------------------------------------------
+
+    @Test
+    fun `five of ten leaves the requirement open and says so out loud`() {
+        // The defect this answers: the first delivery used to close the
+        // requirement whatever its size, and the five still outstanding
+        // vanished off the shop floor's list.
+        val data = written(PurchaseWrite.markReceived(stored(quantity = 10.0), 5.0, author, at))
+
+        assertEquals(5.0, data["rcvQty"])
+        // Both written rather than left absent, because a V8C4 row may carry
+        // neither and "not finished" has to be stated.
+        assertEquals(false, data["received"])
+        assertEquals(PurchaseWrite.STATUS_NEEDED, data["status"])
+        // The total required is untouched: `qty` is what was asked for, and a
+        // delivery never reduces it.
+        assertEquals(10.0, data["qty"])
+    }
+
+    @Test
+    fun `the second five closes it, and the total is cumulative`() {
+        val partly = stored(quantity = 10.0, receivedQuantity = 5.0)
+        val data = written(PurchaseWrite.markReceived(partly, 5.0, author, at))
+
+        assertEquals("the running total, not the last delivery", 10.0, data["rcvQty"])
+        assertEquals(true, data["received"])
+        assertEquals(PurchaseWrite.STATUS_RECEIVED, data["status"])
+    }
+
+    @Test
+    fun `three smaller deliveries add up rather than replace each other`() {
+        var record = stored(quantity = 9.0)
+        listOf(2.0, 3.0, 4.0).forEachIndexed { index, arrived ->
+            val data = written(PurchaseWrite.markReceived(record, arrived, author, at))
+            val total = data["rcvQty"] as Double
+            record = record.copy(
+                receivedQuantity = total,
+                received = data["received"] as Boolean,
+                status = data["status"] as String
+            )
+            val last = index == 2
+            assertEquals("after ${index + 1} deliveries", last, record.received)
+        }
+        assertEquals(9.0, record.receivedQuantity!!, 0.0)
+        assertTrue("the third delivery finishes it", record.isClosed)
+    }
+
+    @Test
+    fun `more than is still outstanding is refused, with the figure in the sentence`() {
+        val partly = stored(quantity = 10.0, receivedQuantity = 7.0)
+        assertEquals(
+            PurchasePlan.Refused(PurchaseWrite.moreThanRemaining(3.0)),
+            PurchaseWrite.markReceived(partly, 4.0, author, at)
+        )
+        // Exactly what is outstanding is not "more than", and must go through.
+        assertTrue(PurchaseWrite.markReceived(partly, 3.0, author, at) is PurchasePlan.Write)
+    }
+
+    @Test
+    fun `awkward decimals still close the requirement`() {
+        // `0.1 + 0.2` is not `0.3`, and a requirement that will not close
+        // because of the seventeenth decimal place is a defect on a floor.
+        var record = stored(quantity = 0.3)
+        listOf(0.1, 0.1, 0.1).forEach { arrived ->
+            val data = written(PurchaseWrite.markReceived(record, arrived, author, at))
+            record = record.copy(
+                receivedQuantity = data["rcvQty"] as Double,
+                received = data["received"] as Boolean
+            )
+        }
+        assertTrue("three tenths make three tenths", record.received)
+        assertEquals(0.3, record.receivedQuantity!!, 1e-9)
+    }
+
+    @Test
+    fun `a legacy row already marked received stays closed however short its total`() {
+        // The PWA overwrites `rcvQty` with each delivery, so a closed row
+        // carrying less than its `qty` is ordinary. Arithmetic must never
+        // reopen something a person marked finished.
+        val legacy = stored(
+            quantity = 10.0,
+            receivedQuantity = 4.0,
+            received = true,
+            status = "Received",
+            receivedBy = "Omar"
+        )
+        assertTrue(legacy.isClosed)
+        assertFalse(legacy.isOpen)
+        assertEquals(
+            PurchasePlan.Refused("Already received by Omar"),
+            PurchaseWrite.markReceived(legacy, 6.0, author, at)
+        )
     }
 
     @Test
@@ -355,10 +525,14 @@ class PurchaseWriteTest {
 
     @Test
     fun `a status is only ever moved by the operation that owns it`() {
-        // There is no setStatus and no cancel: `Received` comes from
-        // markReceived and `Needed` from reopen, so no caller can invent a
-        // state nobody designed. A PWA-written `Cancelled` still reads fine.
-        val received = written(PurchaseWrite.markReceived(stored(), 5.0, author, at))
+        // There is no setStatus and no cancel: `Received` comes from a
+        // delivery and `Needed` from reopen, so no caller can invent a state
+        // nobody designed. A PWA-written `Cancelled` still reads fine.
+        //
+        // `edit` is the third writer of a status and the only one that is not
+        // obvious, so it is named: setting the total needed down to what has
+        // already arrived finishes the requirement, and is tested above.
+        val received = written(PurchaseWrite.markReceived(stored(quantity = 6.0), 6.0, author, at))
         val reopened = written(
             PurchaseWrite.reopen(stored(received = true, status = "Received"), author, at)
         )

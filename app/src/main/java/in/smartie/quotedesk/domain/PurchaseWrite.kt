@@ -1,5 +1,6 @@
 package `in`.smartie.quotedesk.domain
 
+import `in`.smartie.quotedesk.data.mapping.Money
 import `in`.smartie.quotedesk.data.model.PurchaseRecord
 import `in`.smartie.quotedesk.data.model.UrgencyV2
 
@@ -143,6 +144,27 @@ object PurchaseWrite {
         if (by.isBlank()) "This requirement has already been received"
         else "Already received by $by"
 
+    /**
+     * More arrived than was ever outstanding.
+     *
+     * The figure is in the sentence because "too many" is unactionable: the
+     * person is standing in front of a delivery and needs to know what number
+     * the app will take.
+     */
+    fun moreThanRemaining(remaining: Double): String =
+        "Only ${Money.formatQuantity(remaining)} still to come — enter that or less"
+
+    /**
+     * The required total cannot go below what has already arrived.
+     *
+     * Allowing it would leave a requirement whose `remaining` is negative and
+     * which can never close by arithmetic, and it would also quietly rewrite
+     * history: the received total is a record of deliveries, not an estimate.
+     */
+    fun belowReceived(received: Double): String =
+        "${Money.formatQuantity(received)} has already arrived — the total needed " +
+            "cannot be less than that"
+
     // --- creating -----------------------------------------------------------
 
     /**
@@ -197,6 +219,23 @@ object PurchaseWrite {
      * **The rescue path.** Every other operation refuses a requirement whose
      * stored quantity is unusable; this one accepts it, because writing a
      * usable quantity is the only way to make the row writable again.
+     *
+     * **And the only place a required total meets a received one.** Two
+     * things follow from `rcvQty` being cumulative, and both are decided
+     * here rather than left to arithmetic nobody reads:
+     *
+     * - A total **below** what has already arrived is refused. It would put
+     *   `remaining` permanently under zero, and it would rewrite a record of
+     *   deliveries as though it were an estimate.
+     * - A total set **equal** to what has already arrived finishes the
+     *   requirement in the same write. Ten were wanted, five came, and the
+     *   rest is not coming: correcting the total to five is exactly how
+     *   somebody says so, and leaving it open afterwards would be a list
+     *   nobody can ever clear.
+     *
+     * The receipt's own author and time are left alone when that happens.
+     * Whoever edits the total did not receive the delivery, and `upBy` /
+     * `upUid` already record who made the change.
      */
     fun edit(
         stored: PurchaseRecord,
@@ -212,18 +251,40 @@ object PurchaseWrite {
         val trimmedNote = note.trim()
         if (trimmedName.isBlank()) return PurchasePlan.Refused(NO_NAME)
         if (quantity <= 0.0) return PurchasePlan.Refused(NOT_POSITIVE)
+        val alreadyIn = stored.receivedTotal
+        val counts = !stored.isClosed && alreadyIn > 0.0
+        if (counts && quantity < alreadyIn - TOLERANCE) {
+            return PurchasePlan.Refused(belowReceived(alreadyIn))
+        }
+        // Asked down to what has arrived: the delivery is complete by
+        // definition, so this save is the one that closes it.
+        val finishes = counts && quantity <= alreadyIn + TOLERANCE
         val unchanged = trimmedName == stored.name &&
             quantity == stored.quantity &&
             urgency == stored.urgency &&
             trimmedNote == stored.note
-        if (unchanged) return PurchasePlan.NoChange
+        // `finishes` outranks `unchanged`: a row already holding
+        // `rcvQty == qty` while still open — which a PWA receive can leave
+        // behind — must still be closable, and nothing else about it changes.
+        if (unchanged && !finishes) return PurchasePlan.NoChange
+        val closing = if (finishes) {
+            mapOf(
+                "status" to STATUS_RECEIVED,
+                "received" to true,
+                // Squared off against the new total so the closed row reads
+                // as consistent rather than short by a rounding step.
+                "rcvQty" to quantity
+            )
+        } else {
+            emptyMap()
+        }
         return PurchasePlan.Write(
             docId = stored.id,
             data = base(stored, quantity, author, at) + mapOf(
                 "name" to trimmedName,
                 "urgency" to urgency.wireValue,
                 "note" to trimmedNote
-            )
+            ) + closing
         )
     }
 
@@ -247,12 +308,29 @@ object PurchaseWrite {
     // --- closing and reopening -----------------------------------------------
 
     /**
-     * It arrived. The requirement leaves the active list and keeps who
-     * received it, how many, and when.
+     * A delivery arrived. [receivedNow] is **this delivery**, not the total.
+     *
+     * A requirement is very often delivered in pieces, so `rcvQty` is a
+     * **cumulative** total here: the stored figure plus what has just come.
+     * The requirement closes only when that total reaches `qty`, and until
+     * then it keeps `received: false` and `status: "Needed"` and stays on the
+     * active list where the outstanding quantity can still be chased.
+     *
+     * That shape is safe to write because the PWA was asked, rather than
+     * assumed about: it decides closure from `received`/`status` and never
+     * from a positive `rcvQty`, and it renders the figure only inside a
+     * received branch. Both verdicts, and the cutover restriction that
+     * follows from the PWA *overwriting* this field, are in
+     * `docs/N4-plan.md`.
+     *
+     * The total is decided against [stored], read inside the caller's
+     * transaction — never against the figure on somebody's screen — which is
+     * what makes two people receiving at once resolve to one running total
+     * instead of two opinions about it.
      */
     fun markReceived(
         stored: PurchaseRecord,
-        receivedQuantity: Double,
+        receivedNow: Double,
         author: PurchaseAuthor,
         at: Long
     ): PurchasePlan {
@@ -260,14 +338,25 @@ object PurchaseWrite {
         // A second device that was still showing it open gets a sentence
         // rather than a stale-revision error it cannot act on.
         if (stored.isClosed) return PurchasePlan.Refused(alreadyReceived(stored.receivedBy))
-        if (receivedQuantity <= 0.0) return PurchasePlan.Refused(NOT_POSITIVE)
+        if (receivedNow <= 0.0) return PurchasePlan.Refused(NOT_POSITIVE)
         usableQuantity(stored)?.let { return it }
+        val outstanding = stored.remaining
+        // Taking more than was ever asked for is a typo every time, and it
+        // would write a total the requirement can never reconcile to.
+        if (receivedNow > outstanding + TOLERANCE) {
+            return PurchasePlan.Refused(moreThanRemaining(outstanding))
+        }
+        val total = tidy(stored.receivedTotal + receivedNow)
+        val complete = total >= stored.quantity - TOLERANCE
         return PurchasePlan.Write(
             docId = stored.id,
             data = base(stored, stored.quantity, author, at) + mapOf(
-                "status" to STATUS_RECEIVED,
-                "received" to true,
-                "rcvQty" to receivedQuantity,
+                // Both written every time, and never left to be inferred: a
+                // V8C4 row may carry neither, and a partial receipt has to
+                // say out loud that it is not a finished one.
+                "status" to if (complete) STATUS_RECEIVED else STATUS_NEEDED,
+                "received" to complete,
+                "rcvQty" to total,
                 "rcvBy" to author.name,
                 "rcvUid" to author.uid,
                 "rcvAt" to at
@@ -279,6 +368,8 @@ object PurchaseWrite {
      * Back to the active list, as though it had never been received.
      *
      * The four `rcv*` fields are **removed**, not blanked — see [DeleteField].
+     * That is what resets the cumulative received total to zero: the whole
+     * requirement comes back, not the part of it nobody had delivered.
      * A requirement that is already open is left alone rather than rewritten,
      * so a double tap cannot burn a revision.
      *
@@ -365,4 +456,21 @@ object PurchaseWrite {
     /** [UNUSABLE_QUANTITY] when the stored `qty` cannot satisfy the rules. */
     private fun usableQuantity(stored: PurchaseRecord): PurchasePlan.Refused? =
         if (stored.quantity > 0.0) null else PurchasePlan.Refused(UNUSABLE_QUANTITY)
+
+    /** How close two quantities must be to be the same one. */
+    private const val TOLERANCE: Double = PurchaseRecord.QUANTITY_TOLERANCE
+
+    /**
+     * A running total, rounded to something a person could have typed.
+     *
+     * `0.1 + 0.2` is `0.30000000000000004`, and that figure would go on the
+     * wire, come back through the reader, and sit under every later
+     * comparison. Three decimal places is what the display shows, so six is
+     * well past anything that can be entered and well short of where the
+     * noise lives.
+     */
+    private fun tidy(quantity: Double): Double =
+        Math.round(quantity * ROUNDING) / ROUNDING
+
+    private const val ROUNDING: Double = 1_000_000.0
 }

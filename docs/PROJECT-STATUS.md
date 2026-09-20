@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-20.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `924786c` — [run #106](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35523545235), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `2328932` — [run #108](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35536237079), fully green (unit tests, lint, Firestore rules emulator, APK build). **This is the commit to deploy the rules from.** |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -337,6 +337,7 @@ all three jobs green on the first attempt. The plan of record is
 | `a4fc509` | The repository asks the **stored** document who may change it |
 | `4ac2b71` | Capabilities per card; the Close-short control and its confirmation |
 | `924786c` | The rules, and the emulator suite that proves them |
+| `2328932` | Two gaps the pre-deployment verification found, closed |
 
 **What changed, in one paragraph.** The person who raised a requirement may
 correct it — name, note, quantity, urgency — or take it off the list, for as
@@ -374,8 +375,29 @@ recorded that since Batch 2 as the one restriction the rules could not
 express — and the limited role may correct the requirement it raised.
 
 **976 Kotlin test methods across 86 classes**, up from 905 across 83 after
-Batch C; **135 emulator tests**, up from 113; 48 importer and tool tests
+Batch C; **137 emulator tests**, up from 113; 48 importer and tool tests
 unchanged. Still **0 instrumentation tests**.
+
+**Two coverage gaps were found before the deployment and closed** (`2328932`,
+[run #108](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35536237079),
+green). A read-only check against the ten-point security list found all ten
+enforced, but two places where the suite proved less than it appeared to.
+
+The shortfall test ended at `assertSucceeds`, which says a write is permitted
+and nothing about what it did — and a shortfall rewrites a stored quantity and
+closes a requirement. It now reads the document back and asserts the whole
+result: `qty` is the receipt, `received` and `status` are set, all four `rcv*`
+fields survive untouched, `rev` advanced by one, and `byUid` and `t` are where
+they were. Those assertions existed only on the Kotlin side, against the
+payload rather than against Firestore.
+
+And `prIdentityPinned()` binds the Administrator branch by sitting outside the
+disjunction, which is exactly why nothing would notice if it were moved
+inside a branch one day. An Administrator is now refused a `byUid`, `by` or
+`t` rewrite by name, with the identical write **without** them accepted, so
+the refusals mean the pin rather than something else in the rule.
+
+Test-only: no rule, no source and no document changed in that commit.
 
 **⚠️ The rules are changed and NOT deployed.** This is the first rules change
 since 20 September, and it makes the rules **stricter for a Manager** as well

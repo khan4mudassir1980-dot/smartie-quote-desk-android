@@ -1,4 +1,5 @@
 const test = require('node:test');
+const assert = require('node:assert/strict');
 const { assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
 const firebase = require('firebase/compat/app');
 require('firebase/compat/firestore');
@@ -104,6 +105,24 @@ test('the creator may not rewrite who raised it, or when', async () => {
   await assertFails(db.update({ ...base('pr_healthy', 1, 6), byUid: UIDS.staff }));
   await assertFails(db.update({ ...base('pr_healthy', 1, 6), by: 'Somebody else' }));
   await assertFails(db.update({ ...base('pr_healthy', 1, 6), t: 1 }));
+});
+
+test('not even an Administrator may rewrite who raised a requirement', async () => {
+  // prIdentityPinned() sits outside the branch disjunction, so it binds the
+  // Administrator too. That is true by construction, which is exactly why it
+  // is worth a test: nothing else would notice if the pin were moved inside
+  // a branch one day.
+  await given('pr_healthy', HEALTHY);
+  const db = as(testEnv, UIDS.admin).collection('purchase').doc('pr_healthy');
+
+  await assertFails(db.update({ ...base('pr_healthy', 1, 4), byUid: UIDS.admin }));
+  await assertFails(db.update({ ...base('pr_healthy', 1, 4), by: 'Administrator' }));
+  await assertFails(db.update({ ...base('pr_healthy', 1, 4), t: 1 }));
+
+  // And the identical write without them is accepted, which is what makes
+  // the three refusals mean the pin rather than something else in the rule.
+  // A refused write stores nothing, so rev 2 is still the right next one.
+  await assertSucceeds(db.update(base('pr_healthy', 1, 4)));
 });
 
 test('nor the receipt, the status or any audit field', async () => {
@@ -296,6 +315,54 @@ test('a Manager closes a shortfall at exactly the stored receipt', async () => {
       ...base('pr_part', 1, 7), status: 'Received', received: true,
     })
   );
+});
+
+test('and the stored document is exactly what the shortfall promised', async () => {
+  // The test above proves the write is *allowed*. This one is about what it
+  // did: a shortfall rewrites a stored quantity and closes a requirement, so
+  // "permitted" is not the same as "correct", and nothing else in this suite
+  // reads a document back.
+  await given('pr_part', {
+    ...HEALTHY, id: 'pr_part', qty: 10,
+    rcvQty: 7, rcvBy: 'Manager Person', rcvUid: UIDS.staff, rcvAt: 1712600000000,
+  });
+
+  await assertSucceeds(
+    as(testEnv, UIDS.staff).collection('purchase').doc('pr_part').update({
+      ...base('pr_part', 1, 7), status: 'Received', received: true,
+    })
+  );
+
+  // `withSecurityRulesDisabled` does not hand back the callback's value, so
+  // the row is captured rather than returned — as in photos.test.js.
+  let row;
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    row = (await context.firestore().collection('purchase').doc('pr_part').get()).data();
+  });
+
+  assert.equal(row.qty, 7, 'the required total becomes the receipt');
+  assert.equal(row.received, true);
+  assert.equal(row.status, 'Received');
+
+  // The receipt records a delivery somebody made, and the person writing off
+  // the remainder is usually not that person. All four survive untouched.
+  assert.equal(row.rcvQty, 7);
+  assert.equal(row.rcvBy, 'Manager Person');
+  assert.equal(row.rcvUid, UIDS.staff);
+  assert.equal(row.rcvAt, 1712600000000);
+
+  assert.equal(row.rev, 2, 'the stored revision plus one, as every update does');
+
+  // The updater field is its own thing, distinct from the receipt's rcvUid:
+  // who wrote off the rest is not who took the delivery in. `base()` stamps
+  // a fixed updater rather than deriving one from the caller, so this says
+  // the field survives and differs from rcvUid — not that Firestore filled
+  // it in.
+  assert.equal(row.upUid, UIDS.admin);
+  assert.notEqual(row.upUid, row.rcvUid);
+
+  assert.equal(row.byUid, UIDS.worker, 'and who raised it is untouched');
+  assert.equal(row.t, 1712000000000);
 });
 
 test('and at no other quantity whatsoever', async () => {

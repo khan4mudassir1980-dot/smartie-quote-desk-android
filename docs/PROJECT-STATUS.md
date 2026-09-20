@@ -1,7 +1,7 @@
 # Project status
 
 **The single current-status record. Read this before planning or changing
-anything.** Last updated 2026-09-19.
+anything.** Last updated 2026-09-20.
 
 ## Where the work is
 
@@ -24,8 +24,9 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N1 Auth & Team | **Complete** |
 | N2 Products | **Complete and verified** |
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
-| N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (contract withdrawn and replaced), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. Rules and the index exemption are deployed to staging (Owner-confirmed history, not a fresh read); **the `/stoppedStock` rules are new and not yet deployed** |
-| N4–N8 | Not started |
+| N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
+| N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0, 1a and 1b are the data-shape work; nothing is on a device yet |
+| N5–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
   field by field. T-P1 and the §12 "403-item parity" exit criterion are closed.
@@ -245,40 +246,76 @@ classes by the files that hold one.
 **The staging APK for the next physical pass** is `smartie-native-apks` from
 [run #87](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35458715257)
 at `f5a4961`. It carries the removal path, the stopped-item history, the
-bottom-navigation fix and the back-to-top control. **It will not work until
-the `/stoppedStock` rules are deployed** — every removal is refused by the
-rules until then.
+bottom-navigation fix and the back-to-top control. The `/stoppedStock` rules
+**have since been deployed** (20 September), and a removal has been performed
+on a device against them.
+
+### 20 September: the rules reached staging, and the first removal ran
+
+**Owner-confirmed, and recorded as an observation rather than a read-back** — no session holds
+a credential for either project, so nothing below was verified from this container.
+
+**The deployment.** `firestore/firestore.rules` from `ed4c80d` was deployed with
+
+```
+firebase deploy --only firestore:rules --project smartie-quote-desk-staging
+```
+
+The Firebase CLI confirmed the target was `smartie-quote-desk-staging`, and the staging Rules
+tab showed a new publication at about 1:47 AM. **Production was checked separately and its
+latest publication remained 11 September 2026, 6:43 PM — production was not changed.** That
+closes the deployment half of the previous next action.
+
+**The APK.** The `smartie-native-apks` artifact from run #88 was installed and the app showed
+the **Staging** label.
+
+**What passed on the device**, in one sitting, on one phone:
+
+| Step | Result |
+|---|---|
+| Add a temporary **manual** stock product | Passed |
+| Add a stock **photo** to it | Passed |
+| Change its **quantity** | Passed |
+| **Permanently remove** it | Passed |
+| The removed product appears in **Stopped History** | Passed |
+
+**T-P12 is recorded as PASSED IN PART, not passed.** The run exercised the removal and the
+history entry, which is the heart of the replacement contract. Four clauses of that contract
+were not reported and are therefore not claimed: that the catalogue product survived untouched,
+that the same product could be **added again fresh**, that **no `/stockMoves` entry** was
+written by the removal, and that the item left the **Tracked / Low / Out** counts.
+
+**Nothing else moved.** These stay `pending` — not passed, not skipped, and not failed:
+
+- **N3:** T-S5 (two phones, one row), the second-device halves of T-S24 and T-S27, and the six
+  rows the second pass never reached — T-S2c, T-S2d, T-S4, T-S9, T-S20, T-X4. T-S25 is N4's.
+- **N3.1:** T-P13, T-P14, T-P15, and the four unreported T-P12 clauses above.
+- **T-P7 remains BLOCKED** on the N6 Products & Categories screen, which does not exist.
+
+**Neither N3 nor N3.1 is closed**, and neither may be described as verified.
 
 ## Current next action
 
-**Deploy the new `/stoppedStock` rules to staging, then run the five
-outstanding photo rows and the replaced T-P12 contract on a device.**
+**N4 Purchase, Batch 1a: change the green urgency label to "Needed, but not now".**
 
-The rules must go first: nothing in the removal path works against staging
-until `/stoppedStock` is deployed, and the replacement APK is useless without
-them. The exact command is in `docs/N3.1-plan.md` and is the Owner's to run —
-no session holds a credential for either project.
+The plan of record is `docs/N4-plan.md`. Batch 0 (this documentation correction) is done;
+1a is a display-only label change and 1b is the pure mutation planner. Neither touches
+Firestore rules, indexes, the UI or any repository.
 
-Then, on a device:
+What is **not** this action, and must not slip because N4 started:
 
-| Row | What it checks |
+| Still open | Needs |
 |---|---|
-| **T-P12 (replaced)** | Remove a photographed row permanently: the row, its photo document and its cached bytes gone; one read-only history entry left; the catalogue product untouched; the same product addable again, fresh; **no** quantity movement written. And `SIE-EXTRECEIVER` freed |
-| **T-P14** | Scroll the whole board, leave, return, scroll again, against the Firebase console's usage tab. **The assumption every usage figure rests on**, measured rather than trusted |
-| T-P15 | Remove a photographed row as an Administrator; the photo document must go with it |
-| T-P13 | Two phones replacing the same row's photo **at the same moment** — not two phones, the same moment |
-| T-P7 | **Blocked until N6.** A display-model rename needs the Products & Categories editing screen, which does not exist yet. Do not attempt it, and do not record it as failed |
+| **T-P12**'s four unreported clauses, **T-P15** | One phone |
+| **T-P14** | The Firebase console's usage tab |
+| **T-S5**, **T-P13** | **A second phone**, writing the *same* row at the *same moment* |
+| T-S2c, T-S2d, T-S4, T-S9, T-S20, T-X4; second-device T-S24 / T-S27 | One or two phones |
+| **T-P7** | **Blocked** until N6 exists. Do not attempt it, and do not record it as failed |
+| T-S25 | N4 itself — it is the row Purchase being writable finally makes possible |
 
-Also on the device, because a second phone found it: the bottom navigation
-clear of the system navigation in both three-button and gesture navigation,
-and the Products back-to-top control.
-
-**N3.1 is not closed** and must not be described as verified until these have
-run. N3's outstanding device work is **tracked, not closed**, and does not
-become this action: T-S5 on two phones, the six rows the second pass did not
-reach, and the second-device halves of T-S24 and T-S27. They are listed with
-their evidence in `docs/N3-verification.md`. N3.1 must not be the reason they
-slip.
+**N3.1 is not closed** and must not be described as verified until its rows have run. N3's
+outstanding device work is **tracked, not closed**; it is listed with its evidence in
+`docs/N3-verification.md`, and N4 must not be the reason it slips.
 
 ## Decisions that bind future work
 
@@ -512,6 +549,7 @@ manual-to-catalogue link; do not give it a meaning.
 | `docs/N3-plan.md` | The N3 plan: resolved V8C4 facts, the transaction contract, decisions and test plan |
 | `docs/N3-verification.md` | The second manual pass, row by row: what passed, what is pending, what is N4's |
 | `docs/N3.1-plan.md` | The N3.1 Stock Photo plan: flow, data model, rules, Android integration, batches, costs and open decisions |
+| `docs/N4-plan.md` | The N4 Purchase plan: the decisions, the write contract, the rules traps, the batches and the acceptance rows |
 | `tools/catalogue-import/README.md` | How the import runs, its guards, and rollback |
 | `firestore/firestore.rules` | The v9 rules — staging only; production keeps V8C4 |
 

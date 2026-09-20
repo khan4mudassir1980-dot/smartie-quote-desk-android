@@ -310,12 +310,48 @@ moment. No simultaneous photo replacement and no simultaneous quantity change
 was performed. Both rows stay pending, and nothing in this pass may be read as
 covering them.
 
+## 20 September: the rules deployed, and the first removal on a device
+
+**Owner-confirmed, one physical phone.** Recorded as an observation, not a read-back: no
+session holds a credential for either Firebase project.
+
+**The deployment.** `firestore/firestore.rules` from `ed4c80d` was deployed with
+`firebase deploy --only firestore:rules --project smartie-quote-desk-staging`. The CLI
+confirmed the staging target and the staging Rules tab showed a new publication at about
+1:47 AM. **Production Rules were checked separately and their latest publication remained
+11 September 2026, 6:43 PM — production was not changed.**
+
+**The build.** The `smartie-native-apks` artifact from run #88 was installed and the app
+showed the **Staging** label.
+
+| Step | Status | Evidence, as reported |
+|---|---|---|
+| Add a temporary manual stock product | **Passed** | The item appeared on the board |
+| Add a stock photo | **Passed** | |
+| Change the quantity | **Passed** | |
+| Remove the item permanently | **Passed** | |
+| The removed item appears in Stopped History | **Passed** | |
+
+### T-P12 is passed in part, not passed
+
+The pass exercised the removal and the history entry — the heart of the replacement contract
+recorded in `docs/N3.1-plan.md`. **Four clauses of that contract were not reported**, and a
+clause nobody exercised is not a clause that passed:
+
+- the catalogue product survived untouched;
+- the same product could be **added to stock again, fresh and empty**;
+- **no `/stockMoves` entry** was written by the removal;
+- the item left the **Tracked, Low and Out** counts.
+
+Those four, and **T-P13**, **T-P14** and **T-P15**, remain open. **T-P7 stays blocked** on the
+N6 Products & Categories screen.
+
 ## What is still open after all of this
 
 - **N3:** T-S5 (two phones, one row), the second-device halves of T-S24 and
   T-S27, and the six rows the second pass never reached — T-S2c, T-S2d, T-S4,
   T-S9, T-S20 and T-X4. T-S25 remains N4's.
-- **N3.1:** T-P7 (blocked on N6), T-P12 against its replacement contract,
+- **N3.1:** T-P7 (blocked on N6), the four unreported T-P12 clauses above,
   T-P13, T-P14 and T-P15.
 
 **Neither phase is closed**, and neither may be described as verified.

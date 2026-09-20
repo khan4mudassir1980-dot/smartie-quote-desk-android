@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-20.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `9eef41a` — [run #103](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35518126583), fully green (unit tests, lint, Firestore rules emulator, APK build) |
+| **Last CI-verified head** | `8030933` — [run #104](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35519935449), fully green (unit tests, lint, Firestore rules emulator, APK build) |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -25,7 +25,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N2 Products | **Complete and verified** |
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
-| N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done — the tab writes, and every one of the six operations is reachable from it. A manual pass on a phone then found **four real defects**; batches A, B and D are done and CI-verified, and **Batch C, partial receipt, is in progress**. Only the four defects have been seen on a device, so **no N4 acceptance row may be called verified**; the history screen is Batch 5 and the tab badge is Batch 6 |
+| N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done — the tab writes, and every one of the six operations is reachable from it. A manual pass on a phone then found **four real defects**; **all four defect batches — A, B, C and D — are done and CI-verified**. Only the four defects have been seen on a device, so **no N4 acceptance row may be called verified**; the history screen is Batch 5 and the tab badge is Batch 6 |
 | N5–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -323,6 +323,53 @@ written. Nothing was merged to `main` and no pull request exists.
 banner, so **T-S25 stays blocked** on the batch that makes a requirement creatable from a
 screen.
 
+### N4 batch C, partial receipt
+
+Verified at `8030933`,
+[run #104](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35519935449),
+all three jobs green on the first attempt.
+
+| Commit | What |
+|---|---|
+| `d9bdc81` | The three V8C4 verdicts and the production cutover restriction they force |
+| `7c0d928` | `rcvQty` is a cumulative total; the planner closes only when it reaches `qty`, and guards the edit path both ways |
+| `ce57f14` | The repository hands back a `PurchaseReceipt`, so what the tab says is decided inside the transaction |
+| `dc0a107` | The card reads `10 required · 4 received · 6 remaining`; the panel shows all three and asks for this delivery |
+| `8030933` | Six emulator tests proving the deployed rules take a partial and a completing payload |
+
+**The defect.** `markReceived` wrote `received: true` whatever quantity it
+was handed, so the first delivery closed the requirement and whatever was
+still outstanding left the shop floor's list.
+
+**The contract, written out in `docs/N4-plan.md`.** `qty` stays the total
+required and no delivery reduces it. `rcvQty` is the cumulative received
+total; a missing field means none. A requirement keeps `status: "Needed"` and
+`received: false` until that total reaches `qty`, and closes at that point and
+not before. Receiving more than is outstanding is refused with the
+outstanding figure in the sentence. Editing the required total below what has
+arrived is refused; setting it **equal** to what has arrived finishes the
+requirement in the same save. Reopen is unchanged — the four `rcv*` fields are
+removed, which is what returns the cumulative total to zero.
+
+**`isClosed` was deliberately not touched**, so a V8C4 row carrying
+`received: true` with `rcvQty` below `qty` — which the PWA's overwrite makes
+ordinary — stays closed. Arithmetic must never reopen what a person marked
+finished.
+
+**No rules change and no index change, and that was proved rather than
+assumed.** The update rule constrains `id`, `qty`, `updated`, `rev` and `del`
+and says nothing about `rcvQty`, `received` or `status`, so both payloads are
+ordinary updates. `git diff 9eef41a..8030933 -- firestore/firestore.rules
+firestore/firestore.indexes.json` is empty.
+
+**905 Kotlin test methods across 83 classes**, up from 866 across 81 after
+Batch B; **113 emulator tests**, up from 107; 48 importer and tool tests
+unchanged. Still **0 instrumentation tests**.
+
+**Nothing deployed, production neither read nor written, the PWA not
+modified**, nothing merged to `main`, no pull request, nothing amended or
+force-pushed.
+
 ### N4 batches A, B and D, the first three defects from the phone
 
 Verified at `9eef41a`,
@@ -442,20 +489,18 @@ merged to `main`, no pull request.
 
 ## Current next action
 
-**Finish N4 Batch C — partial receipt — and get CI green on it.**
+**Run the N4 manual checks on a phone, from the `smartie-native-apks`
+artifact of run #104.**
 
-The contract is written out in `docs/N4-plan.md` under "Partial receipt, and
-what the PWA actually does", and it is settled: `qty` is the total required,
-`rcvQty` becomes the **cumulative** received total, and a requirement closes
-only when the two meet. It needs no Firestore rule change and no index change,
-which the emulator suite proves against the rules as deployed.
+All four defects the last manual pass found are fixed and CI-verified, so the
+thing that decides what happens next is a device, not more code. The rows
+ready to run are **T-R1 to T-R6, T-R11, T-R13 — and with T-R2, N3's T-S25** —
+plus **T-R14 to T-R18**, the partial-receipt rows Batch C adds. T-R7 and T-R8
+wait on the history screen (Batch 5), T-R9 and T-R10 on the tab badge
+(Batch 6), and T-R12 on a second phone. The build must show **Staging**.
 
-After that, the phone run. The N4 acceptance rows ready to run are **T-R1 to
-T-R6, T-R11, T-R13 — and with T-R2, N3's T-S25** — plus **T-R14 to T-R18**,
-the partial-receipt rows Batch C adds. T-R7 and T-R8 wait on the history
-screen (Batch 5), T-R9 and T-R10 on the tab badge (Batch 6), and T-R12 on a
-second phone. The build to use is the `smartie-native-apks` artifact of the run
-that verifies Batch C, and it must show **Staging**.
+Batch 5, the read-only Purchase History screen, can begin in parallel. It
+changes no Firestore rule and no index.
 
 **No N4 row is passed until it has been run**, and none has.
 

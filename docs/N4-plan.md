@@ -50,9 +50,10 @@ moved by the operation that owns it.
 
 ### Five traps the rules set, all of them verifiable in the fixtures
 
-Every one of these is a way to write something the rules silently refuse. They are listed
-here because each was found by reading the rules against `app/src/test/resources/fixtures/purchase.json`,
-not by a failing test.
+Every one of these is a way to write something the rules silently refuse. The first four were
+found by reading the rules against `app/src/test/resources/fixtures/purchase.json`. The fifth
+was found the honest way, by an emulator test that failed, and its first wording here was
+wrong — see below.
 
 1. **A legacy string `qty` makes a row unupdatable.** On update `request.resource.data` is
    the *merged post-state*, so `qty is number && qty > 0` is applied to the **stored** value.
@@ -69,9 +70,27 @@ not by a failing test.
 4. **`updated` is epoch milliseconds, never a server timestamp.** The rules require
    `updated is number`, and a `FieldValue.serverTimestamp()` is not one. `serverAt` stays as
    the separate audit field.
-5. **`rev` is opt-in in the rules** (`!keys().hasAny(['rev']) || rev == old.rev + 1`), so the
-   optimistic guard only works if the app always sends `rev = stored.rev + 1`, read inside a
-   transaction.
+5. **`rev` is mandatory the moment a row has one**, and the rule reads as though it were
+   optional. `revOk()` is
+   `!request.resource.data.keys().hasAny(['rev']) || request.resource.data.rev == resource.data.get('rev', 0) + 1`,
+   and `request.resource.data` is the merged post-state again — so a row already holding
+   `rev: 1` still holds it after an update that never mentioned `rev`, the first clause is
+   false, and `1 == 1 + 1` refuses the write. **The tolerance covers exactly one case: a row
+   that has never carried a `rev` at all.** Every update this app writes therefore sends
+   `rev = stored.rev + 1`, read inside a transaction, which is what the rule demands and what
+   makes the optimistic guard real. Both halves are pinned in
+   `firestore/tests/purchase.test.js` — *once a row carries a rev, omitting it is refused, not
+   tolerated* and *a V8C4 row that never had a rev is the one case the tolerance is for*.
+
+   ⚠️ **The consequence for the PWA, recorded rather than fixed.** No fixture carries `rev`, so
+   V8C4 never writes one. The moment this app updates a requirement it stamps a `rev`, and from
+   then on a PWA update to that row — which omits `rev` — is refused. That costs nothing today,
+   because the native app writes only to `smartie-quote-desk-staging` while the PWA runs against
+   production. It would matter the day both clients point at one project. It is **not** fixed
+   here: N4 changes no rules, and the fix is a rules decision for the Owner (either `rev` is
+   dropped from the app's updates, losing the optimistic guard, or `revOk()` grows a
+   `rev == old.rev` tolerance, weakening it). Raised now so the cutover plan cannot be surprised
+   by it.
 
 ### Clearing a field needs its own marker
 
@@ -106,8 +125,9 @@ and the Owner's machine; until it is answered, the restriction lives in `Permiss
 
 Neither is adopted. They are written down so nobody re-proposes them.
 
-- **Requiring `rev` on create** would break the PWA. V8C4 never writes `rev`; the opt-in shape
-  of `revOk()` exists for exactly that reason.
+- **Requiring `rev` on create** would break the PWA. V8C4 never writes `rev`; the tolerance in
+  `revOk()` exists for exactly that reason — and, per trap 5, it covers only rows that have
+  never had one.
 - **Requiring `byUid` to be preserved on update** would break the PWA too, and the proof is in
   this repository: `pr_received_legacy` and `pr_soft_deleted` carry **no `byUid` at all**, so
   `resource.data.byUid` is undefined and the rule would deny every update to them.

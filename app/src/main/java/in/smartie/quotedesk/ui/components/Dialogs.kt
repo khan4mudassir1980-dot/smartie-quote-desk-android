@@ -13,8 +13,26 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import `in`.smartie.quotedesk.ui.theme.SmartieColors
+
+/**
+ * How tall a dialog's scrolling body may be, as a share of the window.
+ *
+ * A Material dialog caps its own height and **clips** what does not fit
+ * rather than scrolling it, so a body sized for a tall phone loses its
+ * buttons off the bottom of a short one — and with the keyboard up, every
+ * phone is a short one. Half the window leaves room for the dialog's title,
+ * its padding and the keyboard, and the actions sit directly under the bound.
+ *
+ * One copy, shared by the stock sheets and the purchase panels, because two
+ * copies of a figure like this drift.
+ */
+@Composable
+internal fun sheetBodyHeight(): Dp =
+    (LocalConfiguration.current.screenHeightDp * 0.5f).dp.coerceAtMost(430.dp)
 
 /**
  * Confirmation matching the PWA's `confirmMemberAction` (`index.html:2145`).

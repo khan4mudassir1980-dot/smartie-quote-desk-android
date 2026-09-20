@@ -41,7 +41,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.ImageBitmap
@@ -51,7 +50,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -74,6 +72,7 @@ import `in`.smartie.quotedesk.ui.components.EmptyState
 import `in`.smartie.quotedesk.ui.components.NOTE_TAG
 import `in`.smartie.quotedesk.ui.components.SectionHeader
 import `in`.smartie.quotedesk.ui.components.SmartieCard
+import `in`.smartie.quotedesk.ui.components.sheetBodyHeight
 import `in`.smartie.quotedesk.ui.components.SmartieField
 import `in`.smartie.quotedesk.ui.components.SmartieGhostButton
 import `in`.smartie.quotedesk.ui.components.SmartiePrimaryButton
@@ -1534,20 +1533,6 @@ internal val KEEP_WHAT_IS_TYPED = DialogProperties(
     dismissOnBackPress = false,
     dismissOnClickOutside = false
 )
-
-/**
- * How tall a sheet's body may be: **a share of the window**, not a fixed
- * figure.
- *
- * A Material dialog caps its own height and clips what does not fit rather
- * than scrolling it, so a body sized for a tall phone loses its buttons off
- * the bottom of a short one — and with the keyboard up, every phone is a short
- * one. Half the window leaves room for the dialog's title, its padding and the
- * keyboard, and the actions sit directly under the bound.
- */
-@Composable
-private fun sheetBodyHeight(): Dp =
-    (LocalConfiguration.current.screenHeightDp * 0.5f).dp.coerceAtMost(430.dp)
 
 /** One wording, on every disabled control and in every refusal. */
 const val OFFLINE_LABEL: String = StockViewModel.OFFLINE

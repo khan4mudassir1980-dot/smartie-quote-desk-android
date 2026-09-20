@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -46,8 +47,11 @@ class PurchaseEditPanelScreenTest {
         compose.setContent { SmartieTheme { EditRequirementPanel(record = record) } }
 
         compose.onNodeWithText("Sliding gate rack").assertIsDisplayed()
-        compose.onNodeWithText("For the Kandivali site").assertIsDisplayed()
         compose.onNodeWithText("6").assertIsDisplayed()
+        // The note is the last field, so in a sheet it is scrolled to — and
+        // this comes last, because scrolling to it takes the two above it off
+        // the top.
+        compose.onNodeWithText("For the Kandivali site").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -68,7 +72,9 @@ class PurchaseEditPanelScreenTest {
 
         compose.field(QUANTITY_LABEL).performTextClearance()
         compose.field(QUANTITY_LABEL).performTextInput("9")
-        compose.onNodeWithContentDescription(urgencyOptionLabel(UrgencyV2.NORMAL)).performClick()
+        compose.onNodeWithContentDescription(urgencyOptionLabel(UrgencyV2.NORMAL))
+            .performScrollTo()
+            .performClick()
         compose.onNodeWithContentDescription(CONFIRM_EDIT).performClick()
 
         assertEquals(

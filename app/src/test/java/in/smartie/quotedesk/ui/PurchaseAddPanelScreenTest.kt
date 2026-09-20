@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -59,12 +60,16 @@ class PurchaseAddPanelScreenTest {
     @Test
     fun `all three urgencies are offered, whole, at 360dp`() {
         show()
+        // The sheet body is a share of the window, so the lower fields are
+        // reached by scrolling — as the stock sheets are. What matters is that
+        // each is reachable and, once there, actually visible.
         for (urgency in UrgencyV2.entries) {
+            compose.onNodeWithContentDescription(urgencyOptionLabel(urgency))
+                .performScrollTo()
+                .assertIsDisplayed()
             compose.onNodeWithText(urgency.label).assertIsDisplayed()
         }
-        // The Owner's wording, word for word. A substring match would pass on
-        // a label that had lost its end to a one-line segmented control.
-        compose.onNodeWithText("Needed, but not now").assertIsDisplayed()
+        // The Owner's wording, word for word.
         assertEquals("Needed, but not now", UrgencyV2.NORMAL.label)
     }
 
@@ -74,7 +79,9 @@ class PurchaseAddPanelScreenTest {
         show(actions = PurchaseActions(onAdd = { draft = it }))
 
         compose.field(NAME_LABEL).performTextInput("Remote handsets")
-        compose.onNodeWithContentDescription(urgencyOptionLabel(UrgencyV2.NORMAL)).performClick()
+        compose.onNodeWithContentDescription(urgencyOptionLabel(UrgencyV2.NORMAL))
+            .performScrollTo()
+            .performClick()
         compose.onNodeWithContentDescription(CONFIRM_ADD).performClick()
 
         assertEquals(UrgencyV2.NORMAL, draft?.urgency)
@@ -91,7 +98,9 @@ class PurchaseAddPanelScreenTest {
         compose.field(NAME_LABEL).performTextInput("Remote handsets")
         compose.field(QUANTITY_LABEL).performTextClearance()
         compose.field(QUANTITY_LABEL).performTextInput("12")
-        compose.onNodeWithContentDescription(urgencyOptionLabel(UrgencyV2.CRITICAL)).performClick()
+        compose.onNodeWithContentDescription(urgencyOptionLabel(UrgencyV2.CRITICAL))
+            .performScrollTo()
+            .performClick()
         compose.onNodeWithContentDescription(CONFIRM_ADD).performClick()
 
         assertEquals("Remote handsets", draft?.name)
@@ -123,7 +132,7 @@ class PurchaseAddPanelScreenTest {
 
         // The planner's own sentence, so what is read here cannot drift from
         // what a write would come back with.
-        compose.onNodeWithText(PurchaseWrite.NOT_POSITIVE).assertIsDisplayed()
+        compose.onNodeWithText(PurchaseWrite.NOT_POSITIVE).performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription(CONFIRM_ADD).performClick()
         assertNull(draft)
     }

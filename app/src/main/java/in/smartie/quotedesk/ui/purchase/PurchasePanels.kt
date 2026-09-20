@@ -40,6 +40,7 @@ import `in`.smartie.quotedesk.domain.PurchaseWrite
 import `in`.smartie.quotedesk.ui.components.SmartieField
 import `in`.smartie.quotedesk.ui.components.SmartieGhostButton
 import `in`.smartie.quotedesk.ui.components.SmartiePrimaryButton
+import `in`.smartie.quotedesk.ui.components.sheetBodyHeight
 import `in`.smartie.quotedesk.ui.components.clickableNoRipple
 import `in`.smartie.quotedesk.ui.components.urgencyColour
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
@@ -555,7 +556,10 @@ private fun PurchaseFormPanel(
     actions: @Composable () -> Unit
 ) {
     Column(
-        Modifier.heightIn(max = 520.dp),
+        // A share of the window, never a fixed figure: a Material dialog clips
+        // what does not fit rather than scrolling it, and with the keyboard up
+        // every phone is a short one. The fields scroll; the actions do not.
+        Modifier.heightIn(max = sheetBodyHeight()),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Column(

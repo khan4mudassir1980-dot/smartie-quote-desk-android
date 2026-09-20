@@ -241,6 +241,114 @@ test('the receive payload the app sends is accepted', async () => {
   );
 });
 
+// --- part deliveries, against the rules as deployed -------------------------
+
+test('the partial receipt payload the app sends is accepted', async () => {
+  // The whole question Batch C had to answer before it could ship: does a
+  // requirement that is *partly* received need a rules change? It does not.
+  // The update rule constrains id, qty, updated, rev and del, and says
+  // nothing at all about rcvQty, received or status.
+  await given('pr_healthy', { ...HEALTHY, qty: 10 });
+
+  await assertSucceeds(
+    as(testEnv, UIDS.staff).collection('purchase').doc('pr_healthy').update({
+      ...base('pr_healthy', 1, 10),
+      // Still open, and saying so out loud rather than by omission.
+      status: 'Needed', received: false,
+      rcvQty: 4, rcvBy: 'Sam', rcvUid: UIDS.staff, rcvAt: Date.now(),
+    })
+  );
+});
+
+test('and the delivery that completes it is accepted too', async () => {
+  await given('pr_part', {
+    ...HEALTHY, id: 'pr_part', qty: 10,
+    status: 'Needed', received: false,
+    rcvQty: 4, rcvBy: 'Sam', rcvUid: UIDS.staff, rcvAt: 1712000000000,
+  });
+
+  await assertSucceeds(
+    as(testEnv, UIDS.staff).collection('purchase').doc('pr_part').update({
+      ...base('pr_part', 1, 10),
+      status: 'Received', received: true,
+      // The cumulative total, which is what the app computes inside the
+      // transaction from the stored figure.
+      rcvQty: 10, rcvBy: 'Sam', rcvUid: UIDS.staff, rcvAt: Date.now(),
+    })
+  );
+});
+
+test('a partial receipt still carries no del key, on a row that has none', async () => {
+  // Trap 3, on the payload this batch adds: `touched()` reports keys *added*,
+  // so a helpful `del: false` here would trip the guard that keeps soft
+  // delete an Administrator's and refuse an ordinary Manager's receipt.
+  await given('pr_healthy', { ...HEALTHY, qty: 10 });
+  const payload = {
+    ...base('pr_healthy', 1, 10),
+    status: 'Needed', received: false,
+    rcvQty: 4, rcvBy: 'Sam', rcvUid: UIDS.staff, rcvAt: Date.now(),
+  };
+
+  await assertFails(
+    as(testEnv, UIDS.staff).collection('purchase').doc('pr_healthy')
+      .update({ ...payload, del: false })
+  );
+  await assertSucceeds(
+    as(testEnv, UIDS.staff).collection('purchase').doc('pr_healthy').update(payload)
+  );
+});
+
+test('a partly received row still rewrites a legacy string qty as a number', async () => {
+  // Trap 1 does not go away because a delivery is partial: the merged
+  // post-state still has to satisfy `qty is number && qty > 0`.
+  await given('pr_legacy', { ...HEALTHY, id: 'pr_legacy', qty: '10' });
+
+  await assertFails(
+    as(testEnv, UIDS.staff).collection('purchase').doc('pr_legacy').update({
+      id: 'pr_legacy', updated: Date.now(), rev: 2,
+      upBy: 'Sam', upUid: UIDS.staff,
+      status: 'Needed', received: false, rcvQty: 4,
+    })
+  );
+  await assertSucceeds(
+    as(testEnv, UIDS.staff).collection('purchase').doc('pr_legacy').update({
+      ...base('pr_legacy', 1, 10),
+      status: 'Needed', received: false, rcvQty: 4,
+    })
+  );
+});
+
+test('a Worker may not record a part delivery either', async () => {
+  await given('pr_mine', { ...HEALTHY, id: 'pr_mine', qty: 10, byUid: UIDS.worker });
+
+  await assertFails(
+    as(testEnv, UIDS.worker).collection('purchase').doc('pr_mine').update({
+      ...base('pr_mine', 1, 10),
+      status: 'Needed', received: false, rcvQty: 4,
+    })
+  );
+});
+
+test('two devices cannot both record the same part delivery', async () => {
+  // The running total is read inside a transaction and written back as
+  // `rev + 1`, so the second device loses rather than both appearing to
+  // succeed and one delivery being counted twice.
+  await given('pr_part', { ...HEALTHY, id: 'pr_part', qty: 10 });
+
+  const first = {
+    ...base('pr_part', 1, 10), status: 'Needed', received: false, rcvQty: 4,
+  };
+  await assertSucceeds(
+    as(testEnv, UIDS.staff).collection('purchase').doc('pr_part').update(first)
+  );
+  // The second device planned against rev 1 as well, and is refused.
+  await assertFails(
+    as(testEnv, UIDS.admin).collection('purchase').doc('pr_part').update({
+      ...base('pr_part', 1, 10), status: 'Needed', received: false, rcvQty: 4,
+    })
+  );
+});
+
 test('the reopen payload deletes the received fields rather than blanking them', async () => {
   await given('pr_done', {
     ...HEALTHY, id: 'pr_done', status: 'Received', received: true,

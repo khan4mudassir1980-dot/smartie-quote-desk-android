@@ -20,8 +20,13 @@ const PEOPLE = {
   [UIDS.additionalOwner]: { name: 'Additional Owner', email: 'second@example.invalid', role: 'owner', active: true },
   [UIDS.admin]: { name: 'Administrator', email: 'admin@example.invalid', role: 'admin', active: true },
   [UIDS.otherAdmin]: { name: 'Other Administrator', email: 'admin2@example.invalid', role: 'admin', active: true },
-  [UIDS.staff]: { name: 'Staff', email: 'staff@example.invalid', role: 'staff', active: true },
-  [UIDS.worker]: { name: 'Worker', email: 'worker@example.invalid', role: 'worker', active: true },
+  // The display names are corrected; the uid keys and the stored `role`
+  // values are NOT, because those are what the rules and the PWA read.
+  // Stored `staff` is displayed **Manager**; stored `worker` is displayed
+  // **Staff**. Calling these accounts "Staff" and "Worker" was precisely the
+  // confusion that mapping exists to prevent.
+  [UIDS.staff]: { name: 'Manager Person', email: 'staff@example.invalid', role: 'staff', active: true },
+  [UIDS.worker]: { name: 'Staff Person', email: 'worker@example.invalid', role: 'worker', active: true },
   [UIDS.switchedOff]: { name: 'Switched off', email: 'off@example.invalid', role: 'staff', active: false },
 };
 

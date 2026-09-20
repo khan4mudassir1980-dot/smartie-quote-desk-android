@@ -10,15 +10,21 @@ rules_version = '2';
 //   1. The Primary Owner is identified by teamSettings/access.primaryOwnerUid.
 //      The hard-coded email stays as a fallback only while that field is
 //      empty, and primaryOwnerUid can never be changed once it is set.
-//   2. An Administrator manages Administrator, Staff and Worker accounts
-//      (V8C4 allowed Staff and Worker only).
-//   3. Purchase requirements are soft-deleted by an Administrator; a hard
-//      delete is refused for everyone, so a PWA device can never resurrect a
-//      deleted item.
+//   2. An Administrator manages every account below an Owner (V8C4 allowed
+//      the two lower roles only).
+//   3. Purchase requirements are soft-deleted; a hard delete is refused for
+//      everyone, so a PWA device can never resurrect a deleted item.
 //   4. Purchase updates carry an optimistic `rev` counter.
-//   5. Workers view and add purchase requirements but no longer edit them.
+//   5. Purchase ownership: the person who raised a requirement may correct
+//      it while nothing has been delivered against it, and a delivery closes
+//      the record to everyone but an Administrator.
 //   6. Reads stay V8C4-compatible so the PWA keeps working during the
 //      transition.
+//
+// A note on vocabulary, because the stored values are not the words anybody
+// reads: role `staff` is displayed **Manager** and role `worker` is
+// displayed **Staff**. The stored values are the PWA's and are never
+// renamed; see docs/N4.2-plan.md.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -318,6 +324,164 @@ service cloud.firestore {
         || request.resource.data.rev == resource.data.get('rev', 0) + 1;
     }
 
+    // --- purchase: who owns a requirement, and for how long ----------------
+    //
+    // Two rules live here and neither can be expressed by hiding a button.
+    //
+    // 1. The person who RAISED a requirement may correct it — name, note,
+    //    quantity, urgency — or take it off the list, for as long as nothing
+    //    has been delivered against it. Ownership is byUid and nothing else;
+    //    a row without one belongs to nobody, which is most of what the PWA
+    //    wrote.
+    // 2. A delivery CLOSES the record. After it, the limited role is
+    //    read-only for that requirement, `staff` may still receive what is
+    //    outstanding or write off a shortfall, and a correction is an
+    //    Administrator's.
+    //
+    // Titles, because they are not the stored values: `staff` is displayed
+    // **Manager** and `worker` is displayed **Staff**. Nothing here renames
+    // either. See docs/N4.2-plan.md.
+
+    /** Ownership. A blank stored byUid never matches a signed-in uid. */
+    function prCreator() {
+      return resource.data.get('byUid', '') != '' && resource.data.byUid == mine();
+    }
+
+    /**
+     * Nothing has been delivered against this requirement.
+     *
+     * Read from `resource.data`, the STORED document, so a client cannot
+     * clear the receipt in the same write it edits with — and could not
+     * anyway, because a removed key lands in `touched()` and no list below
+     * admits one. The four rcv fields are checked by PRESENCE: the app
+     * writes them together and a reopen removes them together, so any one of
+     * them means a delivery was recorded, whatever the number says.
+     */
+    function prOpen() {
+      return resource.data.get('received', false) != true
+        && resource.data.get('del', false) != true
+        && resource.data.get('status', 'Needed') == 'Needed';
+    }
+
+    function prUntouched() {
+      return prOpen()
+        && !resource.data.keys().hasAny(['rcvQty','rcvBy','rcvUid','rcvAt']);
+    }
+
+    /**
+     * Who raised it, and when, are not editable by anybody — the
+     * Administrator branch included. An immutable field should not depend on
+     * which branch happened to match. A legacy row carrying none of these
+     * still passes, because '' == ''.
+     */
+    function prIdentityPinned() {
+      return request.resource.data.get('byUid', '') == resource.data.get('byUid', '')
+        && request.resource.data.get('by', '') == resource.data.get('by', '')
+        && request.resource.data.get('t', 0) == resource.data.get('t', 0);
+    }
+
+    /** Correcting a requirement: what it is, how many, how urgently, and why. */
+    function prEditKeys() {
+      return touched().hasOnly([
+        'id','name','note','qty','urgency','updated','rev','upBy','upUid','serverAt'
+      ]);
+    }
+
+    /** Taking it off the list. `qty` is absent on purpose: a removal is not an edit. */
+    function prRemoveKeys() {
+      return touched().hasOnly([
+        'id','del','deletedBy','updated','rev','upBy','upUid','serverAt'
+      ]);
+    }
+
+    /** Recording a delivery. */
+    function prReceiptKeys() {
+      return touched().hasOnly([
+        'id','status','received','rcvQty','rcvBy','rcvUid','rcvAt',
+        'qty','updated','rev','upBy','upUid','serverAt'
+      ]);
+    }
+
+    /**
+     * Writing off what is not coming: `qty` drops to what arrived and the
+     * requirement closes. **No rcv key at all**, so the receipt cannot be
+     * rewritten by the person writing off the remainder.
+     */
+    function prShortfallKeys() {
+      return touched().hasOnly([
+        'id','status','received','qty','updated','rev','upBy','upUid','serverAt'
+      ]);
+    }
+
+    /**
+     * A stored receipt total this rule is willing to reason about.
+     *
+     * The PWA has written strings into this collection — `pr_received_legacy`
+     * holds `"qty": "10"` — and comparing a string to a number here raises an
+     * error rather than coercing. So a non-numeric stored total fails closed
+     * for `staff`, and an Administrator rescues the row through the
+     * privileged branch, exactly as they rescue a string `qty`.
+     */
+    function prRcvNumeric() {
+      return !resource.data.keys().hasAny(['rcvQty']) || resource.data.rcvQty is number;
+    }
+
+    /** A received total may only grow. This is also what refuses a `staff` reopen. */
+    function prRcvNotReduced() {
+      return request.resource.data.get('rcvQty', 0) is number
+        && request.resource.data.rcvQty >= resource.data.get('rcvQty', 0);
+    }
+
+    /**
+     * A delivery does not change what was asked for.
+     *
+     * `qty` is in the receipt list only because every update re-asserts it —
+     * the app writes the value it read — so it is normally not *changed* at
+     * all. The one exception is the legacy rescue: a row whose stored `qty`
+     * is a string is unupdatable until something writes a number, and that
+     * has to stay possible. A numeric total may only be changed by an edit
+     * or by writing off a shortfall, each of which has its own branch.
+     */
+    function prQtyKept() {
+      return !(resource.data.get('qty', '') is number)
+        || request.resource.data.qty == resource.data.qty;
+    }
+
+    /**
+     * A delivery may only close a requirement it has actually completed.
+     *
+     * Without this, marking `received: true` beside a receipt that falls
+     * short of the total would close a requirement at a figure nobody
+     * delivered. Writing off that difference is a different thing, with its
+     * own branch and its own confirmation.
+     */
+    function prClosesOnlyWhenMet() {
+      return request.resource.data.get('received', false) != true
+        || (request.resource.data.get('rcvQty', 0) is number
+            && request.resource.data.rcvQty >= request.resource.data.qty);
+    }
+
+    /**
+     * The shortfall, and the only quantity it may write.
+     *
+     * `qty` must land on exactly the stored receipt: not a figure the caller
+     * chose, and not a rounding of one. The row has to be genuinely part way
+     * there — something arrived, and less than was asked for — so this can
+     * neither cancel an untouched requirement nor re-close a finished one.
+     */
+    function prShortfall() {
+      return prRcvNumeric()
+        && resource.data.get('rcvQty', 0) is number
+        && resource.data.rcvQty > 0
+        && resource.data.rcvQty < resource.data.qty
+        && resource.data.get('received', false) != true
+        && resource.data.get('del', false) != true
+        && resource.data.get('status', 'Needed') == 'Needed'
+        && request.resource.data.qty == resource.data.rcvQty
+        && request.resource.data.received == true
+        && request.resource.data.status == 'Received';
+    }
+
     match /purchase/{id} {
       allow read: if member();
       // Everyone, Workers included, may add a requirement.
@@ -331,17 +495,45 @@ service cloud.firestore {
                     && request.resource.data.urgency in ['critical','urgent','normal']
                     && request.resource.data.updated is number;
 
-      // Workers view and add only. Soft delete is an Administrator action.
-      allow update: if member() && !worker()
+      // `!worker()` is gone from the front of this rule and replaced by
+      // branch structure: the limited role may now change the requirement it
+      // raised itself, and `staff` may no longer change one a delivery has
+      // reached. Everything common to every branch stays at the top.
+      allow update: if member()
                     && request.resource.data.id == id
                     && request.resource.data.qty is number && request.resource.data.qty > 0
                     && request.resource.data.updated is number
                     && revOk()
-                    && (admin() || (
-                      !touched().hasAny(['del'])
-                      && resource.data.get('del', false) != true
-                      && request.resource.data.get('del', false) != true
-                    ));
+                    && prIdentityPinned()
+                    && (
+                      // An Owner or Administrator: unchanged, including the
+                      // privileged correction of a received requirement and
+                      // the rescue of a row the PWA stored badly.
+                      admin()
+
+                      // The displayed Manager.
+                      || (staff() && (
+                        // Anybody's requirement, while nothing has arrived.
+                        (prUntouched() && prEditKeys())
+                        // A delivery against an open requirement, which may
+                        // only add to the received total, may not change what
+                        // was asked for, and may only close the requirement
+                        // once it has actually met it.
+                        || (prOpen() && prReceiptKeys() && prRcvNumeric()
+                            && prRcvNotReduced() && prQtyKept() && prClosesOnlyWhenMet())
+                        // Or writing off what is not coming. A reopen matches
+                        // none of these: it removes rcvQty, and no branch here
+                        // lets a received total fall.
+                        || (prShortfall() && prShortfallKeys())
+                      ))
+
+                      // The person who raised it, while it is untouched —
+                      // whatever their role. This is the branch that lets a
+                      // Manager withdraw their own requirement, which the
+                      // branch above deliberately does not.
+                      || (prCreator() && prUntouched()
+                          && (prEditKeys() || prRemoveKeys()))
+                    );
 
       // Never a hard delete: a removed document reappears from a PWA device.
       allow delete: if false;

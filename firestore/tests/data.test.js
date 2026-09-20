@@ -199,14 +199,34 @@ test('a stock write is attributed to the caller and cannot re-key a row', async 
   }, { merge: true }));
 });
 
-test('a Worker adds a purchase requirement but never edits one', async () => {
+test('the limited role corrects the requirement it raised, and no other', async () => {
+  // Changed by N4.2, and deliberately: this used to assert that the limited
+  // role could add a requirement and then not even fix a quantity it had
+  // just mistyped. It may now correct its own while nothing has been
+  // delivered against it. Ownership is byUid and nothing else — stored
+  // `worker` is displayed **Staff**; the value is not renamed.
   const db = as(testEnv, UIDS.worker);
   await assertSucceeds(db.collection('purchase').doc('pr_worker').set({
     id: 'pr_worker', name: 'Anchor bolts', qty: 20, urgency: 'normal', status: 'Needed',
     byUid: UIDS.worker, t: Date.now(), updated: Date.now(),
   }));
-  await assertFails(db.collection('purchase').doc('pr_worker').update({ qty: 30, updated: Date.now() }));
-  await assertFails(db.collection('purchase').doc('pr_1').update({ qty: 5, updated: Date.now() }));
+  await assertSucceeds(
+    db.collection('purchase').doc('pr_worker').update({ qty: 30, updated: Date.now() })
+  );
+
+  // Somebody else's, raised by the displayed Manager.
+  await assertSucceeds(as(testEnv, UIDS.staff).collection('purchase').doc('pr_manager').set({
+    id: 'pr_manager', name: 'Remote handsets', qty: 4, urgency: 'normal', status: 'Needed',
+    byUid: UIDS.staff, t: Date.now(), updated: Date.now(),
+  }));
+  await assertFails(
+    db.collection('purchase').doc('pr_manager').update({ qty: 5, updated: Date.now() })
+  );
+
+  // And receiving is never theirs, not even on their own requirement.
+  await assertFails(db.collection('purchase').doc('pr_worker').update({
+    qty: 30, updated: Date.now(), received: true, rcvQty: 30, rcvUid: UIDS.worker,
+  }));
 });
 
 test('a purchase requirement is never hard deleted and only an admin soft deletes', async () => {

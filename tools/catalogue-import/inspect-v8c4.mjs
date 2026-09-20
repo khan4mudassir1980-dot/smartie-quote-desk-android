@@ -18,11 +18,20 @@
  * only filesystem call in it is `readFileSync`, and the only output is stdout.
  * Nothing it prints needs committing, and the V8C4 source stays where it is.
  *
+ * With `--purchase` it answers three more instead, for N4's partial-receipt
+ * work — whether the PWA displays `rcvQty` while `received` is false, whether
+ * it derives closure from `rcvQty`, and whether a receipt overwrites that
+ * field or adds to it. That section prints **classifications and redacted
+ * one-line snippets only**: no prices, no customer details, no secrets, and
+ * never a block of the page.
+ *
  *   node inspect-v8c4.mjs --index <path to V8C4 index.html>
+ *   node inspect-v8c4.mjs --index <path to V8C4 index.html> --purchase
  *
  * Add `--context N` for more surrounding lines (default 6).
  */
 import { readFileSync } from 'node:fs';
+import { classifyReceipt, VERDICT } from './lib/purchase-receipt.mjs';
 
 const argv = process.argv.slice(2);
 const option = (name) => {
@@ -36,6 +45,7 @@ if (!indexPath) {
   process.exit(1);
 }
 const context = Number(option('--context') ?? 6);
+const purchaseOnly = argv.includes('--purchase');
 
 let source;
 try {
@@ -48,6 +58,51 @@ const lines = source.split(/\r?\n/);
 
 console.log(`V8C4 source: ${indexPath}`);
 console.log(`${lines.length} lines, ${source.length} characters, read-only.\n`);
+
+/**
+ * The three `rcvQty` questions N4's partial receipt depends on.
+ *
+ * Classifications and redacted single lines, never a block of the page. An
+ * `UNKNOWN` is a real answer here: it says the source does not settle the
+ * question, which is worth far more than a confident guess written into a
+ * data contract.
+ */
+function purchaseReceipt() {
+  const answers = classifyReceipt(source);
+  const questions = [
+    ['Q5  Is `rcvQty` shown while `received` is false?', answers.display],
+    ['Q6  Is closure derived from `rcvQty`, or from `received`/`status`?', answers.closure],
+    ['Q7  Does a receipt overwrite `rcvQty`, or add to it?', answers.accumulation],
+  ];
+
+  for (const [title, answer] of questions) {
+    console.log('='.repeat(72));
+    console.log(title);
+    console.log('='.repeat(72));
+    console.log(`\n  VERDICT: ${answer.verdict}`);
+    console.log(`  BECAUSE: ${answer.reason}`);
+    if (answer.verdict === VERDICT.UNKNOWN) {
+      console.log('  → Static reading does not settle this. Do not assume either way.');
+    }
+    if (answer.evidence.length === 0) {
+      console.log('  (no lines to show)\n');
+      continue;
+    }
+    console.log('\n  Evidence — line numbers, with literals and numbers removed:');
+    for (const item of answer.evidence) {
+      console.log(`    index.html:${String(item.line).padStart(6)}  ${item.snippet}`);
+    }
+    console.log();
+  }
+
+  console.log('Paste the three VERDICT lines back. Nothing else from the page');
+  console.log('is needed, and nothing else has been printed.\n');
+}
+
+if (purchaseOnly) {
+  purchaseReceipt();
+  process.exit(0);
+}
 
 /** Every line matching [pattern], with [context] lines either side, de-duplicated. */
 function show(title, pattern, { limit = 12 } = {}) {
@@ -133,3 +188,7 @@ try {
   console.log('  Re-create it read-only with:');
   console.log('    node extract-v8c4.mjs --index <the same index.html>\n');
 }
+
+// The purchase questions run last in a full inspection, so `--purchase` is a
+// way to skip everything above rather than the only way to reach them.
+purchaseReceipt();

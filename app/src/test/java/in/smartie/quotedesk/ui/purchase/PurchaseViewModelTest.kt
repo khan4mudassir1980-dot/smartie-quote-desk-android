@@ -178,7 +178,7 @@ class PurchaseViewModelTest {
         val model = viewModel(requirements = rows)
 
         assertEquals(listOf("pr_new", "pr_old"), model.active.value.map { it.id })
-        assertEquals(listOf("pr_done"), model.closed.value.map { it.id })
+        assertEquals(listOf("pr_done"), model.received.value.map { it.id })
     }
 
     // --- adding ------------------------------------------------------------------
@@ -257,7 +257,7 @@ class PurchaseViewModelTest {
         )
 
         assertEquals(listOf("pr_one"), model.active.value.map { it.id })
-        assertTrue("and never as history either", model.closed.value.isEmpty())
+        assertTrue("and never among what arrived", model.received.value.isEmpty())
     }
 
     // --- the creator's own window ----------------------------------------------

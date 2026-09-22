@@ -11,12 +11,14 @@ import `in`.smartie.quotedesk.data.ListenerRetry
 import `in`.smartie.quotedesk.data.retryingListener
 import `in`.smartie.quotedesk.data.repository.FirestoreFailures
 import `in`.smartie.quotedesk.data.mapping.Money
+import `in`.smartie.quotedesk.data.mapping.Keys
 import `in`.smartie.quotedesk.data.repository.PurchaseWriteRepository
 import `in`.smartie.quotedesk.data.repository.PurchaseWriteResult
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.PurchaseAccess
 import `in`.smartie.quotedesk.domain.PurchaseBoard
 import `in`.smartie.quotedesk.domain.PurchaseDraft
+import `in`.smartie.quotedesk.domain.PurchaseWrite
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -69,8 +71,19 @@ class PurchaseViewModel(
     requirements: Flow<List<PurchaseRecord>>,
     onlineFlow: Flow<Boolean>,
     private val report: (Throwable) -> Unit = {},
-    retry: ListenerRetry = ListenerRetry()
+    retry: ListenerRetry = ListenerRetry(),
+    /** Injectable so a test can count how many identities an add consumed. */
+    private val newRequirementId: () -> String = { Keys.generateId(PurchaseWrite.ID_PREFIX) }
 ) : ViewModel() {
+
+    /**
+     * The identity of the requirement the Add sheet is currently offering.
+     *
+     * Minted when the sheet opens and cleared when something is written, so
+     * every attempt at adding *this* requirement addresses one document however
+     * many times it is tried. See [add].
+     */
+    private var addId: String? = null
 
     val messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
 
@@ -201,8 +214,15 @@ class PurchaseViewModel(
      */
     fun open(sheet: PurchaseSheet, record: PurchaseRecord? = null) {
         if (sheet == PurchaseSheet.ADD) {
-            if (capabilities().add) _sheet.value = PurchaseSheetState(sheet, null)
-            else emit(NOT_ALLOWED_ADD)
+            if (capabilities().add) {
+                // A fresh id for a fresh attempt at adding something. It
+                // survives a failure so a retry lands on the same document,
+                // and only opening the sheet again starts a new one.
+                addId = newRequirementId()
+                _sheet.value = PurchaseSheetState(sheet, null)
+            } else {
+                emit(NOT_ALLOWED_ADD)
+            }
             return
         }
         // Everything else is about one requirement, so it is refused — or
@@ -235,19 +255,33 @@ class PurchaseViewModel(
 
     // --- the six operations ---------------------------------------------------
 
+    /**
+     * Add the requirement the sheet is holding.
+     *
+     * **The id comes from [open], not from here**, and it is the whole of
+     * B2's fix. The sheet stays open on a failure, with everything typed
+     * still in it, so the person is invited to try again — and a write that
+     * failed after the server committed it is indistinguishable, from here,
+     * from one that never landed. Reusing the id means the retry addresses
+     * the document the first attempt may have written: either it is not
+     * there and this one creates it, or it is and the transaction says so.
+     * Two documents is the one outcome that is no longer reachable.
+     */
     fun add(draft: PurchaseDraft) {
         draft.refusal()?.let {
             emit(it)
             return
         }
         if (!requireOnline()) return
+        val id = addId ?: newRequirementId().also { addId = it }
         launchWrite(ADD_KEY) {
-            runCatching { writes.create(member, draft) }
+            runCatching { writes.create(member, draft, id) }
                 .onSuccess { created ->
                     // On the board straight away, at the position its own
                     // urgency and timestamp put it, rather than after a round
                     // trip a transaction cannot shorten.
                     created.record?.let { _pending.value = _pending.value + (it.id to it) }
+                    addId = null
                     dismiss()
                     emit(
                         if (created.result == PurchaseWriteResult.WRITTEN) ADDED

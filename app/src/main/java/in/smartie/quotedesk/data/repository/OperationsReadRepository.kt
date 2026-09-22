@@ -37,6 +37,13 @@ class OperationsReadRepository(private val firestore: FirebaseFirestore) {
         firestore.collection("purchase").docDataFlow().map { documents ->
             documents
                 .map { it.toPurchaseRecord() }
+                // One row per document, so a list and any count of it can
+                // never disagree. A snapshot is unique by document id
+                // already, so this cannot drop a real row — it is here so
+                // that "the list and the count come from one de-duplicated
+                // source" is a property of the code and not of an argument
+                // about Firestore's behaviour.
+                .distinctBy { it.id }
                 // Newest first by creation, so editing an item never moves it.
                 .sortedByDescending { it.createdAt }
         }

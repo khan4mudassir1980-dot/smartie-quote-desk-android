@@ -108,12 +108,25 @@ class PurchaseWriteRepository(
      * on an id that is already taken is evaluated by the rules as an
      * **update**, which anyone above a Worker may do, so a collision would
      * overwrite somebody else's requirement rather than failing.
+     *
+     * **[id] is the caller's to keep**, and that is N4.4's B2. Point 2 of the
+     * contract above covers Firestore replaying one transaction body; it
+     * covers nothing across two calls. Minting an id here meant a second
+     * attempt after an ambiguous failure — the commit landed, the
+     * acknowledgement did not — wrote a *second* document with the same name,
+     * the same author and a timestamp seconds apart. A caller that keeps one
+     * id for as long as the person is trying to add one thing lands the retry
+     * on the same document, where `alreadyExists` turns it into an honest
+     * refusal instead of a twin.
      */
-    suspend fun create(member: Member, draft: PurchaseDraft): PurchaseCreated {
+    suspend fun create(
+        member: Member,
+        draft: PurchaseDraft,
+        id: String = newId()
+    ): PurchaseCreated {
         require(Permissions.canAddPurchase(member)) { NOT_ALLOWED_ADD }
         val author = authorOf(member)
         val at = now()
-        val id = newId()
         return store.transaction { transaction ->
             val plan = PurchaseWrite.create(
                 id = id,

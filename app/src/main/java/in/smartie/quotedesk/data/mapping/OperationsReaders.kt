@@ -10,7 +10,14 @@ import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.data.model.UrgencyV2
 
 fun DocData.toPurchaseRecord(): PurchaseRecord = PurchaseRecord(
-    id = string("id", default = id),
+    // **The document's own id, not the stored `id` field.** They are the same
+    // on every row this app or the PWA can write — the rules refuse a create
+    // or an update whose `id` is not the document's — but preferring the
+    // field meant two documents could collapse onto one `PurchaseRecord.id`
+    // and crash the board's `LazyColumn`, and a row where the two ever drifted
+    // addressed a document that does not exist on every write. The document
+    // id is the one identity Firestore guarantees, so it is the one used.
+    id = id,
     name = string("name"),
     key = string("key"),
     quantity = double("qty", "quantity"),

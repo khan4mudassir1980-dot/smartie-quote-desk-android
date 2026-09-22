@@ -390,8 +390,8 @@ service cloud.firestore {
     /** Taking it off the list. `qty` is absent on purpose: a removal is not an edit. */
     function prRemoveKeys() {
       return touched().hasOnly([
-        'id','del','deletedBy','updated','rev','upBy','upUid','serverAt'
-      ]);
+        'id','del','deletedBy','delBy','delAt','updated','rev','upBy','upUid','serverAt'
+      ]) && prRemovalStamp();
     }
 
     /** Recording a delivery. */
@@ -482,6 +482,41 @@ service cloud.firestore {
         && request.resource.data.status == 'Received';
     }
 
+    /**
+     * Recording what arrived, or writing off what will not.
+     *
+     * One definition, shared by the displayed Manager and by the person who
+     * raised the requirement, so the two cannot drift apart. It deliberately
+     * does **not** ask whether the row is untouched: the post-receipt lock
+     * takes away corrections and leaves the delivery alone, because somebody
+     * should be able to finish the requirement they raised.
+     */
+    function prDelivery() {
+      return (prOpen() && prReceiptKeys() && prRcvNumeric()
+              && prRcvNotReduced() && prQtyKept() && prClosesOnlyWhenMet())
+        || (prShortfall() && prShortfallKeys());
+    }
+
+    /**
+     * What a soft delete may record about itself.
+     *
+     * `deletedBy` was permitted without any constraint on its value, so any
+     * permitted remover could write anybody's uid there; it is pinned to the
+     * caller now. `delBy` and `delAt` are new, and bounded rather than merely
+     * allowed.
+     *
+     * **No comparison against `request.time`**, deliberately. A removal made
+     * offline carries the device's clock and syncs later; a server-time bound
+     * would refuse a requirement withdrawn in a basement.
+     */
+    function prRemovalStamp() {
+      return (!touched().hasAny(['delBy'])
+              || (request.resource.data.delBy is string
+                  && request.resource.data.delBy.size() <= 80))
+        && (!touched().hasAny(['delAt']) || request.resource.data.delAt is number)
+        && (!touched().hasAny(['deletedBy']) || request.resource.data.deletedBy == mine());
+    }
+
     match /purchase/{id} {
       allow read: if member();
       // Everyone, Workers included, may add a requirement.
@@ -515,24 +550,20 @@ service cloud.firestore {
                       || (staff() && (
                         // Anybody's requirement, while nothing has arrived.
                         (prUntouched() && prEditKeys())
-                        // A delivery against an open requirement, which may
-                        // only add to the received total, may not change what
-                        // was asked for, and may only close the requirement
-                        // once it has actually met it.
-                        || (prOpen() && prReceiptKeys() && prRcvNumeric()
-                            && prRcvNotReduced() && prQtyKept() && prClosesOnlyWhenMet())
-                        // Or writing off what is not coming. A reopen matches
-                        // none of these: it removes rcvQty, and no branch here
-                        // lets a received total fall.
-                        || (prShortfall() && prShortfallKeys())
+                        // Or a delivery against anybody's. A reopen matches
+                        // neither: it removes rcvQty, and no branch here lets
+                        // a received total fall.
+                        || prDelivery()
                       ))
 
-                      // The person who raised it, while it is untouched —
-                      // whatever their role. This is the branch that lets a
-                      // Manager withdraw their own requirement, which the
-                      // branch above deliberately does not.
-                      || (prCreator() && prUntouched()
-                          && (prEditKeys() || prRemoveKeys()))
+                      // The person who raised it — whatever their role. This
+                      // is the branch that lets a Manager withdraw their own
+                      // requirement, which the branch above deliberately does
+                      // not, and that lets a Staff account finish one.
+                      || (prCreator() && (
+                        (prUntouched() && (prEditKeys() || prRemoveKeys()))
+                        || prDelivery()
+                      ))
                     );
 
       // Never a hard delete: a removed document reappears from a PWA device.

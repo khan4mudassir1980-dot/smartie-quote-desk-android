@@ -491,7 +491,13 @@ object PurchaseWrite {
             docId = stored.id,
             data = base(stored, stored.quantity, author, at) + mapOf(
                 "del" to true,
-                "deletedBy" to author.uid
+                "deletedBy" to author.uid,
+                // Who and when, recorded by the removal itself rather than
+                // left to `upBy` and `updated` — those are right for almost
+                // every row and silently wrong for any an Administrator
+                // touched afterwards. The mirror of `rcvBy` / `rcvAt`.
+                "delBy" to author.name,
+                "delAt" to at
             )
         )
     }

@@ -223,9 +223,16 @@ test('the limited role corrects the requirement it raised, and no other', async 
     db.collection('purchase').doc('pr_manager').update({ qty: 5, updated: Date.now() })
   );
 
-  // And receiving is never theirs, not even on their own requirement.
-  await assertFails(db.collection('purchase').doc('pr_worker').update({
+  // Changed again by N4.3: receiving IS theirs now, on the requirement they
+  // raised — the person who noticed the shortage is usually the person
+  // standing in front of the van.
+  await assertSucceeds(db.collection('purchase').doc('pr_worker').update({
     qty: 30, updated: Date.now(), received: true, rcvQty: 30, rcvUid: UIDS.worker,
+  }));
+
+  // And still not on somebody else's.
+  await assertFails(db.collection('purchase').doc('pr_manager').update({
+    qty: 4, updated: Date.now(), received: true, rcvQty: 4, rcvUid: UIDS.worker,
   }));
 });
 

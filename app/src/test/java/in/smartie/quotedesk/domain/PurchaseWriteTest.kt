@@ -575,10 +575,24 @@ class PurchaseWriteTest {
     // --- removing -------------------------------------------------------------------
 
     @Test
-    fun `a soft delete marks the row and names who did it`() {
+    fun `a soft delete marks the row and records who did it, and when`() {
         val data = written(PurchaseWrite.softDelete(stored(), author, at))
         assertEquals(true, data["del"])
         assertEquals("uid_admin", data["deletedBy"])
+        // Recorded by the removal itself, not left to `upBy` and `updated` —
+        // those are right for almost every row and silently wrong for any an
+        // Administrator touched afterwards. The mirror of rcvBy / rcvAt.
+        assertEquals("Asha", data["delBy"])
+        assertEquals(at, data["delAt"])
+    }
+
+    @Test
+    fun `no operation but a soft delete stamps a removal`() {
+        for ((name, data) in everyUpdate()) {
+            if (name == "softDelete") continue
+            assertFalse("$name must not claim to have removed anything", data.containsKey("delBy"))
+            assertFalse(data.containsKey("delAt"))
+        }
     }
 
     @Test

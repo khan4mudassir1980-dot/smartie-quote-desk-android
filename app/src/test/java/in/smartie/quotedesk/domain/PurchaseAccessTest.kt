@@ -141,22 +141,62 @@ class PurchaseAccessTest {
     }
 
     @Test
-    fun `Staff never receives, reopens or writes off a shortfall`() {
+    fun `Staff records what arrives against the requirement they raised`() {
+        // New in N4.3, and the point of it: the person who noticed the
+        // shortage is usually the person standing in front of the van.
         val mine = requirement(byUid = staff.uid)
         val partly = requirement(byUid = staff.uid, receivedQuantity = 4.0)
-        val done = requirement(byUid = staff.uid, received = true, status = "Received")
 
-        assertFalse("not even on their own requirement", PurchaseAccess.canReceive(staff, mine))
-        assertFalse(PurchaseAccess.canCloseShortfall(staff, partly))
-        assertFalse(PurchaseAccess.canReopen(staff, done))
+        assertTrue(PurchaseAccess.canReceive(staff, mine))
+        assertTrue(PurchaseAccess.canReceive(staff, partly))
+        assertTrue(PurchaseAccess.canCloseShortfall(staff, partly))
     }
 
     @Test
-    fun `Staff loses their own requirement the moment something arrives`() {
+    fun `and against nobody else's, and never on a row with no known creator`() {
+        val theirs = requirement(byUid = manager.uid, receivedQuantity = 4.0)
+        val orphan = requirement(byUid = "", receivedQuantity = 4.0)
+
+        assertFalse(PurchaseAccess.canReceive(staff, theirs))
+        assertFalse(PurchaseAccess.canCloseShortfall(staff, theirs))
+        assertFalse(PurchaseAccess.canReceive(staff, orphan))
+        assertFalse(PurchaseAccess.canCloseShortfall(staff, orphan))
+    }
+
+    @Test
+    fun `Staff still never reopens, and never touches a removed requirement`() {
+        val done = requirement(byUid = staff.uid, received = true, status = "Received")
+        val gone = requirement(byUid = staff.uid, receivedQuantity = 4.0, deleted = true)
+
+        assertFalse(PurchaseAccess.canReopen(staff, done))
+        assertFalse(PurchaseAccess.canReceive(staff, gone))
+        assertFalse(PurchaseAccess.canCloseShortfall(staff, gone))
+    }
+
+    @Test
+    fun `a delivery refusal names the Manager too, because a Manager may`() {
+        // `refusalFor` says "only an Owner or Administrator can change it
+        // now", which is true of editing a received row and false of
+        // delivering against one.
+        val theirs = requirement(byUid = manager.uid, receivedQuantity = 4.0)
+        val sentence = PurchaseAccess.deliveryRefusalFor(staff, theirs)
+
+        assertEquals(PurchaseAccess.NOT_YOURS_TO_DELIVER, sentence)
+        assertTrue(sentence.contains("Manager"))
+        assertFalse("and never the stored value", sentence.contains("staff"))
+    }
+
+    @Test
+    fun `Staff loses editing their own requirement the moment something arrives`() {
+        // The lock takes away corrections and deliberately leaves delivery
+        // alone: a requirement you raised is one you should be able to
+        // finish, you just may not rewrite it afterwards.
         val partly = requirement(byUid = staff.uid, receivedQuantity = 4.0, receivedBy = "Sam")
         assertFalse(PurchaseAccess.canEdit(staff, partly))
         assertFalse(PurchaseAccess.canSetUrgency(staff, partly))
         assertFalse(PurchaseAccess.canRemove(staff, partly))
+        assertTrue("but not finishing it", PurchaseAccess.canReceive(staff, partly))
+        assertTrue(PurchaseAccess.canCloseShortfall(staff, partly))
     }
 
     @Test
@@ -220,6 +260,29 @@ class PurchaseAccessTest {
         val partly = requirement(byUid = staff.uid, quantity = 10.0, receivedQuantity = 4.0)
         assertTrue(PurchaseAccess.canReceive(manager, partly))
         assertTrue(PurchaseAccess.canCloseShortfall(manager, partly))
+    }
+
+    @Test
+    fun `a Manager delivers against anybody's requirement, not only their own`() {
+        // Regression: widening delivery to the creator must not have narrowed
+        // it to the creator.
+        val theirs = requirement(byUid = staff.uid, quantity = 10.0, receivedQuantity = 4.0)
+        val orphan = requirement(byUid = "", quantity = 10.0, receivedQuantity = 4.0)
+
+        assertTrue(PurchaseAccess.canReceive(manager, theirs))
+        assertTrue(PurchaseAccess.canCloseShortfall(manager, theirs))
+        assertTrue("including one the PWA left unsigned", PurchaseAccess.canReceive(manager, orphan))
+        assertTrue(PurchaseAccess.canCloseShortfall(manager, orphan))
+    }
+
+    @Test
+    fun `an Owner and an Administrator deliver against anybody's too`() {
+        val theirs = requirement(byUid = staff.uid, quantity = 10.0, receivedQuantity = 4.0)
+        for (privileged in listOf(owner, admin)) {
+            assertTrue(PurchaseAccess.canReceive(privileged, theirs))
+            assertTrue(PurchaseAccess.canCloseShortfall(privileged, theirs))
+            assertTrue(PurchaseAccess.canReopen(privileged, requirement(received = true, status = "Received")))
+        }
     }
 
     @Test

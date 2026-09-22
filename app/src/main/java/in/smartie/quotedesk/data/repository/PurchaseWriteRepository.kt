@@ -180,7 +180,10 @@ class PurchaseWriteRepository(
         record: PurchaseRecord,
         receivedNow: Double
     ): PurchaseReceipt {
-        require(Permissions.canSetPurchaseStatus(member)) { NOT_ALLOWED_RECEIVE }
+        // The floor is "anybody who may add one", because the person who
+        // raised a requirement may now receive against it. Which requirement
+        // is decided inside the transaction, against the stored document.
+        require(Permissions.canAddPurchase(member)) { NOT_ALLOWED_RECEIVE }
         val author = authorOf(member)
         val at = now()
         return store.transaction { transaction ->
@@ -191,6 +194,13 @@ class PurchaseWriteRepository(
             // What is left is the stored figure's type — see below.
             unreadableReceipt(member, doc)?.let { throw IllegalStateException(it) }
             val stored = doc.toPurchaseRecord()
+            // Ownership only. The planner owns every refusal about *state* —
+            // "Already received by Omar" says far more than a guard in front
+            // of it could — so this asks the one question the planner cannot:
+            // is this requirement this person's to receive against?
+            if (!mayDeliver(member, stored)) {
+                throw IllegalStateException(PurchaseAccess.deliveryRefusalFor(member, stored))
+            }
             val plan = PurchaseWrite.markReceived(stored, receivedNow, author, at)
             val result = commit(transaction, plan)
             val written = (plan as? PurchasePlan.Write)
@@ -247,8 +257,13 @@ class PurchaseWriteRepository(
      * what the revision counter exists to stop.
      */
     suspend fun closeShortfall(member: Member, record: PurchaseRecord): PurchaseWriteResult {
-        require(Permissions.canSetPurchaseStatus(member)) { NOT_ALLOWED_SHORTFALL }
-        return update(member, record) { stored, author, at ->
+        require(Permissions.canAddPurchase(member)) { NOT_ALLOWED_SHORTFALL }
+        return update(
+            member = member,
+            record = record,
+            permits = ::mayDeliver,
+            refusal = PurchaseAccess::deliveryRefusalFor
+        ) { stored, author, at ->
             PurchaseWrite.closeShortfall(stored, author, at)
         }
     }
@@ -272,6 +287,13 @@ class PurchaseWriteRepository(
         // sentence of its own — "Already received by Omar" says far more
         // than a generic refusal would.
         permits: (Member, PurchaseRecord) -> Boolean = { _, _ -> true },
+        /**
+         * What to say when [permits] says no. Defaulted to the creator rule's
+         * own wording, which is right for editing and removing and wrong for
+         * a delivery: "only an Owner or Administrator can change it now" is
+         * false of a Manager closing a shortfall.
+         */
+        refusal: (Member, PurchaseRecord) -> String = PurchaseAccess::refusalFor,
         plan: (PurchaseRecord, PurchaseAuthor, Long) -> PurchasePlan
     ): PurchaseWriteResult {
         val author = authorOf(member)
@@ -288,7 +310,7 @@ class PurchaseWriteRepository(
             // raised this, and has anything arrived — is a fact about the
             // document rather than about what was on screen.
             if (!permits(member, stored)) {
-                throw IllegalStateException(PurchaseAccess.refusalFor(member, stored))
+                throw IllegalStateException(refusal(member, stored))
             }
             commit(transaction, plan(stored, author, at))
         }
@@ -328,6 +350,17 @@ class PurchaseWriteRepository(
         return if (stored is Number) null else RECEIPT_NOT_NUMERIC
     }
 
+    /**
+     * Whether this person may record what arrives against **this** stored
+     * requirement: the role floor, or the fact that they raised it.
+     *
+     * Deliberately not `PurchaseAccess.canReceive`, which also asks whether
+     * anything is outstanding. That is a question about state, and state
+     * refusals belong to `PurchaseWrite`, which answers them by name.
+     */
+    private fun mayDeliver(member: Member, stored: PurchaseRecord): Boolean =
+        Permissions.canSetPurchaseStatus(member) || PurchaseAccess.isCreator(member, stored)
+
     private fun authorOf(member: Member): PurchaseAuthor =
         PurchaseAuthor(name = member.name.ifBlank { member.email }, uid = member.uid)
 
@@ -355,7 +388,7 @@ class PurchaseWriteRepository(
          */
         const val NOT_ALLOWED_EDIT = "Your account cannot change a requirement"
 
-        val NOT_ALLOWED_RECEIVE = "Only $PURCHASE_EDITORS can mark a requirement received"
+        const val NOT_ALLOWED_RECEIVE = "Your account cannot mark a requirement received"
         val NOT_ALLOWED_REOPEN = "Only $ADMINS can reopen a requirement"
 
         const val NOT_ALLOWED_DELETE = "Your account cannot remove a requirement"
@@ -364,7 +397,7 @@ class PurchaseWriteRepository(
             "The received quantity on this requirement was not stored as a number — " +
                 "only $ADMINS can correct it"
 
-        val NOT_ALLOWED_SHORTFALL =
-            "Only $PURCHASE_EDITORS can close a requirement short of what was asked for"
+        const val NOT_ALLOWED_SHORTFALL =
+            "Your account cannot close a requirement short of what was asked for"
     }
 }

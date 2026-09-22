@@ -213,11 +213,13 @@ class PurchaseViewModel(
             PurchaseSheet.ADD -> null
             PurchaseSheet.EDIT, PurchaseSheet.URGENCY ->
                 if (allowed.edit) null else PurchaseAccess.refusalFor(member, record)
-            PurchaseSheet.RECEIVE -> if (allowed.receive) null else NOT_ALLOWED_RECEIVE
+            PurchaseSheet.RECEIVE ->
+                if (allowed.receive) null else PurchaseAccess.deliveryRefusalFor(member, record)
             PurchaseSheet.REOPEN -> if (allowed.reopen) null else NOT_ALLOWED_REOPEN
             PurchaseSheet.REMOVE ->
                 if (allowed.remove) null else PurchaseAccess.refusalFor(member, record)
-            PurchaseSheet.SHORTFALL -> if (allowed.shortfall) null else NOT_ALLOWED_SHORTFALL
+            PurchaseSheet.SHORTFALL ->
+                if (allowed.shortfall) null else PurchaseAccess.deliveryRefusalFor(member, record)
         }
         if (refusal != null) {
             emit(refusal)
@@ -466,10 +468,6 @@ class PurchaseViewModel(
         const val CLOSED_SHORT: String = "Closed at what arrived"
 
         const val NOT_ALLOWED_ADD: String = "Your account cannot add a requirement"
-        const val NOT_ALLOWED_RECEIVE: String =
-            "Your account cannot mark a requirement received"
         const val NOT_ALLOWED_REOPEN: String = "Your account cannot reopen a requirement"
-        const val NOT_ALLOWED_SHORTFALL: String =
-            "Your account cannot close a requirement short of what was asked for"
     }
 }

@@ -15,10 +15,12 @@ import `in`.smartie.quotedesk.data.model.PurchaseRecord
  *    their own requirement, or take it off the list altogether, for as long as
  *    nothing has been delivered against it. A Staff account can do nothing to
  *    anybody else's.
- * 2. **A delivery closes the record.** The moment any quantity arrives the
- *    requirement stops being anybody's to tidy up: Staff is read-only for it,
- *    a Manager may still receive what is outstanding or write off a shortfall,
- *    and a correction becomes an Owner's or an Administrator's to make.
+ * 2. **A delivery closes the record to corrections.** The moment any quantity
+ *    arrives the requirement stops being anybody's to tidy up: nobody below
+ *    an Administrator may rename it, change its quantity or take it off the
+ *    list. What it does **not** close is the delivery itself — whoever could
+ *    receive against it still can, including its creator, because a
+ *    requirement you raised is one you should be able to finish.
  *
  * Pure, and taking the **stored** record rather than a member and a role, so
  * the same function decides what a card offers and what the repository allows
@@ -116,12 +118,20 @@ object PurchaseAccess {
     }
 
     /**
-     * Record a delivery. Unchanged by this batch: Owner, Administrator and
-     * Manager, never Staff — not even on their own requirement, because
-     * receiving is the thing the lock exists to protect.
+     * Record a delivery.
+     *
+     * Owner, Administrator and Manager on anybody's requirement — and **the
+     * person who raised it**, on theirs. That last part is new: a Staff
+     * account could raise a requirement and then watch somebody else record
+     * the delivery against it, which is the wrong way round on a shop floor.
+     * The person who noticed the shortage is usually the person standing in
+     * front of the van.
+     *
+     * Still nothing on anybody else's requirement, and still nothing on a row
+     * whose author cannot be proved.
      */
     fun canReceive(member: Member, record: PurchaseRecord): Boolean =
-        Permissions.canSetPurchaseStatus(member) && record.isOpen && record.remaining > 0.0
+        canDeliver(member, record) && record.isOpen && record.remaining > 0.0
 
     /** Owner and Administrator alone, as before, and now the rules agree. */
     fun canReopen(member: Member, record: PurchaseRecord): Boolean =
@@ -134,15 +144,32 @@ object PurchaseAccess {
      * arrived, and not all of it. A requirement nobody has delivered against
      * is cancelled by removing it, and one that is complete closes itself.
      *
-     * Owner, Administrator and Manager — the Manager included deliberately,
-     * because the lock would otherwise leave them able to see a finished
-     * requirement and unable to clear it. Never Staff.
+     * The same people who may receive, for the same reason: whoever can
+     * record the last delivery should be able to say there will not be one.
+     * Otherwise the lock leaves somebody looking at a finished requirement
+     * they cannot clear.
      */
     fun canCloseShortfall(member: Member, record: PurchaseRecord): Boolean =
-        Permissions.canSetPurchaseStatus(member) &&
+        canDeliver(member, record) &&
             record.isOpen &&
             record.isPartlyReceived &&
             record.remaining > 0.0
+
+    /**
+     * Who may record what arrives against [record] at all.
+     *
+     * The role floor, **or** ownership — and ownership is checked against the
+     * record, so it cannot be widened by a role. One definition shared by
+     * [canReceive] and [canCloseShortfall], so the two cannot drift.
+     *
+     * Note what this does **not** consult: whether the row is untouched. The
+     * post-receipt lock takes away editing, renaming and removing, and
+     * deliberately leaves delivery alone — a creator must be able to finish
+     * the requirement they raised, they just may not rewrite it afterwards.
+     */
+    private fun canDeliver(member: Member, record: PurchaseRecord): Boolean =
+        !record.deleted &&
+            (Permissions.canSetPurchaseStatus(member) || isCreator(member, record))
 
     // --- why not, in words ----------------------------------------------------
 
@@ -161,7 +188,27 @@ object PurchaseAccess {
         else -> NOT_ALLOWED
     }
 
+    /**
+     * Why this person may not record what arrives against this requirement.
+     *
+     * Separate from [refusalFor] on purpose. That one is the creator rule's
+     * wording — "only an Owner or Administrator can change it now" — which is
+     * right about editing a received row and **false** about delivering
+     * against one, where a Manager may and its creator may.
+     */
+    fun deliveryRefusalFor(member: Member, record: PurchaseRecord): String = when {
+        record.deleted -> ALREADY_REMOVED
+        record.byUid.isBlank() -> NO_KNOWN_CREATOR
+        else -> NOT_YOURS_TO_DELIVER
+    }
+
     val ADMINS: String = RoleTitles.anyOf(Role.OWNER, Role.ADMIN)
+
+    private val DELIVERERS: String = RoleTitles.anyOf(Role.OWNER, Role.ADMIN, Role.STAFF)
+
+    val NOT_YOURS_TO_DELIVER: String =
+        "Only $DELIVERERS, or the person who raised it, can record what arrives " +
+            "against this requirement"
 
     /**
      * The planner's own sentence, not a second copy of it. A person who tries

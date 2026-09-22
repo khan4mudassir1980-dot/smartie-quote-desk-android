@@ -303,15 +303,84 @@ class PurchaseWriteRepositoryTest {
     }
 
     @Test
-    fun `the displayed Staff may never receive or reopen, and is stopped before the wire`() = runTest {
-        // Two things the creator rule does not loosen. The role floor refuses
-        // them, so no transaction is ever opened.
-        for (attempt in privilegedAttempts()) {
-            val store = FakeStore(stored = row(received = true, byUid = worker.uid))
-            val failure = runCatching { attempt(repository(store), worker) }.exceptionOrNull()
+    fun `the displayed Staff may never reopen, and is stopped before the wire`() = runTest {
+        // The one thing the creator rule does not loosen. The role floor
+        // refuses it, so no transaction is ever opened.
+        val store = FakeStore(stored = row(received = true, byUid = worker.uid))
+        val failure = runCatching { repository(store).reopen(worker, onScreen) }.exceptionOrNull()
 
-            assertTrue("a Staff account must be refused", failure is IllegalArgumentException)
-            assertEquals("and nothing may reach the transaction", 0, store.bodyRuns)
+        assertTrue("a Staff account must be refused", failure is IllegalArgumentException)
+        assertEquals("and nothing may reach the transaction", 0, store.bodyRuns)
+    }
+
+    @Test
+    fun `the displayed Staff records what arrives against their own requirement`() = runTest {
+        val partial = FakeStore(stored = row(qty = 10.0, byUid = worker.uid))
+        val receipt = repository(partial).markReceived(worker, onScreen, 4.0)
+
+        assertEquals(PurchaseWriteResult.WRITTEN, receipt.result)
+        assertEquals(4.0, partial.writes.single().data["rcvQty"])
+        assertEquals(false, partial.writes.single().data["received"])
+
+        val whole = FakeStore(stored = row(qty = 10.0, rcvQty = 6.0, byUid = worker.uid))
+        assertTrue(repository(whole).markReceived(worker, onScreen, 4.0).complete)
+
+        val short = FakeStore(stored = row(qty = 10.0, rcvQty = 7.0, byUid = worker.uid))
+        assertEquals(PurchaseWriteResult.WRITTEN, repository(short).closeShortfall(worker, onScreen))
+        assertEquals(7.0, short.writes.single().data["qty"])
+    }
+
+    @Test
+    fun `but not against somebody else's, nor one with no recorded creator`() = runTest {
+        for (owner in listOf(staff.uid, null)) {
+            val receiving = FakeStore(stored = row(qty = 10.0, byUid = owner))
+            assertEquals(
+                if (owner == null) PurchaseAccess.NO_KNOWN_CREATOR
+                else PurchaseAccess.NOT_YOURS_TO_DELIVER,
+                runCatching { repository(receiving).markReceived(worker, onScreen, 4.0) }
+                    .exceptionOrNull()?.message
+            )
+            assertTrue(receiving.writes.isEmpty())
+
+            val closing = FakeStore(stored = row(qty = 10.0, rcvQty = 7.0, byUid = owner))
+            assertEquals(
+                if (owner == null) PurchaseAccess.NO_KNOWN_CREATOR
+                else PurchaseAccess.NOT_YOURS_TO_DELIVER,
+                runCatching { repository(closing).closeShortfall(worker, onScreen) }
+                    .exceptionOrNull()?.message
+            )
+            assertTrue(closing.writes.isEmpty())
+        }
+    }
+
+    @Test
+    fun `a Manager still delivers against anybody's requirement`() = runTest {
+        // Regression: widening delivery to the creator must not have narrowed
+        // it to the creator.
+        val receiving = FakeStore(stored = row(qty = 10.0, byUid = worker.uid))
+        assertEquals(
+            PurchaseWriteResult.WRITTEN,
+            repository(receiving).markReceived(staff, onScreen, 4.0).result
+        )
+
+        val closing = FakeStore(stored = row(qty = 10.0, rcvQty = 7.0, byUid = worker.uid))
+        assertEquals(PurchaseWriteResult.WRITTEN, repository(closing).closeShortfall(staff, onScreen))
+    }
+
+    @Test
+    fun `an Owner and an Administrator still deliver against anybody's requirement`() = runTest {
+        for (privileged in listOf(owner, admin)) {
+            val receiving = FakeStore(stored = row(qty = 10.0, byUid = worker.uid))
+            assertEquals(
+                PurchaseWriteResult.WRITTEN,
+                repository(receiving).markReceived(privileged, onScreen, 4.0).result
+            )
+
+            val closing = FakeStore(stored = row(qty = 10.0, rcvQty = 7.0, byUid = worker.uid))
+            assertEquals(
+                PurchaseWriteResult.WRITTEN,
+                repository(closing).closeShortfall(privileged, onScreen)
+            )
         }
     }
 
@@ -503,10 +572,13 @@ class PurchaseWriteRepositoryTest {
     }
 
     @Test
-    fun `the displayed Staff can never close a shortfall`() = runTest {
+    fun `a switched-off account closes nothing, whoever raised it`() = runTest {
+        // The role floor still exists; it is just lower than it was. An
+        // inactive member is refused before a transaction opens.
         val store = FakeStore(stored = row(qty = 10.0, rcvQty = 7.0, byUid = worker.uid))
-        val failure = runCatching { repository(store).closeShortfall(worker, onScreen) }
-            .exceptionOrNull()
+        val failure =
+            runCatching { repository(store).closeShortfall(worker.copy(active = false), onScreen) }
+                .exceptionOrNull()
 
         assertTrue("stopped before the wire", failure is IllegalArgumentException)
         assertEquals(0, store.bodyRuns)
@@ -658,10 +730,4 @@ class PurchaseWriteRepositoryTest {
         { repo, member -> repo.softDelete(member, onScreen) }
     )
 
-    /** The three the creator rule does not loosen for the limited role. */
-    private fun privilegedAttempts(): List<suspend (PurchaseWriteRepository, Member) -> Unit> = listOf(
-        { repo, member -> repo.markReceived(member, onScreen, 2.0) },
-        { repo, member -> repo.reopen(member, onScreen) },
-        { repo, member -> repo.closeShortfall(member, onScreen) }
-    )
 }

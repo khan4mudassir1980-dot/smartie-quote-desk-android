@@ -331,19 +331,45 @@ class PurchaseViewModelTest {
     }
 
     @Test
-    fun `a Staff account is never offered the shortfall panel`() = runTest {
+    fun `a Staff account closes their own shortfall, panel and all`() = runTest {
         val store = Store(stored = row(qty = 10.0, rcvQty = 7.0, byUid = worker.uid))
         val model = viewModel(member = worker, store = store)
         val messages = messagesOf(model)
+        val mine = record().copy(byUid = worker.uid, quantity = 10.0, receivedQuantity = 7.0)
 
-        model.open(
-            PurchaseSheet.SHORTFALL,
-            record().copy(byUid = worker.uid, quantity = 10.0, receivedQuantity = 7.0)
-        )
+        model.open(PurchaseSheet.SHORTFALL, mine)
+        assertTrue("the panel opens for its creator", model.sheet.value.isOpen)
+
+        model.closeShortfall(mine)
+
+        assertEquals(listOf(PurchaseViewModel.CLOSED_SHORT), messages)
+        assertEquals(7.0, store.writes.single()["qty"])
+    }
+
+    @Test
+    fun `but is refused the shortfall on somebody else's requirement`() = runTest {
+        val store = Store(stored = row(qty = 10.0, rcvQty = 7.0, byUid = "uid_someone"))
+        val model = viewModel(member = worker, store = store)
+        val messages = messagesOf(model)
+        val theirs = record().copy(byUid = "uid_someone", quantity = 10.0, receivedQuantity = 7.0)
+
+        model.open(PurchaseSheet.SHORTFALL, theirs)
 
         assertFalse(model.sheet.value.isOpen)
-        assertEquals(listOf(PurchaseViewModel.NOT_ALLOWED_SHORTFALL), messages)
+        assertEquals(listOf(PurchaseAccess.NOT_YOURS_TO_DELIVER), messages)
         assertEquals(0, store.attempts)
+    }
+
+    @Test
+    fun `a Staff account records a part delivery against their own requirement`() = runTest {
+        val store = Store(stored = row(qty = 10.0, byUid = worker.uid))
+        val model = viewModel(member = worker, store = store)
+        val messages = messagesOf(model)
+
+        model.markReceived(record().copy(byUid = worker.uid), 4.0)
+
+        assertEquals(listOf(PurchaseViewModel.partlyReceived(6.0)), messages)
+        assertEquals(4.0, store.writes.single()["rcvQty"])
     }
 
     @Test

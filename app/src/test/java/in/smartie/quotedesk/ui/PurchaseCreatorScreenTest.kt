@@ -99,11 +99,43 @@ class PurchaseCreatorScreenTest {
     }
 
     @Test
-    fun `a Staff account is never offered Received or Close short, even on their own`() {
+    fun `a Staff account records what arrives against their own requirement`() {
         showing(purchaseWorker, listOf(mine))
 
-        assertFalse(offered(PurchaseSheet.RECEIVE, mine))
+        assertTrue(offered(PurchaseSheet.RECEIVE, mine))
+        // Nothing has arrived yet, so there is no shortfall to write off.
         assertFalse(offered(PurchaseSheet.SHORTFALL, mine))
+    }
+
+    @Test
+    fun `and is offered Close short once part of it has arrived`() {
+        val partly = mine.copy(receivedQuantity = 4.0, receivedBy = "Sam", receivedAt = 9_000)
+        showing(purchaseWorker, listOf(partly))
+
+        assertTrue(offered(PurchaseSheet.RECEIVE, partly))
+        assertTrue(offered(PurchaseSheet.SHORTFALL, partly))
+        // And the lock still took the corrections away.
+        assertFalse(offered(PurchaseSheet.EDIT, partly))
+        assertFalse(offered(PurchaseSheet.REMOVE, partly))
+    }
+
+    @Test
+    fun `a Staff account is offered no delivery control on somebody else's row`() {
+        val partly = theirs.copy(quantity = 10.0, receivedQuantity = 4.0, receivedBy = "Sam")
+        showing(purchaseWorker, listOf(partly))
+
+        assertFalse(offered(PurchaseSheet.RECEIVE, partly))
+        assertFalse(offered(PurchaseSheet.SHORTFALL, partly))
+    }
+
+    @Test
+    fun `nor on a row with no recorded creator`() {
+        val orphan = requirement("pr_orphan", name = "Emergency stop button", quantity = 10.0)
+            .copy(receivedQuantity = 4.0, receivedBy = "Sam")
+        showing(purchaseWorker, listOf(orphan))
+
+        assertFalse(offered(PurchaseSheet.RECEIVE, orphan))
+        assertFalse(offered(PurchaseSheet.SHORTFALL, orphan))
     }
 
     @Test
@@ -132,6 +164,9 @@ class PurchaseCreatorScreenTest {
         assertFalse("edit is gone", offered(PurchaseSheet.EDIT, mine))
         assertFalse("so is urgency", offered(PurchaseSheet.URGENCY, mine))
         assertFalse("and so is remove", offered(PurchaseSheet.REMOVE, mine))
+        // But not the delivery: a requirement you raised is one you should be
+        // able to finish.
+        assertTrue("Received survives the lock", offered(PurchaseSheet.RECEIVE, mine))
     }
 
     @Test

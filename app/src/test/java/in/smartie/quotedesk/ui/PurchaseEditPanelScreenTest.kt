@@ -115,7 +115,9 @@ class PurchaseEditPanelScreenTest {
             }
         }
 
-        compose.onNodeWithText("Needed, but not now").assertIsDisplayed()
+        // The chips carry short faces; the wording under the row is the one
+        // that is selected, which starts as the record's own.
+        compose.onNodeWithText("Can wait 1-2 days").assertIsDisplayed()
         compose.onNodeWithContentDescription(urgencyOptionLabel(UrgencyV2.NORMAL)).performClick()
 
         assertEquals(UrgencyV2.NORMAL, chosen)

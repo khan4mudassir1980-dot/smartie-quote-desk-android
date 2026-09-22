@@ -10,10 +10,12 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -25,10 +27,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import `in`.smartie.quotedesk.data.mapping.Money
@@ -163,6 +170,7 @@ internal fun AddRequirementPanel(
     var quantity by rememberSaveable { mutableStateOf("1") }
     var note by rememberSaveable { mutableStateOf("") }
     var urgency by rememberSaveable { mutableStateOf(UrgencyV2.NORMAL) }
+    val focus = LocalFocusManager.current
 
     val draft = PurchaseDraft(
         name = name,
@@ -181,6 +189,8 @@ internal fun AddRequirementPanel(
                 onValueChange = { name = it },
                 placeholder = NAME_PLACEHOLDER,
                 enabled = !saving,
+                keyboardOptions = nextField(KeyboardType.Text),
+                keyboardActions = moveNext(focus),
                 modifier = Modifier.semantics { contentDescription = NAME_LABEL }
             )
             SmartieField(
@@ -188,7 +198,8 @@ internal fun AddRequirementPanel(
                 value = quantity,
                 onValueChange = { quantity = it },
                 enabled = !saving,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                keyboardOptions = nextField(KeyboardType.Decimal),
+                keyboardActions = moveNext(focus),
                 modifier = Modifier.semantics { contentDescription = QUANTITY_LABEL }
             )
             UrgencyChoice(
@@ -203,6 +214,8 @@ internal fun AddRequirementPanel(
                 placeholder = NOTE_PLACEHOLDER,
                 enabled = !saving,
                 singleLine = false,
+                keyboardOptions = lastField(),
+                keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
                 modifier = Modifier.semantics { contentDescription = NOTE_LABEL }
             )
             // Only once something has been typed: an empty form that is
@@ -253,6 +266,7 @@ internal fun EditRequirementPanel(
     }
     var note by rememberSaveable(record.id) { mutableStateOf(record.note) }
     var urgency by rememberSaveable(record.id) { mutableStateOf(record.urgency) }
+    val focus = LocalFocusManager.current
 
     val parsed = quantity.trim().toDoubleOrNull() ?: 0.0
     val refusal = PurchaseDraft(name = name, quantity = parsed, urgency = urgency, note = note)
@@ -266,6 +280,8 @@ internal fun EditRequirementPanel(
                 value = name,
                 onValueChange = { name = it },
                 enabled = !saving,
+                keyboardOptions = nextField(KeyboardType.Text),
+                keyboardActions = moveNext(focus),
                 modifier = Modifier.semantics { contentDescription = NAME_LABEL }
             )
             SmartieField(
@@ -273,7 +289,8 @@ internal fun EditRequirementPanel(
                 value = quantity,
                 onValueChange = { quantity = it },
                 enabled = !saving,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                keyboardOptions = nextField(KeyboardType.Decimal),
+                keyboardActions = moveNext(focus),
                 modifier = Modifier.semantics { contentDescription = QUANTITY_LABEL }
             )
             UrgencyChoice(
@@ -287,6 +304,8 @@ internal fun EditRequirementPanel(
                 onValueChange = { note = it },
                 enabled = !saving,
                 singleLine = false,
+                keyboardOptions = lastField(),
+                keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
                 modifier = Modifier.semantics { contentDescription = NOTE_LABEL }
             )
             if (refusal != null) {
@@ -610,13 +629,22 @@ private fun RowAction(
 // --- the urgency picker ---------------------------------------------------
 
 /**
- * The three urgencies, **as three rows rather than three segments**.
+ * The three urgencies, as **one row of three chips** with the chosen one's
+ * full wording beneath.
  *
- * A segmented control divides 360dp by three and clips what will not fit at
- * `maxLines = 1`; "Needed, but not now" and "Can wait 1-2 days" both lose
- * their ends there, and a half-read label on the control that decides how
- * badly something is needed is not acceptable. Each row is its own 48dp
- * target carrying the full wording and the colour it will show on the card.
+ * This replaces three full-width 48dp rows, which between them took a third
+ * of the sheet and pushed the Note field off the bottom of a phone. The
+ * reason those rows existed is still true and this does not undo it: a
+ * segmented control divides 360dp by three and clips at `maxLines = 1`, so
+ * "Needed, but not now" and "Can wait 1-2 days" would both lose their ends,
+ * and a half-read label on the control that decides how badly something is
+ * needed is not acceptable.
+ *
+ * So the chips carry **short faces** and the Owner's exact wording is shown
+ * in full underneath for whichever is selected — and is every chip's
+ * `contentDescription`, so nothing is lost by ear either. The words are never
+ * abbreviated anywhere they decide something: [UrgencyV2.label] still drives
+ * the card, and [UrgencyV2.wireValue] is untouched.
  */
 @Composable
 internal fun UrgencyChoice(
@@ -634,39 +662,95 @@ internal fun UrgencyChoice(
             style = MaterialTheme.typography.labelMedium,
             color = SmartieColors.Steel
         )
-        UrgencyV2.entries.forEach { option ->
-            val chosen = option == selected
-            val tint = urgencyColour(option)
-            Box(
-                Modifier
-                    .semantics { contentDescription = urgencyOptionLabel(option) }
-                    .fillMaxWidth()
-                    .sizeIn(minHeight = 48.dp)
-                    .clip(RoundedCornerShape(dimens.radiusSmall))
-                    .background(if (chosen) tint.copy(alpha = 0.12f) else SmartieColors.Panel)
-                    .border(
-                        dimens.hairline,
-                        if (chosen) tint else SmartieColors.Rule,
-                        RoundedCornerShape(dimens.radiusSmall)
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(dimens.gapXs)
+        ) {
+            UrgencyV2.entries.forEach { option ->
+                val chosen = option == selected
+                val tint = urgencyColour(option)
+                Box(
+                    Modifier
+                        .semantics { contentDescription = urgencyOptionLabel(option) }
+                        .weight(1f)
+                        .sizeIn(minHeight = 48.dp)
+                        .clip(RoundedCornerShape(dimens.radiusSmall))
+                        .background(if (chosen) tint.copy(alpha = 0.12f) else SmartieColors.Panel)
+                        .border(
+                            dimens.hairline,
+                            if (chosen) tint else SmartieColors.Rule,
+                            RoundedCornerShape(dimens.radiusSmall)
+                        )
+                        .then(
+                            if (enabled) Modifier.clickableNoRipple { onSelect(option) }
+                            else Modifier
+                        )
+                        .padding(horizontal = dimens.gapXs),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        urgencyChipFace(option),
+                        style = MaterialTheme.typography.labelLarge,
+                        textAlign = TextAlign.Center,
+                        color = if (chosen) tint else SmartieColors.Ink
                     )
-                    .then(if (enabled) Modifier.clickableNoRipple { onSelect(option) } else Modifier)
-                    .padding(horizontal = dimens.gapM),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                Text(
-                    // The Owner's exact wording, straight off the enum, so the
-                    // picker and the card can never disagree about a label.
-                    option.label,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = if (chosen) tint else SmartieColors.Ink
-                )
+                }
             }
         }
+        // The full wording, for the one that is chosen. A short face is never
+        // the only place somebody can read what they picked.
+        Text(
+            selected.label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = urgencyColour(selected)
+        )
     }
 }
 
+/**
+ * How a form field behaves when somebody has finished typing in it.
+ *
+ * Next on the first two and Done on the last, so a person can go through the
+ * sheet on the keyboard alone rather than reaching past it to tap the next
+ * field — which on a short phone means scrolling to a field they cannot see.
+ *
+ * Nothing here scrolls the focused field into view, and nothing needs to: a
+ * `TextField` asks for that itself when it takes focus, and the
+ * `verticalScroll` around these fields answers. A hand-rolled
+ * `BringIntoViewRequester` would be an experimental dependency doing work
+ * that already happens.
+ */
+private fun nextField(type: KeyboardType): KeyboardOptions =
+    KeyboardOptions(keyboardType = type, imeAction = ImeAction.Next)
+
+private fun lastField(): KeyboardOptions =
+    KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Done)
+
+private fun moveNext(focus: FocusManager): KeyboardActions =
+    KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) })
+
 // --- shared shapes --------------------------------------------------------
 
+/**
+ * A form sheet that the keyboard cannot swallow.
+ *
+ * Three things together do that, and none of them works alone:
+ *
+ * 1. **`imePadding()` on the whole panel**, so the panel's bottom edge sits on
+ *    top of the keyboard rather than behind it.
+ * 2. **`decorFitsSystemWindows = false`** on the dialog's properties — see
+ *    [PURCHASE_FORM_PROPERTIES]. Without it a dialog opens its own window
+ *    which never reports the IME inset at all, and the `imePadding()` above
+ *    resolves to zero. This is the line that actually makes the keyboard
+ *    behave, and it is easy to lose.
+ * 3. **The actions outside the scrolling area**, pinned under it, so Cancel
+ *    and the confirm never scroll away from the person typing.
+ *
+ * The scrolling area takes what height is left rather than a share of the
+ * window: `weight(1f, fill = false)` lets it shrink to its content on a tall
+ * phone and give way to the keyboard on a short one, which is what
+ * [sheetBodyHeight]'s fixed cap could not do.
+ */
 @Composable
 private fun PurchaseFormPanel(
     online: Boolean,
@@ -674,10 +758,9 @@ private fun PurchaseFormPanel(
     actions: @Composable () -> Unit
 ) {
     Column(
-        // A share of the window, never a fixed figure: a Material dialog clips
-        // what does not fit rather than scrolling it, and with the keyboard up
-        // every phone is a short one. The fields scroll; the actions do not.
-        Modifier.heightIn(max = sheetBodyHeight()),
+        Modifier
+            .heightIn(max = sheetBodyHeight())
+            .imePadding(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Column(
@@ -747,7 +830,10 @@ internal const val OFFLINE: String = "Internet required to change a requirement"
  */
 internal val PURCHASE_FORM_PROPERTIES: DialogProperties = DialogProperties(
     dismissOnBackPress = true,
-    dismissOnClickOutside = false
+    dismissOnClickOutside = false,
+    // Without this the dialog's own window never reports the keyboard inset,
+    // and every `imePadding()` inside it is a no-op. See `PurchaseFormPanel`.
+    decorFitsSystemWindows = false
 )
 
 /** A confirmation holds nothing typed, so a tap outside may close it too. */
@@ -863,6 +949,17 @@ internal fun quantityLine(record: PurchaseRecord): String =
 
 /** So a test can click an urgency without depending on where its words wrap. */
 internal fun urgencyOptionLabel(urgency: UrgencyV2): String = "Urgency ${urgency.label}"
+
+/**
+ * The short face on a chip. **Never the word that decides anything** — the
+ * card, the screen reader and the caption under the row all use
+ * [UrgencyV2.label], which is the Owner's wording and is not abbreviated.
+ */
+internal fun urgencyChipFace(urgency: UrgencyV2): String = when (urgency) {
+    UrgencyV2.CRITICAL -> "Urgent"
+    UrgencyV2.URGENT -> "1-2 days"
+    UrgencyV2.NORMAL -> "Not now"
+}
 
 /**
  * A control's own description, **and then** why it cannot be used.

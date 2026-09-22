@@ -1,15 +1,18 @@
 package `in`.smartie.quotedesk.ui
 
 import android.app.Application
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import `in`.smartie.quotedesk.data.model.UrgencyV2
 import `in`.smartie.quotedesk.domain.PurchaseDraft
@@ -22,10 +25,12 @@ import `in`.smartie.quotedesk.ui.purchase.NAME_LABEL
 import `in`.smartie.quotedesk.ui.purchase.OFFLINE
 import `in`.smartie.quotedesk.ui.purchase.PurchaseActions
 import `in`.smartie.quotedesk.ui.purchase.QUANTITY_LABEL
+import `in`.smartie.quotedesk.ui.purchase.urgencyChipFace
 import `in`.smartie.quotedesk.ui.purchase.urgencyOptionLabel
 import `in`.smartie.quotedesk.ui.theme.SmartieTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -58,19 +63,39 @@ class PurchaseAddPanelScreenTest {
     }
 
     @Test
-    fun `all three urgencies are offered, whole, at 360dp`() {
+    fun `all three urgencies are offered at 360dp, and none is abbreviated away`() {
         show()
-        // The sheet body is a share of the window, so the lower fields are
-        // reached by scrolling — as the stock sheets are. What matters is that
-        // each is reachable and, once there, actually visible.
+
+        // Three chips on one row, each its own target, each carrying the
+        // Owner's full wording where a screen reader will find it.
         for (urgency in UrgencyV2.entries) {
             compose.onNodeWithContentDescription(urgencyOptionLabel(urgency))
                 .performScrollTo()
                 .assertIsDisplayed()
-            compose.onNodeWithText(urgency.label).assertIsDisplayed()
+                .assertHeightIsAtLeast(48.dp)
+            compose.onNodeWithText(urgencyChipFace(urgency)).assertIsDisplayed()
         }
+
+        // And the selected one's wording is on screen in full, unabbreviated,
+        // so the short faces are never the only thing a person can read.
+        compose.onNodeWithText(UrgencyV2.NORMAL.label).assertIsDisplayed()
         // The Owner's wording, word for word.
         assertEquals("Needed, but not now", UrgencyV2.NORMAL.label)
+    }
+
+    @Test
+    fun `picking an urgency moves the wording under the row`() {
+        show()
+
+        compose.onNodeWithContentDescription(urgencyOptionLabel(UrgencyV2.CRITICAL))
+            .performScrollTo()
+            .performClick()
+
+        compose.onNodeWithText("Very urgent").assertIsDisplayed()
+        assertTrue(
+            "the wording belongs to the selection, not to every chip",
+            compose.onAllNodesWithText("Needed, but not now").fetchSemanticsNodes().isEmpty()
+        )
     }
 
     @Test

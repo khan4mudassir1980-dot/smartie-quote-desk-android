@@ -77,7 +77,8 @@ class PurchaseCardClippingScreenTest {
         card(partlyReceived, purchaseOwner)
 
         compose.assertFooterPaintedInsideCard(
-            labels(
+            minimumTarget = 48.dp,
+            descriptions = labels(
                 partlyReceived,
                 PurchaseSheet.EDIT,
                 PurchaseSheet.URGENCY,
@@ -93,7 +94,8 @@ class PurchaseCardClippingScreenTest {
         card(untouched, purchaseOwner)
 
         compose.assertFooterPaintedInsideCard(
-            labels(
+            minimumTarget = 48.dp,
+            descriptions = labels(
                 untouched,
                 PurchaseSheet.EDIT,
                 PurchaseSheet.URGENCY,
@@ -110,7 +112,8 @@ class PurchaseCardClippingScreenTest {
         card(mine, purchaseWorker)
 
         compose.assertFooterPaintedInsideCard(
-            labels(
+            minimumTarget = 48.dp,
+            descriptions = labels(
                 mine,
                 PurchaseSheet.EDIT,
                 PurchaseSheet.URGENCY,

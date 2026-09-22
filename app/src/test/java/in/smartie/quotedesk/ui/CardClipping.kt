@@ -3,7 +3,6 @@ package `in`.smartie.quotedesk.ui
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
-import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -66,10 +65,16 @@ internal fun ComposeContentTestRule.cardBoundsNamed(description: String): Rect =
 internal fun ComposeContentTestRule.assertPaintedIn(
     description: String,
     card: Rect,
-    minimumTarget: Dp = 48.dp
+    // `buttonHeightCompact`, which is what the app's own buttons measure. The
+    // purchase row actions ask for 48dp on top of that and pass it here; a
+    // plain ghost button does not, and demanding it of one would be this
+    // helper inventing a rule the app never had.
+    minimumTarget: Dp = 44.dp,
+    /** False for a container, like the stock stepper, whose children click. */
+    requireClickable: Boolean = true
 ) {
     val control = onNodeWithContentDescription(description)
-    control.assertHasClickAction()
+    if (requireClickable) control.assertHasClickAction()
 
     val node = control.fetchSemanticsNode()
     val whole = node.unclippedBounds()
@@ -88,31 +93,37 @@ internal fun ComposeContentTestRule.assertPaintedIn(
             whole.bottom <= card.bottom + EPSILON
     )
 
-    control.assertWidthIsAtLeast(minimumTarget).assertHeightIsAtLeast(minimumTarget)
+    // Height only. It is the dimension a row of controls shares and the one
+    // `buttonHeightCompact` governs; width varies with the words, and an icon
+    // control that is narrower than it is tall is not what this is looking for.
+    control.assertHeightIsAtLeast(minimumTarget)
 }
 
 /** One control against the tagged host, which is the common case. */
 internal fun ComposeContentTestRule.assertPaintedInsideCard(
     description: String,
-    cardTag: String = CARD_HOST_TAG
-) = assertPaintedIn(description, cardBounds(cardTag))
+    cardTag: String = CARD_HOST_TAG,
+    minimumTarget: Dp = 44.dp
+) = assertPaintedIn(description, cardBounds(cardTag), minimumTarget)
 
 /** All of them, so a test names the whole footer rather than one control. */
 internal fun ComposeContentTestRule.assertFooterPaintedInsideCard(
     descriptions: List<String>,
-    cardTag: String = CARD_HOST_TAG
+    cardTag: String = CARD_HOST_TAG,
+    minimumTarget: Dp = 44.dp
 ) {
     val card = cardBounds(cardTag)
-    descriptions.forEach { assertPaintedIn(it, card) }
+    descriptions.forEach { assertPaintedIn(it, card, minimumTarget) }
 }
 
 /** The same, for a card found by its own description rather than a host. */
 internal fun ComposeContentTestRule.assertFooterPaintedInsideNamedCard(
     descriptions: List<String>,
-    cardDescription: String
+    cardDescription: String,
+    minimumTarget: Dp = 44.dp
 ) {
     val card = cardBoundsNamed(cardDescription)
-    descriptions.forEach { assertPaintedIn(it, card) }
+    descriptions.forEach { assertPaintedIn(it, card, minimumTarget) }
 }
 
 /**

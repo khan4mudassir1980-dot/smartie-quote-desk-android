@@ -138,7 +138,11 @@ class PurchaseViewModelTest {
         requirements = requirements,
         onlineFlow = online,
         report = report,
-        retry = fastRetry
+        retry = fastRetry,
+        // The view model mints the requirement's id now and hands it to the
+        // repository, so pinning `newId` on the repository above no longer
+        // reaches an add. This is the one that does.
+        newRequirementId = { "pr_generated" }
     )
 
     private fun TestScope.messagesOf(model: PurchaseViewModel): List<String> {

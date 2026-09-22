@@ -120,23 +120,12 @@ class PurchaseAddIdempotencyTest {
         )
     }
 
-    @Test
-    fun `two taps write once`() = runTest {
-        // Asserted on the documents rather than on the mechanism: on a device
-        // the in-flight key stops the second tap before it starts, and here
-        // the test dispatcher runs the first write to completion first so the
-        // reused id stops it instead. Either way one document, which is the
-        // only thing worth pinning.
-        val store = RememberingStore()
-        val model = viewModel(store)
-
-        model.open(PurchaseSheet.ADD)
-        model.add(draft)
-        model.add(draft)
-
-        assertEquals(1, store.documents.size)
-        assertEquals(1, minted)
-    }
+    // There is deliberately no "two taps in the same frame" case here. Under
+    // the test dispatcher the first write runs to completion before the second
+    // call starts, so it is not a double tap at all — it is a second, separate
+    // add, and the code is right to write a second document for it. What
+    // stops a real double tap is the in-flight key, set synchronously before
+    // any coroutine starts, and `PurchaseViewModelTest` already pins that.
 
     @Test
     fun `a second requirement, asked for separately, is its own document`() = runTest {

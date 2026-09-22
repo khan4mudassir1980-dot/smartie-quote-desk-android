@@ -46,13 +46,15 @@ class StockCardClippingScreenTest {
         shelf()
 
         compose.assertFooterPaintedInsideNamedCard(
-            listOf(
-                "Change $name by one",
-                "Pin $name",
-                "Edit $name",
-                "History for $name"
-            ),
+            listOf("Pin $name", "Edit $name", "History for $name"),
             card
+        )
+        // The stepper is a container — its minus and plus are what click — so
+        // it is checked for paint and bounds and not for a click action.
+        compose.assertPaintedIn(
+            "Change $name by one",
+            compose.cardBoundsNamed(card),
+            requireClickable = false
         )
     }
 

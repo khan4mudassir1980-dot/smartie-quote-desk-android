@@ -63,10 +63,20 @@ class PurchaseSmallPhoneScreenTest {
     @Test
     fun `a card's controls wrap rather than clip, and stay 48dp`() {
         show()
-        // Four controls on one card at 360dp. A Compose `Row` would measure
-        // the overflow at zero and clip it while leaving it in the semantics
-        // tree; the control row is a FlowRow for exactly that reason.
-        for (sheet in listOf(PurchaseSheet.EDIT, PurchaseSheet.URGENCY, PurchaseSheet.RECEIVE)) {
+        // Four controls on one card at 360dp, and it says four because it
+        // means four: the loop used to stop at three while the comment
+        // claimed otherwise, which is part of how B1 went unseen.
+        //
+        // This still cannot see a control the card clipped away —
+        // `assertIsDisplayed()` never asks about ancestors. That is
+        // `PurchaseCardClippingScreenTest`'s job.
+        val sheets = listOf(
+            PurchaseSheet.EDIT,
+            PurchaseSheet.URGENCY,
+            PurchaseSheet.RECEIVE,
+            PurchaseSheet.REMOVE
+        )
+        for (sheet in sheets) {
             val label = rowActionLabel(sheet, "Requirement 8")
             compose.scrollToDescription(label)
             compose.onNodeWithContentDescription(label)

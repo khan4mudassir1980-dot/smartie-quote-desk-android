@@ -749,10 +749,12 @@ class PurchaseViewModelTest {
         val store = Store()
         val model = PurchaseViewModel(
             member = admin,
-            writes = PurchaseWriteRepository(store, now = { 1L }, newId = { "pr_one" }),
+            writes = PurchaseWriteRepository(store, now = { 1L }),
             requirements = rows,
             onlineFlow = MutableStateFlow(true),
-            retry = fastRetry
+            retry = fastRetry,
+            // The view model's id is the one the pending row is keyed by.
+            newRequirementId = { "pr_one" }
         )
         model.add(PurchaseDraft(name = "Remote handsets", quantity = 4.0))
         assertEquals(1, model.active.value.size)

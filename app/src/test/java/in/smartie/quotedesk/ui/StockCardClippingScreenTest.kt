@@ -2,6 +2,7 @@ package `in`.smartie.quotedesk.ui
 
 import android.app.Application
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import `in`.smartie.quotedesk.ui.stock.stockItemLabel
 import org.junit.Rule
@@ -54,6 +55,11 @@ class StockCardClippingScreenTest {
         compose.assertPaintedIn(
             "Change $name by one",
             compose.cardBoundsNamed(card),
+            // `stepperHeightNarrow`. At 360dp the stepper is deliberately
+            // 40dp — `SmartieDimens.forWidth` shrinks it and nothing else —
+            // so asking for 44 here would be asking the card to break a rule
+            // the theme sets on purpose.
+            minimumTarget = 40.dp,
             requireClickable = false
         )
     }

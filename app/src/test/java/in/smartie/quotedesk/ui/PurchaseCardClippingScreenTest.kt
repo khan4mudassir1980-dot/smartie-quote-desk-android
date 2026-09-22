@@ -125,7 +125,8 @@ class PurchaseCardClippingScreenTest {
         card(partlyReceived, purchaseOwner)
 
         compose.assertNoDeadSpaceBelow(
-            rowActionLabel(PurchaseSheet.REMOVE, partlyReceived.name)
+            rowActionLabel(PurchaseSheet.REMOVE, partlyReceived.name),
+            compose.cardBounds()
         )
     }
 }

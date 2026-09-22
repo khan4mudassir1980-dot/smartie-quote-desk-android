@@ -6,12 +6,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -26,6 +22,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -109,7 +107,29 @@ fun SmartieTopBar(
     }
 }
 
-/** A `.card`: white panel, 1dp rule border, 10dp radius. */
+/**
+ * A `.card`: white panel, 1dp rule border, 10dp radius, optional accent bar.
+ *
+ * **The accent bar is painted, not laid out**, and that is the whole point.
+ * It used to be a sibling `Box` with `fillMaxHeight()`, which only works
+ * inside a `Row` whose height is already known — so the card carried
+ * `height(IntrinsicSize.Min)` for no other reason than to give that bar
+ * something to fill.
+ *
+ * That cost far more than it bought. An intrinsic measurement asks a child
+ * how tall it would be, and a `FlowRow` answers for the width it is asked
+ * about rather than the width it finally gets. When the two disagree, the
+ * card's height is fixed to the wrong one: too short and the clip below
+ * erases whatever wrapped past it — which is how N4.4's B1 lost the last two
+ * controls on every purchase card — too tall and the surplus shows as a hole
+ * under the content, which the same phone pass reported and
+ * `PurchaseCardClippingScreenTest` measured at 67px.
+ *
+ * `drawBehind` needs no intrinsic pass at all: the card wraps its content, and
+ * the bar is drawn down the left edge of whatever height that turns out to be.
+ * The clip stays — it rounds the bar's corners with the card's — but nothing
+ * can overflow it any more.
+ */
 @Composable
 fun SmartieCard(
     modifier: Modifier = Modifier,
@@ -119,23 +139,30 @@ fun SmartieCard(
     content: @Composable () -> Unit
 ) {
     val dimens = LocalSmartieDimens.current
-    Row(
+    val shape = RoundedCornerShape(dimens.radius)
+    val barWidth = dimens.accentBarWidth
+
+    Box(
         modifier
             .fillMaxWidth()
-            .height(IntrinsicSize.Min)
-            .clip(RoundedCornerShape(dimens.radius))
+            .clip(shape)
             .background(background)
-            .border(dimens.hairline, borderColor, RoundedCornerShape(dimens.radius))
-    ) {
-        if (accent != null) {
-            Box(
-                Modifier
-                    .width(dimens.accentBarWidth)
-                    .fillMaxHeight()
-                    .background(accent)
+            .then(
+                if (accent == null) {
+                    Modifier
+                } else {
+                    Modifier.drawBehind {
+                        drawRect(color = accent, size = Size(barWidth.toPx(), size.height))
+                    }
+                }
             )
-        }
-        Box(Modifier.fillMaxWidth().padding(dimens.cardPadding)) { content() }
+            .border(dimens.hairline, borderColor, shape)
+            // The bar's width first, so the content clears it exactly as it
+            // did when the bar was a sibling taking up that space.
+            .padding(start = if (accent == null) 0.dp else barWidth)
+            .padding(dimens.cardPadding)
+    ) {
+        content()
     }
 }
 

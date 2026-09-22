@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -45,6 +46,16 @@ internal fun ComposeContentTestRule.cardBounds(cardTag: String = CARD_HOST_TAG):
     onNodeWithTag(cardTag).fetchSemanticsNode().boundsInRoot
 
 /**
+ * The same, for a card that names itself.
+ *
+ * The stock card carries a `contentDescription` on the `SmartieCard` — put
+ * there so a test could prove the controls belong to that card and not a
+ * second one — so it needs no host of its own.
+ */
+internal fun ComposeContentTestRule.cardBoundsNamed(description: String): Rect =
+    onNodeWithContentDescription(description).fetchSemanticsNode().boundsInRoot
+
+/**
  * One control, painted whole, inside its card, at a real size, and tappable.
  *
  * Four separate failures, each named, because they have four different causes:
@@ -52,9 +63,9 @@ internal fun ComposeContentTestRule.cardBounds(cardTag: String = CARD_HOST_TAG):
  * erased; one outside the card's bounds means the card is measuring wrongly;
  * and one below 48dp is not a touch target whatever else is true of it.
  */
-internal fun ComposeContentTestRule.assertPaintedInsideCard(
+internal fun ComposeContentTestRule.assertPaintedIn(
     description: String,
-    cardTag: String = CARD_HOST_TAG,
+    card: Rect,
     minimumTarget: Dp = 48.dp
 ) {
     val control = onNodeWithContentDescription(description)
@@ -63,7 +74,6 @@ internal fun ComposeContentTestRule.assertPaintedInsideCard(
     val node = control.fetchSemanticsNode()
     val whole = node.unclippedBounds()
     val painted = node.boundsInRoot
-    val card = cardBounds(cardTag)
 
     assertTrue("$description was never laid out: $whole", whole.width > 0f && whole.height > 0f)
     assertTrue(
@@ -81,11 +91,29 @@ internal fun ComposeContentTestRule.assertPaintedInsideCard(
     control.assertWidthIsAtLeast(minimumTarget).assertHeightIsAtLeast(minimumTarget)
 }
 
+/** One control against the tagged host, which is the common case. */
+internal fun ComposeContentTestRule.assertPaintedInsideCard(
+    description: String,
+    cardTag: String = CARD_HOST_TAG
+) = assertPaintedIn(description, cardBounds(cardTag))
+
 /** All of them, so a test names the whole footer rather than one control. */
 internal fun ComposeContentTestRule.assertFooterPaintedInsideCard(
     descriptions: List<String>,
     cardTag: String = CARD_HOST_TAG
-) = descriptions.forEach { assertPaintedInsideCard(it, cardTag) }
+) {
+    val card = cardBounds(cardTag)
+    descriptions.forEach { assertPaintedIn(it, card) }
+}
+
+/** The same, for a card found by its own description rather than a host. */
+internal fun ComposeContentTestRule.assertFooterPaintedInsideNamedCard(
+    descriptions: List<String>,
+    cardDescription: String
+) {
+    val card = cardBoundsNamed(cardDescription)
+    descriptions.forEach { assertPaintedIn(it, card) }
+}
 
 /**
  * Nothing below the last control but the card's own padding.
@@ -99,16 +127,33 @@ internal fun ComposeContentTestRule.assertFooterPaintedInsideCard(
  */
 internal fun ComposeContentTestRule.assertNoDeadSpaceBelow(
     description: String,
-    cardTag: String = CARD_HOST_TAG,
+    card: Rect,
     allowance: Dp = 24.dp
+) = assertNoDeadSpaceUnder(
+    onNodeWithContentDescription(description).fetchSemanticsNode(),
+    description,
+    card,
+    allowance
+)
+
+/** The same, for the last thing on a card that has no control to measure. */
+internal fun ComposeContentTestRule.assertNoDeadSpaceBelowText(
+    text: String,
+    card: Rect,
+    allowance: Dp = 40.dp
+) = assertNoDeadSpaceUnder(onNodeWithText(text).fetchSemanticsNode(), text, card, allowance)
+
+private fun ComposeContentTestRule.assertNoDeadSpaceUnder(
+    node: SemanticsNode,
+    named: String,
+    card: Rect,
+    allowance: Dp
 ) {
-    val node = onNodeWithContentDescription(description).fetchSemanticsNode()
-    val card = cardBounds(cardTag)
     val gap = card.bottom - node.unclippedBounds().bottom
     val limit = with(density) { allowance.toPx() }
 
     assertTrue(
-        "${gap}px of dead space under $description, more than the ${allowance} allowed",
+        "${gap}px of dead space under $named, more than the $allowance allowed",
         gap <= limit + EPSILON
     )
 }

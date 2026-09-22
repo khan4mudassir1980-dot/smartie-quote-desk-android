@@ -670,6 +670,21 @@ requirement, while relaxing `revOk()` to accept an unchanged `rev` weakens it
 for everybody. **Neither was taken. N4 changes no rules.** Proved by name in
 `firestore/tests/purchase.test.js` and written out in `docs/N4-plan.md`, trap 5.
 
+**Purchase history is filtered in the app, not in the rules, and that is
+deliberate.** Firestore evaluates a list query against its *constraints*, not
+document by document, so the moment a read rule mentions `resource.data` an
+unconstrained listener is refused. The Purchase tab would then have to query
+`where('del','==',false)`, and legacy rows carry `del: 1` as a number or no
+`del` at all — both shapes are in `fixtures/purchase.json` — so every one of
+them would silently vanish from the shop floor's list. It would refuse the
+PWA's own listener in the same project too.
+
+**Deferred: a rules-level restriction on reading other people's Purchase
+history — only after the PWA is retired, and only together with a one-time
+`del` normalisation.** Until then a Staff account's own-rows-only history is an
+app-level filter, which `docs/N4.3-plan.md` states plainly rather than
+implying otherwise.
+
 **The PWA and the native app must never both write Purchase requirements in
 the same Firebase project.** This is the production cutover restriction, and it
 follows from two independent facts, either of which is enough on its own:

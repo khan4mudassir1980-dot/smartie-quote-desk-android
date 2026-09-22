@@ -36,11 +36,20 @@ class MoreMenuTest {
     }
 
     @Test
-    fun `a worker sees only About`() {
+    fun `the displayed Staff sees About and their own Purchase history`() {
+        // Changed by N4.3: every role gets Purchase history now. What a Staff
+        // account sees *inside* it is its own rows only, which is
+        // `PurchaseHistory`'s job and has its own tests.
         assertEquals(
-            listOf("About & legal"),
+            listOf("Purchase history", "About & legal"),
             MoreMenu.visibleTo(worker).map { it.label },
         )
+    }
+
+    @Test
+    fun `a switched-off account is offered nothing at all`() {
+        val off = worker.copy(active = false)
+        assertTrue(!MoreMenu.visibleTo(off).map { it.label }.contains("Purchase history"))
     }
 
     @Test

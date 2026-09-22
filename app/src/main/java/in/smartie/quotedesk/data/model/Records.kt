@@ -236,6 +236,10 @@ data class PurchaseRecord(
     val cancelledAt: Long = 0L,
     /** PWA soft delete (`del:1`). Deleted items must never be shown. */
     val deleted: Boolean = false,
+    /** Who removed it, by name, and when. Absent on a PWA removal. */
+    val removedBy: String = "",
+    val removedByUid: String = "",
+    val removedAt: Long = 0L,
     val revision: Int = 0
 ) {
     val isClosed: Boolean get() = received || status == "Received" || status == "Cancelled"

@@ -51,11 +51,13 @@ object MoreMenu {
         MoreDestination(
             route = "more/purchase-history",
             label = "Purchase history",
-            description = "Received, cancelled and reopened requirements",
-            phase = "N4",
-            // A Worker adds requirements from the Purchase tab but does not
-            // manage them, so the history entry is not offered.
-            isVisible = Permissions::canEditPurchase,
+            description = "What arrived, and what was taken off the list",
+            // Built, so no placeholder. Every role gets it: a Staff account
+            // sees the rows it raised, and everybody else sees everyone's.
+            // The filtering is `PurchaseHistory`'s, in the app — that file
+            // says plainly why the rules do not do it and what would have to
+            // be true first.
+            isVisible = { it.active },
         ),
         MoreDestination(
             route = "more/stock-history",

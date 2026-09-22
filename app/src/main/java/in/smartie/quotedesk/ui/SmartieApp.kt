@@ -74,6 +74,7 @@ import `in`.smartie.quotedesk.ui.more.MoreScreen
 import `in`.smartie.quotedesk.ui.more.PlaceholderScreen
 import `in`.smartie.quotedesk.ui.products.ProductsScreen
 import `in`.smartie.quotedesk.ui.products.ProductsViewModel
+import `in`.smartie.quotedesk.ui.purchase.PurchaseHistoryScreen
 import `in`.smartie.quotedesk.ui.purchase.PurchaseViewModel
 import `in`.smartie.quotedesk.ui.screens.PurchaseScreen
 import `in`.smartie.quotedesk.ui.screens.QuotationsScreen
@@ -248,6 +249,10 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
                     )
                 }
                 composable("more/about") { AboutScreen() }
+                composable("more/purchase-history") {
+                    val requirements by data.requirements.collectAsStateWithLifecycle()
+                    PurchaseHistoryScreen(records = requirements, viewer = member)
+                }
                 MoreMenu.destinations
                     .filter { it.phase != null }
                     .forEach { destination ->

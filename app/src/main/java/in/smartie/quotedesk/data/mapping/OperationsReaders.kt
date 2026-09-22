@@ -38,6 +38,11 @@ fun DocData.toPurchaseRecord(): PurchaseRecord = PurchaseRecord(
     cancelledAt = millis("cancelledAt"),
     // Soft delete: `del:1`. A hard delete would let PWA devices resurrect it.
     deleted = bool("del", "deleted"),
+    // `delBy` and `delAt` are this app's; a PWA removal wrote neither, so
+    // History falls back to `deletedBy` and to the update time.
+    removedBy = string("delBy"),
+    removedByUid = string("deletedBy"),
+    removedAt = millis("delAt"),
     revision = int("rev")
 )
 

@@ -121,10 +121,12 @@ class PurchaseAddIdempotencyTest {
     }
 
     @Test
-    fun `two taps in the same frame write once`() = runTest {
-        // The guard that already existed, now asserted for `add` rather than
-        // only for a receipt: the in-flight key is set synchronously, before
-        // any coroutine starts, so the second call never opens a transaction.
+    fun `two taps write once`() = runTest {
+        // Asserted on the documents rather than on the mechanism: on a device
+        // the in-flight key stops the second tap before it starts, and here
+        // the test dispatcher runs the first write to completion first so the
+        // reused id stops it instead. Either way one document, which is the
+        // only thing worth pinning.
         val store = RememberingStore()
         val model = viewModel(store)
 

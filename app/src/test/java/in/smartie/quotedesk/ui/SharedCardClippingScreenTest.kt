@@ -67,6 +67,7 @@ class SharedCardClippingScreenTest {
         }
     }
 
+    @Composable
     private fun action() {
         SmartieGhostButton(
             text = "Do it",

@@ -37,7 +37,8 @@ class PurchaseHistoryTest {
         received: Any? = null,
         status: String = "Needed",
         delBy: String? = null,
-        delAt: Long? = null
+        delAt: Long? = null,
+        deletedBy: String? = null
     ): PurchaseRecord = DocData(
         id = id,
         fields = buildMap {
@@ -51,6 +52,7 @@ class PurchaseHistoryTest {
             if (received != null) put("received", received)
             if (delBy != null) put("delBy", delBy)
             if (delAt != null) put("delAt", delAt)
+            if (deletedBy != null) put("deletedBy", deletedBy)
         }
     ).toPurchaseRecord()
 
@@ -193,9 +195,15 @@ class PurchaseHistoryTest {
 
     @Test
     fun `a removal this app made carries who and when`() {
-        val row = removedRow("pr_gone", delBy = "Asha", delAt = 1_712_600_000_000L)
+        val row = stored(
+            "pr_gone",
+            del = true,
+            delBy = "Asha",
+            delAt = 1_712_600_000_000L,
+            deletedBy = "uid_admin"
+        )
         assertEquals("Asha", row.removedBy)
         assertEquals(1_712_600_000_000L, row.removedAt)
-        assertEquals("uid_worker", row.removedByUid)
+        assertEquals("uid_admin", row.removedByUid)
     }
 }

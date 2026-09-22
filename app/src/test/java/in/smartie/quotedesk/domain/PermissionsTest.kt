@@ -232,15 +232,73 @@ class PermissionsTest {
     }
 
     @Test
-    fun `an administrator manages administrators, staff and workers but no owner`() {
+    fun `an administrator manages managers and staff, and no one above`() {
+        // Stored `staff` is displayed Manager; stored `worker` is displayed
+        // Staff. Those two, and nothing else.
         assertTrue(Permissions.canManage(admin, staff))
         assertTrue(Permissions.canManage(admin, worker))
-        assertTrue(Permissions.canManage(admin, Member(uid = "uid_other_admin", role = Role.ADMIN)))
         assertFalse(Permissions.canManage(admin, primaryOwner))
         assertFalse(Permissions.canManage(admin, additionalOwner))
+    }
 
-        val options = Permissions.roleOptionsFor(admin, worker, ownerCount = 2)
-        assertEquals(listOf(Role.WORKER, Role.STAFF, Role.ADMIN), options)
+    @Test
+    fun `and never another administrator, in either direction`() {
+        // Demoting a peer. Two Administrators who can each demote the other is
+        // not a hierarchy, so neither may.
+        val peer = Member(uid = "uid_other_admin", email = "admin2@example.invalid", role = Role.ADMIN)
+        assertFalse(Permissions.canManage(admin, peer))
+        assertFalse(Permissions.canToggleActive(admin, peer))
+        assertFalse(Permissions.canRemove(admin, peer))
+
+        // And promoting somebody into a peer they could then not manage, which
+        // is the same hole reached from the other side.
+        assertFalse(Permissions.roleOptionsFor(admin, worker, ownerCount = 2).contains(Role.ADMIN))
+        assertEquals(
+            listOf(Role.WORKER, Role.STAFF),
+            Permissions.roleOptionsFor(admin, worker, ownerCount = 2)
+        )
+    }
+
+    @Test
+    fun `while an owner still appoints an administrator`() {
+        // The narrowing is about the Administrator's reach, not the role's
+        // existence: an Owner offers it exactly as before.
+        val fromPrimary = Permissions.roleOptionsFor(primaryOwner, worker, ownerCount = 2)
+        assertTrue(fromPrimary.contains(Role.ADMIN))
+        assertTrue(Permissions.roleOptionsFor(additionalOwner, worker, ownerCount = 2).contains(Role.ADMIN))
+        assertTrue(Permissions.canManage(additionalOwner, admin))
+    }
+
+    @Test
+    fun `an administrator is offered no role at all for a peer`() {
+        // Not a shorter list — no list. The picker has nothing to show,
+        // because there is no change this viewer may make to this person.
+        val peer = Member(uid = "uid_other_admin", email = "admin2@example.invalid", role = Role.ADMIN)
+        assertTrue(Permissions.roleOptionsFor(admin, peer, ownerCount = 2).isEmpty())
+    }
+
+    @Test
+    fun `a stored owner with no access slot still shows as one`() {
+        // The `target.role !in base` fallback, and the row it exists for: a
+        // legacy profile carrying `role: "owner"` that the access document
+        // never recorded. The Primary Owner may act on it, and the picker must
+        // show what the person currently is rather than silently proposing a
+        // demotion to Administrator.
+        val strayOwner = Member(
+            uid = "uid_stray",
+            email = "stray@example.invalid",
+            role = Role.OWNER,
+            ownerRank = OwnerRank.NONE
+        )
+
+        val options = Permissions.roleOptionsFor(
+            primaryOwner,
+            strayOwner,
+            ownerCount = Permissions.MAX_OWNERS
+        )
+        // Owner is on the list because the person already holds it, not
+        // because a free slot put it there — there is no free slot.
+        assertEquals(listOf(Role.WORKER, Role.STAFF, Role.ADMIN, Role.OWNER), options)
     }
 
     @Test

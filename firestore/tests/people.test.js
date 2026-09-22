@@ -21,12 +21,38 @@ test('the Primary Owner is protected from everyone, including themselves', async
   }
 });
 
-test('an Administrator manages Administrator, Staff and Worker accounts', async () => {
+test('an Administrator manages Manager and Staff accounts', async () => {
+  // Stored `staff` is displayed **Manager**; stored `worker` is displayed
+  // **Staff**. An Administrator moves people between those two, switches them
+  // off and removes them, and goes no further.
   const db = as(testEnv, UIDS.admin);
-  await assertSucceeds(user(db, UIDS.worker).update({ role: 'admin', email: 'worker@example.invalid' }));
-  await assertSucceeds(user(db, UIDS.otherAdmin).update({ role: 'staff', email: 'admin2@example.invalid' }));
+  await assertSucceeds(user(db, UIDS.worker).update({ role: 'staff', email: 'worker@example.invalid' }));
   await assertSucceeds(user(db, UIDS.staff).update({ active: false, email: 'staff@example.invalid' }));
   await assertSucceeds(user(db, UIDS.worker).delete());
+});
+
+test('but never another Administrator, in either direction', async () => {
+  const db = as(testEnv, UIDS.admin);
+  // Demoting, disabling or removing a peer. Two Administrators who can each
+  // demote the other is not a hierarchy; that level is the Owner's.
+  await assertFails(user(db, UIDS.otherAdmin).update({ role: 'staff', email: 'admin2@example.invalid' }));
+  await assertFails(user(db, UIDS.otherAdmin).update({ active: false, email: 'admin2@example.invalid' }));
+  await assertFails(user(db, UIDS.otherAdmin).delete());
+  // And promoting somebody into a peer they could then not manage, which is
+  // the same hole reached from the other side.
+  await assertFails(user(db, UIDS.worker).update({ role: 'admin', email: 'worker@example.invalid' }));
+});
+
+test('while an Owner still appoints and removes an Administrator', async () => {
+  // The narrowing is about the Administrator's reach, not the role itself.
+  const db = as(testEnv, UIDS.primaryOwner);
+  await assertSucceeds(user(db, UIDS.worker).update({ role: 'admin', email: 'worker@example.invalid' }));
+  await assertSucceeds(user(db, UIDS.otherAdmin).update({ role: 'staff', email: 'admin2@example.invalid' }));
+  await assertSucceeds(user(db, UIDS.otherAdmin).delete());
+
+  // The Additional Owner keeps the same reach it had.
+  const secondDb = as(testEnv, UIDS.additionalOwner);
+  await assertSucceeds(user(secondDb, UIDS.admin).update({ role: 'worker', email: 'admin@example.invalid' }));
 });
 
 test('an Administrator can never touch an Owner', async () => {

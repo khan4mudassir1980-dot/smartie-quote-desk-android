@@ -127,18 +127,24 @@ service cloud.firestore {
           && request.resource.data.role in ['admin','staff','worker']
           && request.resource.data.email == resource.data.email)
         ||
-        // An Administrator manages Administrator, Staff and Worker accounts.
+        // An Administrator manages Manager and Staff accounts only — never
+        // another Administrator, and never an Owner. Two Administrators who
+        // can each demote the other is not a hierarchy; appointing and
+        // removing at that level is the Owner's. The stored values are
+        // `staff` (displayed Manager) and `worker` (displayed Staff).
         (admin() && !owner()
           && uid != mine()
-          && resource.data.role in ['admin','staff','worker']
-          && request.resource.data.role in ['admin','staff','worker']
+          && resource.data.role in ['staff','worker']
+          && request.resource.data.role in ['staff','worker']
           && !protectsPrimary(uid, resource.data)
           && request.resource.data.email == resource.data.email);
 
+      // The same list, for the same reason: an Administrator cannot delete a
+      // peer they cannot demote.
       allow delete: if uid != mine()
                     && !protectsPrimary(uid, resource.data)
                     && resource.data.role != 'owner'
-                    && (owner() || (admin() && !owner() && resource.data.role in ['admin','staff','worker']));
+                    && (owner() || (admin() && !owner() && resource.data.role in ['staff','worker']));
     }
 
     // --- catalogue -----------------------------------------------------

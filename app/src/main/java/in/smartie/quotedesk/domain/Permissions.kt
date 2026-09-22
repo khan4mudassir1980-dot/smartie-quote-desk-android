@@ -8,8 +8,8 @@ package `in`.smartie.quotedesk.domain
  *  - the Primary Owner cannot be demoted, switched off or removed by anyone,
  *    including themselves;
  *  - an Additional Owner can never modify either Owner, or themselves;
- *  - an Administrator manages Administrator, Staff and Worker accounts, but
- *    never an Owner;
+ *  - an Administrator manages Manager and Staff accounts only — never another
+ *    Administrator, and never an Owner;
  *  - nobody edits their own profile;
  *  - at most two people hold an Owner position.
  */
@@ -145,6 +145,13 @@ object Permissions {
     /**
      * Whether [viewer] may change [target] at all. The Primary Owner is
      * protected from everyone, and nobody manages their own account.
+     *
+     * **An Administrator acts on Manager and Staff accounts only** — never on
+     * another Administrator, and never on an Owner. Before N5 an Administrator
+     * could change a peer, which meant two Administrators could demote each
+     * other and neither outranked the other while doing it. Appointing and
+     * removing at that level is the Owner's, and the rules agree
+     * (`firestore.rules`, the `admin() && !owner()` branch of `/users`).
      */
     fun canManage(viewer: Member, target: Member): Boolean {
         if (!viewer.active) return false
@@ -154,19 +161,30 @@ object Permissions {
         return when {
             viewer.ownerRank == OwnerRank.PRIMARY -> true
             viewer.isOwner -> !target.isOwner
-            viewer.role == Role.ADMIN -> !target.isOwner
+            // An Administrator holding an Owner position never reaches here:
+            // `viewer.isOwner` above has already answered for them.
+            viewer.role == Role.ADMIN -> !target.isOwner && target.role != Role.ADMIN
             else -> false
         }
     }
 
     /**
-     * Roles [viewer] may assign to [target]. Administrators may now set
-     * Administrator as well as Staff and Worker; only the Primary Owner may
-     * offer the Owner position, and only while a slot is free.
+     * Roles [viewer] may assign to [target].
+     *
+     * **Administrator is offered only by an Owner.** An Administrator who
+     * could promote somebody to Administrator would be creating a peer they
+     * are then not allowed to manage, which is the same hole [canManage]
+     * closes, reached from the other side.
+     *
+     * Only the Primary Owner may offer the Owner position, and only while a
+     * slot is free. The target's current role is always in the list, so a
+     * picker can show what somebody already is even when the viewer could not
+     * assign it.
      */
     fun roleOptionsFor(viewer: Member, target: Member, ownerCount: Int): List<Role> {
         if (!canManage(viewer, target)) return emptyList()
-        val base = mutableListOf(Role.WORKER, Role.STAFF, Role.ADMIN)
+        val base = mutableListOf(Role.WORKER, Role.STAFF)
+        if (viewer.isOwner) base.add(Role.ADMIN)
         if (viewer.ownerRank == OwnerRank.PRIMARY) {
             val slotFree = ownerCount < MAX_OWNERS
             if (target.ownerRank == OwnerRank.ADDITIONAL || slotFree) base.add(Role.OWNER)

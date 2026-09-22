@@ -10,6 +10,7 @@ const UIDS = {
   admin: 'uid_admin',
   otherAdmin: 'uid_admin2',
   staff: 'uid_staff',
+  otherStaff: 'uid_staff2',
   worker: 'uid_worker',
   outsider: 'uid_outsider',
   switchedOff: 'uid_off',
@@ -26,6 +27,10 @@ const PEOPLE = {
   // **Staff**. Calling these accounts "Staff" and "Worker" was precisely the
   // confusion that mapping exists to prevent.
   [UIDS.staff]: { name: 'Manager Person', email: 'staff@example.invalid', role: 'staff', active: true },
+  // A second Manager, so two ordinary quoting accounts can contend for the
+  // same quotation number without either of them reaching an admin-only rule
+  // branch and proving something other than what the test claims.
+  [UIDS.otherStaff]: { name: 'Second Manager', email: 'staff2@example.invalid', role: 'staff', active: true },
   [UIDS.worker]: { name: 'Staff Person', email: 'worker@example.invalid', role: 'worker', active: true },
   [UIDS.switchedOff]: { name: 'Switched off', email: 'off@example.invalid', role: 'staff', active: false },
 };

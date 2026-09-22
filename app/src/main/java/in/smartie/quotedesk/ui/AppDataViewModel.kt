@@ -147,6 +147,16 @@ class AppDataViewModel(
     val quotations = quotingOnly(container.operationsRepository.observeQuotations())
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList<QuotationRecord>())
 
+    /**
+     * The saved customers, **collected by nobody yet**.
+     *
+     * `More → Parties` is still `PlaceholderScreen`, so this flow is built and
+     * never subscribed to. It is kept rather than deleted because N5.3 is the
+     * batch that replaces that placeholder and reads exactly this, and because
+     * `WhileSubscribed(5_000)` means an uncollected flow costs no listener —
+     * unlike `QuotationPdf` and the beta models N5.0 removed, which were dead
+     * code describing a shape nothing writes any more.
+     */
     val parties = quotingOnly(container.operationsRepository.observeParties())
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList<PartyRecord>())
 

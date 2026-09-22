@@ -43,7 +43,7 @@ class PurchaseUrgencyOrderScreenTest {
             SmartieTheme {
                 PurchaseBoardScreen(
                     active = PurchaseBoard.active(records),
-                    closed = PurchaseBoard.closed(records),
+                    received = PurchaseBoard.closed(records),
                     capabilities = staffOnly,
                     capabilitiesFor = capabilitiesFor(purchaseWorker)
                 )

@@ -11,7 +11,6 @@ import `in`.smartie.quotedesk.domain.PurchaseBoard
 import `in`.smartie.quotedesk.ui.purchase.PurchaseCapabilities
 import `in`.smartie.quotedesk.ui.purchase.PurchaseSheet
 import `in`.smartie.quotedesk.ui.purchase.rowActionLabel
-import `in`.smartie.quotedesk.ui.screens.CLOSED_SECTION
 import `in`.smartie.quotedesk.ui.screens.NOTHING_WAITING
 import `in`.smartie.quotedesk.ui.screens.PurchaseBoardScreen
 import `in`.smartie.quotedesk.ui.theme.SmartieTheme
@@ -46,7 +45,7 @@ class PurchaseTransitionsScreenTest {
             SmartieTheme {
                 PurchaseBoardScreen(
                     active = PurchaseBoard.active(records),
-                    closed = PurchaseBoard.closed(records),
+                    received = PurchaseBoard.closed(records),
                     capabilities = PurchaseCapabilities.forMember(purchaseAdmin),
                     capabilitiesFor = capabilitiesFor(purchaseAdmin)
                 )
@@ -56,11 +55,11 @@ class PurchaseTransitionsScreenTest {
     }
 
     @Test
-    fun `receiving moves a requirement out of Open and into Received and closed`() {
+    fun `receiving moves a requirement out of Open and into History`() {
         val listener = showing(listOf(rack))
 
         assertTrue(compose.boardHas(rowActionLabel(PurchaseSheet.RECEIVE, rack.name)))
-        assertFalse(compose.boardShows(CLOSED_SECTION))
+        assertFalse("nothing has happened yet, so there is no History", compose.hasHistory())
 
         // What the write puts on the wire, read back: status Received, the
         // received quantity, and who had it.
@@ -76,12 +75,14 @@ class PurchaseTransitionsScreenTest {
             )
         )
 
-        assertTrue(compose.boardShows(CLOSED_SECTION))
-        assertTrue("what actually arrived belongs on the card", compose.boardShows("4 in"))
+        assertTrue(compose.hasHistory())
         // It has left the active list, and the active list says so.
         assertTrue(compose.boardShows(NOTHING_WAITING))
-        // Received is no longer offered; Reopen is.
         assertFalse(compose.boardHas(rowActionLabel(PurchaseSheet.RECEIVE, rack.name)))
+
+        // Folded away until asked for, which is the whole of C1.
+        compose.openHistory(count = 1)
+        assertTrue("what actually arrived belongs on the card", compose.boardShows("4 in"))
         assertTrue(compose.boardHas(rowActionLabel(PurchaseSheet.REOPEN, rack.name)))
     }
 
@@ -95,13 +96,13 @@ class PurchaseTransitionsScreenTest {
             receivedAt = 9_000
         )
         val listener = showing(listOf(received))
-        assertTrue(compose.boardShows(CLOSED_SECTION))
+        assertTrue(compose.hasHistory())
 
         // Reopening removes the four `rcv*` fields outright, so the row comes
         // back exactly as it was before anyone received it.
         listener(listOf(rack))
 
-        assertFalse("the closed section goes with its last row", compose.boardShows(CLOSED_SECTION))
+        assertFalse("History goes with its last row", compose.hasHistory())
         assertFalse(
             "a reopened requirement must not still claim a received quantity",
             compose.boardShows("4 in")
@@ -120,7 +121,9 @@ class PurchaseTransitionsScreenTest {
         listener(listOf(rack.copy(deleted = true)))
 
         assertFalse(compose.boardShows("Sliding gate rack"))
-        assertFalse(compose.boardShows(CLOSED_SECTION))
+        // The board is given no removed rows here, so History has nothing to
+        // hold and does not appear at all.
+        assertFalse(compose.hasHistory())
         assertTrue(compose.boardShows(NOTHING_WAITING))
     }
 }

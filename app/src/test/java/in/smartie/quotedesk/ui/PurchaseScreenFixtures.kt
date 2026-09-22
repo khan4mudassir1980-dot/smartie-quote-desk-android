@@ -6,12 +6,17 @@ import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import `in`.smartie.quotedesk.data.model.PurchaseRecord
 import `in`.smartie.quotedesk.data.model.UrgencyV2
 import `in`.smartie.quotedesk.domain.Member
+import `in`.smartie.quotedesk.domain.PurchaseBoard
 import `in`.smartie.quotedesk.domain.Role
 import `in`.smartie.quotedesk.ui.purchase.PurchaseCapabilities
+import `in`.smartie.quotedesk.ui.purchase.removedHeading
+import `in`.smartie.quotedesk.ui.screens.historyHeading
 
 /**
  * Shared by the Purchase tab's screen tests.
@@ -84,4 +89,48 @@ internal fun ComposeContentTestRule.boardHas(description: String): Boolean {
 internal fun ComposeContentTestRule.boardShows(text: String): Boolean {
     runCatching { scrollToText(text) }
     return onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isNotEmpty()
+}
+
+/**
+ * Any History heading at all.
+ *
+ * A substring, deliberately: the heading carries its own count, and a test
+ * that asserts the section is absent should not have to know what the count
+ * would have been.
+ */
+internal const val HISTORY_PREFIX: String = "History ("
+
+/** Whether the board is offering History. */
+internal fun ComposeContentTestRule.hasHistory(): Boolean = boardShows(HISTORY_PREFIX)
+
+/**
+ * Open it, so what is inside can be asserted.
+ *
+ * History is collapsed on arrival since N4.4, so a test that looks for a
+ * received row has to ask for it first — exactly as a person does.
+ */
+internal fun ComposeContentTestRule.openHistory(count: Int) {
+    val heading = historyHeading(count, open = false)
+    scrollToDescription(heading)
+    onNodeWithContentDescription(heading).performClick()
+}
+
+/** And the removals inside it, which fold again. */
+internal fun ComposeContentTestRule.openRemoved(count: Int) {
+    val heading = removedHeading(count, open = false)
+    scrollToDescription(heading)
+    onNodeWithContentDescription(heading).performClick()
+}
+
+/**
+ * Open History when these records put anything in it.
+ *
+ * For the classes that assert what a *closed* row offers. Without this their
+ * `assertFalse`s would pass because the fold hides the control rather than
+ * because the role does — which is the same "passing for the wrong reason"
+ * that let B1 through.
+ */
+internal fun ComposeContentTestRule.openHistoryFor(records: List<PurchaseRecord>) {
+    val count = PurchaseBoard.closed(records).size
+    if (count > 0) openHistory(count)
 }

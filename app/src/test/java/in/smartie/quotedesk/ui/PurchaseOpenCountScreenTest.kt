@@ -44,7 +44,7 @@ class PurchaseOpenCountScreenTest {
             SmartieTheme {
                 PurchaseBoardScreen(
                     active = PurchaseBoard.active(records),
-                    closed = PurchaseBoard.closed(records),
+                    received = PurchaseBoard.closed(records),
                     capabilities = PurchaseCapabilities.forMember(purchaseAdmin),
                     capabilitiesFor = capabilitiesFor(purchaseAdmin)
                 )

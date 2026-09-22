@@ -12,7 +12,6 @@ import `in`.smartie.quotedesk.domain.PurchaseBoard
 import `in`.smartie.quotedesk.ui.purchase.PurchaseCapabilities
 import `in`.smartie.quotedesk.ui.purchase.PurchaseSheet
 import `in`.smartie.quotedesk.ui.purchase.rowActionLabel
-import `in`.smartie.quotedesk.ui.screens.CLOSED_SECTION
 import `in`.smartie.quotedesk.ui.screens.PurchaseBoardScreen
 import `in`.smartie.quotedesk.ui.theme.SmartieTheme
 import org.junit.Assert.assertFalse
@@ -56,7 +55,7 @@ class PurchasePartialReceiptScreenTest {
             SmartieTheme {
                 PurchaseBoardScreen(
                     active = PurchaseBoard.active(records),
-                    closed = PurchaseBoard.closed(records),
+                    received = PurchaseBoard.closed(records),
                     capabilities = PurchaseCapabilities.forMember(purchaseAdmin),
                     capabilitiesFor = capabilitiesFor(purchaseAdmin)
                 )
@@ -69,10 +68,7 @@ class PurchasePartialReceiptScreenTest {
         show(listOf(partly))
 
         compose.onNodeWithText("10 required · 4 received · 6 remaining").assertIsDisplayed()
-        assertFalse(
-            "a part delivery must not close anything",
-            compose.boardShows(CLOSED_SECTION)
-        )
+        assertFalse("a part delivery must not close anything", compose.hasHistory())
         // Still receivable, which is the point: the rest is still coming.
         assertTrue(compose.boardHas(rowActionLabel(PurchaseSheet.RECEIVE, partly.name)))
     }
@@ -134,7 +130,8 @@ class PurchasePartialReceiptScreenTest {
         )
         show(listOf(finished))
 
-        assertTrue(compose.boardShows(CLOSED_SECTION))
+        assertTrue(compose.hasHistory())
+        compose.openHistory(count = 1)
         // The cumulative total, not the size of the delivery that closed it.
         assertTrue(compose.boardShows("10 in"))
         assertFalse(

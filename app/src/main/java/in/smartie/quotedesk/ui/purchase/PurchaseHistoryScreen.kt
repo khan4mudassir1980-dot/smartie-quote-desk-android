@@ -118,7 +118,10 @@ private fun HistoryRow(item: PurchaseRecord) {
         // coloured tag would be shouting about a decision already taken.
         tags = { Tag(if (item.deleted) REMOVED_TAG else item.status, TagTone.NEUTRAL) },
         trailing = {
-            if (!item.deleted && item.receivedQuantity != null) {
+            // C7: a removed requirement that had received something still
+            // says so. Hiding it was treating "removed" as though it undid
+            // the delivery, and it does not — the goods arrived.
+            if (item.receivedQuantity != null) {
                 Text(
                     "${Money.formatQuantity(item.receivedTotal)} in",
                     style = MaterialTheme.typography.labelMedium,

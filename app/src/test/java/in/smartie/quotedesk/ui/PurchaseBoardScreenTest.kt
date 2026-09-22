@@ -19,7 +19,6 @@ import `in`.smartie.quotedesk.ui.purchase.rowActionLabel
 import `in`.smartie.quotedesk.ui.purchase.PurchaseActions
 import `in`.smartie.quotedesk.ui.purchase.PurchaseCapabilities
 import `in`.smartie.quotedesk.ui.purchase.PurchaseSheet
-import `in`.smartie.quotedesk.ui.screens.CLOSED_SECTION
 import `in`.smartie.quotedesk.ui.screens.LOADING
 import `in`.smartie.quotedesk.ui.screens.NOTHING_WAITING
 import `in`.smartie.quotedesk.ui.screens.OPEN_SECTION
@@ -67,7 +66,7 @@ class PurchaseBoardScreenTest {
             SmartieTheme {
                 PurchaseBoardScreen(
                     active = PurchaseBoard.active(records),
-                    closed = PurchaseBoard.closed(records),
+                    received = PurchaseBoard.closed(records),
                     loading = loading,
                     online = online,
                     capabilities = capabilities,
@@ -93,15 +92,19 @@ class PurchaseBoardScreenTest {
     }
 
     @Test
-    fun `received requirements are in the closed section, not the open one`() {
+    fun `received requirements are in History, not the open list`() {
         show(listOf(open, done))
 
-        // Two headings, each carrying its own count.
         compose.onNodeWithText(OPEN_SECTION).assertIsDisplayed()
-        assertTrue(compose.boardShows(CLOSED_SECTION))
+        // Present, and closed: the received row is not on the board until
+        // somebody asks for it.
+        assertTrue(compose.hasHistory())
+        assertFalse(compose.boardShows("Emergency stop button"))
+
+        compose.openHistory(count = 1)
         assertTrue(compose.boardShows("Emergency stop button"))
-        // The received quantity is on the card, so the closed row says what
-        // actually arrived rather than what was asked for.
+        // The received quantity is on the card, so the row says what actually
+        // arrived rather than what was asked for.
         assertTrue(compose.boardShows("2 in"))
     }
 
@@ -118,8 +121,8 @@ class PurchaseBoardScreenTest {
             compose.boardShows("Duplicate entry")
         )
         assertFalse(
-            "and there is no closed section to put it in",
-            compose.boardShows(CLOSED_SECTION)
+            "and there is no History section to put it in",
+            compose.hasHistory()
         )
     }
 
@@ -134,7 +137,7 @@ class PurchaseBoardScreenTest {
         show(listOf(open, removedAndReceived))
 
         assertFalse(compose.boardShows("Old bracket"))
-        assertFalse(compose.boardShows(CLOSED_SECTION))
+        assertFalse(compose.hasHistory())
     }
 
     @Test

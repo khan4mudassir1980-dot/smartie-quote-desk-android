@@ -11,6 +11,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -21,6 +24,7 @@ import `in`.smartie.quotedesk.data.model.PurchaseRecord
 import `in`.smartie.quotedesk.ui.components.EmptyState
 import `in`.smartie.quotedesk.ui.components.ListRow
 import `in`.smartie.quotedesk.ui.components.SectionHeader
+import `in`.smartie.quotedesk.ui.components.SmartieGhostButton
 import `in`.smartie.quotedesk.ui.components.SmartiePrimaryButton
 import `in`.smartie.quotedesk.ui.components.Tag
 import `in`.smartie.quotedesk.ui.components.TagTone
@@ -41,7 +45,10 @@ import `in`.smartie.quotedesk.ui.purchase.PurchaseRowActions
 import `in`.smartie.quotedesk.ui.purchase.PurchaseSheet
 import `in`.smartie.quotedesk.ui.purchase.PurchaseSheetState
 import `in`.smartie.quotedesk.ui.purchase.PurchaseViewModel
+import `in`.smartie.quotedesk.ui.purchase.NOTHING_RECEIVED
+import `in`.smartie.quotedesk.ui.purchase.RECEIVED_SECTION
 import `in`.smartie.quotedesk.ui.purchase.RECEIVE_TITLE
+import `in`.smartie.quotedesk.ui.purchase.removedHeading
 import `in`.smartie.quotedesk.ui.purchase.REMOVE_TITLE
 import `in`.smartie.quotedesk.ui.purchase.REOPEN_TITLE
 import `in`.smartie.quotedesk.ui.purchase.RemoveConfirmPanel
@@ -68,7 +75,8 @@ import java.util.Locale
 @Composable
 fun PurchaseScreen(viewModel: PurchaseViewModel) {
     val active by viewModel.active.collectAsStateWithLifecycle()
-    val closed by viewModel.closed.collectAsStateWithLifecycle()
+    val received by viewModel.received.collectAsStateWithLifecycle()
+    val removed by viewModel.removed.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
     val saving by viewModel.saving.collectAsStateWithLifecycle()
     val online by viewModel.online.collectAsStateWithLifecycle()
@@ -88,7 +96,8 @@ fun PurchaseScreen(viewModel: PurchaseViewModel) {
 
     PurchaseBoardScreen(
         active = active,
-        closed = closed,
+        received = received,
+        removed = removed,
         loading = loading,
         saving = saving,
         online = online,
@@ -105,12 +114,16 @@ fun PurchaseScreen(viewModel: PurchaseViewModel) {
 /**
  * The board itself, stateless over what it is given.
  *
- * **Two lists, and a removed requirement is in neither.** They come from
- * `PurchaseBoard`, which filters the second on `!deleted && isClosed` rather
- * than on `!isOpen`: `isOpen` is `!deleted && !isClosed`, so a removed
- * requirement that was never received is neither open nor closed, and
- * `filterNot { isOpen }` put it back on screen as history. That was this
- * screen's defect and it is gone with the `filterNot`.
+ * **Open, and then History folded away under it.** What has already happened
+ * is not what somebody standing on the shop floor came to the screen for, and
+ * an always-open "Received and closed" section pushed the open list up the
+ * screen and made the board's own count hard to read against it. It collapses
+ * now, with removals collapsed again inside it — the same shape
+ * `PurchaseHistoryScreen` uses, because they are the same information.
+ *
+ * **[received] and [removed] are already filtered for the viewer.** The board
+ * does not decide who sees whose; `PurchaseHistory` does, and the view model
+ * asks it. A Staff account is given only the rows it raised.
  *
  * The sheets are hosted separately in [PurchaseSheets], so a test can drive
  * the board without a Compose `Dialog` in the composition.
@@ -118,7 +131,8 @@ fun PurchaseScreen(viewModel: PurchaseViewModel) {
 @Composable
 internal fun PurchaseBoardScreen(
     active: List<PurchaseRecord> = emptyList(),
-    closed: List<PurchaseRecord> = emptyList(),
+    received: List<PurchaseRecord> = emptyList(),
+    removed: List<PurchaseRecord> = emptyList(),
     loading: Boolean = false,
     saving: Set<String> = emptySet(),
     online: Boolean = true,
@@ -135,6 +149,8 @@ internal fun PurchaseBoardScreen(
     actions: PurchaseActions = PurchaseActions()
 ) {
     val dimens = LocalSmartieDimens.current
+    var historyOpen by rememberSaveable { mutableStateOf(false) }
+    var removedOpen by rememberSaveable { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -170,7 +186,8 @@ internal fun PurchaseBoardScreen(
             // An empty board and one that has not arrived are different
             // things, and saying "nothing is waiting" about a list nobody has
             // seen yet is a lie the shop floor would act on.
-            loading && active.isEmpty() && closed.isEmpty() -> item { EmptyState(LOADING) }
+            loading && active.isEmpty() && received.isEmpty() && removed.isEmpty() ->
+                item { EmptyState(LOADING) }
             active.isEmpty() -> item { EmptyState(NOTHING_WAITING) }
         }
 
@@ -184,16 +201,62 @@ internal fun PurchaseBoardScreen(
             )
         }
 
-        if (closed.isNotEmpty()) {
-            item { SectionHeader(CLOSED_SECTION, trailing = closed.size.toString()) }
-            items(closed, key = { it.id }) { item ->
-                PurchaseRow(
-                    item = item,
-                    capabilities = capabilitiesFor(item),
-                    online = online,
-                    saving = item.id in saving,
-                    actions = actions
+        // Folded away at the bottom, and closed on arrival. Opening it is a
+        // decision, which is why the heading carries the count.
+        if (received.isNotEmpty() || removed.isNotEmpty()) {
+            item {
+                SmartieGhostButton(
+                    text = historyHeading(received.size + removed.size, historyOpen),
+                    onClick = { historyOpen = !historyOpen },
+                    modifier = Modifier
+                        .semantics {
+                            contentDescription =
+                                historyHeading(received.size + removed.size, historyOpen)
+                        }
+                        .fillMaxWidth()
                 )
+            }
+
+            if (historyOpen) {
+                item { SectionHeader(RECEIVED_SECTION, trailing = received.size.toString()) }
+                if (received.isEmpty()) item { EmptyState(NOTHING_RECEIVED) }
+                items(received, key = { it.id }) { item ->
+                    PurchaseRow(
+                        item = item,
+                        capabilities = capabilitiesFor(item),
+                        online = online,
+                        saving = item.id in saving,
+                        actions = actions
+                    )
+                }
+
+                // Removals are a different kind of fact from a delivery —
+                // usually a mistake being tidied away — so they fold again
+                // rather than sitting among what arrived.
+                if (removed.isNotEmpty()) {
+                    item {
+                        SmartieGhostButton(
+                            text = removedHeading(removed.size, removedOpen),
+                            onClick = { removedOpen = !removedOpen },
+                            modifier = Modifier
+                                .semantics {
+                                    contentDescription = removedHeading(removed.size, removedOpen)
+                                }
+                                .fillMaxWidth()
+                        )
+                    }
+                    if (removedOpen) {
+                        items(removed, key = { it.id }) { item ->
+                            PurchaseRow(
+                                item = item,
+                                capabilities = capabilitiesFor(item),
+                                online = online,
+                                saving = item.id in saving,
+                                actions = actions
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -324,10 +387,17 @@ internal fun PurchaseRow(
             Tag(item.status, if (item.isClosed) TagTone.NEUTRAL else TagTone.PURPLE)
         },
         trailing = {
-            // Only on a closed card. On an open one the secondary line is
-            // already carrying the received figure, and saying it twice in
-            // two different wordings is how a card starts being misread.
-            if (item.isClosed && item.receivedQuantity != null) {
+            // Only on a card that is no longer open. On an open one the
+            // secondary line is already carrying the received figure, and
+            // saying it twice in two different wordings is how a card starts
+            // being misread.
+            //
+            // `!isOpen` rather than `isClosed`, which is C7: `isOpen` is
+            // `!deleted && !isClosed`, so a requirement that was part way
+            // through when somebody took it off the list is neither open nor
+            // closed — and what had already arrived against it is exactly
+            // what a person looking at History wants to know.
+            if (!item.isOpen && item.receivedQuantity != null) {
                 Text(
                     "${Money.formatQuantity(item.receivedTotal)} in",
                     style = MaterialTheme.typography.labelMedium,
@@ -365,6 +435,9 @@ private fun formatDate(millis: Long): String =
 // --- wording ---------------------------------------------------------------
 
 internal const val OPEN_SECTION: String = "Open"
-internal const val CLOSED_SECTION: String = "Received and closed"
+
+/** How many have already happened, and whether the section is showing them. */
+internal fun historyHeading(count: Int, open: Boolean): String =
+    if (open) "Hide history ($count)" else "History ($count)"
 internal const val NOTHING_WAITING: String = "Nothing is waiting to be bought."
 internal const val LOADING: String = "Loading requirements…"

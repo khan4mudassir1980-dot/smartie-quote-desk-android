@@ -58,7 +58,7 @@ class PurchaseBoardRolesScreenTest {
             SmartieTheme {
                 PurchaseBoardScreen(
                     active = PurchaseBoard.active(records),
-                    closed = PurchaseBoard.closed(records),
+                    received = PurchaseBoard.closed(records),
                     saving = saving,
                     capabilities = PurchaseCapabilities.forMember(member),
                     capabilitiesFor = capabilitiesFor(member),
@@ -66,6 +66,10 @@ class PurchaseBoardRolesScreenTest {
                 )
             }
         }
+        // The closed row lives in History now, and every assertion in this
+        // class is about what a role is offered — so it is opened here rather
+        // than letting the fold answer for the role.
+        compose.openHistoryFor(records)
     }
 
     private fun offered(sheet: PurchaseSheet, record: PurchaseRecord): Boolean =

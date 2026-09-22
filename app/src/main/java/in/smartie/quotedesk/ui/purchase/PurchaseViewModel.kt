@@ -18,6 +18,7 @@ import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.PurchaseAccess
 import `in`.smartie.quotedesk.domain.PurchaseBoard
 import `in`.smartie.quotedesk.domain.PurchaseDraft
+import `in`.smartie.quotedesk.domain.PurchaseHistory
 import `in`.smartie.quotedesk.domain.PurchaseWrite
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -185,9 +186,23 @@ class PurchaseViewModel(
         .map { PurchaseBoard.active(it, member.uid) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** Received or cancelled, newest first. A removed one is in neither list. */
-    val closed: StateFlow<List<PurchaseRecord>> = visible
-        .map { PurchaseBoard.closed(it) }
+    /**
+     * What arrived, newest first — and **only what this person may see**.
+     *
+     * `PurchaseHistory.received` rather than `PurchaseBoard.closed`, which is
+     * N4.4's C1 and a correction. The board's own filter is about the state of
+     * a requirement and says nothing about who raised it, so a Staff account
+     * was shown everyone's received rows on the main list while the History
+     * screen was showing it only its own. One of those had to be wrong; the
+     * Owner's standing decision says which.
+     */
+    val received: StateFlow<List<PurchaseRecord>> = visible
+        .map { PurchaseHistory.received(it, member) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Taken off the list, newest first, filtered the same way. */
+    val removed: StateFlow<List<PurchaseRecord>> = visible
+        .map { PurchaseHistory.removed(it, member) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** The screen-wide part, which is now only whether Add is offered. */

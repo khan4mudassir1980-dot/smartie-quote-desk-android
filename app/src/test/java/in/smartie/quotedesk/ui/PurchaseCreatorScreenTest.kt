@@ -63,7 +63,7 @@ class PurchaseCreatorScreenTest {
             SmartieTheme {
                 PurchaseBoardScreen(
                     active = PurchaseBoard.active(records),
-                    closed = PurchaseBoard.closed(records),
+                    received = PurchaseBoard.closed(records),
                     capabilities = PurchaseCapabilities.forMember(member),
                     capabilitiesFor = capabilitiesFor(member)
                 )
@@ -179,6 +179,9 @@ class PurchaseCreatorScreenTest {
             receivedAt = 9_000
         )
         val listener = showing(purchaseWorker, listOf(received))
+        // Opened, so "Edit is gone" means the role took it away and not the
+        // fold.
+        compose.openHistory(count = 1)
         assertFalse("while it is closed", offered(PurchaseSheet.EDIT, mine))
 
         // A reopen removes all four receipt fields, so the row is untouched

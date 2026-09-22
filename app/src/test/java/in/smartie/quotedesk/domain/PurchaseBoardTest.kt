@@ -3,6 +3,7 @@ package `in`.smartie.quotedesk.domain
 import `in`.smartie.quotedesk.data.model.PurchaseRecord
 import `in`.smartie.quotedesk.data.model.UrgencyV2
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -18,13 +19,15 @@ class PurchaseBoardTest {
         received: Boolean = false,
         receivedQuantity: Double? = null,
         receivedAt: Long = 0L,
-        deleted: Boolean = false
+        deleted: Boolean = false,
+        byUid: String = ""
     ) = PurchaseRecord(
         id = id,
         name = id,
         quantity = 1.0,
         urgency = urgency,
         status = status,
+        byUid = byUid,
         createdAt = createdAt,
         updatedAt = updatedAt,
         received = received,
@@ -248,4 +251,138 @@ class PurchaseBoardTest {
         assertTrue(PurchaseBoard.active(emptyList()).isEmpty())
         assertTrue(PurchaseBoard.closed(emptyList()).isEmpty())
     }
+
+    // --- mine first --------------------------------------------------------
+
+    private val me = "uid_me"
+    private val them = "uid_them"
+
+    @Test
+    fun `my own requirements come before everybody else's`() {
+        // Six people add to this list. Somebody opening the tab is usually
+        // looking for the thing they raised, and theirs was scrolling away.
+        val board = PurchaseBoard.active(
+            listOf(
+                record("pr_theirs_red", urgency = UrgencyV2.CRITICAL, byUid = them),
+                record("pr_mine_green", urgency = UrgencyV2.NORMAL, byUid = me),
+                record("pr_theirs_green", urgency = UrgencyV2.NORMAL, byUid = them),
+                record("pr_mine_red", urgency = UrgencyV2.CRITICAL, byUid = me)
+            ),
+            viewerUid = me
+        )
+
+        assertEquals(
+            listOf("pr_mine_red", "pr_mine_green", "pr_theirs_red", "pr_theirs_green"),
+            board.map { it.id }
+        )
+    }
+
+    @Test
+    fun `my green sits above somebody else's red`() {
+        // The blunt statement of the rule, because it is the one that will
+        // look wrong to somebody who expects colour to win outright.
+        val board = PurchaseBoard.active(
+            listOf(
+                record("pr_theirs", urgency = UrgencyV2.CRITICAL, byUid = them),
+                record("pr_mine", urgency = UrgencyV2.NORMAL, byUid = me)
+            ),
+            viewerUid = me
+        )
+        assertEquals(listOf("pr_mine", "pr_theirs"), board.map { it.id })
+    }
+
+    @Test
+    fun `urgency still orders each group, red then yellow then green`() {
+        val board = PurchaseBoard.active(
+            listOf(
+                record("pr_mine_green", urgency = UrgencyV2.NORMAL, byUid = me),
+                record("pr_mine_red", urgency = UrgencyV2.CRITICAL, byUid = me),
+                record("pr_mine_yellow", urgency = UrgencyV2.URGENT, byUid = me),
+                record("pr_theirs_green", urgency = UrgencyV2.NORMAL, byUid = them),
+                record("pr_theirs_red", urgency = UrgencyV2.CRITICAL, byUid = them),
+                record("pr_theirs_yellow", urgency = UrgencyV2.URGENT, byUid = them)
+            ),
+            viewerUid = me
+        )
+
+        assertEquals(
+            listOf(
+                "pr_mine_red", "pr_mine_yellow", "pr_mine_green",
+                "pr_theirs_red", "pr_theirs_yellow", "pr_theirs_green"
+            ),
+            board.map { it.id }
+        )
+    }
+
+    @Test
+    fun `a row with no recorded creator is somebody else's`() {
+        // The PWA wrote requirements without a byUid. `"" == ""` would make
+        // every one of them everybody's.
+        val board = PurchaseBoard.active(
+            listOf(
+                record("pr_orphan", urgency = UrgencyV2.CRITICAL),
+                record("pr_mine", urgency = UrgencyV2.NORMAL, byUid = me)
+            ),
+            viewerUid = me
+        )
+        assertEquals(listOf("pr_mine", "pr_orphan"), board.map { it.id })
+        assertFalse(PurchaseBoard.isMine(record("pr_orphan"), me))
+    }
+
+    @Test
+    fun `a viewer with no uid gets the order the board had before`() {
+        // A session that has not resolved must not quietly claim every
+        // authorless row.
+        val records = listOf(
+            record("pr_orphan", urgency = UrgencyV2.NORMAL),
+            record("pr_red", urgency = UrgencyV2.CRITICAL, byUid = them)
+        )
+        assertEquals(
+            PurchaseBoard.active(records).map { it.id },
+            PurchaseBoard.active(records, viewerUid = "").map { it.id }
+        )
+        assertEquals(listOf("pr_red", "pr_orphan"), PurchaseBoard.active(records).map { it.id })
+    }
+
+    @Test
+    fun `the id still breaks a tie inside my own group`() {
+        // A PWA import writes many rows with one timestamp. A comparator that
+        // called them equal would let a keyed LazyColumn jump under the thumb.
+        val board = PurchaseBoard.active(
+            listOf(
+                record("pr_a", createdAt = 7_000, byUid = me),
+                record("pr_c", createdAt = 7_000, byUid = me),
+                record("pr_b", createdAt = 7_000, byUid = me)
+            ),
+            viewerUid = me
+        )
+        assertEquals(listOf("pr_c", "pr_b", "pr_a"), board.map { it.id })
+    }
+
+    @Test
+    fun `mine first never resurrects a removed or closed requirement`() {
+        val board = PurchaseBoard.active(
+            listOf(
+                record("pr_gone", byUid = me, deleted = true),
+                record("pr_done", byUid = me, received = true, status = "Received"),
+                record("pr_open", byUid = me)
+            ),
+            viewerUid = me
+        )
+        assertEquals(listOf("pr_open"), board.map { it.id })
+    }
+
+    @Test
+    fun `the closed list is chronological, not mine-first`() {
+        // Nothing in History is waiting for anybody, so whose it is does not
+        // change where it sits.
+        val board = PurchaseBoard.closed(
+            listOf(
+                record("pr_theirs", received = true, status = "Received", receivedAt = 9_000, byUid = them),
+                record("pr_mine", received = true, status = "Received", receivedAt = 1_000, byUid = me)
+            )
+        )
+        assertEquals(listOf("pr_theirs", "pr_mine"), board.map { it.id })
+    }
 }
+

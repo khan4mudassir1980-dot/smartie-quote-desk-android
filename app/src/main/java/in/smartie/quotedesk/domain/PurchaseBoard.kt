@@ -17,13 +17,21 @@ import `in`.smartie.quotedesk.data.model.PurchaseRecord
 object PurchaseBoard {
 
     /**
-     * Still waiting to be bought: **most urgent first, newest within that**.
+     * Still waiting to be bought: **mine first, then most urgent**.
      *
-     * Red, then yellow, then green, because that is the order the shop floor
-     * works in — a requirement that stops a gate going up today must not sit
-     * below one that is merely wanted this month. Inside a colour the newest
-     * is first, so adding one still puts it where the person who added it
-     * will look.
+     * Two groups, and the viewer's own requirements are the first of them.
+     * Somebody opening this tab is usually looking for the thing they raised
+     * — to correct it, or to record what arrived against it — and on a list
+     * six people are adding to, theirs was scrolling away.
+     *
+     * Inside each group, red then yellow then green, because that is the
+     * order the shop floor works in: a requirement that stops a gate going up
+     * today must not sit below one merely wanted this month. And inside a
+     * colour the newest is first, so adding one still puts it where the
+     * person who added it will look.
+     *
+     * [viewerUid] empty means nobody's rows come first, which is what a
+     * caller that does not know who is looking should get.
      *
      * [PurchaseRecord.isOpen] already excludes a soft-deleted row, which is
      * the whole point of a soft delete: the document survives so a PWA device
@@ -31,8 +39,22 @@ object PurchaseBoard {
      * been **partly** received is still open, so it keeps its place in its own
      * colour rather than dropping to the bottom.
      */
-    fun active(records: List<PurchaseRecord>): List<PurchaseRecord> =
-        records.filter { it.isOpen }.sortedWith(MOST_URGENT_FIRST)
+    fun active(
+        records: List<PurchaseRecord>,
+        viewerUid: String = ""
+    ): List<PurchaseRecord> =
+        records.filter { it.isOpen }.sortedWith(mostUrgentFirst(viewerUid))
+
+    /**
+     * Whether [record] is the viewer's own.
+     *
+     * Both sides must be a real uid. A blank `byUid` is a row the PWA wrote
+     * without recording an author, and `"" == ""` would make every one of
+     * them everybody's — so a row whose author cannot be proved always sorts
+     * as somebody else's.
+     */
+    fun isMine(record: PurchaseRecord, viewerUid: String): Boolean =
+        viewerUid.isNotBlank() && record.byUid == viewerUid
 
     /**
      * Received or cancelled, newest first — and **never** a removed one.
@@ -62,7 +84,7 @@ object PurchaseBoard {
     }
 
     /**
-     * Urgency, then newest, then the id.
+     * Mine, then urgency, then newest, then the id.
      *
      * The rank comes from [UrgencyV2.rank] rather than the enum's declaration
      * order, so reordering the enum cannot silently reorder the board.
@@ -72,9 +94,13 @@ object PurchaseBoard {
      * and a comparator that called them equal would let the list reorder
      * itself between recompositions, which on a `LazyColumn` keyed by id is a
      * visible jump under the thumb.
+     *
+     * Built per viewer rather than held as a constant, because the first key
+     * depends on who is looking.
      */
-    private val MOST_URGENT_FIRST: Comparator<PurchaseRecord> =
-        compareBy<PurchaseRecord> { it.urgency.rank }
+    private fun mostUrgentFirst(viewerUid: String): Comparator<PurchaseRecord> =
+        compareBy<PurchaseRecord> { if (isMine(it, viewerUid)) 0 else 1 }
+            .thenBy { it.urgency.rank }
             .thenByDescending { addedAt(it) }
             .thenByDescending { it.id }
 

@@ -219,6 +219,43 @@ class PurchaseViewModelTest {
         assertEquals("uid_worker", store.writes.single()["byUid"])
     }
 
+    // --- what the board shows, and in what order ---------------------------------
+
+    @Test
+    fun `the board puts this person's own requirements first`() = runTest {
+        val mine = record(id = "pr_mine", createdAt = 1_000).copy(
+            byUid = admin.uid,
+            urgency = UrgencyV2.NORMAL
+        )
+        val theirs = record(id = "pr_theirs", createdAt = 9_000).copy(
+            byUid = "uid_someone",
+            urgency = UrgencyV2.CRITICAL
+        )
+        val model = viewModel(
+            member = admin,
+            requirements = MutableStateFlow(listOf(theirs, mine))
+        )
+
+        // Older and greener, and still first, because it is theirs.
+        assertEquals(listOf("pr_mine", "pr_theirs"), model.active.value.map { it.id })
+    }
+
+    @Test
+    fun `a removed requirement reaches the view model and appears in neither list`() = runTest {
+        // The repository used to drop these before they got here, which made
+        // the board's own filter redundant. History needs them, so the board's
+        // filter is now the only thing standing between a removed row and the
+        // screen.
+        val removed = record(id = "pr_gone").copy(deleted = true, byUid = admin.uid)
+        val model = viewModel(
+            member = admin,
+            requirements = MutableStateFlow(listOf(removed, record()))
+        )
+
+        assertEquals(listOf("pr_one"), model.active.value.map { it.id })
+        assertTrue("and never as history either", model.closed.value.isEmpty())
+    }
+
     // --- the creator's own window ----------------------------------------------
 
     @Test

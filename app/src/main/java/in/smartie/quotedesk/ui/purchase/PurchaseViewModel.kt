@@ -162,13 +162,14 @@ class PurchaseViewModel(
     }
 
     /**
-     * Waiting to be bought, newest first — sorted **here**, never by
-     * Firestore. `docs/N4-plan.md` records why an `orderBy("t")` is unsafe:
-     * it drops rows that have no `t`, and a requirement that silently
-     * vanishes from the shop floor is worse than the read cost.
+     * Waiting to be bought: **this person's own first**, then everyone
+     * else's, most urgent within each — sorted **here**, never by Firestore.
+     * `docs/N4-plan.md` records why an `orderBy("t")` is unsafe: it drops
+     * rows that have no `t`, and a requirement that silently vanishes from
+     * the shop floor is worse than the read cost.
      */
     val active: StateFlow<List<PurchaseRecord>> = visible
-        .map { PurchaseBoard.active(it) }
+        .map { PurchaseBoard.active(it, member.uid) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Received or cancelled, newest first. A removed one is in neither list. */

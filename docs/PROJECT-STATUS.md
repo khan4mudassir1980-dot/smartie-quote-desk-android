@@ -1,14 +1,14 @@
 # Project status
 
 **The single current-status record. Read this before planning or changing
-anything.** Last updated 2026-09-20.
+anything.** Last updated 2026-09-22.
 
 ## Where the work is
 
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `2328932` — [run #108](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35536237079), fully green (unit tests, lint, Firestore rules emulator, APK build). **This is the commit to deploy the rules from.** |
+| **Last CI-verified head** | `3f1c988` — [run #112](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35720565293), fully green (unit tests, lint, Firestore rules emulator, APK build). **This is the commit to deploy the rules from, and its `smartie-native-apks` artifact is the APK to install.** |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -25,7 +25,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N2 Products | **Complete and verified** |
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
-| N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2, creator self-service, is code complete and CI-verified**, and is waiting on an Owner-run staging rules deployment paired with the APK rollout; the history screen is Batch 5 and the tab badge is Batch 6 |
+| N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2 and N4.3 are both code complete and CI-verified**, and both are waiting on the same Owner-run staging rules deployment paired with the APK rollout — they were never deployed separately and must not be. Purchase History is built and open to every role, so what was Batch 5 is done; the tab badge is Batch 6 |
 | N5–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -323,6 +323,123 @@ written. Nothing was merged to `main` and no pull request exists.
 banner, so **T-S25 stays blocked** on the batch that makes a requirement creatable from a
 screen.
 
+### N4.3, the phone pass changes: own rows first, History for everyone, and the creator finishes what they raised
+
+Verified at `3f1c988`,
+[run #112](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35720565293),
+all three jobs green. The plan of record is `docs/N4.3-plan.md`.
+
+| Commit | What |
+|---|---|
+| `0bd838c` | `docs/N4.3-plan.md` — the Owner's decisions, the deferred rules-level history item, the role matrix |
+| `d9ae2a3` | The open list puts the viewer's own requirements first |
+| `4aff19c` | The Add and Edit sheets keep the Note field and the buttons out from behind the keyboard |
+| `c5c7f66` | The creator may record what arrives against their own requirement — app side |
+| `88f343f` | The same permission in the rules, and the emulator tests that prove it |
+| `73c0205` | Purchase History for every role, with removals folded away at the bottom |
+| `c0fe76f` | A test helper call that did not compile, and the assertion it was hiding |
+| `a0bf1f1` | The N4.2 acceptance rows reconciled with the creator's new powers |
+| `3f1c988` | The form sheets use the window, and four tests that still pinned the old truth |
+
+**Receiving writes no stock movement and changes no Our Stock quantity.** The
+Owner asked this be established before anything was planned, and it was:
+`PurchaseWriteRepository` is built with `FirestorePurchaseStore(firestore)`
+alone (`AppContainer.kt:42`), which touches only the `purchase` collection;
+`stocked` and `stockedQty` are read (`OperationsReaders.kt:34-35`) and written
+nowhere. The rules agree — `stockWriter()` is `admin() || staff()`, so a
+`worker` cannot write `/stock` or `/stockMoves` at all. Giving a Staff account
+Receive therefore gives it nothing over stock.
+
+**A requirement you raised is one you can finish.** N4.2 let the creator
+correct or remove an untouched requirement; N4.3 adds Receive — partial and
+full — and Close with N received. The post-receipt lock is unchanged and
+deliberate: once something has arrived, Edit, Urgency and Remove go, because
+the row is now a record of what arrived. Reopen stays Owner and Administrator
+only. A Manager's powers over other people's requirements are untouched.
+
+**The rules carry it, not the hidden buttons.** `prDelivery()` is one
+definition shared by the displayed Manager's branch and the creator's, so the
+two cannot drift apart, and every existing invariant still binds it —
+`prIdentityPinned()` and `revOk()` sit above the disjunction,
+`prRcvNotReduced()`, `prShortfallKeys()` and the shortfall's
+`request.qty == resource.rcvQty` are reused verbatim. No creator branch can
+reach a reopen: `prOpen()` is false on a closed row and `prShortfall()`
+requires `received != true`.
+
+**History is filtered in the app, by the Owner's decision, and the reason is
+recorded so it is not re-proposed.** Firestore evaluates a list query against
+its *constraints*, not document by document, so the moment a read rule
+mentions `resource.data` an unconstrained listener is refused — and the
+filtered query that would replace it (`where('del','==',false)`) silently
+drops every legacy row carrying `del: 1` or no `del` at all, and would refuse
+the PWA's own listener in the same project. Owner, Administrator and Manager
+see everyone's received and removed rows; a Staff account sees only the rows
+it raised, and a row the PWA wrote without recording an author belongs to
+nobody and is in no Staff account's history. **This hides rows from a screen;
+it does not stop a determined client reading them.**
+
+**`observeRequirements()` stops dropping removed rows**, because History needs
+them and a second query would double the tab's cost against a shared daily
+quota to fetch rows the first one already holds. All three consumers were
+audited: `AppDataViewModel` and `SmartieApp` pass the flow through, and
+`PurchaseViewModel` filters through `PurchaseBoard`, whose own filter is
+load-bearing again rather than redundant — `PurchaseViewModelTest` guards it.
+There is no badge and no count to regress; `openRequirementCount` does not
+exist.
+
+**Removals record who and when.** `delBy` and `delAt` join the remove key
+list, constrained in the rules — `delBy` a string of 80 characters or fewer,
+`delAt` a number — and `deletedBy` is now pinned to the caller's uid, which it
+was not before: the old rule let any permitted remover write any uid there.
+There is deliberately **no `request.time` comparison**, because an offline
+write carries the device clock and a server-time bound would refuse a removal
+made in a basement and synced later. A legacy removal that stamped neither
+still renders, and the screen invents neither a name nor a date for it.
+
+**Five existing emulator tests changed, all by design and all reported.** Four
+asserted the limited role could not deliver, against rows whose `byUid` *is*
+that account. The fifth, in `data.test.js`, ended on a refusal of the worker's
+own receipt. A sixth was rewritten although it did not fail: its refusals
+would have survived on `prQtyKept()` rather than on the receipt gate — passing
+for the wrong reason and no longer testing what it named.
+
+**1027 Kotlin test methods across 89 classes**, up from 976
+across 86 after N4.2; **148 emulator tests**, up from 137, of which 62 are the
+purchase rules; 48 importer and tool tests unchanged. Still **0 instrumentation
+tests**.
+
+**The sheet fix was wrong the first time, and a test said so.** The compact
+urgency chips freed room inside a box that was still capped at half the
+window — `sheetBodyHeight()`, 320dp on a 640dp phone — so the Note field was
+still below the fold and five tests failed on run #111. The cap is gone
+from the purchase **form** sheets: the window is the only bound a form needs,
+and the weighted scroll child gives way to the keyboard. The stock sheets
+keep the cap, because their bodies are lists.
+
+**Nine tests failed before this went green, and every one of them was real.**
+Five were the layout defect above. Three asserted what N4.3 deliberately
+changed — the built More entries, and the creator's controls before and after
+a delivery. One asked for a node by a word the screen now uses twice, as both
+the section heading and a row's status tag. None was made green by weakening
+it.
+
+**`firestore.indexes.json` is unchanged** and no new query was introduced, so
+no index deploy is needed.
+
+**The rules change cannot break the PWA.** It only widens who may write — one
+new alternative inside the existing creator branch, plus two field names in
+the remove list. No read rule changed, no query changed, no field became
+newly required, and a receipt a Staff account records is an ordinary receipt.
+The standing cutover restriction is unaffected: the PWA overwrites `rcvQty`
+and carries no `rev`, so the two apps still must not both write Purchase
+requirements in one project.
+
+**⚠️ The rules are changed and NOT deployed.** Staging only, the Owner's to
+run, and in the same sitting as the APK — the two halves are one feature.
+Production rules are untouched, production was neither read nor written, the
+PWA was not modified, no role value moved and no account changed. Nothing
+merged to `main`, no pull request, nothing amended or force-pushed.
+
 ### N4.2, creator self-service
 
 Verified at `924786c`,
@@ -611,31 +728,70 @@ merged to `main`, no pull request.
 
 ## Current next action
 
-**Deploy the N4.2 rules to staging, and put the new APK on every phone in the
-same sitting.**
+**Deploy the N4.2 + N4.3 rules to staging, and put the new APK on every phone
+in the same sitting.**
 
-Both halves, together, because the rules get **stricter for a Manager** as
-well as looser for Staff. A Manager still running the Batch C build would be
-offered Edit on a requirement a delivery has reached and would be refused by
-the server. Staff's new abilities are the safe direction — an old build
-simply does not offer them — so it is the Manager restriction that must not
-run ahead of the APK.
+Both halves, together, and both batches at once — the ruleset in the
+repository carries N4.2 and N4.3 and there is no version of it that carries
+only one. The pairing matters in both directions. The rules got **stricter
+for a Manager** in N4.2: a Manager still running the Batch C build would be
+offered Edit on a requirement a delivery has reached and be refused by the
+server. They got **looser for the person who raised a requirement** in N4.3:
+on the old APK that simply goes unused, which is the safe direction, but the
+Staff phone testing the new rows needs the new build to have the controls at
+all.
 
 The Owner runs the deployment; this branch never deploys, and production
-rules are not part of it. The build is the `smartie-native-apks` artifact of
-[run #106](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35523545235),
-and it must show **Staging**.
+rules are not part of it:
 
-Then the phone rows: **T-C1 to T-C15** in `docs/N4.2-plan.md`, plus the N4
+```powershell
+cd firestore
+firebase.cmd deploy --only firestore:rules --project smartie-quote-desk-staging
+```
+
+The build is the `smartie-native-apks` artifact of
+[run #112](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35720565293),
+and it must show **Staging**. No index deploy: `firestore.indexes.json` has
+not changed since `69d0fce`.
+
+Then the phone rows: **T-C1 to T-C15** in `docs/N4.2-plan.md` as
+`docs/N4.3-plan.md` reconciles them, the new **T-D1 to T-D16**, and the N4
 rows the Batch C pass did not reach — every role-specific row, T-R16, T-R17,
-and N3's **T-S25**. Batch 5, the read-only Purchase History screen, comes
-after, and carries a binding requirement: **a Staff account sees only the
-rows it raised**.
+and N3's **T-S25**. Four of the T-D rows can only be run on a phone and are
+marked so in the plan: T-D14 and T-D15 need a real keyboard, because
+Robolectric has no IME and `imePadding()` resolves to zero insets there.
 
-**No N4 or N4.2 acceptance row is passed until it has been run.** The Batch C
-pass confirmed eight things and they are listed above; nothing else.
+**No N4, N4.2 or N4.3 acceptance row is passed until it has been run.** The
+Batch C pass confirmed eight things and they are listed above; the run #106
+pass confirmed T-C1, T-C3, T-C4, T-C15 and the Staff "no History" half of
+T-C5 — and T-C4 and T-C5 have since been superseded and reworded, so those
+two are open again. Nothing else.
 
 ## Decisions that bind future work
+
+**Purchase History is filtered in the app, not in the rules, and that is
+deliberate.** The Owner decided it after seeing why: Firestore evaluates a
+list query against its *constraints* rather than document by document, so the
+moment the read rule mentions `resource.data` the app's one unconstrained
+`/purchase` listener is refused. The query that would replace it,
+`where('del','==',false)`, silently drops every legacy row carrying `del: 1`
+or no `del` at all, and refuses the PWA's own listener in the same project.
+So the screen hides rows it should not show; it does not stop a determined
+client reading them, and no document in this repository may say otherwise.
+
+**Deferred, not dropped: a rules-level restriction on reading other people's
+Purchase history.** Only after the PWA is retired, and only together with a
+one-time normalisation of `del` to a boolean across every existing
+requirement. Until both are true, proposing it again is re-deciding something
+already decided.
+
+**A requirement you raised is one you can finish, and not one you can
+rewrite.** The creator may correct or remove a requirement while nothing has
+arrived, and may record deliveries and write off a shortfall for as long as
+it is open. The moment a delivery lands, Edit, Urgency and Remove go and
+Receive stays: the row has become a record of what arrived. Reopen is Owner
+and Administrator only, and a reopen hands the row back to its creator whole.
+
 
 **Spark limits come in three kinds and are not interchangeable.** Daily
 operation quotas (50,000 reads, 20,000 writes, 20,000 deletes) reset daily;

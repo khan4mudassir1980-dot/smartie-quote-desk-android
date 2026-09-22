@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -64,7 +65,10 @@ class PurchaseHistoryScreenTest {
     fun `received requirements are listed, with what actually arrived`() {
         history(listOf(received))
 
-        compose.onNodeWithText(RECEIVED_SECTION).assertIsDisplayed()
+        // Two nodes read exactly "Received" — this heading and the row's own
+        // status tag — so the heading is taken by position rather than by a
+        // selector that would match either.
+        compose.onAllNodesWithText(RECEIVED_SECTION).onFirst().assertIsDisplayed()
         compose.onNodeWithText("Sliding gate rack").assertIsDisplayed()
         assertTrue(shows("6 in"))
     }

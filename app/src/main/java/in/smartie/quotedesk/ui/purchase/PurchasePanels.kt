@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
@@ -49,7 +48,6 @@ import `in`.smartie.quotedesk.domain.PurchaseWrite
 import `in`.smartie.quotedesk.ui.components.SmartieField
 import `in`.smartie.quotedesk.ui.components.SmartieGhostButton
 import `in`.smartie.quotedesk.ui.components.SmartiePrimaryButton
-import `in`.smartie.quotedesk.ui.components.sheetBodyHeight
 import `in`.smartie.quotedesk.ui.components.clickableNoRipple
 import `in`.smartie.quotedesk.ui.components.urgencyColour
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
@@ -120,7 +118,10 @@ data class PurchaseCapabilities(
     /** **Owner and Administrator only.** */
     val reopen: Boolean = false,
     val remove: Boolean = false,
-    /** Close it at what arrived. Owner, Administrator and Manager. */
+    /**
+     * Close it at what arrived. Owner, Administrator and Manager — and, since
+     * N4.3, the person who raised it.
+     */
     val shortfall: Boolean = false
 ) {
     /** Whether a card needs a control row at all. */
@@ -748,8 +749,16 @@ private fun moveNext(focus: FocusManager): KeyboardActions =
  *
  * The scrolling area takes what height is left rather than a share of the
  * window: `weight(1f, fill = false)` lets it shrink to its content on a tall
- * phone and give way to the keyboard on a short one, which is what
- * [sheetBodyHeight]'s fixed cap could not do.
+ * phone and give way to the keyboard on a short one.
+ *
+ * **And no fixed cap**, which is the part a first attempt got wrong.
+ * `sheetBodyHeight()` is half the window, so on a 640dp phone the fields had
+ * 320dp between them and the Note field stayed below the fold — the very
+ * defect the Owner reported. The window is the only bound this panel needs:
+ * the dialog measures it against what is left after the keyboard, and the
+ * weighted child absorbs the difference. The stock sheets keep the cap;
+ * their bodies are lists, which want a bound, and these are forms, which do
+ * not.
  */
 @Composable
 private fun PurchaseFormPanel(
@@ -758,9 +767,7 @@ private fun PurchaseFormPanel(
     actions: @Composable () -> Unit
 ) {
     Column(
-        Modifier
-            .heightIn(max = sheetBodyHeight())
-            .imePadding(),
+        Modifier.imePadding(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Column(

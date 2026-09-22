@@ -620,25 +620,33 @@ class PurchaseViewModelTest {
     }
 
     @Test
-    fun `the creator's own untouched requirement offers them all three`() = runTest {
+    fun `the creator's own untouched requirement offers them everything but a reopen`() = runTest {
         val mine = record().copy(byUid = worker.uid)
         val allowed = viewModel(member = worker).capabilities(mine)
 
         assertTrue(allowed.edit)
         assertTrue(allowed.remove)
-        assertFalse("receiving is never theirs", allowed.receive)
-        assertFalse(allowed.reopen)
-        assertFalse(allowed.shortfall)
+        // N4.3: a requirement you raised is one you can finish.
+        assertTrue("receiving is theirs now", allowed.receive)
+        assertFalse("reopening never is", allowed.reopen)
+        assertFalse("nothing has arrived to write off", allowed.shortfall)
     }
 
     @Test
-    fun `and loses all three the moment a snapshot says something arrived`() = runTest {
+    fun `and keeps only the receiving of it once a snapshot says something arrived`() = runTest {
         val mine = record().copy(byUid = worker.uid)
         val partly = mine.copy(receivedQuantity = 4.0, receivedBy = "Sam")
         val model = viewModel(member = worker)
 
         assertTrue("before the delivery", model.capabilities(mine).anyRowAction)
-        assertFalse("after it", model.capabilities(partly).anyRowAction)
+
+        // The row is a record of what arrived now, so correcting and removing
+        // it go — but finishing it does not, and the shortfall appears.
+        val after = model.capabilities(partly)
+        assertFalse("correcting it", after.edit)
+        assertFalse("removing it", after.remove)
+        assertTrue("finishing it", after.receive)
+        assertTrue("or writing off what will not come", after.shortfall)
     }
 
     @Test

@@ -89,9 +89,11 @@ class MoreMenuTest {
     }
 
     @Test
-    fun `Team and About are built, the rest name their phase`() {
+    fun `the built destinations are named, and the rest name their phase`() {
+        // Purchase history joined them in N4.3; it is a screen now, not a
+        // promise of one.
         val built = MoreMenu.destinations.filter { it.phase == null }.map { it.label }
-        assertEquals(listOf("Team", "About & legal"), built)
+        assertEquals(listOf("Purchase history", "Team", "About & legal"), built)
         MoreMenu.destinations.filter { it.phase != null }.forEach {
             assertTrue(it.label, it.phase!!.matches(Regex("N[0-9]")))
         }

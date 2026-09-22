@@ -568,33 +568,66 @@ internal fun PurchaseRowActions(
 ) {
     if (!capabilities.anyRowAction) return
     val dimens = LocalSmartieDimens.current
-    val open = record.isOpen
 
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(dimens.gapS),
         verticalArrangement = Arrangement.spacedBy(dimens.gapXs)
     ) {
-        if (open && capabilities.edit) {
-            RowAction(EDIT, PurchaseSheet.EDIT, record, online, saving, actions)
-            RowAction(URGENCY, PurchaseSheet.URGENCY, record, online, saving, actions)
+        rowActionsFor(record, capabilities).forEach { action ->
+            RowAction(action.text, action.sheet, record, online, saving, actions, action.danger)
         }
-        if (open && capabilities.receive) {
-            RowAction(MARK_RECEIVED, PurchaseSheet.RECEIVE, record, online, saving, actions)
-        }
-        // Only on a requirement that is part way there: nothing has arrived
-        // means remove it, and everything has means it closes itself.
-        if (open && capabilities.shortfall) {
-            RowAction(CLOSE_SHORT, PurchaseSheet.SHORTFALL, record, online, saving, actions)
-        }
-        // Only a closed requirement can come back, and only for the two roles
-        // the rules cannot be made to check.
-        if (!open && capabilities.reopen) {
-            RowAction(REOPEN, PurchaseSheet.REOPEN, record, online, saving, actions)
-        }
-        if (capabilities.remove) {
-            RowAction(REMOVE, PurchaseSheet.REMOVE, record, online, saving, actions, danger = true)
-        }
+    }
+}
+
+/** One offered control, and what it opens. */
+private data class RowActionSpec(
+    val sheet: PurchaseSheet,
+    val text: String,
+    val danger: Boolean = false
+)
+
+/**
+ * The controls this card offers, in one fixed order.
+ *
+ * **Fixed so every role sees the same shape.** Received is what people come
+ * to a card to do and leads wherever it is offered; Edit and Urgency are the
+ * corrections; writing off a shortfall, reopening and removing are rarer and
+ * come last. A Manager's card and an Owner's differ in what is on them, never
+ * in the order of what they share.
+ *
+ * **They all stand on the card**, and an overflow `⋯` was built and taken out
+ * again. Three inline plus a fold would have been one tidy row in every case
+ * rather than most, but it puts Remove behind a tap — and a missing Remove is
+ * precisely what the phone pass reported. With the buttons compact, four fit
+ * on one row at 360dp; only an Owner looking at a part-delivered requirement
+ * sees five, and that wraps to a second row, which is safe now that
+ * `SmartieCard` measures what it draws.
+ */
+private fun rowActionsFor(
+    record: PurchaseRecord,
+    capabilities: PurchaseCapabilities
+): List<RowActionSpec> = buildList {
+    val open = record.isOpen
+    if (open && capabilities.receive) {
+        add(RowActionSpec(PurchaseSheet.RECEIVE, MARK_RECEIVED))
+    }
+    if (open && capabilities.edit) {
+        add(RowActionSpec(PurchaseSheet.EDIT, EDIT))
+        add(RowActionSpec(PurchaseSheet.URGENCY, URGENCY))
+    }
+    // Only on a requirement that is part way there: nothing has arrived means
+    // remove it, and everything has means it closes itself.
+    if (open && capabilities.shortfall) {
+        add(RowActionSpec(PurchaseSheet.SHORTFALL, CLOSE_SHORT))
+    }
+    // Only a closed requirement can come back, and only for the two roles the
+    // rules cannot be made to check.
+    if (!open && capabilities.reopen) {
+        add(RowActionSpec(PurchaseSheet.REOPEN, REOPEN))
+    }
+    if (capabilities.remove) {
+        add(RowActionSpec(PurchaseSheet.REMOVE, REMOVE, danger = true))
     }
 }
 
@@ -615,6 +648,11 @@ private fun RowAction(
         onClick = { actions.onOpen(sheet, record) },
         enabled = online && !saving,
         danger = danger,
+        // C5's "smaller". 14dp of padding each side on four controls is
+        // 112dp of the 303dp a card has at 360dp, spent on nothing. The
+        // target below is untouched — it is the padding that shrinks, not
+        // what a thumb has to hit.
+        compact = true,
         // Semantics **outermost**: a semantics node reports the bounds at its
         // own position in the chain, so one placed under the sizing would
         // describe the words rather than the target they sit in.

@@ -134,3 +134,4 @@ internal fun ComposeContentTestRule.openHistoryFor(records: List<PurchaseRecord>
     val count = PurchaseBoard.closed(records).size
     if (count > 0) openHistory(count)
 }
+

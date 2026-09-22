@@ -70,7 +70,16 @@ fun SmartieGhostButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    danger: Boolean = false
+    danger: Boolean = false,
+    /**
+     * Narrower padding and a smaller face, for a row of several.
+     *
+     * The height is untouched — `buttonHeightCompact` either way — so what a
+     * thumb has to hit does not change. Only the space around the words does,
+     * which is what lets four card controls share one row at 360dp instead of
+     * three.
+     */
+    compact: Boolean = false
 ) {
     val dimens = LocalSmartieDimens.current
     OutlinedButton(
@@ -80,10 +89,20 @@ fun SmartieGhostButton(
         colors = ButtonDefaults.outlinedButtonColors(
             contentColor = if (danger) SmartieColors.Danger else SmartieColors.Ink2
         ),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            horizontal = if (compact) 9.dp else 14.dp
+        ),
         modifier = modifier.heightIn(min = dimens.buttonHeightCompact)
     ) {
-        Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+        Text(
+            text,
+            style = if (compact) {
+                MaterialTheme.typography.labelMedium
+            } else {
+                MaterialTheme.typography.labelLarge
+            },
+            maxLines = 1
+        )
     }
 }
 

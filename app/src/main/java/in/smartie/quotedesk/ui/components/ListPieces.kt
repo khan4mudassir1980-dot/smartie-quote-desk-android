@@ -17,7 +17,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
 import `in`.smartie.quotedesk.ui.theme.SmartieColors
@@ -89,6 +91,20 @@ fun ListRow(
     footer: (@Composable () -> Unit)? = null,
     background: Color = SmartieColors.Panel,
     accent: Color? = null,
+    /**
+     * The figure a person came to the card to read, set larger and bolder.
+     *
+     * Off by default: on most rows the secondary line is an email address or
+     * a model code, and emphasising those would just make every card shout.
+     * On a requirement it is `10 required · 4 received · 6 remaining`, which
+     * is the whole point of the card, so it is on there — and it wraps to two
+     * lines rather than ellipsizing, because a figure cut off mid-sentence is
+     * worse than a card one line taller.
+     */
+    emphasiseSecondary: Boolean = false,
+    /** A note in its own tinted box, so it reads as somebody's words. */
+    tintNote: Boolean = false,
+    padding: Dp = LocalSmartieDimens.current.cardPadding,
     onClick: (() -> Unit)? = null
 ) {
     val dimens = LocalSmartieDimens.current
@@ -97,7 +113,8 @@ fun ListRow(
             if (onClick != null) Modifier.clickableNoRipple(onClick) else Modifier
         ),
         background = background,
-        accent = accent
+        accent = accent,
+        padding = padding
     ) {
         // **A Column, and it has to be.** `SmartieCard` puts its content in a
         // `Box`, which stacks its children — so with two of them the footer
@@ -122,23 +139,49 @@ fun ListRow(
                     if (secondary != null) {
                         Text(
                             secondary,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = SmartieColors.Steel,
-                            maxLines = 1,
+                            style = if (emphasiseSecondary) {
+                                MaterialTheme.typography.titleSmall
+                            } else {
+                                MaterialTheme.typography.bodySmall
+                            },
+                            color = if (emphasiseSecondary) {
+                                SmartieColors.Ink
+                            } else {
+                                SmartieColors.Steel
+                            },
+                            fontWeight = if (emphasiseSecondary) FontWeight.Bold else null,
+                            maxLines = if (emphasiseSecondary) 2 else 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
                     if (!note.isNullOrBlank()) {
-                        Text(
-                            note,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = SmartieColors.Ink2,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
-                            // A tag, not a content description: a description
-                            // would be read out *instead of* the note.
-                            modifier = Modifier.testTag(NOTE_TAG).padding(top = dimens.gapXs)
-                        )
+                        val noteText = @Composable {
+                            Text(
+                                note,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SmartieColors.Ink2,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                                // A tag, not a content description: a
+                                // description would be read out *instead of*
+                                // the note.
+                                modifier = Modifier.testTag(NOTE_TAG)
+                            )
+                        }
+                        if (tintNote) {
+                            Box(
+                                Modifier
+                                    .padding(top = dimens.gapXs)
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(dimens.radiusSmall))
+                                    .background(SmartieColors.PurpleTint)
+                                    .padding(horizontal = dimens.gapS, vertical = dimens.gapXs)
+                            ) {
+                                noteText()
+                            }
+                        } else {
+                            Box(Modifier.padding(top = dimens.gapXs)) { noteText() }
+                        }
                     }
                     if (meta != null) {
                         Text(

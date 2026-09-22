@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
 import `in`.smartie.quotedesk.ui.theme.SmartieColors
@@ -137,6 +138,15 @@ fun SmartieCard(
     background: Color = SmartieColors.Panel,
     borderColor: Color = SmartieColors.Rule,
     accent: Color? = null,
+    /**
+     * Defaulted to `cardPadding`, so every existing card is unmoved.
+     *
+     * A parameter rather than a smaller token, because the purchase card is
+     * the one the Owner asked to tighten and the stock and products cards
+     * were not complained about. Moving the token would have moved all of
+     * them on a guess.
+     */
+    padding: Dp = LocalSmartieDimens.current.cardPadding,
     content: @Composable () -> Unit
 ) {
     val dimens = LocalSmartieDimens.current
@@ -161,7 +171,7 @@ fun SmartieCard(
             // The bar's width first, so the content clears it exactly as it
             // did when the bar was a sibling taking up that space.
             .padding(start = if (accent == null) 0.dp else barWidth)
-            .padding(dimens.cardPadding)
+            .padding(padding)
     ) {
         content()
     }

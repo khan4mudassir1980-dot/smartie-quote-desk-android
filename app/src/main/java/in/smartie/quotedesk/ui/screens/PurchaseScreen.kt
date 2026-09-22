@@ -17,6 +17,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import `in`.smartie.quotedesk.data.mapping.Money
@@ -381,6 +383,13 @@ internal fun PurchaseRow(
         note = item.note.takeIf { it.isNotBlank() },
         meta = creatorLine(item),
         accent = urgencyColour(item.urgency),
+        // C2, C3 and C4. The quantity line is what a person came to the card
+        // to read, so it is the thing set large; the note is somebody's words,
+        // so it sits in its own box; and the card gives back the padding that
+        // made a board of eight requirements longer than it needed to be.
+        emphasiseSecondary = true,
+        tintNote = true,
+        padding = PURCHASE_CARD_PADDING,
         tags = {
             // Filled, not toned: the accent bar alone was invisible in use.
             UrgencyTag(item.urgency)
@@ -433,6 +442,15 @@ private fun formatDate(millis: Long): String =
     SimpleDateFormat("d MMM yyyy", Locale.forLanguageTag("en-IN")).format(Date(millis))
 
 // --- wording ---------------------------------------------------------------
+
+/**
+ * Tighter than `cardPadding`, for the one card the Owner asked to compact.
+ *
+ * 15dp all round put 30dp of nothing between the words and the card's edges
+ * on a 360dp phone, which is a tenth of the width. 10dp is still clear of the
+ * border and gives a board of eight requirements most of a card back.
+ */
+internal val PURCHASE_CARD_PADDING: Dp = 10.dp
 
 internal const val OPEN_SECTION: String = "Open"
 

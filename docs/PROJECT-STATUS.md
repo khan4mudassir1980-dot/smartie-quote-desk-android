@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-22.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `3f1c988` — [run #112](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35720565293), fully green (unit tests, lint, Firestore rules emulator, APK build). **This is the commit to deploy the rules from, and its `smartie-native-apks` artifact is the APK to install.** |
+| **Last CI-verified head** | `505b8d9` — [run #123](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35750625322), fully green (unit tests, lint, Firestore rules emulator, APK build). **This is the commit to deploy the rules from, and its `smartie-native-apks` artifact is the APK to install.** |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -25,7 +25,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N2 Products | **Complete and verified** |
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
-| N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2 and N4.3 are both code complete and CI-verified**, and both are waiting on the same Owner-run staging rules deployment paired with the APK rollout — they were never deployed separately and must not be. Purchase History is built and open to every role, so what was Batch 5 is done; the tab badge is Batch 6 |
+| N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2, N4.3 and N4.4 are all code complete and CI-verified**, and both are waiting on the same Owner-run staging rules deployment paired with the APK rollout — they were never deployed separately and must not be. Purchase History is built and open to every role, so what was Batch 5 is done; the tab badge is Batch 6 |
 | N5–N8 | Not started |
 
 - Staging holds **403 products and 12 categories**, imported and verified
@@ -322,6 +322,111 @@ written. Nothing was merged to `main` and no pull request exists.
 **No N4 row may be called verified.** Purchase is still read-only behind its in-development
 banner, so **T-S25 stays blocked** on the batch that makes a requirement creatable from a
 screen.
+
+### N4.4, the run #113 phone pass: two defects and seven changes
+
+Verified at `505b8d9`,
+[run #123](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35750625322),
+all three jobs green. The plan of record is `docs/N4.4-plan.md`, and what a
+phone still owes is `docs/PHONE-TEST-CHECKLIST.md`.
+
+**Phone testing happens once now, at the end of a batch**, against one
+staging APK and one staging rules deploy. CI green stays mandatory on every
+push, which is what makes CI the only thing between a defect and that single
+pass — and this batch is the argument for taking that seriously.
+
+| Commit | What |
+|---|---|
+| `b5bb3ed` | `docs/N4.4-plan.md` and the new cumulative `docs/PHONE-TEST-CHECKLIST.md` |
+| `116e164` | The clipping-aware test helper, and B1 reproduced before it was fixed |
+| `a1d25ab` | B1: the accent bar is painted rather than laid out |
+| `efe8090` | B2: one requirement, one document, however many times it is tried |
+| `d0ec4b7`, `c3d3b91`, `950d118` | Three rounds of correcting the new tests, below |
+| `162ce5b` | C1 and C7: History folded away, and Staff stops seeing other people's deliveries |
+| `db8ee33` | Two assertions that still asked for the renamed flow |
+| `97d9294` | C2 to C5: the card compacted, the quantity line emphasised, the note boxed |
+| `505b8d9` | C6: a person's role beside their name, where the rules allow it |
+
+**B1 was one cause with two faces, and the test came first.** `SmartieCard`
+fixed its height with `height(IntrinsicSize.Min)` for one reason — so a 3dp
+accent bar could `fillMaxHeight()` — and an intrinsic measurement asks a
+`FlowRow` how tall it would be at a width it will not finally get. Where the
+two disagree the card's height is wrong in one direction or the other: too
+short and the rounded clip erases whatever wrapped past it, which is how
+Remove and Close-short went missing on every card and for every role; too
+tall and the surplus is the "large blank area under the buttons" the same
+report described. The reproduction measured the second at **67px** before
+anything was changed. The bar is painted with `drawBehind` now and the card
+wraps its content, so neither face has a mechanism.
+
+**Why the suite could not see it.** `assertIsDisplayed()` asks a node about
+its own bounds and never asks whether an ancestor painted it, so a clipped
+control passes. `PurchaseSmallPhoneScreenTest` compounded it: the comment
+said "Four controls on one card" over a loop of three.
+`assertPaintedInsideCard` compares what a node would occupy against what
+survived its ancestors, and runs at 360dp against the purchase card, the
+stock card — same `FlowRow` pattern, same latent defect — and the shared
+`ListRow` and `SmartieCard` that the Products and Team cards are built from.
+
+**B2 was an idempotency gap, not a double tap.** `create()` minted a document
+id on every call, and the replay guarantee the repository documents covers
+Firestore re-running one transaction body, not two calls. The Add sheet stays
+open on a failure with the typing intact, and a write that failed *after* the
+server committed it is indistinguishable from one that never landed — so the
+retry the app invites wrote a twin. The id belongs to the open sheet now and
+a retry lands on the same document. `PurchaseRecord.id` is the Firestore
+document id rather than a stored `id` field, checked first as the Owner asked:
+nothing references a purchase row by that field, no fixture carries one that
+differs from its document id, and the only outward identifier on a
+requirement is `key`, which points at a stock row.
+
+**The count is still unexplained and is not being explained away.** All nine
+cards sat above the closed heading, inside Open, and the header is
+`active.size` over the same list `items(...)` iterates. It may have read 9 at
+that resolution. It has a test rather than an argument now: the Open header's
+number against the cards the board drew, including two documents that look
+alike, which are two requirements and are counted twice. **The two existing
+"yysh" rows are two real documents** — the fix stops new ones and cannot
+merge these, so both still show and the Owner removes one by hand.
+
+**Staff was being shown other people's deliveries on the main list.** The
+board asked `PurchaseBoard.closed`, which knows the state of a requirement
+and nothing about who raised it, while the History screen asked
+`PurchaseHistory`. One of them had to be wrong. Both ask `PurchaseHistory`
+now, so the Owner's standing decision holds wherever a received row appears.
+
+**C6 shows a role on an Owner's and an Administrator's phone and nowhere
+else**, and that is a rules fact rather than a preference: another person's
+`/users` document is readable by `admin()` only, so a Manager or a Staff
+account cannot look anyone up. The members listener is gated the way
+`quotingOnly` already gates products and quotations, so those accounts never
+attach one the server would refuse, and every line falls back to the name
+alone — which is also what a PWA-written row gets.
+
+**The `⋯` overflow was built and taken out again**, which is a deviation from
+the approved plan and is recorded as one. A `DropdownMenu` renders in a
+`Popup` a Robolectric test cannot dismiss, so every question about what a card
+offers would have left a menu open behind it; and an overflow puts Remove
+behind a tap, which is what the phone pass reported missing. The buttons are
+compact instead — narrower padding, smaller face, **the same 44dp height and
+48dp target** — and four share one row at 360dp where three did.
+
+**1065 Kotlin test methods across 98 classes**, up from 1027 across 89 after
+N4.3; **148 emulator tests** and 48 importer and tool tests unchanged, because
+`firestore/` was not touched. Still **0 instrumentation tests**.
+
+**Nothing in this batch changed a rule, an index, or a document.** No
+deployment, production neither read nor written, the PWA not modified, no role
+value moved and no account renamed. Nothing merged to `main`, no pull request,
+nothing amended or force-pushed.
+
+**Seven CI runs to get here, and five of them were mine.** Gradle cannot
+resolve the Android plugins in this container, so a Kotlin compile is a push
+away and two rounds went to compile errors. Three more went to tests that
+asked for things the app never promised — a 48dp target from a button the
+theme makes 44dp, a click action from a container whose children click, a
+44dp stepper the theme deliberately shrinks to 40 at 360dp. Each was corrected
+to what the app actually says rather than by loosening the check.
 
 ### N4.3, the phone pass changes: own rows first, History for everyone, and the creator finishes what they raised
 
@@ -728,18 +833,19 @@ merged to `main`, no pull request.
 
 ## Current next action
 
-**Deploy the N4.2 + N4.3 rules to staging, and put the new APK on every phone
-in the same sitting.**
+**Deploy the N4.2 + N4.3 rules to staging, put the new APK on every phone,
+and run the whole of `docs/PHONE-TEST-CHECKLIST.md` in one sitting.**
 
-Both halves, together, and both batches at once — the ruleset in the
-repository carries N4.2 and N4.3 and there is no version of it that carries
-only one. The pairing matters in both directions. The rules got **stricter
-for a Manager** in N4.2: a Manager still running the Batch C build would be
-offered Edit on a requirement a delivery has reached and be refused by the
-server. They got **looser for the person who raised a requirement** in N4.3:
-on the old APK that simply goes unused, which is the safe direction, but the
-Staff phone testing the new rows needs the new build to have the controls at
-all.
+Phone testing happens once now, at the end, so this is that sitting. The
+checklist is the cumulative record of what is owed and nothing else is: it
+carries N4.2's reconciled rows, N4.3's unrun ones, N4.4's new ones, and the
+older N3 and N3.1 rows neither pass reached.
+
+**N4.4 changed no rule**, so the ruleset to deploy is exactly the one N4.2
+and N4.3 left. Both batches deploy together — there is no version of the file
+that carries one without the other — and the pairing matters in both
+directions: the rules got stricter for a Manager in N4.2, and looser for the
+person who raised a requirement in N4.3, which the new build is what exercises.
 
 The Owner runs the deployment; this branch never deploys, and production
 rules are not part of it:
@@ -750,22 +856,19 @@ firebase.cmd deploy --only firestore:rules --project smartie-quote-desk-staging
 ```
 
 The build is the `smartie-native-apks` artifact of
-[run #112](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35720565293),
+[run #123](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35750625322),
 and it must show **Staging**. No index deploy: `firestore.indexes.json` has
 not changed since `69d0fce`.
 
-Then the phone rows: **T-C1 to T-C15** in `docs/N4.2-plan.md` as
-`docs/N4.3-plan.md` reconciles them, the new **T-D1 to T-D16**, and the N4
-rows the Batch C pass did not reach — every role-specific row, T-R16, T-R17,
-and N3's **T-S25**. Four of the T-D rows can only be run on a phone and are
-marked so in the plan: T-D14 and T-D15 need a real keyboard, because
-Robolectric has no IME and `imePadding()` resolves to zero insets there.
+**Two things to know before the pass, so neither reads as a defect.** The two
+existing "yysh" rows are two real documents — N4.4 stops new ones and cannot
+merge these, so both will still show and one is removed by hand. And a role
+will appear beside a name only on an Owner's or an Administrator's phone; a
+Manager's and a Staff account's show the name alone, because the rules do not
+let those accounts read `/users`.
 
-**No N4, N4.2 or N4.3 acceptance row is passed until it has been run.** The
-Batch C pass confirmed eight things and they are listed above; the run #106
-pass confirmed T-C1, T-C3, T-C4, T-C15 and the Staff "no History" half of
-T-C5 — and T-C4 and T-C5 have since been superseded and reworded, so those
-two are open again. Nothing else.
+**No acceptance row is passed until it has been run on a phone.** An
+automated test passing is not a pass in that file.
 
 ## Decisions that bind future work
 
@@ -778,6 +881,15 @@ moment the read rule mentions `resource.data` the app's one unconstrained
 or no `del` at all, and refuses the PWA's own listener in the same project.
 So the screen hides rows it should not show; it does not stop a determined
 client reading them, and no document in this repository may say otherwise.
+
+**Deferred, not dropped: a write-time role snapshot.** `byRole`, `rcvRole`
+and `delRole` on the requirement itself, validated in the rules against the
+writer's actual role, so that **every** role sees who did what rather than
+only an Owner or an Administrator. Today a person's role can be shown only
+where `/users` is readable, which is `admin()` alone, and N4.4's C6 falls back
+to the name for everybody else. This needs a rules change and is scheduled
+with a later rules batch — the Owner's decision, recorded so the fallback is
+not mistaken for the intended end state.
 
 **Deferred, not dropped: a rules-level restriction on reading other people's
 Purchase history.** Only after the PWA is retired, and only together with a

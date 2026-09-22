@@ -17,9 +17,12 @@ import `in`.smartie.quotedesk.data.model.StockRecord
 import `in`.smartie.quotedesk.data.model.StoppedStockRecord
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.Permissions
+import `in`.smartie.quotedesk.domain.TeamRoles
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -114,6 +117,32 @@ class AppDataViewModel(
     val requirements = container.operationsRepository.observeRequirements()
         .guarded("purchase requirements")
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * The team, for putting a role beside a name — **and empty for the roles
+     * that may not read it**.
+     *
+     * `/users` is readable only by an Owner or an Administrator. Purchase and
+     * Purchase history are open to every role, so attaching this listener
+     * unconditionally would mean a permission refusal on a screen a Manager
+     * or a Staff account is entitled to see. The gate is the same shape as
+     * `quotingOnly` below, and the consequence is recorded rather than hidden:
+     * on those phones a person is named without their role, which
+     * `PurchasePeople` treats as the ordinary case.
+     */
+    val members: StateFlow<List<Member>> =
+        if (Permissions.canViewTeam(member)) {
+            combine(
+                container.peopleRepository.observeMembers(),
+                container.authRepository.observeAccess()
+            ) { people, access ->
+                people.map {
+                    TeamRoles.resolve(it, access, container.authRepository.primaryOwnerEmail)
+                }
+            }.guarded("team members")
+        } else {
+            flowOf(emptyList())
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val quotations = quotingOnly(container.operationsRepository.observeQuotations())
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList<QuotationRecord>())

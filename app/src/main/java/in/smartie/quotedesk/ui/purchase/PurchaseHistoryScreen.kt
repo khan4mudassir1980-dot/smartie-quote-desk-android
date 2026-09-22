@@ -20,6 +20,7 @@ import `in`.smartie.quotedesk.data.mapping.Money
 import `in`.smartie.quotedesk.data.model.PurchaseRecord
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.PurchaseHistory
+import `in`.smartie.quotedesk.domain.PurchasePeople
 import `in`.smartie.quotedesk.ui.components.EmptyState
 import `in`.smartie.quotedesk.ui.components.ListRow
 import `in`.smartie.quotedesk.ui.components.SectionHeader
@@ -55,7 +56,9 @@ import java.util.Locale
 internal fun PurchaseHistoryScreen(
     records: List<PurchaseRecord> = emptyList(),
     viewer: Member = Member(uid = ""),
-    loading: Boolean = false
+    loading: Boolean = false,
+    /** The team by uid, or empty where this account may not read it. */
+    members: Map<String, Member> = emptyMap()
 ) {
     val dimens = LocalSmartieDimens.current
     val received = PurchaseHistory.received(records, viewer)
@@ -81,7 +84,7 @@ internal fun PurchaseHistoryScreen(
             received.isEmpty() -> item { EmptyState(NOTHING_RECEIVED) }
         }
 
-        items(received, key = { it.id }) { item -> HistoryRow(item) }
+        items(received, key = { it.id }) { item -> HistoryRow(item, members) }
 
         if (removed.isNotEmpty()) {
             item {
@@ -94,7 +97,7 @@ internal fun PurchaseHistoryScreen(
                 )
             }
             if (removedOpen) {
-                items(removed, key = { it.id }) { item -> HistoryRow(item) }
+                items(removed, key = { it.id }) { item -> HistoryRow(item, members) }
             }
         }
     }
@@ -107,12 +110,12 @@ internal fun PurchaseHistoryScreen(
  * waiting for it, and nobody is waiting for anything here.
  */
 @Composable
-private fun HistoryRow(item: PurchaseRecord) {
+private fun HistoryRow(item: PurchaseRecord, members: Map<String, Member> = emptyMap()) {
     ListRow(
         title = item.name,
         secondary = quantityLine(item),
         note = item.note.takeIf { it.isNotBlank() },
-        meta = closingLine(item),
+        meta = closingLine(item, members),
         accent = urgencyColour(item.urgency),
         // Neutral throughout: nothing here is waiting for anybody, so a
         // coloured tag would be shouting about a decision already taken.
@@ -140,19 +143,26 @@ private fun HistoryRow(item: PurchaseRecord) {
  * and the line reads simply "Removed"; a row is never dropped for want of a
  * stamp, and the screen never invents one.
  */
-internal fun closingLine(item: PurchaseRecord): String? = when {
-    item.deleted -> listOfNotNull(
-        REMOVED_TAG,
-        item.removedBy.takeIf { it.isNotBlank() }?.let { "by $it" },
-        item.removedAt.takeIf { it > 0L }?.let { "on ${formatDay(it)}" }
-    ).joinToString(" ")
+internal fun closingLine(
+    item: PurchaseRecord,
+    members: Map<String, Member> = emptyMap()
+): String? {
+    val remover = PurchasePeople.describe(item.removedBy, item.removedByUid, members)
+    val receiver = PurchasePeople.describe(item.receivedBy, item.receivedByUid, members)
+    return when {
+        item.deleted -> listOfNotNull(
+            REMOVED_TAG,
+            remover.takeIf { it.isNotBlank() }?.let { "by $it" },
+            item.removedAt.takeIf { it > 0L }?.let { "on ${formatDay(it)}" }
+        ).joinToString(" ")
 
-    item.receivedBy.isNotBlank() -> listOfNotNull(
-        "Received by ${item.receivedBy}",
-        item.receivedAt.takeIf { it > 0L }?.let { formatDay(it) }
-    ).joinToString(" · ")
+        receiver.isNotBlank() -> listOfNotNull(
+            "Received by $receiver",
+            item.receivedAt.takeIf { it > 0L }?.let { formatDay(it) }
+        ).joinToString(" · ")
 
-    else -> item.receivedAt.takeIf { it > 0L }?.let { "Received ${formatDay(it)}" }
+        else -> item.receivedAt.takeIf { it > 0L }?.let { "Received ${formatDay(it)}" }
+    }
 }
 
 private fun formatDay(millis: Long): String =

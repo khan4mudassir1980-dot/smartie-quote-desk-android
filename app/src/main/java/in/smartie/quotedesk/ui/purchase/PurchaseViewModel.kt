@@ -19,6 +19,7 @@ import `in`.smartie.quotedesk.domain.PurchaseAccess
 import `in`.smartie.quotedesk.domain.PurchaseBoard
 import `in`.smartie.quotedesk.domain.PurchaseDraft
 import `in`.smartie.quotedesk.domain.PurchaseHistory
+import `in`.smartie.quotedesk.domain.PurchasePeople
 import `in`.smartie.quotedesk.domain.PurchaseWrite
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -28,6 +29,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
@@ -71,6 +73,11 @@ class PurchaseViewModel(
     private val writes: PurchaseWriteRepository,
     requirements: Flow<List<PurchaseRecord>>,
     onlineFlow: Flow<Boolean>,
+    /**
+     * The team, for putting a role beside a name — empty for the roles that
+     * may not read `/users`, which is every role but Owner and Administrator.
+     */
+    people: Flow<List<Member>> = flowOf(emptyList()),
     private val report: (Throwable) -> Unit = {},
     retry: ListenerRetry = ListenerRetry(),
     /** Injectable so a test can count how many identities an add consumed. */
@@ -204,6 +211,11 @@ class PurchaseViewModel(
     val removed: StateFlow<List<PurchaseRecord>> = visible
         .map { PurchaseHistory.removed(it, member) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** The team by uid, so a card can name a person's role without a lookup. */
+    val members: StateFlow<Map<String, Member>> = people
+        .map { PurchasePeople.byUid(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /** The screen-wide part, which is now only whether Add is offered. */
     fun capabilities(): PurchaseCapabilities = PurchaseCapabilities.forMember(member)
@@ -454,7 +466,8 @@ class PurchaseViewModel(
     class Factory(
         private val container: AppContainer,
         private val member: Member,
-        private val requirements: Flow<List<PurchaseRecord>>
+        private val requirements: Flow<List<PurchaseRecord>>,
+        private val people: Flow<List<Member>> = flowOf(emptyList())
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T = PurchaseViewModel(
@@ -462,6 +475,7 @@ class PurchaseViewModel(
             writes = container.purchaseWriteRepository,
             requirements = requirements,
             onlineFlow = container.connectivity.online,
+            people = people,
             report = container.errorReporter::report
         ) as T
     }

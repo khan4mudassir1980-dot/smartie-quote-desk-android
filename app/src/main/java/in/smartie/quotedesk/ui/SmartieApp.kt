@@ -62,6 +62,7 @@ import `in`.smartie.quotedesk.BuildConfig
 import `in`.smartie.quotedesk.R
 import `in`.smartie.quotedesk.core.AppContainer
 import `in`.smartie.quotedesk.domain.Member
+import `in`.smartie.quotedesk.domain.PurchasePeople
 import `in`.smartie.quotedesk.domain.RoleTitles
 
 import `in`.smartie.quotedesk.domain.Permissions
@@ -251,7 +252,12 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
                 composable("more/about") { AboutScreen() }
                 composable("more/purchase-history") {
                     val requirements by data.requirements.collectAsStateWithLifecycle()
-                    PurchaseHistoryScreen(records = requirements, viewer = member)
+                    val people by data.members.collectAsStateWithLifecycle()
+                    PurchaseHistoryScreen(
+                        records = requirements,
+                        viewer = member,
+                        members = PurchasePeople.byUid(people)
+                    )
                 }
                 MoreMenu.destinations
                     .filter { it.phase != null }

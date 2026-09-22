@@ -23,6 +23,8 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import `in`.smartie.quotedesk.data.mapping.Money
 import `in`.smartie.quotedesk.data.model.PurchaseRecord
+import `in`.smartie.quotedesk.domain.Member
+import `in`.smartie.quotedesk.domain.PurchasePeople
 import `in`.smartie.quotedesk.ui.components.EmptyState
 import `in`.smartie.quotedesk.ui.components.ListRow
 import `in`.smartie.quotedesk.ui.components.SectionHeader
@@ -84,6 +86,8 @@ fun PurchaseScreen(viewModel: PurchaseViewModel) {
     val online by viewModel.online.collectAsStateWithLifecycle()
     val sheet by viewModel.sheet.collectAsStateWithLifecycle()
 
+    val members by viewModel.members.collectAsStateWithLifecycle()
+
     val actions = PurchaseActions(
         onAdd = viewModel::add,
         onEdit = viewModel::edit,
@@ -100,6 +104,7 @@ fun PurchaseScreen(viewModel: PurchaseViewModel) {
         active = active,
         received = received,
         removed = removed,
+        members = members,
         loading = loading,
         saving = saving,
         online = online,
@@ -135,6 +140,8 @@ internal fun PurchaseBoardScreen(
     active: List<PurchaseRecord> = emptyList(),
     received: List<PurchaseRecord> = emptyList(),
     removed: List<PurchaseRecord> = emptyList(),
+    /** The team by uid, or empty where this account may not read it. */
+    members: Map<String, Member> = emptyMap(),
     loading: Boolean = false,
     saving: Set<String> = emptySet(),
     online: Boolean = true,
@@ -199,7 +206,8 @@ internal fun PurchaseBoardScreen(
                 capabilities = capabilitiesFor(item),
                 online = online,
                 saving = item.id in saving,
-                actions = actions
+                actions = actions,
+                members = members
             )
         }
 
@@ -228,7 +236,8 @@ internal fun PurchaseBoardScreen(
                         capabilities = capabilitiesFor(item),
                         online = online,
                         saving = item.id in saving,
-                        actions = actions
+                        actions = actions,
+                        members = members
                     )
                 }
 
@@ -254,7 +263,8 @@ internal fun PurchaseBoardScreen(
                                 capabilities = capabilitiesFor(item),
                                 online = online,
                                 saving = item.id in saving,
-                                actions = actions
+                                actions = actions,
+                                members = members
                             )
                         }
                     }
@@ -370,7 +380,15 @@ internal fun PurchaseRow(
     capabilities: PurchaseCapabilities = PurchaseCapabilities(),
     online: Boolean = true,
     saving: Boolean = false,
-    actions: PurchaseActions = PurchaseActions()
+    actions: PurchaseActions = PurchaseActions(),
+    /**
+     * The team by uid, for putting a role beside a name.
+     *
+     * Empty by default, and empty in earnest on a Manager's or a Staff
+     * account's phone: they may not read `/users`, so every name on their
+     * cards shows alone. See `PurchasePeople`.
+     */
+    members: Map<String, Member> = emptyMap()
 ) {
     ListRow(
         title = item.name,
@@ -381,7 +399,7 @@ internal fun PurchaseRow(
         secondary = quantityLine(item),
         // A note is shown only when there is one: no empty placeholder.
         note = item.note.takeIf { it.isNotBlank() },
-        meta = creatorLine(item),
+        meta = creatorLine(item, members),
         accent = urgencyColour(item.urgency),
         // C2, C3 and C4. The quantity line is what a person came to the card
         // to read, so it is the thing set large; the note is somebody's words,
@@ -432,8 +450,9 @@ internal fun PurchaseRow(
     )
 }
 
-private fun creatorLine(item: PurchaseRecord): String? {
-    val who = item.by.takeIf { it.isNotBlank() } ?: return null
+private fun creatorLine(item: PurchaseRecord, members: Map<String, Member>): String? {
+    val who = PurchasePeople.describe(item.by, item.byUid, members).takeIf { it.isNotBlank() }
+        ?: return null
     val created = item.createdAt.takeIf { it > 0 }?.let { formatDate(it) }
     return if (created != null) "Added by $who · $created" else "Added by $who"
 }

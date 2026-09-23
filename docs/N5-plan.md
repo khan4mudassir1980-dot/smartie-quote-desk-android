@@ -68,10 +68,15 @@ shown.
 
 **Reading stays complete.** Quotations already issued at the contractor tier
 must display in full, and the `contractor` rate column in product data is
-preserved — the minimal product editor of N5.7 may change that rate but may
-never drop it, which `contractorKept()` enforces in the rules. A screen test
-opens the finalised contractor-tier fixture and asserts its tier and totals
-still read.
+preserved. N5.7 does this **without a rule change**: the editor does not offer
+the contractor rate as a box at all, and its complete write carries the stored
+value through untouched — including a stored `null`, which is V8C4's
+deliberate "Price not set" rather than an absence to tidy away. An earlier
+draft of this plan proposed a `contractorKept()` rule guard; it was dropped,
+because a rule cannot distinguish an edit that drops a field from one that
+never had it, and the editor writing every field makes the guard unnecessary.
+A screen test opens the finalised contractor-tier fixture and asserts its tier
+and totals still read.
 
 ---
 
@@ -382,21 +387,25 @@ silently extended, because the instruction was the configuration branch only.
 
 ### N5.7 — `/products`, the minimal edit
 
-No structural change. Pricing type is the **existing `unit` field** with value
-`"sqft"` — already a live value in the fixtures, and the PWA's own per-group
-semantic. `minSqft` is additive. One guard is added to `allow update` only:
+**No rule change at all.** The deployed rule validates the *merged post-state*
+rather than the keys an update touches, so a document an older PWA version
+left with `gst` as a string refuses even a correction that does not go near
+it — there is no partial fix, and weakening the rule to allow one would be the
+wrong trade. Instead the editor writes a **complete, correctly typed**
+document every save, exactly as `fbPushProduct` does, and the legacy defects
+repair themselves on the way through. Both halves of that are pinned in
+`firestore/tests/catalogue.test.js`.
 
-```
-// The contractor tier is no longer offered on a new quotation, but the rate
-// stays live for the ones already issued at it. An edit may legitimately
-// *change* it — what must never happen is an edit that **drops** it. A stored
-// `null` is a deliberate "Price not set" and is not data to protect.
-function contractorKept() {
-  return !resource.data.keys().hasAny(['contractor'])
-    || resource.data.contractor == null
-    || request.resource.data.get('contractor', null) is number;
-}
-```
+Pricing type is the **existing `unit` field**, a free text box, with the value
+`"per sq ft"` — V8C4's own spelling. `minSqft` is additive and the rule does
+not name it.
+
+Two things that block a rewrite rather than being guessed at: a stored price
+that is neither blank, nor the `∅` marker, nor a number is refused rather than
+written back as "not set"; and a seed model readable only from a sanitised
+document id whose model half contains a `_` is refused, because a `/` and a
+`.` both occur in live models and a wrong seed model makes V8C4 materialise a
+new custom item.
 
 **V8C4 verdict — compatible, established rather than assumed.**
 `fbPushProduct` writes `contractor: rate(gid, m, "contractor").v` on every
@@ -520,14 +529,23 @@ and the contractor tier, so they keep reading V8C4 records.
 
 | Key | Type | Meaning |
 |---|---|---|
-| `unit` | string — **existing field**, value `"sqft"` | Pricing type. No new field. |
+| `unit` | string — **existing field**, value `"per sq ft"` | Pricing type. No new field, and a free text box, not a menu. |
 | `minSqft` | number, optional | Minimum chargeable area per door |
 
+**The spelling is V8C4's, not ours.** `per sq ft` is what the price book
+already uses for the products this exists to serve. Matching folds case on the
+already-trimmed value and admits nothing else, so `Per sq ft` is area-priced
+and `sqft` is not — such a product is priced per piece, which shows on its
+list row and is one edit away from being right. A guess would be the silent
+option; this one is visible.
+
 **Caveat recorded rather than discovered later:**
-`tools/catalogue-import/verify-staging.mjs` compares `unit` field-for-field on
-import, so a unit edited in the native app shows as drift against the seed on
-the next catalogue verification. A reporting nuisance, not data loss; N8
-reconciles it.
+`tools/catalogue-import/verify-staging.mjs` compares `unit` field-for-field,
+so a unit corrected in the native app reads as drift against the seed until a
+seed is regenerated with the fixed extractor. A reporting nuisance, not data
+loss — and **no import may be run to resolve it**: the importer carries seed
+rates in every payload and would revert any rate edited since the last run.
+See the blocking warning in `docs/PROJECT-STATUS.md`.
 
 ### `/quotations/{id}`
 
@@ -551,7 +569,7 @@ Existing keys unchanged. New:
 | `nos` | number | Door count |
 
 with `qty` = total chargeable sq ft, `rate` = the per-sq-ft rate, `amt` =
-`qty × rate`, `u` = `"sqft"`.
+`qty × rate`, `u` = `"per sq ft"` — the product's own unit, copied.
 
 ### Where V8C4 will still look different
 
@@ -652,7 +670,7 @@ of 0.5 must not be lifted to 80.5.
 | **N5.4** | Quotation history and detail, read-only | No | **Done**, `4fe76dd` + fix `38d32a6`, CI #130 |
 | **N5.5** | Parties, write side | No | **Done**, `f2bcd3f` — CI pending at the time of writing |
 | **N5.6** | Settings, Owner-only: numbering and the discount cap | **Yes** | **Done**, `f61eebc` + `74ff81e` + `a849650`, CI #137 |
-| **N5.7** | Minimal product edit — `unit`, dealer/client rate, `minSqft` | **Yes** | To do |
+| **N5.7** | Minimal product edit — `unit`, dealer/client rate, `minSqft` | **No** | Done |
 | **N5.8** | The quotation builder, draft only | No | To do |
 | **N5.9** | Finalise — one transaction, idempotent retry, `src`, `snap`, party snapshot | **Yes** | To do |
 | **N5.10** | Edit and cancel, with the last-edited stamp | **Yes** | To do |

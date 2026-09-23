@@ -46,7 +46,7 @@
       "seedModel": "TG12",
       "model": "TG12",
       "name": "Toughened glass 12 mm",
-      "unit": "sqft",
+      "unit": "per sq ft",
       "gst": "18",
       "dealer": null,
       "contractor": null,

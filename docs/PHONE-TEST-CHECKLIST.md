@@ -23,6 +23,24 @@ Last updated for **N4.4**.
 
 ## Owed now
 
+### N5.7 — the product editor
+
+| Row | Check |
+|---|---|
+| T-E1 | **Go through the product list and set the unit on every item that is priced per square foot.** Trust the catalogue, not this list — the Owner knows which products are sold that way far better than a text search does. The known candidates are the PVC curtains (PVC-A to PVC-D, group `hsdbuild`) and the toughened-glass items (GD-GLASS-60, GD-GLASS-100, GD-FILM, group `glass`), but check the rest of the catalogue too: the extractor gave the wrong unit to any item whose unit differed from its group's, not only the sq-ft ones |
+| T-E2 | Type the unit **exactly** as `per sq ft`. A product left reading `sqft` or `sq ft` is priced per piece, deliberately — the unit shows on its list row, so it is readable there |
+| T-E3 | A unit that is not `each` reads darker on the list row than `each` does, so a wrong one is findable without opening every product |
+| T-E4 | After correcting a product, open it in the **PWA** and confirm both the unit and every rate read correctly there. This is the check that the write landed on the document the PWA reads |
+| T-E5 | **Change a rate by hand in the PWA, then change only the unit in the app, and confirm the rate is unchanged.** The editor must write the rate it read from Firestore and never a seed value |
+| T-E6 | A product whose contractor rate is set shows it in the editor as a fact with no box, and the rate is still there after saving a change to something else |
+| T-E7 | A product with no contractor rate shows **Price not set**, not `₹0`, and still has none after a save |
+| T-E8 | Editing a `per m` or `per pc` product's rate leaves its unit exactly as it was |
+| T-E9 | A Manager opening a product sees the stored details, the sentence saying why, and **no Save control** |
+| T-E10 | A refusal — a blank name, a GST of 29 — lands on the field and the sheet **stays open** |
+| T-E11 | An existing **stock** row for a product whose unit was corrected still shows the old unit. This is expected and recorded under Deferred in `PROJECT-STATUS.md`; it is not a defect found on the pass |
+| T-E12 | A Manager's Team screen still renders, with names and no role badges. N5.6c closed `/teamSettings/access` to them and the denial is swallowed, so this is the check that nothing broke |
+| T-E13 | **Negative check, because the error is swallowed and never reaches the log:** an Owner's Team screen still shows the Primary and Additional Owner badges and the Appoint and Revoke controls. If they are missing, `observeAccess` failed and the app said nothing — see Deferred in `PROJECT-STATUS.md` |
+
 ### N4.4 — the fixes and changes from the run #113 pass
 
 | Row | Check |
@@ -108,6 +126,18 @@ them.
 | T-P12 | Passed in part on 20 September; four clauses unreported |
 | T-P7 | **Blocked** on the N6 Products & Categories screen, which does not exist |
 | T-R16, T-R17 | N4 role rows the Batch C pass did not reach |
+
+---
+
+## Before the rules deploy
+
+Not this batch's work. Recorded here so it cannot be forgotten, because on
+deploy day the whole committed ruleset meets the live PWA for the first time,
+for every collection at once.
+
+| Row | Check |
+|---|---|
+| T-E14 | **Verify every document shape the PWA writes is accepted by the committed ruleset** — quotations, customers, products, purchase, stock, teamSettings — each pinned by an emulator test rather than checked by hand. `firestore/tests/catalogue.test.js` is the pattern: it pins what `fbPushProduct` writes, so a mistake in that reading fails in CI instead of stopping the business on the day |
 
 ---
 

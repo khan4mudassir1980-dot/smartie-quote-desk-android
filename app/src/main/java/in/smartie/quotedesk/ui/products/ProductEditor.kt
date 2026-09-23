@@ -27,7 +27,6 @@ import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.domain.ProductDraft
 import `in`.smartie.quotedesk.domain.ProductUnit
 import `in`.smartie.quotedesk.domain.ProductWrite
-import `in`.smartie.quotedesk.ui.components.SectionHeader
 import `in`.smartie.quotedesk.ui.components.SmartieField
 import `in`.smartie.quotedesk.ui.components.SmartieGhostButton
 import `in`.smartie.quotedesk.ui.components.SmartiePrimaryButton
@@ -111,8 +110,9 @@ fun ProductEditorSheet(
     actions: ProductEditorActions = ProductEditorActions()
 ) {
     val dimens = LocalSmartieDimens.current
-    val opened = remember(record.documentId) { ProductWrite.draftOf(record) }
-    var draft by remember(record.documentId) { mutableStateOf(opened) }
+    // Keyed on the document, so opening a different product starts a fresh
+    // sheet rather than carrying the last one's half-typed values across.
+    var draft by remember(record.documentId) { mutableStateOf(ProductWrite.draftOf(record)) }
     var attempted by remember(record.documentId) { mutableStateOf(false) }
 
     val nameError = ProductWrite.NAME_REQUIRED.takeIf { attempted && draft.name.isBlank() }

@@ -27,10 +27,10 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
 | N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2, N4.3 and N4.4 are all code complete and CI-verified**, and both are waiting on the same Owner-run staging rules deployment paired with the APK rollout — they were never deployed separately and must not be. Purchase History is built and open to every role, so what was Batch 5 is done; the tab badge is Batch 6 |
-| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.6 are complete and CI-verified at `a849650` ([run #137](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35838856077)).** Parties can be added and corrected, and an Owner can configure the quotation numbering and the Manager discount limit. Quotations themselves are still read-only — **nothing issues a number yet** — and the Quotation tab keeps its "Keep using the PWA to issue quotations" banner until the cutover batch. Next is N5.7 |
+| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.6 are complete and CI-verified at `a849650` ([run #137](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35838856077)).** Parties can be added and corrected, and an Owner can configure the quotation numbering and the Manager discount limit. **N5.7 is complete and CI-verified**: the catalogue now has a product editor, and it needed no rule change. Quotations themselves are still read-only — **nothing issues a number yet** — and the Quotation tab keeps its "Keep using the PWA to issue quotations" banner until the cutover batch. Next is N5.8 |
 | N6 Products & Categories | Not started. The Products & Categories editing screen, which T-P7 is blocked on |
 | N7 Calculators | Not started. Port the four V8C4 calculators — rolling shutter, high-speed door, garage door, glass door — whose output becomes ordinary quotation lines carrying the opening size in the line's spec text |
-| N8 Migration & cutover | Not started. **The production migration and cutover.** `docs/N2-delivery.md:40` calls N8 "the catalogue migration"; that line is the stale one and `docs/N3-plan.md:585` is right |
+| N8 Migration & cutover | Not started. **The production migration and cutover.** `docs/N2-delivery.md:40` calls N8 "the catalogue migration"; that line is the stale one and `docs/N3-plan.md:585` is right. **Read the blocking warning about `import-staging.mjs` under "Decisions that bind future work" before planning any part of this** — the importer carries seed rates in every payload and would destroy live pricing if pointed at production |
 
 - Staging holds **403 products and 12 categories**, imported and verified
   field by field. T-P1 and the §12 "403-item parity" exit criterion are closed.
@@ -853,7 +853,10 @@ All of these are CI-verified, the last of them at `2127d48` ([run #133](https://
 `7bc11dd` sits between N5.5 and its fix and is `docs/N5-plan.md` alone — no code, and
 therefore red on CI only because it inherited `f2bcd3f`'s failures.
 
-**Test counts at `a849650`: 1236 Kotlin tests across 111 classes, and 191 emulator tests.**
+**Test counts at `a849650`: 1236 Kotlin tests across 111 classes, and 191 emulator
+tests.** Superseded — see the N5.7 block for the counts at the branch head. A figure
+here is the count at the commit it names and nothing else; quoting an older batch's
+number as the current baseline is how a quietly deleted test hides.
 N5.2 to N5.5 changed no rule text; **N5.6 is the second and last rules change N5 has
 made so far**, after N5.0b.
 
@@ -1039,29 +1042,119 @@ Two things are recorded rather than fixed, both awaiting the Owner:
    Pinned as a characterisation test asserting today's behaviour, in the same
    shape as the N5.1 counter finding.
 
+### N5.7 — the product editor, and no rule change
+
+The first write path to `/products` the native app has ever had. Owner and
+Administrator only, reached from a control on the catalogue card.
+
+**The rule is untouched, and that was the finding rather than the plan.** The
+deployed `/products` rule validates the *merged post-state*, not the keys an
+update touches, so a document an older PWA version left with `gst` as a string
+refuses even a correction that does not go near it. Rather than weaken the
+rule, the editor writes a complete, correctly typed document every save —
+exactly as `fbPushProduct` does — so the legacy defects repair themselves on
+the way through. `firestore/tests/catalogue.test.js` pins both halves:
+`a one-field edit on a legacy document is refused`, and
+`and the same edit as a complete, correctly typed write is accepted`.
+
+**`/products` had no positive-path coverage at all before this batch.**
+`priceOk` appeared nowhere in the emulator suite, every product write in it
+ran with the rules disabled, and the one negative case was refused at
+`admin()` before a single field predicate evaluated. The whole
+`seedModel`/`gst`/`priceOk`/`active` chain had never been shown to accept
+anything, or to refuse anything.
+
+**An absent key is not read as `null`, and the emulator said so in its own
+words.** The rule reads nine possibly-absent keys bare, where about thirty
+other sites in the same file guard with `.get()` or `hasAny()`. The probe
+returns `Property seedModel is undefined on object.`, reported as
+`evaluation error at L167:32`; an allow whose condition errors does not grant.
+That is why the editor writes `contractor: null` where the stored key is
+missing rather than leaving it out.
+
+**Three things the editor must never do**, each with a test that names it:
+write a seed value (every unchanged field comes from a fresh read inside the
+transaction); drop a contractor price (a stored `null` is V8C4's deliberate
+"Price not set"); or rewrite a unit nobody touched.
+
+**The unit is a free text box, not a toggle.** V8C4's own `#fU` is a text
+input, and the price book uses `per m`, `per pc`, `per kg`, `per rft`,
+`per ft` and `per rm` besides `per sq ft` — far more products carry one of
+those than carry the area unit. Because the save writes the whole document, a
+toggle meaning "off equals `each`" would have converted every one of them on
+its first rate correction. The chip beside the box can only *set* it to
+`per sq ft` and disappears once it already says so.
+
+**The canonical spelling is `per sq ft`**, V8C4's own. Matching folds case on
+the already-trimmed value and admits nothing else: `Per sq ft` is area-priced,
+`sqft` is not. A product left reading `sqft` is priced per piece — and because
+a unit that is not `each` now reads in Ink on its list row, that refusal is
+visible rather than silent.
+
+**The write lands on `group__model`, never on the document it was read from.**
+`docId` (`index.html:5723`) is the only product document id V8C4 computes;
+`pid` (`:5682`) is the pipe-separated value it puts in the `id` and `key`
+*fields*. A product still sitting at a legacy pipe id is read from there and
+written to the canonical document, carrying its shelf and spec across.
+
+**The seed model is derived stored → the `id`/`key` field → the document id →
+`model`, and that order is load-bearing.** The `id`/`key` field is
+`group|model` and loses nothing; the document id is `group__model` with six
+characters replaced, and is lossy. `model` must come last, because V8C4 writes
+it from `o.md || it.m` and it is therefore the display override where one is
+set — deriving from it would compute a different document id and write to a
+second document. Where only a sanitised document id is left and its model half
+contains a `_`, the save is refused rather than guessed: both `/` and `.`
+occur in live models.
+
+**The extractor defect that started this.**
+`tools/catalogue-import/extract-v8c4.mjs:57` read `unit: group.unit ?? 'each'`
+and discarded an item's own `u`, so any item whose unit differed from its
+group's was given the group's. Fixed to read the item first, with `||`
+semantics rather than `??` — V8C4 chains with `||`, so a blank item unit must
+fall through to the group, and `??` would have let a blank shadow it. The
+derivation moved into `lib/catalogue.mjs` so it could be tested at all, and
+the extraction report now tallies units so the next run shows what it derived.
+
+**No import was run and no credential was requested.** The stored units are
+corrected by hand in the editor at the final phone pass — see the blocking
+warning about the importer under *Decisions that bind future work*, which is
+the reason.
+
+**Test counts at `042d995`: 1306 Kotlin test methods across 115 classes, 223
+emulator tests, 58 catalogue-tool tests.** N5.7 added 58 Kotlin tests
+(1248 before), 22 emulator tests (201 before) and 11 tool tests (47 before).
+The emulator and tool figures are the runner's own, taken locally; the Kotlin
+figure counts `@Test` methods, which is what the earlier entries in this file
+counted.
+
+The Owner's figure for how many items carry their own unit is recorded as what
+it is: Owner-supplied from the private V8C4 file, 23 Sept 2026; **not
+verifiable in this repository**, because V8C4 is deliberately absent and
+`out/` is gitignored. Approximately 57 items carry their own `u`, of which
+about 7 are `per sq ft`; the named candidates are PVC-A to PVC-D (`hsdbuild`)
+and GD-GLASS-60, GD-GLASS-100, GD-FILM (`glass`). **A lead, not a
+specification** — nothing built depends on those names, the extractor fix is
+correct whatever the count, and the phone pass trusts the catalogue rather
+than the list.
+
 ## Current next action
 
-**Build N5.7 — the minimal product edit: pricing type, dealer and client
-rate, and the minimum chargeable area.**
+**Build N5.8 — the quotation builder, draft only.**
 
-Area pricing needs products that carry a rate and a minimum, so this comes
-before the builder that reads them. Owner and Administrator only.
+Catalogue, area and manual lines; the Dealer and Client tiers; installation;
+the discount with the Manager cap N5.6 configured; transport; GST. **Nothing
+is written to Firestore** — all the content and none of the danger. N5.9
+builds the finalise transaction that takes a number from the counter.
 
-Pricing type is the **existing `unit` field** with value `"sqft"` — already a
-live value in the fixtures and the PWA's own per-group semantic — and not a
-new `pricingType`. `minSqft` is additive. The one rule change is
-`contractorKept()` on `allow update`: the contractor tier is no longer offered
-on a new quotation, but the rate stays live for the ones already issued at it,
-so an edit may **change** it and may never **drop** it. That guard is written
-as *never dropped* rather than *frozen* because `fbPushProduct` writes
-`contractor` explicitly on every product save — an earlier draft would have
-refused a legitimate PWA rate change.
+Area pricing reads the product's `unit`, matching `per sq ft` with case folded
+and nothing else, and applies `minSqft` per door after rounding up to the next
+half square foot. `QuoteMath` already holds that arithmetic from N5.2 and its
+four worked examples; N5.8 is the screen over it.
 
-**Carry the N5.6 lesson into it:** write the screen that actually performs the
-edit before trusting the rule, because the first real caller is what finds the
-case the rule's own tests did not.
-
-The full diff and its V8C4 verdict are in `docs/N5-plan.md`.
+**Carry the N5.7 lesson into it:** the rule was never the problem. What made
+the batch was reading what the deployed rule actually does before designing
+against it — and finding it had never been proven to accept anything.
 
 ### The staging pass is deferred, not skipped
 
@@ -1417,6 +1510,102 @@ document only. A display-model rename never changes a stock key, a stock
 document id, or which movements belong to a row. Every stock-to-product join
 uses it. `linkedKey` stays empty and is reserved for a future explicit
 manual-to-catalogue link; do not give it a meaning.
+
+**NEVER RUN `import-staging.mjs` AGAINST PRODUCTION.** The catalogue importer
+carries **seed rates in every payload**: `tools/catalogue-import/lib/plan.mjs:69-92`
+names `dealer`, `contractor`, `client`, `gst` and `active` on every product,
+and `merge: true` does **not** protect a field that is present in the payload.
+`reconcileProducts` (`:213-218`) skips only documents that are already
+byte-identical, so any product the import touches **for any reason at all** —
+including a one-character change to its `unit` — has its stored rates replaced
+by the seed's. On production, where the PWA edits rates daily, this would
+destroy live pricing with no warning and no record of what it overwrote.
+
+Never run it against production without either a rate-preserving mode or an
+explicit per-product diff that a person has read first. Supplying a fresh
+`--export` makes production's values win per field (`lib/plan.mjs:94-111`),
+which is a mitigation and not a licence: it still rewrites every document it
+touches.
+
+This is why the N5.7 unit correction is done **by hand in the editor** and no
+import is run.
+
+## Deferred — known defects, recorded and not fixed
+
+These are findings from N5.6c and N5.7 that were deliberately not fixed in the
+batch that found them. A plan document gets superseded; this list does not.
+
+### `priceOk` admits infinity
+
+`firestore/firestore.rules:89` reads
+`return v == null || (v is number && v >= 0);`. `Infinity` is a number and is
+greater than zero, so a price of infinity is accepted. The native editor
+cannot produce one — `ProductWrite.priceIsSayable` requires a finite value —
+so this is reachable only by a hand-crafted write from an Owner or
+Administrator account. **Not N8 work**: it is a one-clause rule change that
+belongs to whichever batch next has a reason to touch `/products`, so it is
+not deployed on its own.
+
+### A product's unit is copied into `/stock` and never re-synced
+
+`StockEntry.kt:81` takes `product.unit` when a stock row is created and
+`StockWrite.kt:328` writes it, so a stock row keeps whatever unit the product
+had on the day it was added. Correcting a product's unit in the N5.7 editor
+does **not** update existing `/stock` rows, which will still read `each`.
+There is a phone-checklist row so this is not discovered as a surprise. A fix
+means either re-syncing on a product save, or reading the unit through the
+product rather than storing it — the second is the better shape and is a
+change to how stock rows are read, not a rules change.
+
+### A transient denial freezes an Owner's team access for the whole session
+
+**Found while answering the N5.6c follow-up about the Manager's Team screen,
+and unrelated to that change.** `AuthRepository.kt:190-193`:
+
+```kotlin
+fun observeAccess(): Flow<TeamAccess> = accessDocument.docDataFlow()
+    .map { it?.toTeamAccess() ?: TeamAccess() }
+    .onStart { emit(TeamAccess()) }
+    .catch { emit(TeamAccess()) }
+```
+
+`observeAccess` is the **one** listener that opts out of `retryingListener`,
+and `.catch` terminates the flow. So a *transient* failure — not a permission
+decision, a dropped connection — leaves `TeamAccess` empty for the rest of
+the session, stripping an Owner's or Administrator's Primary/Additional
+badges and their Appoint and Revoke controls until the app is restarted.
+
+**The trap that makes this more than a one-line fix.** A naive retry would
+spam, because for a Manager and a Staff account the denial is *permanent and
+correct* — the rules do not let them read `/teamSettings/access`, and N5.6c
+closed the catch-all that used to let them. Any fix must therefore tell a
+permanent permission denial from a transient failure and retry only the
+second. The swallow also means a genuine breakage never reaches the log,
+which is why the phone pass carries a *negative* check for it.
+
+### Owed in N8: normalise the products no edit ever reaches
+
+**N8 — normalise every product document that neither app has rewritten.**
+
+The N5.7 editor writes a complete, correctly typed document, so any product
+somebody edits repairs itself. Products nobody edits keep whatever shape an
+older PWA version left them in — `gst` as a string, `active` as `1`, no
+`seedModel` — and the deployed rule refuses a write to those until something
+rewrites them whole. Whether any such document still exists in production is
+**not established**: the parity audit recorded those variants somewhere, and
+no export exists in this repository to check against.
+
+The same step clears what N5.7 leaves behind. A product read from a legacy
+`group|model` document is written to the canonical `group__model` one, and
+the legacy document stays where it is. Nothing reads it — V8C4 computes only
+`docId` (`group__model`), and `canonicalProduct` prefers the newer canonical
+document — but it is stale data and should be removed once, deliberately,
+with both apps stopped.
+
+### Before the importer is ever pointed at production
+
+See the blocking warning under **Decisions that bind future work**. It is the
+single most dangerous operation in this repository.
 
 ## Data and credentials
 

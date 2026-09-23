@@ -39,3 +39,19 @@ State provenance only at the strength the artefacts support, and say which
 artefact supports it. "The fixtures hold `SIE/QD`" is a claim about this
 directory. "Production holds `SIE/QD`" is a claim about a system nothing in
 this repository can see.
+
+## A correction made in N5.7
+
+`glass__TG12` carried `"unit": "sqft"`. That spelling is **not** what V8C4
+uses — the price book says `per sq ft`, and the toughened-glass items really
+are priced that way — so the fixture modelled a real scenario with the wrong
+literal value. It now reads `per sq ft`.
+
+The old spelling is not lost: `ProductUnitTest` asserts that `sqft` and
+`sq ft` are **not** area-priced, so the refusal is deliberate and pinned
+rather than accidental. A product stored with either reads as priced per
+piece, which shows on its list row and is one edit away from being right.
+
+This is another instance of the note above: the fixtures model shapes, and a
+shape modelled from memory can get the literal right or wrong. Check a literal
+against the artefact that defines it before depending on it.

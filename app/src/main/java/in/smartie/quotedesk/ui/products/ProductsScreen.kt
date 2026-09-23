@@ -91,9 +91,10 @@ import `in`.smartie.quotedesk.ui.theme.SmartieColors
  * The Products tab: the whole catalogue on its shelves, as the PWA's
  * `V.catalogue` (`index.html:7615-7721`) lays it out.
  *
- * Phase N2. Editing a product, managing categories and resolving price reviews
- * are N6's; turning the draft this screen fills into a numbered quotation is
- * N5's.
+ * Phase N2, with the minimal product edit added in N5.7: the rate, the unit,
+ * the minimum chargeable area and GST, for an Owner or an Administrator.
+ * Managing categories and resolving price reviews are still N6's; turning the
+ * draft this screen fills into a numbered quotation is N5.8's.
  */
 /** Everything the catalogue can do, so the screen itself stays stateless. */
 data class ProductsActions(

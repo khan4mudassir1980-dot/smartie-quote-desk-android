@@ -25,6 +25,14 @@ data class ProductRecord(
     val categoryId: String = "",
     val active: Boolean = true,
     val kg: Double? = null,
+    /**
+     * Minimum chargeable area per door, for a product priced per square foot.
+     *
+     * Null means "no minimum", never zero — the same distinction the prices
+     * keep. Additive: V8C4 does not write it and ignores it, and the rule does
+     * not name it.
+     */
+    val minSqft: Double? = null,
     val conflictResolved: Boolean = false,
     val seeded: Boolean = false,
     val reviewNote: String = "",

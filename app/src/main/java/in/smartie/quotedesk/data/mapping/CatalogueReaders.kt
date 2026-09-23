@@ -29,6 +29,8 @@ fun DocData.toProductRecord(): ProductRecord {
         categoryId = string("categoryId"),
         active = bool("active", default = true),
         kg = optionalDouble("kg"),
+        // Null is "no minimum", never zero — as with the prices above.
+        minSqft = optionalDouble("minSqft"),
         conflictResolved = bool("conflictResolved"),
         seeded = bool("seeded"),
         reviewNote = string("reviewNote", "f", "conflict"),

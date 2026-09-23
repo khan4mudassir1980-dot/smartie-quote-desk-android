@@ -5,7 +5,9 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToKey
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import `in`.smartie.quotedesk.data.mapping.Fixtures
 import `in`.smartie.quotedesk.data.mapping.toQuotationRecord
@@ -13,9 +15,11 @@ import `in`.smartie.quotedesk.data.model.QuotationRecord
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.Role
 import `in`.smartie.quotedesk.ui.quotations.BACK_TO_QUOTATIONS
+import `in`.smartie.quotedesk.ui.quotations.DETAIL_LIST_TAG
 import `in`.smartie.quotedesk.ui.quotations.GRAND_TOTAL
 import `in`.smartie.quotedesk.ui.quotations.NO_QUOTATIONS
 import `in`.smartie.quotedesk.ui.quotations.QuotationListScreen
+import `in`.smartie.quotedesk.ui.quotations.TOTALS_KEY
 import `in`.smartie.quotedesk.ui.quotations.openQuotationLabel
 import `in`.smartie.quotedesk.ui.theme.SmartieTheme
 import org.junit.Assert.assertTrue
@@ -66,6 +70,19 @@ class QuotationListScreenTest {
     private fun open(number: String) =
         compose.onNodeWithContentDescription(openQuotationLabel(number)).performClick()
 
+    /**
+     * Bring the totals card into view.
+     *
+     * A `LazyColumn` never composes what is off screen, so on a quotation
+     * with a full party snapshot and a couple of lines the totals are not
+     * merely invisible — they are absent from the semantics tree, and
+     * `onNodeWithText` cannot find what was never composed. Scrolling by key
+     * is what makes the assertion about the screen rather than about the
+     * viewport it happened to be measured in.
+     */
+    private fun scrollToTotals() =
+        compose.onNodeWithTag(DETAIL_LIST_TAG).performScrollToKey(TOTALS_KEY)
+
     // --- the list -----------------------------------------------------------------
 
     @Test
@@ -95,6 +112,8 @@ class QuotationListScreenTest {
 
         assertTrue("the tier it was issued at", shows("Contractor"))
         assertTrue(shows("Sunrise Constructions"))
+
+        scrollToTotals()
         assertTrue("its own subtotal", shows("44,900"))
         assertTrue("and its stored total", shows("52,982"))
     }
@@ -106,6 +125,7 @@ class QuotationListScreenTest {
         screen()
         open("SIE/QD/2024-25/101")
 
+        scrollToTotals()
         assertTrue(shows("12,390"))
         assertTrue(shows("10,500"))
         // GST is the difference between two stored figures, so it lands even
@@ -121,6 +141,8 @@ class QuotationListScreenTest {
 
         assertTrue("it is flagged", shows("Beta record"))
         assertTrue(shows("Harbour Interiors"))
+
+        scrollToTotals()
         assertTrue("the gstTotal it stored", shows("3,132"))
         assertTrue(shows("20,532"))
     }
@@ -151,7 +173,9 @@ class QuotationListScreenTest {
         assertTrue("a catalogue line", shows("Sliding gate motor 1000 kg"))
         assertTrue("its rate", shows("22,200"))
         assertTrue("the transport line V8C4 writes by hand", shows("Transportation"))
-        assertTrue(shows(GRAND_TOTAL))
+
+        scrollToTotals()
+        assertTrue("the grand total", shows(GRAND_TOTAL))
     }
 
     @Test

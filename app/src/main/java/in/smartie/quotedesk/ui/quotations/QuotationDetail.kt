@@ -12,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -61,7 +62,11 @@ internal fun QuotationDetail(quotation: QuotationRecord, onBack: () -> Unit) {
     val dimens = LocalSmartieDimens.current
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        // Tagged so a test can scroll to a card below the fold. A LazyColumn
+        // never composes what is off screen, so on a tall quotation the
+        // totals are not merely invisible — they are absent from the
+        // semantics tree entirely, and no amount of looking finds them.
+        modifier = Modifier.fillMaxSize().testTag(DETAIL_LIST_TAG),
         contentPadding = PaddingValues(
             start = dimens.screenPadding,
             end = dimens.screenPadding,
@@ -152,7 +157,7 @@ internal fun QuotationDetail(quotation: QuotationRecord, onBack: () -> Unit) {
             LineRow(line)
         }
 
-        item(key = "totals") {
+        item(key = TOTALS_KEY) {
             SmartieCard {
                 Column(verticalArrangement = Arrangement.spacedBy(dimens.gapXs)) {
                     MoneyLine("Subtotal", quotation.subtotal)
@@ -248,6 +253,8 @@ internal fun openQuotationLabel(number: String): String = "Open $number"
 internal fun formatDate(millis: Long): String =
     SimpleDateFormat("d MMM yyyy", Locale.forLanguageTag("en-IN")).format(Date(millis))
 
+internal const val DETAIL_LIST_TAG = "quotation-detail"
+internal const val TOTALS_KEY = "totals"
 internal const val PARTY_SECTION = "Party, as it was issued"
 internal const val LINES_SECTION = "Items"
 internal const val GRAND_TOTAL = "Grand total"

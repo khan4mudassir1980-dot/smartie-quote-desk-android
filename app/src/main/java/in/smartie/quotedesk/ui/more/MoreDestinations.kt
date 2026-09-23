@@ -31,7 +31,11 @@ object MoreMenu {
             route = "more/parties",
             label = "Parties",
             description = "Saved customers and their details",
-            phase = "N5",
+            // Built in N5.3, and read-only: the list, search and a detail
+            // view. Adding or correcting a party is N5.5. No placeholder,
+            // because the screen exists — the screen itself says what it
+            // cannot yet do rather than the menu implying it does nothing.
+            phase = null,
             isVisible = Permissions::canUseParties,
         ),
         MoreDestination(

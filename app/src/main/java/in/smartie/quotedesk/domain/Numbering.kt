@@ -50,9 +50,9 @@ data class NumberingConsequence(val headline: String, val detail: String)
  *
  * **Leaving `next` exactly where it is stays allowed**, in both layers. It is
  * not a move forward, and refusing it would mean an Owner correcting a prefix
- * or a padding had to burn a quotation number to do it. The rule that stops a
- * spent number being re-taken is a different one: configuration may never
- * stamp `lastIssued`, which only issuing does.
+ * or a padding had to burn a quotation number to do it. That allowance is what
+ * a second rule then has to cover: configuration may never stamp
+ * `lastIssued`, so a stale re-stamp cannot slip through the same opening.
  *
  * **The preview is the point of the screen.** A prefix, a year, a count and
  * a padding are four fields nobody can assemble in their head into
@@ -69,18 +69,43 @@ object Numbering {
 
     const val PREFIX_REQUIRED = "Enter the prefix, for example SIE/QD"
     const val YEAR_REQUIRED = "Enter the financial year, for example 2026-27"
+    const val YEAR_MALFORMED = "The financial year reads like 2026-27 — four digits, a dash, two digits"
     const val NEXT_TOO_SMALL = "The next number must be 1 or more"
-    const val PAD_OUT_OF_RANGE = "Padding must be between 1 and 9 digits"
+    const val PAD_OUT_OF_RANGE =
+        "Padding must be between 1 and 6 digits. The PWA only offers 1 to 6, and would " +
+            "quietly rewrite anything wider the next time somebody saved settings there."
 
-    /** The widest `pad` that produces a number anybody would recognise. */
-    const val MAX_PAD = 9
+    /**
+     * The `pad` bounds, and they are **V8C4's**, not a guess at what looks
+     * readable. Both of the PWA's save paths clamp with
+     * `Math.min(6, Math.max(1, pd||3))` and its inputs are `min="1" max="6"`,
+     * so a padding of 7 set here would appear in that input and be silently
+     * rewritten to 6 on its next settings save — changing the printed number
+     * format with nobody asking. The deployed configuration rule bounds it to
+     * the same 1–6.
+     */
+    const val MIN_PAD = 1
+    const val MAX_PAD = 6
+
+    /**
+     * The financial year V8C4 accepts: `^[0-9]{4}-[0-9]{2}$`, and the same
+     * pattern the configuration rule enforces.
+     *
+     * **The prefix has no pattern here, deliberately.** V8C4's own input
+     * pattern is `^[A-Za-z0-9][A-Za-z0-9-]{0,11}$`, which rejects `SIE/QD` —
+     * the prefix the live counter actually holds and the one every issued
+     * number is built from. Applying it would refuse every save of the real
+     * data, so it is held until that contradiction is resolved rather than
+     * shipped against the evidence.
+     */
+    private val YEAR = Regex("^[0-9]{4}-[0-9]{2}$")
 
     /**
      * The number that will be issued next, formatted exactly as it will be
      * stored and printed: `SIE/QD/2026-27/010`.
      */
     fun format(prefix: String, financialYear: String, next: Int, pad: Int): String {
-        val counted = next.coerceAtLeast(1).toString().padStart(pad.coerceIn(1, MAX_PAD), '0')
+        val counted = next.coerceAtLeast(1).toString().padStart(pad.coerceIn(MIN_PAD, MAX_PAD), '0')
         return listOf(prefix.trim(), financialYear.trim(), counted)
             .filter { it.isNotEmpty() }
             .joinToString("/")
@@ -120,8 +145,9 @@ object Numbering {
     fun refusal(stored: NumberingRecord, draft: NumberingDraft): String? = when {
         draft.prefix.isBlank() -> PREFIX_REQUIRED
         draft.financialYear.isBlank() -> YEAR_REQUIRED
+        !YEAR.matches(draft.financialYear.trim()) -> YEAR_MALFORMED
         draft.next < 1 -> NEXT_TOO_SMALL
-        draft.pad < 1 || draft.pad > MAX_PAD -> PAD_OUT_OF_RANGE
+        draft.pad < MIN_PAD || draft.pad > MAX_PAD -> PAD_OUT_OF_RANGE
         rollsTheYear(stored, draft) -> null
         draft.next < stored.next -> alreadyIssued(stored)
         else -> null

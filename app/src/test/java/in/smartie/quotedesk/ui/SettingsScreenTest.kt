@@ -26,6 +26,7 @@ import `in`.smartie.quotedesk.ui.more.CONFIRM
 import `in`.smartie.quotedesk.ui.more.LATER_KEY
 import `in`.smartie.quotedesk.ui.more.NEXT_LABEL
 import `in`.smartie.quotedesk.ui.more.NUMBERING_VIEW_ONLY
+import `in`.smartie.quotedesk.ui.more.PAD_LABEL
 import `in`.smartie.quotedesk.ui.more.PREFIX_LABEL
 import `in`.smartie.quotedesk.ui.more.PREVIEW_KEY
 import `in`.smartie.quotedesk.ui.more.SAVE_CAP
@@ -287,6 +288,41 @@ class SettingsScreenTest {
         tap(SAVE_NUMBERING_KEY, SAVE_NUMBERING)
 
         assertEquals("SIE/QT", savedNumbering?.prefix)
+    }
+
+    @Test
+    fun `a financial year that does not read like 2026-27 is refused on the field`() {
+        // The rule refuses the same value. The screen's job is to say why on
+        // the box it is about, so a bad year never reaches the server as a
+        // raw permission error.
+        screen(ownerCan)
+        retype(YEAR_LABEL, "2026-278")
+
+        assertTrue("says what the year should look like", shows("reads like 2026-27"))
+        assertRefused(SAVE_NUMBERING_KEY, SAVE_NUMBERING)
+        assertNull(savedNumbering)
+    }
+
+    @Test
+    fun `a padding wider than the PWA allows is refused on the field`() {
+        // 7 is refused because the PWA clamps to 6 and would rewrite it on
+        // its next settings save, changing the printed number format.
+        screen(ownerCan)
+        retype(PAD_LABEL, "7")
+
+        assertTrue("says the PWA would rewrite it", shows("between 1 and 6 digits"))
+        assertRefused(SAVE_NUMBERING_KEY, SAVE_NUMBERING)
+        assertNull(savedNumbering)
+    }
+
+    @Test
+    fun `and a padding of 6 saves`() {
+        screen(ownerCan)
+        retype(PAD_LABEL, "6")
+
+        tap(SAVE_NUMBERING_KEY, SAVE_NUMBERING)
+
+        assertEquals(6, savedNumbering?.pad)
     }
 
     // --- the discount limit --------------------------------------------------------------

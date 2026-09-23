@@ -95,7 +95,9 @@ internal fun SettingsScreen(
     // message about the financial year sitting under the next number is how a
     // person ends up changing the wrong field.
     val prefixError = refusal?.takeIf { it == Numbering.PREFIX_REQUIRED }
-    val yearError = refusal?.takeIf { it == Numbering.YEAR_REQUIRED }
+    val yearError = refusal?.takeIf {
+        it == Numbering.YEAR_REQUIRED || it == Numbering.YEAR_MALFORMED
+    }
     val padError = refusal?.takeIf { it == Numbering.PAD_OUT_OF_RANGE }
     val nextError = refusal?.takeIf { prefixError == null && yearError == null && padError == null }
     val consequence = Numbering.consequenceOf(stored, draft)

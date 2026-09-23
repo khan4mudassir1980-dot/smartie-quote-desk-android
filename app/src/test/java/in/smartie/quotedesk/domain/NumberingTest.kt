@@ -68,12 +68,52 @@ class NumberingTest {
     }
 
     @Test
-    fun `the padding is clamped to something a person could read`() {
+    fun `the padding is clamped to what V8C4 itself allows`() {
+        // 1 to 6, because that is what the PWA clamps to on both of its save
+        // paths and what its inputs offer. Anything wider set here would be
+        // silently rewritten to 6 on its next settings save.
         assertEquals("SIE/QD/2025-26/9", Numbering.format("SIE/QD", "2025-26", 9, 0))
-        assertEquals(
-            "SIE/QD/2025-26/000000009",
-            Numbering.format("SIE/QD", "2025-26", 9, 50)
-        )
+        assertEquals("SIE/QD/2025-26/000009", Numbering.format("SIE/QD", "2025-26", 9, 50))
+        assertEquals("SIE/QD/2025-26/000009", Numbering.format("SIE/QD", "2025-26", 9, 6))
+        assertEquals(1, Numbering.MIN_PAD)
+        assertEquals(6, Numbering.MAX_PAD)
+    }
+
+    @Test
+    fun `a padding of 7 is refused, because the PWA would rewrite it to 6`() {
+        // The whole reason the bound is 6 and not 9: a wider padding is not
+        // merely unusual, it is unstable — the next settings save in the PWA
+        // would change the printed number format with nobody asking.
+        assertEquals(Numbering.PAD_OUT_OF_RANGE, Numbering.refusal(stored, draft(pad = 7)))
+        assertEquals(Numbering.PAD_OUT_OF_RANGE, Numbering.refusal(stored, draft(pad = 9)))
+        assertNull(Numbering.refusal(stored, draft(pad = 6)))
+        assertNull(Numbering.refusal(stored, draft(pad = 1)))
+    }
+
+    @Test
+    fun `the financial year must read like 2026-27`() {
+        // The same pattern the configuration rule enforces, so the screen
+        // refuses what the server would and says why instead of showing a
+        // permission error. The rejected values differ from the accepted one
+        // at the end, the start and the middle in turn.
+        assertEquals(Numbering.YEAR_MALFORMED, Numbering.refusal(stored, draft(financialYear = "2026-278")))
+        assertEquals(Numbering.YEAR_MALFORMED, Numbering.refusal(stored, draft(financialYear = "x2026-27")))
+        assertEquals(Numbering.YEAR_MALFORMED, Numbering.refusal(stored, draft(financialYear = "2026-2")))
+        assertEquals(Numbering.YEAR_MALFORMED, Numbering.refusal(stored, draft(financialYear = "202-267")))
+        assertEquals(Numbering.YEAR_MALFORMED, Numbering.refusal(stored, draft(financialYear = "FY25")))
+
+        assertNull(Numbering.refusal(stored, draft(financialYear = "2026-27")))
+        assertNull(Numbering.refusal(stored, draft(financialYear = "2025-26")))
+    }
+
+    @Test
+    fun `the prefix V8C4 actually stores is accepted, pattern or no pattern`() {
+        // `SIE/QD` is what the live counter holds. V8C4's own input pattern
+        // would reject it, so no prefix pattern is applied here — a screen
+        // that refused the real stored value would be unusable.
+        assertNull(Numbering.refusal(stored, draft(prefix = "SIE/QD")))
+        assertNull(Numbering.refusal(stored, draft(prefix = "SIE/QT")))
+        assertEquals(Numbering.PREFIX_REQUIRED, Numbering.refusal(stored, draft(prefix = "   ")))
     }
 
     // --- what may be saved -----------------------------------------------------------
@@ -121,7 +161,7 @@ class NumberingTest {
         assertEquals(Numbering.YEAR_REQUIRED, Numbering.refusal(stored, draft(financialYear = "", next = 10)))
         assertEquals(Numbering.NEXT_TOO_SMALL, Numbering.refusal(stored, draft(next = 0)))
         assertEquals(Numbering.PAD_OUT_OF_RANGE, Numbering.refusal(stored, draft(next = 10, pad = 0)))
-        assertEquals(Numbering.PAD_OUT_OF_RANGE, Numbering.refusal(stored, draft(next = 10, pad = 10)))
+        assertEquals(Numbering.PAD_OUT_OF_RANGE, Numbering.refusal(stored, draft(next = 10, pad = 7)))
     }
 
     // --- the confirmation --------------------------------------------------------------

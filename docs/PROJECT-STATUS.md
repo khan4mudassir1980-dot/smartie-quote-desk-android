@@ -998,6 +998,25 @@ would then have demoted every contractor in the book on its first save. The
 fallback belongs to whichever writer has the context — `create` takes V8C4's
 `client`, `edit` and `mergeInto` keep what is stored.
 
+### Owed in N5.12: scrub the fixture rates
+
+**N5.12 — replace every rate in `app/src/test/resources/fixtures/` with
+obviously-fake values and update the expected totals.**
+
+Treat all fixture rates as potentially real: at least one dealer figure
+matches a rate in V8C4's own embedded seed catalogue, and the other tiers are
+simple multiples of it. `products.json` holds the tier rates and
+`quotations.json` holds totals derived from them, so the expected values in
+`LegacyDocumentMappingTest` and the quotation screen tests move with them.
+
+Everything else in those fixtures is synthetic and stays — the evidence for
+that is in `app/src/test/resources/fixtures/README.md`. The Owner's own email
+in `users.json` also stays: it is in this repository by design at
+`firestore/firestore.rules:42` as `ownerEmailFallback()`, because the PWA
+hard-codes it. **Do not remove or obfuscate it.**
+
+Repository visibility is being checked; assume private until told otherwise.
+
 ### N5.6b, and the two decisions it left with the Owner
 
 `pad` is now bounded 1–6 on the configuration branch and `fy` must read like
@@ -1008,9 +1027,12 @@ or `fy: 'FY25'` still issues numbers.
 
 Two things are recorded rather than fixed, both awaiting the Owner:
 
-1. **The prefix pattern is not shipped.** `^[A-Za-z0-9][A-Za-z0-9-]{0,11}$`
-   rejects `SIE/QD`, which is the prefix the exported production counter holds.
-   Applying it would leave the Owner unable to save the counter at all.
+1. **The prefix pattern is not shipped.** *(Closed in N5.6c.)*
+   `^[A-Za-z0-9][A-Za-z0-9-]{0,11}$` rejects `SIE/QD`, which is the prefix the
+   **hand-built test fixtures** hold — not, as this file first said, an export
+   of production data. **No production export exists in this repository**; see
+   `app/src/test/resources/fixtures/README.md`. N5.6c ships a pattern that
+   admits `/`.
 2. **A Manager can read `/teamSettings/access`.** The named rule says
    `admin()`, but the `/teamSettings/{other}` catch-all ORs in
    `member() && !worker()` and a narrower named rule cannot take anything away.

@@ -361,13 +361,19 @@ natively would have appeared in that `max="6"` input and been silently
 rewritten to 6 on the PWA's next settings save, changing the printed number
 format with nobody asking.
 
-**The prefix pattern was specified but is NOT shipped.** The Owner's reading of
-V8C4 gives `^[A-Za-z0-9][A-Za-z0-9-]{0,11}$`, which rejects `SIE/QD` — the
-prefix the exported production counter actually holds, and the one every
-number in `lastIssued` is built from. Applying it would leave the Owner unable
-to save the counter at all, because a merged configuration write always carries
-`prefix`. Held pending a decision; `the prefix V8C4 actually stores still
-saves` pins the real value meanwhile.
+**The prefix pattern was held for one batch, and shipped in N5.6c.** The
+first pattern offered — `^[A-Za-z0-9][A-Za-z0-9-]{0,11}$` — rejects `SIE/QD`,
+which is the prefix **the hand-built test fixtures hold** (committed 15–17
+September; `app/src/test/resources/fixtures/README.md` records what they are
+and are not). An earlier draft of this section called them an export of
+production data. They are not, and **no production export exists in this
+repository**. The Owner then confirmed from the live file why `SIE/QD` is
+stored at all: only one of V8C4's two save paths applies a pattern, and the
+numbering dialog validates "not blank" alone.
+
+N5.6c ships `^[A-Za-z0-9][A-Za-z0-9/-]{0,15}$`, which admits `/` because a
+quotation number is `{prefix}/{fy}/{n}` and the prefix is itself two
+segments.
 
 **`allow create` is still unbounded.** Seeding a fresh counter checks
 `pad is number` but not its range, and does not check the `fy` shape. Narrow,

@@ -8,8 +8,8 @@ anything.** Last updated 2026-09-23.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `9d3ab3a` — [run #126](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35761805936), fully green (unit tests, lint, Firestore rules emulator, APK build). **This is the commit to deploy the rules from, and its `smartie-native-apks` artifact is the APK to install.** |
-| **The ruleset has moved since N4.4** | `505b8d9` (run #123) was the deploy commit while N4.4 was the tip, and it is **no longer current**. N5.0b changed `/users`, so `9d3ab3a` carries one rules change beyond what N4.2 and N4.3 left — an Administrator may no longer manage another Administrator. It is safe to ship with them: there is no Administrator account in staging or production, so nothing observable changes. Deploy from `9d3ab3a`, not from `505b8d9`. |
+| **Last CI-verified head** | `2127d48` — [run #133](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35834219582), fully green (unit tests, lint, Firestore rules emulator, APK build). **This is the commit to deploy the rules from, and its `smartie-native-apks` artifact is the APK to install.** |
+| **The ruleset has moved since N4.4** | `505b8d9` (run #123) was the deploy commit while N4.4 was the tip, and it is **no longer current**. N5.0b changed `/users`, so `2127d48` carries one rules change beyond what N4.2 and N4.3 left — an Administrator may no longer manage another Administrator. It is safe to ship with them: there is no Administrator account in staging or production, so nothing observable changes. N5.2 to N5.5 changed no rule at all, so the ruleset at `2127d48` is still exactly N5.0b's. Deploy from `2127d48`, not from `505b8d9`. |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -27,7 +27,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
 | N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2, N4.3 and N4.4 are all code complete and CI-verified**, and both are waiting on the same Owner-run staging rules deployment paired with the APK rollout — they were never deployed separately and must not be. Purchase History is built and open to every role, so what was Batch 5 is done; the tab badge is Batch 6 |
-| N5 Quotation | **In progress.** The plan of record is the approved N5 plan; `docs/N5-plan.md` is written in a later batch. **N5.0, N5.0b and N5.1 are complete and CI-verified at `9d3ab3a` (run #126).** Quotations are still read-only end to end — there is no write path for `/quotations`, `/customers` or `/teamSettings/numbering` — and the Quotation tab keeps its "Keep using the PWA to issue quotations" banner until the cutover batch. Next is N5.2 |
+| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.5 are complete and CI-verified at `2127d48` ([run #133](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35834219582)).** Parties can now be added and corrected from the app; quotations themselves are still read-only, with no write path for `/quotations` or `/teamSettings/numbering`, and the Quotation tab keeps its "Keep using the PWA to issue quotations" banner until the cutover batch. Next is N5.6 |
 | N6 Products & Categories | Not started. The Products & Categories editing screen, which T-P7 is blocked on |
 | N7 Calculators | Not started. Port the four V8C4 calculators — rolling shutter, high-speed door, garage door, glass door — whose output becomes ordinary quotation lines carrying the opening size in the line's spec text |
 | N8 Migration & cutover | Not started. **The production migration and cutover.** `docs/N2-delivery.md:40` calls N8 "the catalogue migration"; that line is the stale one and `docs/N3-plan.md:585` is right |
@@ -837,13 +837,23 @@ merged to `main`, no pull request.
 
 ## N5 Quotation — the batches that are done
 
-All three are CI-verified at `9d3ab3a` ([run #126](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35761805936)).
+All of these are CI-verified, the last of them at `2127d48` ([run #133](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35834219582)).
 
-| Commit | Batch |
-|---|---|
-| `ccb4a25` | **N5.0** — remove the beta quotation code nothing reaches |
-| `ba2db27` | **N5.0b** — an Administrator acts on Manager and Staff only |
-| `9d3ab3a` | **N5.1** — write down what the quotation rules already do, before building on them |
+| Commit | Batch | Green at |
+|---|---|---|
+| `ccb4a25` | **N5.0** — remove the beta quotation code nothing reaches | run #126 |
+| `ba2db27` | **N5.0b** — an Administrator acts on Manager and Staff only | run #126 |
+| `9d3ab3a` | **N5.1** — write down what the quotation rules already do, before building on them | run #126 |
+| `15d6ce3` | **N5.2** — the area, installation and discount arithmetic, pure Kotlin | run #127 |
+| `978a495` + `d6bf5d5` | **N5.3** — Parties, read side | run #130 |
+| `4fe76dd` + `38d32a6` | **N5.4** — quotation history and detail, read-only | run #130 |
+| `f2bcd3f` + `2127d48` | **N5.5** — Parties, write side | run #133 |
+
+`7bc11dd` sits between N5.5 and its fix and is `docs/N5-plan.md` alone — no code, and
+therefore red on CI only because it inherited `f2bcd3f`'s failures.
+
+**Test counts at `2127d48`: 1198 Kotlin tests across 109 classes, and 172 emulator tests.**
+N5.2 to N5.5 changed **no rule text**; the only rules change N5 has made is still N5.0b's.
 
 **N5.0** deleted `util/QuotationPdf.kt` (188 lines) and `data/model/Models.kt` (51 lines),
 neither of which had a single caller. Deleting the PDF writer also removed a trap for the area
@@ -895,19 +905,69 @@ that only holds about half the time. `helpers.js` gained a second Manager accoun
 ordinary quoting accounts can contend without either reaching an admin-only branch and proving
 something other than what the test claims.
 
+### What N5.2 to N5.5 settled, and the two traps they cost
+
+**N5.2** put every worked example in `docs/N5-plan.md` into `QuoteArea` and
+`QuoteMath` before any screen existed to get them wrong. Two decisions there
+are load-bearing and are not obvious from the code alone: the area rounding
+goes through `BigDecimal` quantised to six decimals rather than `ceil`, so an
+exact 10 ft × 8 ft opening entered in millimetres stays 80 sq ft instead of
+being sold half a square foot nobody measured; and a line stores `qty` as the
+**total chargeable area**, not the door count, so `qty × rate == amt` and a
+natively built area line still prints correctly in V8C4.
+
+**N5.3 and N5.4** are read-only. Both landed with a fix commit, and the two
+failures are worth keeping because each is a class of mistake rather than a
+typo:
+
+1. **A phone number pasted with its country code found nobody** (`d6bf5d5`).
+   Partial search and country-code search pull in opposite directions — one
+   needs the stored number to contain what was typed, the other the reverse —
+   and only the obvious direction had been implemented. **The same bug reached
+   CI a second time in N5.5's duplicate guard** (`2127d48`), because that file
+   tested the *order* of the three matchers and left the comparison itself to
+   an `==` between digit strings. The lesson recorded: a predicate two callers
+   need for the same reason still needs testing at each of them.
+
+2. **A `LazyColumn` never composes an off-screen item** (`38d32a6`), so an
+   un-scrolled assertion is about the emulated screen size rather than the
+   screen. **This too recurred in N5.5** (`2127d48`), where nine of eleven
+   failures were the Save button sitting below the fold. Worse than the
+   failures, two *absence* checks were passing vacuously: an un-scrolled
+   "a Manager is offered no archive control" would have passed whether or not
+   the control was there. Absence assertions in this repository must now prove
+   their own reach by also finding a neighbouring control.
+
+**N5.5** added the party writer. Two save semantics live in `PartyWrite` so
+the difference is a tested function rather than a remembered sentence:
+`edit` is a **replace**, so emptying a box takes that detail off the customer,
+which is the only way a GSTIN entered against the wrong firm comes off it;
+`mergeInto` is a **fill** for N5.8's "Save this customer", which never blanks
+a detail already held. A third finding came out of the gap between them:
+**`PartyDraft.type` must not default to `client`**, because that makes "nobody
+chose a type" and "somebody chose Client" the same value, and `mergeInto`
+would then have demoted every contractor in the book on its first save. The
+fallback belongs to whichever writer has the context — `create` takes V8C4's
+`client`, `edit` and `mergeInto` keep what is stored.
+
 ## Current next action
 
-**Build N5.2 — the area, installation and discount arithmetic, as pure Kotlin
-in `domain/`, with no Firebase.**
+**Build N5.6 — Settings, Owner-only: the numbering configuration and the
+Manager discount cap.**
 
-It is the first N5 batch that computes money, and it is deliberately ahead of
-every screen that will show it: each worked example in the approved plan
-becomes a unit test before a builder exists to get them wrong. It covers area
-rounded up to the next half square foot **then** lifted to the product
-minimum, millimetres and feet at 304.8, installation in all four modes,
-one discount in percent or rupees that never touches transport, the totals
-order, whole-rupee HALF_UP on every stored figure, and the `discBase` bound
-the rules will check the Manager's cap against.
+It is the first N5 batch to change rule text since N5.0b, and it is
+configuration before the thing it configures. It moves the numbering
+**configuration** branch from `admin()` to `owner()` while leaving the
+**issue** branch open to every quoting role, because V8C4 needs it; adds
+`numberingSrcOk()`, which reads `lastIssued.src` but never requires it, so
+`fbFinaliseAtomic` still passes; requires a strictly greater `next` unless the
+financial year changes, which is what **closes N5.1's second finding** and
+flips that characterisation test from `assertSucceeds` to `assertFails`; and
+creates `/teamSettings/quoting` holding `managerDiscountPct`, written by an
+Owner only. An emulator test must pin that an Owner's `fbSaveNumbering`-shaped
+write — `{prefix, fy, next, pad, updated, by}` — still passes the new
+configuration branch. The full diff and its V8C4 verdict are in
+`docs/N5-plan.md`.
 
 ### The staging pass is deferred, not skipped
 
@@ -926,7 +986,7 @@ cd firestore
 firebase.cmd deploy --only firestore:rules --project smartie-quote-desk-staging
 ```
 
-Deploy from the **last CI-verified head**, which is `9d3ab3a` today and will
+Deploy from the **last CI-verified head**, which is `2127d48` today and will
 have moved again by then — not from `505b8d9`, which is the N4.4 ruleset and
 no longer current. No index deploy: `firestore.indexes.json` has not changed
 since `69d0fce`.
@@ -1288,6 +1348,7 @@ manual-to-catalogue link; do not give it a meaning.
 | `docs/N3-verification.md` | The second manual pass, row by row: what passed, what is pending, what is N4's |
 | `docs/N3.1-plan.md` | The N3.1 Stock Photo plan: flow, data model, rules, Android integration, batches, costs and open decisions |
 | `docs/N4-plan.md` | The N4 Purchase plan: the decisions, the write contract, the rules traps, the batches and the acceptance rows |
+| `docs/N5-plan.md` | The N5 Quotation plan: the Owner's decisions, the printed order, the rules diff per batch with a V8C4 verdict for each, the data shape, the worked examples and the batch list |
 | `tools/catalogue-import/README.md` | How the import runs, its guards, and rollback |
 | `firestore/firestore.rules` | The v9 rules — staging only; production keeps V8C4 |
 

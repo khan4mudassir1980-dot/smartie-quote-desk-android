@@ -107,13 +107,67 @@ class NumberingTest {
     }
 
     @Test
-    fun `the prefix V8C4 actually stores is accepted, pattern or no pattern`() {
-        // `SIE/QD` is what the live counter holds. V8C4's own input pattern
-        // would reject it, so no prefix pattern is applied here — a screen
-        // that refused the real stored value would be unusable.
+    fun `the prefix admits the multi-segment value the live counter holds`() {
+        // `SIE/QD` is two segments, so the number built from it has four. A
+        // pattern without `/` would refuse every save of the real data, which
+        // is why the first one proposed for this was held rather than shipped.
         assertNull(Numbering.refusal(stored, draft(prefix = "SIE/QD")))
         assertNull(Numbering.refusal(stored, draft(prefix = "SIE/QT")))
+        assertNull(Numbering.refusal(stored, draft(prefix = "SIE-QD")))
+        assertNull(Numbering.refusal(stored, draft(prefix = "A")))
+        assertNull(Numbering.refusal(stored, draft(prefix = "A".repeat(16))))
+    }
+
+    @Test
+    fun `and refuses whitespace, quotes, control characters and anything too long`() {
         assertEquals(Numbering.PREFIX_REQUIRED, Numbering.refusal(stored, draft(prefix = "   ")))
+        listOf("SIE QD", "SIE'QD", "SIE\"QD", "SIE\nQD", "SIE\u0000QD", "/SIE", "-SIE", "A".repeat(17))
+            .forEach {
+                assertEquals(
+                    "refused: $it",
+                    Numbering.PREFIX_MALFORMED,
+                    Numbering.refusal(stored, draft(prefix = it))
+                )
+            }
+        // A trailing space is trimmed before matching, as it is before saving,
+        // so it is the value that counts and not how it was typed.
+        assertNull(Numbering.refusal(stored, draft(prefix = " SIE/QD ")))
+    }
+
+    @Test
+    fun `the screen refuses two slash mistakes the rules do not need to`() {
+        // Both produce a prefix the pattern accepts and a number nobody wants:
+        // `SIE/QD/` would print `SIE/QD//2025-26/009`.
+        assertEquals(
+            Numbering.PREFIX_TRAILING_SLASH,
+            Numbering.refusal(stored, draft(prefix = "SIE/QD/"))
+        )
+        assertEquals(
+            Numbering.PREFIX_DOUBLE_SLASH,
+            Numbering.refusal(stored, draft(prefix = "SIE//QD"))
+        )
+    }
+
+    @Test
+    fun `a multi-segment prefix produces a four-segment number, and nothing parses it back`() {
+        // The number the live counter builds has FOUR segments, because the
+        // prefix is itself two. `format` joins the prefix in whole, so this
+        // works — and it keeps working only because no reader splits a stored
+        // number apart. There is no `split("/")` anywhere in `app/src/main`;
+        // `toQuotationRecord` reads `no` as an opaque string and both screens
+        // render it verbatim. This test is what would fail if somebody added
+        // a parse that assumed three parts or took index [0] as the prefix.
+        val number = Numbering.format("SIE/QD", "2025-26", 9, 3)
+
+        assertEquals("SIE/QD/2025-26/009", number)
+        assertEquals(4, number.split("/").size)
+        assertEquals("SIE", number.split("/")[0])
+        assertEquals("SIE/QD", number.split("/").dropLast(2).joinToString("/"))
+
+        // A single-segment prefix still gives three, and a three-segment one
+        // gives five. Nothing in `format` assumes a count.
+        assertEquals(3, Numbering.format("SIE", "2025-26", 9, 3).split("/").size)
+        assertEquals(5, Numbering.format("SIE/QD/X", "2025-26", 9, 3).split("/").size)
     }
 
     // --- what may be saved -----------------------------------------------------------

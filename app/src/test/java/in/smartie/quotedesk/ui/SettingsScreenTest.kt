@@ -325,6 +325,37 @@ class SettingsScreenTest {
         assertEquals(6, savedNumbering?.pad)
     }
 
+    @Test
+    fun `a prefix with a character the rules refuse is stopped on the field`() {
+        screen(ownerCan)
+        retype(PREFIX_LABEL, "SIE QD")
+
+        assertTrue("says which characters are allowed", shows("letters, digits, / and -"))
+        assertRefused(SAVE_NUMBERING_KEY, SAVE_NUMBERING)
+        assertNull(savedNumbering)
+    }
+
+    @Test
+    fun `and a trailing slash is stopped too, which the rules do not check`() {
+        // `SIE/QD/` passes the pattern and would print `SIE/QD//2025-26/009`.
+        // The screen is the only place that catches it.
+        screen(ownerCan)
+        retype(PREFIX_LABEL, "SIE/QD/")
+
+        assertTrue("says what is wrong with it", shows("should not end with /"))
+        assertRefused(SAVE_NUMBERING_KEY, SAVE_NUMBERING)
+    }
+
+    @Test
+    fun `the multi-segment prefix the live counter holds saves unchanged`() {
+        screen(ownerCan)
+        retype(PREFIX_LABEL, "SIE/QT")
+
+        tap(SAVE_NUMBERING_KEY, SAVE_NUMBERING)
+
+        assertEquals("SIE/QT", savedNumbering?.prefix)
+    }
+
     // --- the discount limit --------------------------------------------------------------
 
     @Test

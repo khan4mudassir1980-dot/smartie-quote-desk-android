@@ -94,7 +94,10 @@ internal fun SettingsScreen(
     // One refusal gates Save, but it is shown under the box it is about: a
     // message about the financial year sitting under the next number is how a
     // person ends up changing the wrong field.
-    val prefixError = refusal?.takeIf { it == Numbering.PREFIX_REQUIRED }
+    val prefixError = refusal?.takeIf {
+        it == Numbering.PREFIX_REQUIRED || it == Numbering.PREFIX_MALFORMED ||
+            it == Numbering.PREFIX_TRAILING_SLASH || it == Numbering.PREFIX_DOUBLE_SLASH
+    }
     val yearError = refusal?.takeIf {
         it == Numbering.YEAR_REQUIRED || it == Numbering.YEAR_MALFORMED
     }

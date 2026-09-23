@@ -303,6 +303,16 @@ class LegacyDocumentMappingTest {
         assertEquals(9, numbering.next)
         assertEquals("SIE/QD/2025-26/008", numbering.lastIssuedNumber)
         assertEquals("uid_admin", numbering.lastIssuedUid)
+
+        // **Read whole, never parsed.** The stored prefix is itself two
+        // segments, so the number has four — and the reader keeps it verbatim
+        // rather than splitting it. There is no `split("/")` anywhere in
+        // `app/src/main`: `toQuotationRecord` reads `no` as an opaque string
+        // and both quotation screens render it as they found it. A reader that
+        // started assuming three parts, or took index [0] as the prefix, would
+        // fail here.
+        assertEquals(4, numbering.lastIssuedNumber.split("/").size)
+        assertEquals(numbering.prefix, numbering.lastIssuedNumber.split("/").dropLast(2).joinToString("/"))
     }
 
     @Test

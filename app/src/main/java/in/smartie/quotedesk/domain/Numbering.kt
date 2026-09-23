@@ -68,6 +68,11 @@ object Numbering {
     const val NOT_ALLOWED = "Only the Owner can change the quotation numbering"
 
     const val PREFIX_REQUIRED = "Enter the prefix, for example SIE/QD"
+    const val PREFIX_MALFORMED =
+        "The prefix can use letters, digits, / and - only, up to 16 characters"
+    const val PREFIX_TRAILING_SLASH =
+        "The prefix should not end with / — the year is joined on after it"
+    const val PREFIX_DOUBLE_SLASH = "The prefix has two slashes together"
     const val YEAR_REQUIRED = "Enter the financial year, for example 2026-27"
     const val YEAR_MALFORMED = "The financial year reads like 2026-27 — four digits, a dash, two digits"
     const val NEXT_TOO_SMALL = "The next number must be 1 or more"
@@ -88,17 +93,24 @@ object Numbering {
     const val MAX_PAD = 6
 
     /**
-     * The financial year V8C4 accepts: `^[0-9]{4}-[0-9]{2}$`, and the same
-     * pattern the configuration rule enforces.
-     *
-     * **The prefix has no pattern here, deliberately.** V8C4's own input
-     * pattern is `^[A-Za-z0-9][A-Za-z0-9-]{0,11}$`, which rejects `SIE/QD` —
-     * the prefix the live counter actually holds and the one every issued
-     * number is built from. Applying it would refuse every save of the real
-     * data, so it is held until that contradiction is resolved rather than
-     * shipped against the evidence.
+     * The financial year V8C4 accepts, and the same pattern the configuration
+     * rule enforces.
      */
     private val YEAR = Regex("^[0-9]{4}-[0-9]{2}$")
+
+    /**
+     * The prefix, and the same pattern the configuration rule enforces.
+     *
+     * **It admits `/` on purpose.** A quotation number is
+     * `{prefix}/{fy}/{n}`, and the live counter's prefix `SIE/QD` is itself
+     * two segments — so `SIE/QD/2025-26/009` has **four**, not three. Nothing
+     * in this app parses a stored number back apart (there is no `split("/")`
+     * anywhere in `app/src/main`), and [format] joins the prefix in whole, so
+     * a multi-segment prefix travels through untouched. Both facts are
+     * pinned by tests, because "nobody splits it" is a property that a future
+     * edit could quietly break.
+     */
+    private val PREFIX = Regex("^[A-Za-z0-9][A-Za-z0-9/-]{0,15}$")
 
     /**
      * The number that will be issued next, formatted exactly as it will be
@@ -144,6 +156,13 @@ object Numbering {
      */
     fun refusal(stored: NumberingRecord, draft: NumberingDraft): String? = when {
         draft.prefix.isBlank() -> PREFIX_REQUIRED
+        !PREFIX.matches(draft.prefix.trim()) -> PREFIX_MALFORMED
+        // The rules do not need these two: both produce a prefix the pattern
+        // accepts, and both produce a number nobody would want. `SIE/QD/`
+        // would print `SIE/QD//2025-26/009`, which reads as a mistake because
+        // it is one.
+        draft.prefix.trim().endsWith("/") -> PREFIX_TRAILING_SLASH
+        draft.prefix.trim().contains("//") -> PREFIX_DOUBLE_SLASH
         draft.financialYear.isBlank() -> YEAR_REQUIRED
         !YEAR.matches(draft.financialYear.trim()) -> YEAR_MALFORMED
         draft.next < 1 -> NEXT_TOO_SMALL

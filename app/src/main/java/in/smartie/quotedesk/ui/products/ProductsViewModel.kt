@@ -10,7 +10,9 @@ import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.domain.PinChange
+import `in`.smartie.quotedesk.domain.ProductDraft
 import `in`.smartie.quotedesk.domain.ProductPins
+import `in`.smartie.quotedesk.domain.ProductWrite
 import `in`.smartie.quotedesk.domain.QuoteDraft
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -165,6 +167,42 @@ class ProductsViewModel(
         }
     }
 
+    // --- correcting a product (N5.7) ---------------------------------------
+
+    private val _savingProduct = MutableStateFlow(false)
+    val savingProduct: StateFlow<Boolean> = _savingProduct.asStateFlow()
+
+    /**
+     * The last refusal, shown on the editor rather than as a passing message.
+     *
+     * A refusal here names a field or a stored value the person has to act on,
+     * so it has to stay on screen while they do. Cleared when the next save
+     * starts.
+     */
+    private val _productFailure = MutableStateFlow<String?>(null)
+    val productFailure: StateFlow<String?> = _productFailure.asStateFlow()
+
+    fun saveProduct(record: ProductRecord, draft: ProductDraft) {
+        if (!Permissions.canEditProducts(member)) {
+            emit(ProductWrite.CANNOT_EDIT)
+            return
+        }
+        _productFailure.value = null
+        _savingProduct.value = true
+        viewModelScope.launch {
+            runCatching { container.productEditRepository.save(member, record, draft = draft) }
+                .onSuccess { written -> if (written) emit(PRODUCT_SAVED) }
+                .onFailure { failure ->
+                    // A refusal `ProductWrite` decided carries the person's own
+                    // words and belongs on the sheet; anything else is a real
+                    // failure and goes through the reporter like the rest.
+                    val refusal = (failure as? IllegalStateException)?.message
+                    if (refusal != null) _productFailure.value = refusal else report(failure)
+                }
+            _savingProduct.value = false
+        }
+    }
+
     // --- plumbing ----------------------------------------------------------
 
     private fun persist(draft: QuoteDraft) {
@@ -198,5 +236,6 @@ class ProductsViewModel(
         const val ALREADY_IN_QUOTE = "Already in the quotation — quantity raised"
         const val NEGATIVE_QUANTITY = "Quantity cannot be negative"
         const val NOT_ALLOWED = "Only an Owner or Administrator can manage pinned products"
+        const val PRODUCT_SAVED = "Product saved"
     }
 }

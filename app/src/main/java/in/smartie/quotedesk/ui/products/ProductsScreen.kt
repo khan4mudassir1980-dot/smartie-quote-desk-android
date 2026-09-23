@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
@@ -29,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.derivedStateOf
@@ -60,6 +62,8 @@ import `in`.smartie.quotedesk.domain.CatalogueEntry
 import `in`.smartie.quotedesk.domain.CatalogueView
 import `in`.smartie.quotedesk.domain.DraftLine
 import `in`.smartie.quotedesk.domain.Permissions
+import `in`.smartie.quotedesk.domain.ProductDraft
+import `in`.smartie.quotedesk.domain.ProductUnit
 import `in`.smartie.quotedesk.domain.RoleTitles
 
 import `in`.smartie.quotedesk.domain.PinDrag
@@ -105,6 +109,8 @@ data class ProductsActions(
     /** A drop: put the first key where the second one currently sits. */
     val onReorderPin: (String, String) -> Unit = { _, _ -> },
     val onClearDraft: () -> Unit = {},
+    /** Save one product's corrections. The draft is what the sheet showed. */
+    val onSaveProduct: (ProductRecord, ProductDraft) -> Unit = { _, _ -> },
 )
 
 @Composable
@@ -120,6 +126,8 @@ fun ProductsScreen(
     val minimumKg by viewModel.minimumKg.collectAsStateWithLifecycle()
     val openShelves by viewModel.openShelves.collectAsStateWithLifecycle()
     val draft by viewModel.draft.collectAsStateWithLifecycle()
+    val savingProduct by viewModel.savingProduct.collectAsStateWithLifecycle()
+    val productFailure by viewModel.productFailure.collectAsStateWithLifecycle()
 
     val view = remember(products, categories, pinnedKeys, query, minimumKg) {
         Catalogue.build(products, categories, pinnedKeys, query, minimumKg)
@@ -137,6 +145,9 @@ fun ProductsScreen(
         openShelves = openShelves,
         pinnedKeys = pinnedKeys,
         canPin = viewModel.canManagePins(),
+        canEditProducts = Permissions.canEditProducts(data.member),
+        savingProduct = savingProduct,
+        productFailure = productFailure,
         stockByKey = stockByKey,
         actions = ProductsActions(
             onQueryChange = viewModel::setQuery,
@@ -149,6 +160,7 @@ fun ProductsScreen(
             onMovePin = { key, delta -> viewModel.movePin(pinnedKeys, key, delta) },
             onReorderPin = { moved, target -> viewModel.reorderPin(pinnedKeys, moved, target) },
             onClearDraft = viewModel::clearDraft,
+            onSaveProduct = viewModel::saveProduct,
         ),
     )
 }
@@ -167,6 +179,9 @@ fun ProductsCatalogue(
     openShelves: Set<String> = emptySet(),
     pinnedKeys: List<String> = emptyList(),
     canPin: Boolean = false,
+    canEditProducts: Boolean = false,
+    savingProduct: Boolean = false,
+    productFailure: String? = null,
     stockByKey: Map<String, StockRecord> = emptyMap(),
     actions: ProductsActions = ProductsActions(),
 ) {
@@ -179,6 +194,43 @@ fun ProductsCatalogue(
 
     val dimens = LocalSmartieDimens.current
     var showDraft by remember { mutableStateOf(false) }
+
+    // The product being corrected, if any. The editor replaces the catalogue
+    // rather than floating over it: it is a form with seven fields, and on a
+    // phone there is nothing useful to see behind it.
+    var editing by remember { mutableStateOf<ProductRecord?>(null) }
+
+    // **The sheet does not close on the tap.** A refusal — a stored price that
+    // cannot be read, a model that can only be guessed at — names something
+    // the person has to act on, and closing the sheet would take it away
+    // before they read it. So the tap starts the save and the sheet stays
+    // until the save has actually finished with nothing to say.
+    var awaitingSave by remember { mutableStateOf(false) }
+    LaunchedEffect(savingProduct, productFailure) {
+        if (awaitingSave && !savingProduct) {
+            awaitingSave = false
+            if (productFailure == null) editing = null
+        }
+    }
+
+    val correcting = editing
+    if (correcting != null) {
+        ProductEditorSheet(
+            record = correcting,
+            canEdit = canEditProducts,
+            saving = savingProduct,
+            failure = productFailure,
+            actions = ProductEditorActions(
+                onSave = { edited, draft ->
+                    awaitingSave = true
+                    actions.onSaveProduct(edited, draft)
+                },
+                onCancel = { editing = null },
+            ),
+        )
+        BackHandler { editing = null }
+        return
+    }
 
     // The catalogue is long — every shelf, every card. `derivedStateOf` so a
     // scroll recomposes the one control rather than the whole page.
@@ -256,6 +308,8 @@ fun ProductsCatalogue(
                     }
                     items(view.results, key = { it.product.documentId }) { entry ->
                         CatalogueCard(
+                            canEdit = canEditProducts,
+                            onEdit = { editing = entry.product },
                             entry = entry,
                             stock = stockByKey[entry.product.stockKey],
                             draft = draft,
@@ -283,6 +337,8 @@ fun ProductsCatalogue(
                     val key = entry.product.key
                     val dragging = draggingKey == key
                     CatalogueCard(
+                        canEdit = canEditProducts,
+                        onEdit = { editing = entry.product },
                         entry = entry,
                         stock = stockByKey[entry.product.stockKey],
                         draft = draft,
@@ -359,6 +415,8 @@ fun ProductsCatalogue(
                 } else {
                     items(shelf.entries, key = { it.product.documentId }) { entry ->
                         CatalogueCard(
+                            canEdit = canEditProducts,
+                            onEdit = { editing = entry.product },
                             entry = entry,
                             stock = stockByKey[entry.product.stockKey],
                             draft = draft,
@@ -462,8 +520,10 @@ private fun CatalogueCard(
     draft: QuoteDraft,
     pinned: Boolean,
     canPin: Boolean,
+    canEdit: Boolean,
     showCategory: Boolean,
     actions: ProductsActions,
+    onEdit: () -> Unit,
     modifier: Modifier = Modifier,
     dragging: Boolean = false,
     drag: PinDragHandlers? = null,
@@ -475,6 +535,7 @@ private fun CatalogueCard(
         quantity = draft.quantityOf(entry.product.key),
         pinned = pinned,
         canPin = canPin,
+        canEdit = canEdit,
         showCategory = showCategory,
         modifier = modifier,
         dragging = dragging,
@@ -483,6 +544,7 @@ private fun CatalogueCard(
         onChangeQuantity = { actions.onChangeQuantity(entry.product.key, it) },
         onTogglePin = { actions.onTogglePin(entry.product.key) },
         onMovePin = { delta -> actions.onMovePin(entry.product.key, delta) },
+        onEdit = onEdit,
     )
 }
 
@@ -524,10 +586,12 @@ private fun ProductCard(
     quantity: Double,
     pinned: Boolean,
     canPin: Boolean,
+    canEdit: Boolean,
     onAdd: () -> Unit,
     onChangeQuantity: (Double) -> Unit,
     onTogglePin: () -> Unit,
     onMovePin: (Int) -> Unit,
+    onEdit: () -> Unit,
     modifier: Modifier = Modifier,
     dragging: Boolean = false,
     drag: PinDragHandlers? = null,
@@ -587,10 +651,21 @@ private fun ProductCard(
                         style = MaterialTheme.typography.titleSmall,
                         color = if (price == null) SmartieColors.Warn else SmartieColors.Ink,
                     )
+                    // `each` on hundreds of rows is noise; a unit that is
+                    // anything else is the thing somebody scanning the list
+                    // is looking for, so it gets the emphasis the price has.
+                    // That is what makes a wrong unit findable on a phone —
+                    // and what makes a product still reading `sqft` rather
+                    // than `per sq ft` a visible refusal instead of a silent
+                    // mispricing.
                     Text(
                         product.unit,
                         style = MaterialTheme.typography.bodySmall,
-                        color = SmartieColors.Steel,
+                        color = if (product.unit.trim().equals(ProductUnit.EACH, ignoreCase = true)) {
+                            SmartieColors.Steel
+                        } else {
+                            SmartieColors.Ink
+                        },
                     )
                 }
                 if (inQuote) {
@@ -599,6 +674,16 @@ private fun ProductCard(
                         onDecrement = { onChangeQuantity(-1.0) },
                         onIncrement = { onChangeQuantity(1.0) },
                         highlighted = true,
+                    )
+                }
+                if (canEdit) {
+                    SmartieGhostButton(
+                        text = EDIT_PRODUCT,
+                        onClick = onEdit,
+                        compact = true,
+                        modifier = Modifier.semantics {
+                            contentDescription = editLabel(product.model)
+                        },
                     )
                 }
                 SmartiePrimaryButton(

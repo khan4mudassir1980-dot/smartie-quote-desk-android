@@ -14,7 +14,9 @@ import `in`.smartie.quotedesk.data.repository.FirestoreStockStore
 import `in`.smartie.quotedesk.data.repository.FirestorePurchaseStore
 import `in`.smartie.quotedesk.data.repository.ProductPinsRepository
 import `in`.smartie.quotedesk.data.repository.FirestorePartyStore
+import `in`.smartie.quotedesk.data.repository.FirestoreProductStore
 import `in`.smartie.quotedesk.data.repository.PartyWriteRepository
+import `in`.smartie.quotedesk.data.repository.ProductEditRepository
 import `in`.smartie.quotedesk.data.repository.SettingsRepository
 import `in`.smartie.quotedesk.data.repository.PurchaseWriteRepository
 import `in`.smartie.quotedesk.data.repository.StockPhotoRepository
@@ -46,6 +48,9 @@ class AppContainer(
 
     /** N5.5's writer for `/customers`. The read side stays `operationsRepository`. */
     val partyWriteRepository = PartyWriteRepository(FirestorePartyStore(firestore))
+
+    /** N5.7's writer for `/products`. The read side stays `catalogueRepository`. */
+    val productEditRepository = ProductEditRepository(FirestoreProductStore(firestore))
 
     /**
      * N5.6's reader and writer for the two settings documents the quotation

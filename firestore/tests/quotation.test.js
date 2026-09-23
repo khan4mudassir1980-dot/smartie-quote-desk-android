@@ -262,9 +262,11 @@ test('a number that is already spent cannot be re-taken, by anybody', async () =
     next: 10, lastIssued: { no: 'SIE/QD/2025-26/009', at, by: 'Administrator', uid: UIDS.admin },
   }));
 
-  // 2. And an Owner, who does reach it, is refused by the strictly-greater
-  //    rule — because standing still is not a configuration change, it is a
-  //    re-take of a number that is already spent.
+  // 2. And an Owner, who does reach it, is refused because **configuration
+  //    may never stamp `lastIssued`**. That is the guard that matters here:
+  //    a stale issue carries one by definition, so it cannot be dressed up
+  //    as a configuration write however `next` is set. `settings.test.js`
+  //    covers it directly.
   await assertFails(numbering(ownerDb).update({
     next: 10, lastIssued: { no: 'SIE/QD/2025-26/009', at, by: 'Primary Owner', uid: UIDS.primaryOwner },
   }));

@@ -210,8 +210,12 @@ class SettingsScreenTest {
         screen(ownerCan)
         retype(NEXT_LABEL, "8")
 
-        assertTrue("names the number already reached", shows("SIE/QD/2025-26/009"))
-        assertTrue("and the lowest one allowed", shows("type 10 or more"))
+        // 009 has not gone out yet, so 9 is the lowest the counter may sit at
+        // — not 10. This line said "type 10 or more" until the rule was
+        // corrected from `<=` to `<`, and it is the only assertion in the
+        // batch that did not get updated with it.
+        assertTrue("names the number not yet issued", shows("SIE/QD/2025-26/009"))
+        assertTrue("and the lowest one allowed", shows("type 9 or more"))
         assertRefused(SAVE_NUMBERING_KEY, SAVE_NUMBERING)
     }
 

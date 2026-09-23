@@ -73,6 +73,8 @@ import `in`.smartie.quotedesk.ui.more.AboutScreen
 import `in`.smartie.quotedesk.ui.more.MoreMenu
 import `in`.smartie.quotedesk.ui.more.MoreScreen
 import `in`.smartie.quotedesk.ui.more.PartiesScreen
+import `in`.smartie.quotedesk.ui.more.PartiesViewModel
+import `in`.smartie.quotedesk.ui.more.PartyActions
 import `in`.smartie.quotedesk.ui.more.PlaceholderScreen
 import `in`.smartie.quotedesk.ui.products.ProductsScreen
 import `in`.smartie.quotedesk.ui.products.ProductsViewModel
@@ -254,7 +256,25 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
                 composable("more/about") { AboutScreen() }
                 composable("more/parties") {
                     val parties by data.parties.collectAsStateWithLifecycle()
-                    PartiesScreen(parties = parties, loading = parties.isEmpty())
+                    val partiesViewModel: PartiesViewModel = viewModel(
+                        key = "parties-${member.uid}",
+                        factory = PartiesViewModel.Factory(container, member),
+                    )
+                    val savingParties by partiesViewModel.saving.collectAsStateWithLifecycle()
+                    val partyError by partiesViewModel.error.collectAsStateWithLifecycle()
+                    PartiesScreen(
+                        parties = parties,
+                        loading = parties.isEmpty(),
+                        capabilities = partiesViewModel.capabilities,
+                        saving = savingParties,
+                        error = partyError,
+                        newPartyId = partiesViewModel::mintId,
+                        actions = PartyActions(
+                            onCreate = partiesViewModel::create,
+                            onEdit = partiesViewModel::edit,
+                            onArchive = partiesViewModel::setArchived,
+                        ),
+                    )
                 }
                 composable("more/quotation-history") {
                     val quotations by data.quotations.collectAsStateWithLifecycle()

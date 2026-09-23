@@ -356,3 +356,113 @@ test('a quotation is never edited or deleted by the person who wrote it', async 
     status: 'Cancelled', cancelledBy: 'Administrator', cancelledAt: Date.now(),
   }));
 });
+
+// --- writing a party ----------------------------------------------------------
+
+/**
+ * A stored party, planted with the rules disabled.
+ *
+ * Seeded per test rather than in `beforeEach`, and **not optional**: an
+ * `update` on a document that is not there fails whatever the rules say, so a
+ * "this role is refused" test against a missing party passes for the wrong
+ * reason and proves nothing. Every refusal below is asserted against a party
+ * that really exists.
+ */
+async function givenParty(id = 'c_1', fields = {}) {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await context.firestore().collection('customers').doc(id).set({
+      id, name: 'Sunrise Constructions', type: 'contractor', city: 'Mumbai',
+      gstin: '27AAACS1234F1Z5', contact: 'Mr Deshmukh', phone: '9876543210',
+      email: 'accounts@sunrise.invalid', address: 'Plot 14, Andheri East',
+      notes: '', archived: false, t: 1700000000000, by: 'Mudassir Khan',
+      byUid: UIDS.primaryOwner, updated: 1705000000000,
+      ...fields,
+    });
+  });
+}
+
+test('a Manager creates a party, in the shape V8C4 reads', async () => {
+  // Every field V8C4 keeps, and no parallel one. `city`, never `site`.
+  const db = as(testEnv, UIDS.staff);
+  await assertSucceeds(customers(db).doc('c_new').set({
+    id: 'c_new',
+    name: 'Metro Glass',
+    type: 'contractor',
+    city: 'Mumbai',
+    gstin: '27AAACM1234F1Z5',
+    contact: 'Mr Rane',
+    phone: '9820011223',
+    email: 'accounts@metro.invalid',
+    address: 'Plot 9, Bhandup',
+    notes: 'Pays on delivery',
+    archived: false,
+    t: Date.now(),
+    by: 'Manager Person',
+    byUid: UIDS.staff,
+    updated: Date.now(),
+    upBy: 'Manager Person',
+    upUid: UIDS.staff,
+  }));
+});
+
+test('and corrects a detail on one, without touching its name', async () => {
+  await givenParty();
+  const db = as(testEnv, UIDS.staff);
+  await assertSucceeds(customers(db).doc('c_1').update({
+    id: 'c_1', name: 'Sunrise Constructions',
+    contact: 'Mrs Deshmukh', phone: '9876500000', gstin: '27AAACS1234F1Z5',
+    city: 'Mumbai', email: 'a@b.invalid', address: 'Plot 14', notes: '', type: 'contractor',
+    updated: Date.now(), upBy: 'Manager Person', upUid: UIDS.staff,
+  }));
+});
+
+test('but a Manager never renames a party', async () => {
+  await givenParty();
+  const db = as(testEnv, UIDS.staff);
+  await assertFails(customers(db).doc('c_1').update({ id: 'c_1', name: 'Renamed Ltd' }));
+  // Not even by emptying it.
+  await assertFails(customers(db).doc('c_1').update({ id: 'c_1', name: '' }));
+});
+
+test('and never archives one, nor brings one back', async () => {
+  await givenParty();
+  const db = as(testEnv, UIDS.staff);
+  await assertFails(customers(db).doc('c_1').update({ id: 'c_1', archived: true }));
+
+  await givenParty('c_old', { name: 'Old Client Pvt Ltd', archived: true });
+  // Unarchiving is refused, and so is every other change to an archived
+  // party: the staff branch requires it was not archived to begin with.
+  await assertFails(customers(db).doc('c_old').update({ id: 'c_old', archived: false }));
+  await assertFails(customers(db).doc('c_old').update({ id: 'c_old', city: 'Mumbai' }));
+});
+
+test('an Owner and an Administrator rename and archive', async () => {
+  await givenParty();
+  const adminDb = as(testEnv, UIDS.admin);
+  await assertSucceeds(customers(adminDb).doc('c_1').update({ id: 'c_1', name: 'Sunrise Infra' }));
+  await assertSucceeds(customers(adminDb).doc('c_1').update({ id: 'c_1', archived: true }));
+  // And back again, which a Manager cannot do.
+  await assertSucceeds(customers(adminDb).doc('c_1').update({ id: 'c_1', archived: false }));
+
+  const ownerDb = as(testEnv, UIDS.primaryOwner);
+  await assertSucceeds(customers(ownerDb).doc('c_1').update({ id: 'c_1', name: 'Sunrise Group' }));
+});
+
+test('a Staff account writes no party at all', async () => {
+  // Stored `worker`, displayed Staff. No Parties screen, and no way round it.
+  await givenParty();
+  const db = as(testEnv, UIDS.worker);
+  await assertFails(customers(db).doc('c_new').set({ id: 'c_new', name: 'Metro Glass' }));
+  await assertFails(customers(db).doc('c_1').update({ id: 'c_1', city: 'Mumbai' }));
+  await assertFails(customers(db).doc('c_1').delete());
+  await assertFails(customers(db).doc('c_1').get());
+});
+
+test('an edit must still carry the id of the document it is in', async () => {
+  // The rule checks `data.id == id` on an update as well as a create, and on
+  // a merged update the post-state carries whatever was stored — so a
+  // document that never had an `id` cannot be edited until one is written.
+  await givenParty();
+  const db = as(testEnv, UIDS.staff);
+  await assertFails(customers(db).doc('c_1').update({ id: 'c_elsewhere', city: 'Pune' }));
+});

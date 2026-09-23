@@ -13,6 +13,8 @@ import `in`.smartie.quotedesk.data.repository.DiskStockPhotoFiles
 import `in`.smartie.quotedesk.data.repository.FirestoreStockStore
 import `in`.smartie.quotedesk.data.repository.FirestorePurchaseStore
 import `in`.smartie.quotedesk.data.repository.ProductPinsRepository
+import `in`.smartie.quotedesk.data.repository.FirestorePartyStore
+import `in`.smartie.quotedesk.data.repository.PartyWriteRepository
 import `in`.smartie.quotedesk.data.repository.PurchaseWriteRepository
 import `in`.smartie.quotedesk.data.repository.StockPhotoRepository
 import `in`.smartie.quotedesk.data.repository.StockWriteRepository
@@ -40,6 +42,9 @@ class AppContainer(
 
     /** N4's writer. The read side stays `operationsRepository`. */
     val purchaseWriteRepository = PurchaseWriteRepository(FirestorePurchaseStore(firestore))
+
+    /** N5.5's writer for `/customers`. The read side stays `operationsRepository`. */
+    val partyWriteRepository = PartyWriteRepository(FirestorePartyStore(firestore))
 
     /** Clearing stopped-item history; the only write it has. */
     val stoppedStockRepository = StoppedStockRepository(firestore)

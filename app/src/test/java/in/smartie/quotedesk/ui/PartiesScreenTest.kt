@@ -184,9 +184,11 @@ class PartiesScreenTest {
     }
 
     @Test
-    fun `the detail view offers nothing to change, because nothing can be`() {
-        // N5.3 is read-only. A control that opened an editor which does not
-        // exist would be worse than no control.
+    fun `the detail offers nothing to change to somebody who may not`() {
+        // N5.5 added Edit and Archive, and both are capability-gated. This
+        // screen is built with the default capabilities, which grant nothing,
+        // so neither control is drawn — a control that earns a permission
+        // error is worse than no control.
         screen(listOf(sunrise))
 
         compose.onNodeWithContentDescription(openLabel("Sunrise Constructions")).performClick()

@@ -20,12 +20,18 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.domain.Parties
+import `in`.smartie.quotedesk.domain.PartyDraft
+import `in`.smartie.quotedesk.domain.PartyDuplicates
+import `in`.smartie.quotedesk.domain.PartyMatch
+import `in`.smartie.quotedesk.domain.PartyMatcher
+import `in`.smartie.quotedesk.domain.PartyWrite
 import `in`.smartie.quotedesk.ui.components.EmptyState
 import `in`.smartie.quotedesk.ui.components.ListRow
 import `in`.smartie.quotedesk.ui.components.SectionHeader
 import `in`.smartie.quotedesk.ui.components.SmartieCard
 import `in`.smartie.quotedesk.ui.components.SmartieField
 import `in`.smartie.quotedesk.ui.components.SmartieGhostButton
+import `in`.smartie.quotedesk.ui.components.SmartiePrimaryButton
 import `in`.smartie.quotedesk.ui.components.Tag
 import `in`.smartie.quotedesk.ui.components.TagTone
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
@@ -35,32 +41,110 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * The saved customers, **read-only**.
+ * The saved customers: the list, a search, and — since N5.5 — adding and
+ * correcting one.
  *
- * N5.3 replaces the placeholder with the list and a detail view and stops
- * there: creating or correcting a party is N5.5, and a screen that offered an
- * edit it could not perform would be worse than one that does not offer it.
+ * Every role that may quote sees every party, and may add one and correct its
+ * details. They are shared deliberately, so a Manager can quote against a
+ * customer somebody else entered. A Staff account never reaches this screen:
+ * the More entry is gated on `Permissions.canUseParties`, and the rules refuse
+ * the read as well.
  *
- * Every role that may quote sees every party — they are shared, deliberately,
- * so a Manager can quote against a customer somebody else entered. A Staff
- * account never reaches this screen: the More entry is gated on
- * `Permissions.canUseParties`, and the rules refuse the read as well.
+ * **Renaming and archiving are an Owner's and an Administrator's**, because
+ * the deployed rules say so — a Manager's update must leave `name` untouched
+ * and may not carry `archived` in either direction. The screen draws neither
+ * control for a Manager rather than drawing one that earns a permission
+ * error.
  */
 @Composable
 internal fun PartiesScreen(
     parties: List<PartyRecord> = emptyList(),
-    loading: Boolean = false
+    loading: Boolean = false,
+    capabilities: PartyCapabilities = PartyCapabilities(),
+    actions: PartyActions = PartyActions(),
+    saving: Boolean = false,
+    error: String? = null,
+    /** Minted once when the Add form opens, and reused on a retry. */
+    newPartyId: () -> String = { "" }
 ) {
     val dimens = LocalSmartieDimens.current
     var query by rememberSaveable { mutableStateOf("") }
     var archivedOpen by rememberSaveable { mutableStateOf(false) }
     var openPartyId by rememberSaveable { mutableStateOf<String?>(null) }
+    var editingId by rememberSaveable { mutableStateOf<String?>(null) }
+    var adding by rememberSaveable { mutableStateOf(false) }
+    // The N4.4 lesson: one id for as long as the person is entering one
+    // party, so a retry after an ambiguous failure lands on the same
+    // document rather than writing a twin.
+    var draftId by rememberSaveable { mutableStateOf<String?>(null) }
+    var acknowledged by rememberSaveable { mutableStateOf(false) }
+    // Held as two plain strings rather than a `PartyMatch`, so it survives a
+    // rotation without a custom saver, and is resolved back against the live
+    // list — a party deleted underneath the warning simply stops warning.
+    var duplicateId by rememberSaveable { mutableStateOf<String?>(null) }
+    var duplicateOn by rememberSaveable { mutableStateOf<String?>(null) }
 
     val book = Parties.build(parties, query)
     val open = openPartyId?.let { id -> parties.firstOrNull { it.id == id } }
+    val editing = editingId?.let { id -> parties.firstOrNull { it.id == id } }
+    val duplicate = duplicateId
+        ?.let { id -> parties.firstOrNull { it.id == id } }
+        ?.let { party -> PartyMatch(party, PartyMatcher.valueOf(duplicateOn ?: PartyMatcher.NAME.name)) }
+
+    fun closeForm() {
+        adding = false
+        editingId = null
+        draftId = null
+        duplicateId = null
+        duplicateOn = null
+        acknowledged = false
+    }
+
+    if (adding || editing != null) {
+        val id = draftId ?: newPartyId().also { draftId = it }
+        PartyEditPanel(
+            initial = editing?.let(PartyWrite::draftOf) ?: PartyDraft(),
+            editing = editing,
+            capabilities = capabilities,
+            duplicate = duplicate,
+            saving = saving,
+            error = error,
+            onOpenDuplicate = { party ->
+                closeForm()
+                openPartyId = party.id
+            },
+            onCancel = { closeForm() },
+            onSave = { draft ->
+                if (editing != null) {
+                    actions.onEdit(editing, draft)
+                    closeForm()
+                } else {
+                    // The guard warns once. Saving again is the person
+                    // saying they meant it, which is theirs to decide.
+                    val match = if (acknowledged) null
+                    else PartyDuplicates.find(parties, draft)
+                    if (match != null) {
+                        duplicateId = match.party.id
+                        duplicateOn = match.on.name
+                        acknowledged = true
+                    } else {
+                        actions.onCreate(id, draft)
+                        closeForm()
+                    }
+                }
+            }
+        )
+        return
+    }
 
     if (open != null) {
-        PartyDetail(party = open, onBack = { openPartyId = null })
+        PartyDetail(
+            party = open,
+            capabilities = capabilities,
+            onEdit = { editingId = open.id; openPartyId = null },
+            onArchive = { actions.onArchive(open, !open.archived) },
+            onBack = { openPartyId = null }
+        )
         return
     }
 
@@ -89,6 +173,19 @@ internal fun PartiesScreen(
 
         item(key = "heading") {
             SectionHeader(ACTIVE_SECTION, trailing = book.active.size.toString())
+        }
+
+        if (capabilities.canAdd) {
+            item(key = "add") {
+                SmartiePrimaryButton(
+                    text = ADD_PARTY,
+                    onClick = { adding = true },
+                    enabled = !saving,
+                    modifier = Modifier
+                        .semantics { contentDescription = ADD_PARTY }
+                        .fillMaxWidth()
+                )
+            }
         }
 
         when {
@@ -159,7 +256,13 @@ private fun PartyRow(party: PartyRecord, onOpen: () -> Unit) {
  * recorded" is an answer somebody came here for and a missing line is not.
  */
 @Composable
-private fun PartyDetail(party: PartyRecord, onBack: () -> Unit) {
+private fun PartyDetail(
+    party: PartyRecord,
+    onBack: () -> Unit,
+    capabilities: PartyCapabilities = PartyCapabilities(),
+    onEdit: () -> Unit = {},
+    onArchive: () -> Unit = {}
+) {
     val dimens = LocalSmartieDimens.current
     val name = Parties.displayName(party)
 
@@ -227,6 +330,34 @@ private fun PartyDetail(party: PartyRecord, onBack: () -> Unit) {
             }
         }
 
+        if (capabilities.canAdd) {
+            item(key = "edit") {
+                SmartiePrimaryButton(
+                    text = EDIT_PARTY,
+                    onClick = onEdit,
+                    modifier = Modifier
+                        .semantics { contentDescription = EDIT_PARTY }
+                        .fillMaxWidth()
+                )
+            }
+        }
+
+        // Archiving is the Owner's and the Administrator's. The rules refuse
+        // a Manager an `archived` key in either direction, so no control is
+        // drawn for one rather than one that produces a permission error.
+        if (capabilities.canArchive) {
+            item(key = "archive") {
+                val label = if (party.archived) UNARCHIVE_PARTY else ARCHIVE_PARTY
+                SmartieGhostButton(
+                    text = label,
+                    onClick = onArchive,
+                    modifier = Modifier
+                        .semantics { contentDescription = label }
+                        .fillMaxWidth()
+                )
+            }
+        }
+
         item(key = "read-only") {
             Text(
                 READ_ONLY_NOTE,
@@ -274,7 +405,7 @@ internal const val CONTACT_AS_NAME = "No firm name"
 internal const val CONTACT_AS_NAME_DETAIL =
     "No firm name is recorded on this party, so the contact person's name is shown above. " +
         "Some of these came from the native beta, which kept the firm and the contact in " +
-        "different fields. Correcting it needs the party editor, which arrives in N5.5."
+        "different fields. Edit the party to give it one."
 internal const val READ_ONLY_NOTE =
-    "Parties are read-only for now. Adding and correcting one arrives with the rest of " +
-        "the Quotation phase."
+    "A quotation points at the party it was issued to, so a party is archived rather " +
+        "than deleted."

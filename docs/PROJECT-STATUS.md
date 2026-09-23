@@ -1,14 +1,15 @@
 # Project status
 
 **The single current-status record. Read this before planning or changing
-anything.** Last updated 2026-09-22.
+anything.** Last updated 2026-09-23.
 
 ## Where the work is
 
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `505b8d9` — [run #123](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35750625322), fully green (unit tests, lint, Firestore rules emulator, APK build). **This is the commit to deploy the rules from, and its `smartie-native-apks` artifact is the APK to install.** |
+| **Last CI-verified head** | `9d3ab3a` — [run #126](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35761805936), fully green (unit tests, lint, Firestore rules emulator, APK build). **This is the commit to deploy the rules from, and its `smartie-native-apks` artifact is the APK to install.** |
+| **The ruleset has moved since N4.4** | `505b8d9` (run #123) was the deploy commit while N4.4 was the tip, and it is **no longer current**. N5.0b changed `/users`, so `9d3ab3a` carries one rules change beyond what N4.2 and N4.3 left — an Administrator may no longer manage another Administrator. It is safe to ship with them: there is no Administrator account in staging or production, so nothing observable changes. Deploy from `9d3ab3a`, not from `505b8d9`. |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -26,7 +27,10 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
 | N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2, N4.3 and N4.4 are all code complete and CI-verified**, and both are waiting on the same Owner-run staging rules deployment paired with the APK rollout — they were never deployed separately and must not be. Purchase History is built and open to every role, so what was Batch 5 is done; the tab badge is Batch 6 |
-| N5–N8 | Not started |
+| N5 Quotation | **In progress.** The plan of record is the approved N5 plan; `docs/N5-plan.md` is written in a later batch. **N5.0, N5.0b and N5.1 are complete and CI-verified at `9d3ab3a` (run #126).** Quotations are still read-only end to end — there is no write path for `/quotations`, `/customers` or `/teamSettings/numbering` — and the Quotation tab keeps its "Keep using the PWA to issue quotations" banner until the cutover batch. Next is N5.2 |
+| N6 Products & Categories | Not started. The Products & Categories editing screen, which T-P7 is blocked on |
+| N7 Calculators | Not started. Port the four V8C4 calculators — rolling shutter, high-speed door, garage door, glass door — whose output becomes ordinary quotation lines carrying the opening size in the line's spec text |
+| N8 Migration & cutover | Not started. **The production migration and cutover.** `docs/N2-delivery.md:40` calls N8 "the catalogue migration"; that line is the stale one and `docs/N3-plan.md:585` is right |
 
 - Staging holds **403 products and 12 categories**, imported and verified
   field by field. T-P1 and the §12 "403-item parity" exit criterion are closed.
@@ -831,46 +835,125 @@ otherwise: `Permissions.canReopenPurchase`, `PurchaseCapabilities`, and
 **No rules or index change, nothing deployed, production neither read nor written**, nothing
 merged to `main`, no pull request.
 
+## N5 Quotation — the batches that are done
+
+All three are CI-verified at `9d3ab3a` ([run #126](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35761805936)).
+
+| Commit | Batch |
+|---|---|
+| `ccb4a25` | **N5.0** — remove the beta quotation code nothing reaches |
+| `ba2db27` | **N5.0b** — an Administrator acts on Manager and Staff only |
+| `9d3ab3a` | **N5.1** — write down what the quotation rules already do, before building on them |
+
+**N5.0** deleted `util/QuotationPdf.kt` (188 lines) and `data/model/Models.kt` (51 lines),
+neither of which had a single caller. Deleting the PDF writer also removed a trap for the area
+pricing N5 builds: its private `formatNumber` used `Double.toInt()` — the truncation audit C12
+recorded and that `Money` exists to replace — so a computed area of 76.125 sq ft would have
+printed 76.13 on the PDF and 76.125 on the card. `AppDataViewModel.parties` was kept and
+documented rather than deleted: it is uncollected today, but N5.3 replaces the Parties
+placeholder and reads exactly that flow, and `WhileSubscribed(5_000)` means an uncollected
+flow attaches no listener.
+
+**N5.0b** is a rules change and the only one N5 has deployed so far. An Administrator may no
+longer demote, disable or delete another Administrator, and `roleOptionsFor` offers
+Administrator only to an Owner — the second half matters as much as the first, because
+without it an Administrator could create the peer they are then not allowed to manage. Taken
+now because there is **no Administrator account in staging or production**, so the narrowing
+interrupts nobody; that window closes the moment one is created.
+
+### The two N5.1 findings, and where each is answered
+
+N5.1 changed no rule. It wrote fifteen emulator tests against the rules exactly as deployed,
+and two of them found something. Both are carried forward rather than fixed in place:
+
+1. **A contended issue is refused as `permission-denied`, and the SDK does not retry that.**
+   A Firestore transaction retries itself when the *server* aborts it for contention. Here the
+   security rule is doing the concurrency check — `next == resource.data.next + 1`, exactly —
+   so a transaction whose read of `next` went stale is rejected by the rules before the
+   server's own optimistic-concurrency check ever aborts it, and the SDK gives up. Measured
+   over twenty contended pairs on the emulator: two separate client apps both got through half
+   the time and lost one to `permission-denied` the other half; two concurrent transactions
+   inside one app lost one **every** time. **N5.9's finalise must therefore retry the whole
+   transaction itself, bounded, on `permission-denied` against the counter.** The approved plan
+   assumed the SDK's own retry covered this; it does not.
+
+2. **An Administrator can re-take a number that is already gone.** The counter's second update
+   branch exists for configuration and asks only for `next >= resource.data.next`. An
+   Administrator issuing from a stale read writes `next: 10` when the stored value is already
+   10, `10 >= 10` holds, and the write is accepted — so two people hold the same quotation
+   number and `lastIssued` ends up naming the loser. A Manager cannot do this, because a
+   Manager never reaches that branch, which is why the contention tests use two Managers to
+   prove the real property. It is pinned today as a **characterisation test that asserts
+   `assertSucceeds`**, with the defect named in full beside it. **In N5.6 that assertion flips
+   to `assertFails`**, when the configuration branch becomes **Owner-only** and must require a
+   **strictly greater `next` unless the financial year changes**.
+
+**Emulator tests: 165**, up from 148. The contended pair was run five times over to confirm it
+is not flaky; it asserts the invariant that holds every time — the counter advances by exactly
+the number of clients that got through, and no number is issued twice — rather than an outcome
+that only holds about half the time. `helpers.js` gained a second Manager account so two
+ordinary quoting accounts can contend without either reaching an admin-only branch and proving
+something other than what the test claims.
+
 ## Current next action
 
-**Deploy the N4.2 + N4.3 rules to staging, put the new APK on every phone,
-and run the whole of `docs/PHONE-TEST-CHECKLIST.md` in one sitting.**
+**Build N5.2 — the area, installation and discount arithmetic, as pure Kotlin
+in `domain/`, with no Firebase.**
 
-Phone testing happens once now, at the end, so this is that sitting. The
-checklist is the cumulative record of what is owed and nothing else is: it
-carries N4.2's reconciled rows, N4.3's unrun ones, N4.4's new ones, and the
-older N3 and N3.1 rows neither pass reached.
+It is the first N5 batch that computes money, and it is deliberately ahead of
+every screen that will show it: each worked example in the approved plan
+becomes a unit test before a builder exists to get them wrong. It covers area
+rounded up to the next half square foot **then** lifted to the product
+minimum, millimetres and feet at 304.8, installation in all four modes,
+one discount in percent or rupees that never touches transport, the totals
+order, whole-rupee HALF_UP on every stored figure, and the `discBase` bound
+the rules will check the Manager's cap against.
 
-**N4.4 changed no rule**, so the ruleset to deploy is exactly the one N4.2
-and N4.3 left. Both batches deploy together — there is no version of the file
-that carries one without the other — and the pairing matters in both
-directions: the rules got stricter for a Manager in N4.2, and looser for the
-person who raised a requirement in N4.3, which the new build is what exercises.
+### The staging pass is deferred, not skipped
 
-The Owner runs the deployment; this branch never deploys, and production
-rules are not part of it:
+Phone testing happens once, at the end, so the deployment and the whole of
+`docs/PHONE-TEST-CHECKLIST.md` now run **after N5**, in one sitting, covering
+N4 and N5 together. That file stays the cumulative record of what is owed and
+nothing else is: N4.2's reconciled rows, N4.3's unrun ones, N4.4's new ones,
+the older N3 and N3.1 rows neither pass reached, and N5's when they are
+written.
+
+When that sitting comes, the Owner runs the deployment; this branch never
+deploys, and production rules are not part of it:
 
 ```powershell
 cd firestore
 firebase.cmd deploy --only firestore:rules --project smartie-quote-desk-staging
 ```
 
-The build is the `smartie-native-apks` artifact of
-[run #123](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35750625322),
-and it must show **Staging**. No index deploy: `firestore.indexes.json` has
-not changed since `69d0fce`.
+Deploy from the **last CI-verified head**, which is `9d3ab3a` today and will
+have moved again by then — not from `505b8d9`, which is the N4.4 ruleset and
+no longer current. No index deploy: `firestore.indexes.json` has not changed
+since `69d0fce`.
 
-**Two things to know before the pass, so neither reads as a defect.** The two
-existing "yysh" rows are two real documents — N4.4 stops new ones and cannot
-merge these, so both will still show and one is removed by hand. And a role
-will appear beside a name only on an Owner's or an Administrator's phone; a
+**Three things to know before the pass, so none of them reads as a defect.**
+The two existing "yysh" rows are two real documents — N4.4 stops new ones and
+cannot merge these, so both will still show and one is removed by hand. A role
+appears beside a name only on an Owner's or an Administrator's phone; a
 Manager's and a Staff account's show the name alone, because the rules do not
-let those accounts read `/users`.
+let those accounts read `/users`. And an Administrator can no longer change
+another Administrator, which is N5.0b and intended.
 
 **No acceptance row is passed until it has been run on a phone.** An
 automated test passing is not a pass in that file.
 
 ## Decisions that bind future work
+
+**Finalise retries itself; the Firestore SDK will not do it.** A transaction
+retries automatically when the *server* aborts it for contention. The
+quotation counter's rule does the concurrency check first — `next ==
+resource.data.next + 1`, exactly — so a stale transaction is refused as
+`permission-denied`, which is not a retryable status, and the SDK gives up.
+Measured in N5.1 over twenty contended pairs: roughly half of genuinely
+simultaneous issues surface as a permission error. **N5.9 must catch
+`permission-denied` on the counter and re-run the whole transaction itself,
+bounded.** Any later batch that touches finalise inherits this; it is not an
+implementation detail of one commit.
 
 **Purchase History is filtered in the app, not in the rules, and that is
 deliberate.** The Owner decided it after seeing why: Firestore evaluates a

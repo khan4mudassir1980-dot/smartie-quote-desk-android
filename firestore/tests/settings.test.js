@@ -352,27 +352,120 @@ test('a stored pad the configuration branch would now refuse does not stop a num
 
 // --- a defect being recorded, not approved ----------------------------------------
 
-test('a Manager can read /teamSettings/access — a gap, not a feature', async () => {
-  // **Known defect, pinned so it cannot be lost**, in the same shape as the
-  // N5.1 counter finding: this asserts what the rules do *today*, with the
-  // defect named beside it, and the assertion flips when it is fixed.
+test('a Manager is refused /teamSettings/access, and the catch-all no longer overrides it', async () => {
+  // **The N5.6b characterisation test, flipped.** It asserted `assertSucceeds`
+  // with the defect named beside it: `/teamSettings/access` declared
+  // `allow read: if admin()` and was overridden by a `/teamSettings/{other}`
+  // catch-all granting `member() && !worker()` read to the whole collection.
+  // Firestore ORs across every matching rule, so the narrower named rule could
+  // not take anything away.
   //
-  // `/teamSettings/access` declares `allow read: if admin()`. It is overridden
-  // by the `/teamSettings/{other}` catch-all, which grants
-  // `member() && !worker()` read to every document in the collection —
-  // Firestore ORs across every matching rule, so the narrower named rule
-  // cannot take anything away. A Manager therefore reads `primaryOwnerUid`,
-  // `secondOwnerUid` and `updatedBy`.
-  //
-  // No credential leaks, and V8C4 touches this document only inside the
-  // Owner's own appoint / remove-second-owner transaction, so tightening it
-  // would not break the PWA. Left as-is pending the Owner's decision.
-  await assertSucceeds(
-    as(testEnv, UIDS.staff).collection('teamSettings').doc('access').get()
-  );
+  // The catch-all is now closed both ways. Every document either app uses has
+  // its own named rule, so nothing legitimate lost a read — the tests below
+  // prove that document by document.
+  const access = (uid) => as(testEnv, uid).collection('teamSettings').doc('access');
 
-  // A Staff account is refused, because the catch-all still excludes a worker.
-  await assertFails(
-    as(testEnv, UIDS.worker).collection('teamSettings').doc('access').get()
-  );
+  await assertFails(access(UIDS.staff).get());
+  await assertFails(access(UIDS.worker).get());
+
+  await assertSucceeds(access(UIDS.admin).get());
+  await assertSucceeds(access(UIDS.primaryOwner).get());
+});
+
+test('an unnamed teamSettings document is closed to everybody, including the Owner', async () => {
+  // What the catch-all is for now: a document nobody has written a rule for
+  // is shut by default rather than open by default.
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await context.firestore().collection('teamSettings').doc('someFutureThing').set({ x: 1 });
+  });
+  const future = (uid) => as(testEnv, uid).collection('teamSettings').doc('someFutureThing');
+
+  await assertFails(future(UIDS.primaryOwner).get());
+  await assertFails(future(UIDS.admin).get());
+  await assertFails(future(UIDS.staff).get());
+  await assertFails(future(UIDS.primaryOwner).set({ x: 2 }));
+});
+
+test('every teamSettings document either app uses is still readable by the roles that need it', async () => {
+  // Closing the catch-all is only safe because each of these has a named
+  // rule. The native app touches access, categories, numbering, productPins
+  // and quoting; V8C4 touches numbering, company, categories, productPins and
+  // access. This walks the union, document by document, rather than trusting
+  // that the named rules were all present.
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await db.collection('teamSettings').doc('company').set({ name: 'Smart India Enterprises' });
+    await db.collection('teamSettings').doc('categories').set({ map: {} });
+    await db.collection('teamSettings').doc('productPins').set({ keys: [] });
+  });
+  await givenCounter();
+  await givenCap();
+
+  const read = (uid, id) => as(testEnv, uid).collection('teamSettings').doc(id).get();
+
+  // Everyone who can quote — Owner, Administrator, Manager.
+  for (const uid of [UIDS.primaryOwner, UIDS.admin, UIDS.staff]) {
+    for (const id of ['numbering', 'quoting', 'company', 'categories', 'productPins']) {
+      await assertSucceeds(read(uid, id));
+    }
+  }
+
+  // A Staff account reads none of them, exactly as before.
+  for (const id of ['numbering', 'quoting', 'company', 'categories', 'productPins', 'access']) {
+    await assertFails(read(UIDS.worker, id));
+  }
+});
+
+// --- N5.6c: the prefix pattern ----------------------------------------------------
+
+test('the prefix admits the multi-segment value the live counter holds', async () => {
+  // `SIE/QD` is two segments, so a quotation number built from it has four:
+  // {prefix}/{fy}/{n} is SIE/QD/2025-26/009. A pattern without `/` would
+  // refuse every save of the real data — which is why the first pattern
+  // proposed for this was held rather than shipped.
+  await givenCounter();
+  const db = numbering(as(testEnv, UIDS.primaryOwner));
+  const at = { fy: '2025-26', pad: 3, next: 12 };
+
+  await assertSucceeds(db.update({ ...at, prefix: 'SIE/QD' }));
+  await assertSucceeds(db.update({ prefix: 'SIE/QT', fy: '2025-26', pad: 3, next: 13 }));
+  await assertSucceeds(db.update({ prefix: 'SIE-QD', fy: '2025-26', pad: 3, next: 14 }));
+  await assertSucceeds(db.update({ prefix: 'A', fy: '2025-26', pad: 3, next: 15 }));
+  await assertSucceeds(db.update({ prefix: 'A'.repeat(16), fy: '2025-26', pad: 3, next: 16 }));
+});
+
+test('and refuses whitespace, quotes, control characters and anything too long', async () => {
+  // The pattern is anchored at both ends: `SIE/QD ` differs from an accepted
+  // value only at the end, and `A`.repeat(17) only in length.
+  await givenCounter();
+  const db = numbering(as(testEnv, UIDS.primaryOwner));
+  const at = { fy: '2025-26', pad: 3, next: 12 };
+
+  await assertFails(db.update({ ...at, prefix: 'SIE QD' }));
+  await assertFails(db.update({ ...at, prefix: 'SIE/QD ' }));
+  await assertFails(db.update({ ...at, prefix: ' SIE/QD' }));
+  await assertFails(db.update({ ...at, prefix: "SIE'QD" }));
+  await assertFails(db.update({ ...at, prefix: 'SIE"QD' }));
+  await assertFails(db.update({ ...at, prefix: 'SIE\nQD' }));
+  await assertFails(db.update({ ...at, prefix: 'SIE\u0000QD' }));
+  await assertFails(db.update({ ...at, prefix: '/SIE' }));
+  await assertFails(db.update({ ...at, prefix: '-SIE' }));
+  await assertFails(db.update({ ...at, prefix: '' }));
+  await assertFails(db.update({ ...at, prefix: 'A'.repeat(17) }));
+});
+
+test('seeding a counter is bounded exactly as configuring one is', async () => {
+  // N8's production migration seeds on an unseeded project, so this branch
+  // must not be the weaker of the two.
+  const ownerDb = numbering(as(testEnv, UIDS.primaryOwner));
+  const good = { prefix: 'SIE/QD', fy: '2025-26', next: 1, pad: 3 };
+
+  await assertFails(ownerDb.set({ ...good, prefix: 'SIE QD' }));
+  await assertFails(ownerDb.set({ ...good, prefix: 'A'.repeat(17) }));
+  await assertFails(ownerDb.set({ ...good, fy: '2026-278' }));
+  await assertFails(ownerDb.set({ ...good, pad: 7 }));
+  await assertFails(ownerDb.set({ ...good, pad: 0 }));
+
+  await assertSucceeds(ownerDb.set(good));
+  assert.equal((await stored('numbering')).prefix, 'SIE/QD');
 });

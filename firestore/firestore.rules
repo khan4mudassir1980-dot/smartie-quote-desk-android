@@ -88,6 +88,19 @@ service cloud.firestore {
     function touched()    { return request.resource.data.diff(resource.data).affectedKeys(); }
     function priceOk(v)   { return v == null || (v is number && v >= 0); }
 
+    // The issuer marker on the counter's `lastIssued`: which app took the
+    // number. It exists so a number that somehow goes out twice during
+    // cutover can be traced to an app rather than argued about.
+    //
+    // **Read, never required.** V8C4's `fbFinaliseAtomic` writes `lastIssued`
+    // with no `src` at all, and a missing key reads as `''` — a string of
+    // size 0 — so the PWA keeps issuing numbers exactly as it does today.
+    // Making it mandatory would stop the live business the day this deploys.
+    function numberingSrcOk() {
+      let src = request.resource.data.get('lastIssued', {}).get('src', '');
+      return src is string && src.size() <= 16;
+    }
+
     // --- people --------------------------------------------------------
 
     match /users/{uid} {
@@ -611,14 +624,24 @@ service cloud.firestore {
 
     // --- team settings -------------------------------------------------
 
+    // The one counter the whole business queues behind. Two update branches,
+    // and which one a write lands in is decided by what it touches, not by
+    // who is signed in.
     match /teamSettings/numbering {
       allow read: if member() && !worker();
-      allow create: if admin()
+
+      // Seeding is configuration, so from N5.6 it follows the Owner like the
+      // rest of it.
+      allow create: if owner()
                     && request.resource.data.next is number && request.resource.data.next >= 1
                     && request.resource.data.prefix is string
                     && request.resource.data.fy is string
                     && request.resource.data.pad is number;
+
       allow update: if
+        // --- issuing a number ---------------------------------------------
+        // Unchanged, and deliberately so: every quoting role reaches this
+        // branch, from either app, and the counter advances by exactly one.
         (member() && !worker()
           && touched().hasOnly(['next','lastIssued'])
           && request.resource.data.next is number
@@ -626,14 +649,40 @@ service cloud.firestore {
           && request.resource.data.prefix == resource.data.prefix
           && request.resource.data.fy == resource.data.fy
           && request.resource.data.pad == resource.data.pad
-          && request.resource.data.get('lastIssued', {}).get('uid', '') == mine())
+          && request.resource.data.get('lastIssued', {}).get('uid', '') == mine()
+          && numberingSrcOk())
         ||
-        (admin()
+        // --- configuring the counter: Owner only, from N5.6 ---------------
+        // `next` must be **strictly greater** inside a financial year. It used
+        // to be `>=`, and that one character was a real hole: an
+        // administrator issuing from a stale read wrote `next: 10` when the
+        // stored value was already 10, `10 >= 10` held, and two people walked
+        // away holding the same quotation number while `lastIssued` named the
+        // loser. Equality is never a configuration change — it re-takes a
+        // number that is already spent.
+        (owner()
           && request.resource.data.next is number && request.resource.data.next >= 1
           && request.resource.data.prefix is string
           && request.resource.data.fy is string
           && (request.resource.data.fy != resource.data.fy
-              || request.resource.data.next >= resource.data.next));
+              || request.resource.data.next > resource.data.next));
+
+      allow delete: if false;
+    }
+
+    // The Manager discount cap, and nothing else yet. Read by everyone who
+    // can quote, because the quotation form has to show a Manager the limit
+    // it is about to hold them to; written by the Owner alone.
+    //
+    // The document may not exist: the N5.9 quotation rule reads it through a
+    // guarded `exists()` and treats a missing one as a cap of zero, so an
+    // unseeded project refuses a Manager's discount rather than allowing any.
+    match /teamSettings/quoting {
+      allow read: if member() && !worker();
+      allow create, update: if owner()
+                            && request.resource.data.managerDiscountPct is number
+                            && request.resource.data.managerDiscountPct >= 0
+                            && request.resource.data.managerDiscountPct <= 100;
       allow delete: if false;
     }
 

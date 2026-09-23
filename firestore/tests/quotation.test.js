@@ -236,38 +236,42 @@ test('however a contended pair resolves, no two quotations share a number', asyn
   }
 });
 
-test('an Administrator can still re-take a number that is gone — a gap, not a feature', async () => {
-  // **Known defect, pinned so it cannot be lost.** The counter has a second
-  // update branch for configuration, and that branch asks only for
-  // `next >= resource.data.next`. An Administrator issuing from a stale read
-  // writes `next: 10` when the stored value is already 10, `10 >= 10` holds,
-  // and the write is accepted — so they believe they own a number a Manager
-  // has already used, and `lastIssued` is overwritten with theirs.
+test('a number that is already spent cannot be re-taken, by anybody', async () => {
+  // **N5.1's second finding, and this test used to assert the opposite.**
   //
-  // A Manager cannot do this: they never reach the configuration branch, which
-  // is why the tests above use two Managers to prove the real property.
+  // Until N5.6 it read `assertSucceeds` with the defect named beside it: the
+  // configuration branch asked only for `next >= resource.data.next`, so an
+  // Administrator issuing from a stale read wrote `next: 10` when the stored
+  // value was already 10, `10 >= 10` held, the write was accepted — and two
+  // people walked away holding number 009 while `lastIssued` named the loser.
   //
-  // The fix belongs with the other numbering rule changes in N5.6: require the
-  // configuration branch to be touching something other than `next` and
-  // `lastIssued`, so an issue-shaped write is forced through the issue branch
-  // and its exact `+ 1`, whoever is signed in. **This assertion flips to
-  // `assertFails` in that batch.**
+  // Two separate changes close it, and each is asserted on its own so a later
+  // edit cannot quietly remove one and still leave this file green.
   await givenCounter();
   const manager = as(testEnv, UIDS.staff);
   const administrator = as(testEnv, UIDS.admin);
+  const ownerDb = as(testEnv, UIDS.primaryOwner);
   const at = Date.now();
 
   await assertSucceeds(numbering(manager).update({
     next: 10, lastIssued: { no: 'SIE/QD/2025-26/009', at, by: 'Manager Person', uid: UIDS.staff },
   }));
 
-  await assertSucceeds(numbering(administrator).update({
+  // 1. An Administrator no longer reaches the configuration branch at all.
+  await assertFails(numbering(administrator).update({
     next: 10, lastIssued: { no: 'SIE/QD/2025-26/009', at, by: 'Administrator', uid: UIDS.admin },
   }));
 
-  // The damage: the counter did not move, and two people hold number 009.
+  // 2. And an Owner, who does reach it, is refused by the strictly-greater
+  //    rule — because standing still is not a configuration change, it is a
+  //    re-take of a number that is already spent.
+  await assertFails(numbering(ownerDb).update({
+    next: 10, lastIssued: { no: 'SIE/QD/2025-26/009', at, by: 'Primary Owner', uid: UIDS.primaryOwner },
+  }));
+
+  // The counter still holds what the Manager left, and 009 has one owner.
   assert.equal((await counter()).next, 10);
-  assert.equal((await counter()).lastIssued.uid, UIDS.admin);
+  assert.equal((await counter()).lastIssued.uid, UIDS.staff);
 });
 
 test('a Manager may not bump the counter in somebody else s name', async () => {
@@ -294,12 +298,17 @@ test('the prefix, year and padding are frozen while a number is being issued', a
   await assertSucceeds(numbering(db).update({ next: 10, lastIssued }));
 });
 
-test('an Administrator rolls the financial year, and never rewinds inside one', async () => {
+test('an Owner rolls the financial year, and never rewinds or stands still inside one', async () => {
+  // Configuration became the Owner's in N5.6; this test named an
+  // Administrator until then. The year roll is the one case where `next` may
+  // go backwards, because a new year restarts the sequence.
   await givenCounter();
-  const db = as(testEnv, UIDS.admin);
+  const db = as(testEnv, UIDS.primaryOwner);
 
-  // Inside the same year the counter only goes forward.
+  // Inside the same year the counter only goes forward, and standing still is
+  // not going forward.
   await assertFails(numbering(db).update({ prefix: 'SIE/QD', fy: '2025-26', next: 2 }));
+  await assertFails(numbering(db).update({ prefix: 'SIE/QD', fy: '2025-26', next: 9 }));
   await assertSucceeds(numbering(db).update({ prefix: 'SIE/QD', fy: '2025-26', next: 12 }));
 
   // A new year starts wherever the Owner says, including at 1.

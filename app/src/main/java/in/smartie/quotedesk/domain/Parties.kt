@@ -70,12 +70,36 @@ object Parties {
         if (displayName(party).lowercase().contains(text)) return true
         if (party.contact.lowercase().contains(text)) return true
         if (party.gstin.lowercase().contains(text)) return true
-
-        // A phone matches on digits alone, so spacing and a country code
-        // cannot hide a number somebody typed correctly.
-        val digits = needle.filter { it.isDigit() }
-        return digits.isNotEmpty() && party.phone.filter { it.isDigit() }.contains(digits)
+        return matchesPhone(party.phone, needle)
     }
+
+    /**
+     * Whether a typed number reaches a stored one, on digits alone.
+     *
+     * Two different things have to work, and they pull in opposite
+     * directions. **A partial number narrows the list** — `543210` finds
+     * 9876543210, so the stored number contains what was typed. **A number
+     * pasted with its country code is still the same number** — typing
+     * `+91-9876543210` against a stored `9876543210` means what was typed
+     * contains the stored one, the other way round entirely. Checking only
+     * the first direction, which is the obvious one, silently fails every
+     * number copied out of a phone's contacts.
+     *
+     * The country-code direction is a **suffix** match rather than a loose
+     * containment, and only for a stored number long enough to mean
+     * something: a two-digit stored value matching every number that happens
+     * to end in it would be noise rather than a find.
+     */
+    fun matchesPhone(stored: String, needle: String): Boolean {
+        val typed = needle.filter { it.isDigit() }
+        val known = stored.filter { it.isDigit() }
+        if (typed.isEmpty() || known.isEmpty()) return false
+        if (known.contains(typed)) return true
+        return known.length >= MIN_SUFFIX_DIGITS && typed.endsWith(known)
+    }
+
+    /** Below this, a stored number is too short to match by suffix. */
+    private const val MIN_SUFFIX_DIGITS = 6
 
     /**
      * What to call a party on a list.

@@ -86,11 +86,40 @@ class PartiesTest {
     fun `a phone matches on its digits, however it was written down`() {
         val parties = listOf(sunrise, harbour)
 
-        listOf("9876543210", "98765 43210", "+91-9876543210", "98765-43210").forEach { typed ->
-            assertEquals(typed, listOf("c_1"), Parties.build(parties, typed).active.map { it.id })
-        }
+        listOf("9876543210", "98765 43210", "+91-9876543210", "98765-43210", "+91 98765 43210")
+            .forEach { typed ->
+                assertEquals(
+                    typed,
+                    listOf("c_1"),
+                    Parties.build(parties, typed).active.map { it.id }
+                )
+            }
         // A partial number still narrows the list.
         assertEquals(listOf("c_1"), Parties.build(parties, "543210").active.map { it.id })
+    }
+
+    @Test
+    fun `a number pasted with its country code still finds one stored without`() {
+        // The direction the obvious implementation gets wrong. A partial
+        // search means the stored number contains what was typed; a pasted
+        // country code means what was typed contains the stored number. Only
+        // checking the first silently fails every number copied out of a
+        // phone's contacts.
+        assertTrue(Parties.matchesPhone(stored = "9876543210", needle = "+91-9876543210"))
+        assertTrue(Parties.matchesPhone(stored = "9876543210", needle = "543210"))
+        assertTrue(Parties.matchesPhone(stored = "9876543210", needle = "98765 43210"))
+    }
+
+    @Test
+    fun `but a country code cannot be matched against a stub of a number`() {
+        // The suffix direction only applies to a stored number long enough to
+        // mean something. A two-digit stored value matching every number that
+        // happens to end in it would be noise, not a find.
+        assertFalse(Parties.matchesPhone(stored = "10", needle = "+91-9876543210"))
+        assertFalse(Parties.matchesPhone(stored = "", needle = "9876543210"))
+        assertFalse(Parties.matchesPhone(stored = "9876543210", needle = "no digits here"))
+        // Six digits is enough to be a real fragment of a number.
+        assertTrue(Parties.matchesPhone(stored = "543210", needle = "+91-9876543210"))
     }
 
     @Test

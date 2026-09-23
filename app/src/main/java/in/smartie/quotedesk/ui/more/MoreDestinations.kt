@@ -48,8 +48,10 @@ object MoreMenu {
         MoreDestination(
             route = "more/quotation-history",
             label = "Quotation history",
-            description = "Every quotation, with search and filters",
-            phase = "N5",
+            description = "Every quotation, with its lines and totals",
+            // Built in N5.4, and read-only. An Owner or Administrator sees
+            // every quotation; a Manager sees the ones they issued.
+            phase = null,
             isVisible = Permissions::canViewQuotationHistory,
         ),
         MoreDestination(

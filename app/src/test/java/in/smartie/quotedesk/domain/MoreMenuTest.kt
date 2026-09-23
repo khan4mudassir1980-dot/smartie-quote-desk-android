@@ -90,13 +90,17 @@ class MoreMenuTest {
 
     @Test
     fun `the built destinations are named, and the rest name their phase`() {
-        // Purchase history joined them in N4.3 and Parties in N5.3; both are
-        // screens now, not promises of one. Parties is read-only until N5.5,
-        // which the screen says for itself — a menu entry that still claimed
-        // "In development" would be the wrong place to say it, because the
-        // list and the detail view are there and usable today.
+        // Purchase history joined them in N4.3, and Parties and Quotation
+        // history in N5.3 and N5.4. All three are screens now, not promises of
+        // one. Both of the N5 ones are read-only, which each screen says for
+        // itself — a menu entry still claiming "In development" would be the
+        // wrong place to say it, because the lists and the detail views are
+        // there and usable today.
         val built = MoreMenu.destinations.filter { it.phase == null }.map { it.label }
-        assertEquals(listOf("Parties", "Purchase history", "Team", "About & legal"), built)
+        assertEquals(
+            listOf("Parties", "Quotation history", "Purchase history", "Team", "About & legal"),
+            built
+        )
         MoreMenu.destinations.filter { it.phase != null }.forEach {
             assertTrue(it.label, it.phase!!.matches(Regex("N[0-9]")))
         }

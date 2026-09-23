@@ -78,6 +78,7 @@ import `in`.smartie.quotedesk.ui.products.ProductsScreen
 import `in`.smartie.quotedesk.ui.products.ProductsViewModel
 import `in`.smartie.quotedesk.ui.purchase.PurchaseHistoryScreen
 import `in`.smartie.quotedesk.ui.purchase.PurchaseViewModel
+import `in`.smartie.quotedesk.ui.quotations.QuotationListScreen
 import `in`.smartie.quotedesk.ui.screens.PurchaseScreen
 import `in`.smartie.quotedesk.ui.screens.QuotationsScreen
 import `in`.smartie.quotedesk.ui.screens.SignInScreen
@@ -254,6 +255,14 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
                 composable("more/parties") {
                     val parties by data.parties.collectAsStateWithLifecycle()
                     PartiesScreen(parties = parties, loading = parties.isEmpty())
+                }
+                composable("more/quotation-history") {
+                    val quotations by data.quotations.collectAsStateWithLifecycle()
+                    QuotationListScreen(
+                        records = quotations,
+                        viewer = member,
+                        loading = quotations.isEmpty()
+                    )
                 }
                 composable("more/purchase-history") {
                     val requirements by data.requirements.collectAsStateWithLifecycle()

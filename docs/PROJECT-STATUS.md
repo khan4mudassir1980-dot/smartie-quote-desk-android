@@ -8,8 +8,8 @@ anything.** Last updated 2026-09-23.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `2127d48` — [run #133](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35834219582), fully green (unit tests, lint, Firestore rules emulator, APK build). **This is the commit to deploy the rules from, and its `smartie-native-apks` artifact is the APK to install.** |
-| **The ruleset has moved since N4.4** | `505b8d9` (run #123) was the deploy commit while N4.4 was the tip, and it is **no longer current**. N5.0b changed `/users`, so `2127d48` carries one rules change beyond what N4.2 and N4.3 left — an Administrator may no longer manage another Administrator. It is safe to ship with them: there is no Administrator account in staging or production, so nothing observable changes. N5.2 to N5.5 changed no rule at all, so the ruleset at `2127d48` is still exactly N5.0b's. Deploy from `2127d48`, not from `505b8d9`. |
+| **Last CI-verified head** | `a849650` — [run #137](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35838856077), fully green (unit tests, lint, Firestore rules emulator, APK build). **This is the commit to deploy the rules from, and its `smartie-native-apks` artifact is the APK to install.** |
+| **The ruleset has moved since N4.4** | `505b8d9` (run #123) was the deploy commit while N4.4 was the tip, and it is **no longer current**. N5.0b changed `/users` and **N5.6 changed `/teamSettings`**, so `a849650` carries two rules changes beyond what N4.2 and N4.3 left. N5.0b: an Administrator may no longer manage another Administrator. N5.6: configuring the quotation counter is the Owner's alone, the counter's *issue* branch is untouched, and `/teamSettings/quoting` is new. Both are safe to ship together — there is no Administrator account in staging or production, so neither narrowing interrupts anyone. N5.2 to N5.5 changed no rule at all. Deploy from `a849650`, not from `505b8d9`. |
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -27,7 +27,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
 | N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2, N4.3 and N4.4 are all code complete and CI-verified**, and both are waiting on the same Owner-run staging rules deployment paired with the APK rollout — they were never deployed separately and must not be. Purchase History is built and open to every role, so what was Batch 5 is done; the tab badge is Batch 6 |
-| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.5 are complete and CI-verified at `2127d48` ([run #133](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35834219582)).** Parties can now be added and corrected from the app; quotations themselves are still read-only, with no write path for `/quotations` or `/teamSettings/numbering`, and the Quotation tab keeps its "Keep using the PWA to issue quotations" banner until the cutover batch. Next is N5.6 |
+| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.6 are complete and CI-verified at `a849650` ([run #137](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35838856077)).** Parties can be added and corrected, and an Owner can configure the quotation numbering and the Manager discount limit. Quotations themselves are still read-only — **nothing issues a number yet** — and the Quotation tab keeps its "Keep using the PWA to issue quotations" banner until the cutover batch. Next is N5.7 |
 | N6 Products & Categories | Not started. The Products & Categories editing screen, which T-P7 is blocked on |
 | N7 Calculators | Not started. Port the four V8C4 calculators — rolling shutter, high-speed door, garage door, glass door — whose output becomes ordinary quotation lines carrying the opening size in the line's spec text |
 | N8 Migration & cutover | Not started. **The production migration and cutover.** `docs/N2-delivery.md:40` calls N8 "the catalogue migration"; that line is the stale one and `docs/N3-plan.md:585` is right |
@@ -848,12 +848,14 @@ All of these are CI-verified, the last of them at `2127d48` ([run #133](https://
 | `978a495` + `d6bf5d5` | **N5.3** — Parties, read side | run #130 |
 | `4fe76dd` + `38d32a6` | **N5.4** — quotation history and detail, read-only | run #130 |
 | `f2bcd3f` + `2127d48` | **N5.5** — Parties, write side | run #133 |
+| `f61eebc` + `74ff81e` + `a849650` | **N5.6** — Settings, Owner-only: numbering and the discount cap | run #137 |
 
 `7bc11dd` sits between N5.5 and its fix and is `docs/N5-plan.md` alone — no code, and
 therefore red on CI only because it inherited `f2bcd3f`'s failures.
 
-**Test counts at `2127d48`: 1198 Kotlin tests across 109 classes, and 172 emulator tests.**
-N5.2 to N5.5 changed **no rule text**; the only rules change N5 has made is still N5.0b's.
+**Test counts at `a849650`: 1236 Kotlin tests across 111 classes, and 191 emulator tests.**
+N5.2 to N5.5 changed no rule text; **N5.6 is the second and last rules change N5 has
+made so far**, after N5.0b.
 
 **N5.0** deleted `util/QuotationPdf.kt` (188 lines) and `data/model/Models.kt` (51 lines),
 neither of which had a single caller. Deleting the PDF writer also removed a trap for the area
@@ -893,10 +895,10 @@ and two of them found something. Both are carried forward rather than fixed in p
    10, `10 >= 10` holds, and the write is accepted — so two people hold the same quotation
    number and `lastIssued` ends up naming the loser. A Manager cannot do this, because a
    Manager never reaches that branch, which is why the contention tests use two Managers to
-   prove the real property. It is pinned today as a **characterisation test that asserts
-   `assertSucceeds`**, with the defect named in full beside it. **In N5.6 that assertion flips
-   to `assertFails`**, when the configuration branch becomes **Owner-only** and must require a
-   **strictly greater `next` unless the financial year changes**.
+   prove the real property. It was pinned as a **characterisation test asserting
+   `assertSucceeds`**, with the defect named in full beside it. **Closed in N5.6**, where that
+   assertion flipped to `assertFails` — but *not* by the predicate the plan named. See
+   "What N5.6 cost" below.
 
 **Emulator tests: 165**, up from 148. The contended pair was run five times over to confirm it
 is not flaky; it asserts the invariant that holds every time — the counter advances by exactly
@@ -904,6 +906,39 @@ the number of clients that got through, and no number is issued twice — rather
 that only holds about half the time. `helpers.js` gained a second Manager account so two
 ordinary quoting accounts can contend without either reaching an admin-only branch and proving
 something other than what the test claims.
+
+### What N5.6 cost, and the rule that had to be corrected after it shipped
+
+N5.6 made the counter's configuration the Owner's and added the Manager
+discount cap. The plan's predicate for closing finding 2 — **a strictly
+greater `next` unless the financial year changes** — shipped in `f61eebc`
+and was **wrong twice over**, which `74ff81e` corrects.
+
+1. **It made a prefix or padding correction impossible.** Requiring
+   `next > stored` on *every* configuration write refused leaving `next`
+   alone as firmly as moving it backwards, so renaming `SIE/QD` would have
+   cost a real quotation number. Found by the Settings screen test, because
+   that screen is the thing which does exactly that edit.
+2. **It did not actually close finding 2 on its own.**
+   `{next: 10, lastIssued, updated}` against a stored `10` passes it, because
+   an unchanged `next` never appears in `affectedKeys()`.
+
+What closes it is a different clause, and it was not in the plan:
+**configuration may never stamp `lastIssued`.** A stale issue carries one by
+definition, so forbidding the key stops a spent number being re-taken however
+`next` is set. Strictly-greater is kept, but only **where `next` is being
+changed**. The plan's other proposed half — `!hasOnly(['next','lastIssued'])`
+— would have refused a `next`-only correction and is deliberately not there.
+
+**The lesson worth keeping:** the screen was what proved the rule wrong. A
+rules change reviewed only against its own emulator tests is reviewed against
+the cases its author already thought of; the first real caller is what finds
+the case they did not.
+
+A near-miss also worth recording: the first probe that "confirmed" the
+breakage had actually failed on module resolution, not on the rules. It was
+re-run from `firestore/tests/` against both the old and the new rule text
+before anything was concluded from it.
 
 ### What N5.2 to N5.5 settled, and the two traps they cost
 
@@ -952,22 +987,27 @@ fallback belongs to whichever writer has the context — `create` takes V8C4's
 
 ## Current next action
 
-**Build N5.6 — Settings, Owner-only: the numbering configuration and the
-Manager discount cap.**
+**Build N5.7 — the minimal product edit: pricing type, dealer and client
+rate, and the minimum chargeable area.**
 
-It is the first N5 batch to change rule text since N5.0b, and it is
-configuration before the thing it configures. It moves the numbering
-**configuration** branch from `admin()` to `owner()` while leaving the
-**issue** branch open to every quoting role, because V8C4 needs it; adds
-`numberingSrcOk()`, which reads `lastIssued.src` but never requires it, so
-`fbFinaliseAtomic` still passes; requires a strictly greater `next` unless the
-financial year changes, which is what **closes N5.1's second finding** and
-flips that characterisation test from `assertSucceeds` to `assertFails`; and
-creates `/teamSettings/quoting` holding `managerDiscountPct`, written by an
-Owner only. An emulator test must pin that an Owner's `fbSaveNumbering`-shaped
-write — `{prefix, fy, next, pad, updated, by}` — still passes the new
-configuration branch. The full diff and its V8C4 verdict are in
-`docs/N5-plan.md`.
+Area pricing needs products that carry a rate and a minimum, so this comes
+before the builder that reads them. Owner and Administrator only.
+
+Pricing type is the **existing `unit` field** with value `"sqft"` — already a
+live value in the fixtures and the PWA's own per-group semantic — and not a
+new `pricingType`. `minSqft` is additive. The one rule change is
+`contractorKept()` on `allow update`: the contractor tier is no longer offered
+on a new quotation, but the rate stays live for the ones already issued at it,
+so an edit may **change** it and may never **drop** it. That guard is written
+as *never dropped* rather than *frozen* because `fbPushProduct` writes
+`contractor` explicitly on every product save — an earlier draft would have
+refused a legitimate PWA rate change.
+
+**Carry the N5.6 lesson into it:** write the screen that actually performs the
+edit before trusting the rule, because the first real caller is what finds the
+case the rule's own tests did not.
+
+The full diff and its V8C4 verdict are in `docs/N5-plan.md`.
 
 ### The staging pass is deferred, not skipped
 

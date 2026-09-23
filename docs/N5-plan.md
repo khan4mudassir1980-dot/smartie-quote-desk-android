@@ -248,9 +248,9 @@ accepted — and two people hold the same quotation number while `lastIssued`
 names the loser. A Manager cannot do this, because a Manager never reaches that
 branch, which is why the contention tests use two Managers.
 
-Pinned today as a characterisation test asserting `assertSucceeds`, with the
-defect named in full beside it. **Answered by N5.6**, where the assertion flips
-to `assertFails`.
+**Closed in N5.6** (`f61eebc` and `74ff81e`), where the characterisation test
+flipped from `assertSucceeds` to `assertFails`. What actually closes it is not
+what this plan predicted — see the N5.6 entry below.
 
 ---
 
@@ -268,15 +268,42 @@ The update branch and the delete branch both narrow from
 either project, so it interrupts nobody. That window closes the moment one is
 created, which is why it was taken first.
 
-### N5.6 — `/teamSettings/numbering` and `/teamSettings/quoting`
+### Done: N5.6 — `/teamSettings/numbering` and `/teamSettings/quoting`
 
 Numbering **configuration** moves from `admin()` to `owner()`. The **issue**
 branch (`next + 1` plus `lastIssued`) stays open to every quoting role, because
-V8C4 needs it. The configuration branch additionally requires a **strictly
-greater `next` unless the financial year changes**, and must be touching
-something other than `next` and `lastIssued` — which is what forces an
-issue-shaped write through the issue branch and its exact `+ 1`, whoever is
-signed in, and closes finding 2.
+V8C4 needs it.
+
+**What shipped is not what this section originally said, and the difference
+matters.** The plan proposed two guards on the configuration branch: a
+strictly greater `next` unless the financial year changes, *and* a requirement
+to be touching something other than `next` and `lastIssued`. The first shipped
+alone in `f61eebc` and was wrong; both together would also have been wrong.
+
+```
+&& !touched().hasAny(['lastIssued'])
+&& (request.resource.data.fy != resource.data.fy
+    || !touched().hasAny(['next'])
+    || request.resource.data.next > resource.data.next)
+```
+
+- **Strictly greater on every configuration write made a prefix or padding
+  correction impossible.** Leaving `next` where it is was refused along with
+  moving it backwards, so renaming `SIE/QD` would have cost a real quotation
+  number. Found by the Settings screen test, which does exactly that edit.
+- **`!hasOnly(['next','lastIssued'])`, the plan's other half, would have
+  refused a `next`-only correction** — an Owner moving the counter forward and
+  changing nothing else.
+- **`!touched().hasAny(['lastIssued'])` is what actually closes finding 2.** A
+  stale issue carries a `lastIssued` by definition, so forbidding that key on
+  the configuration branch stops a spent number being re-taken however `next`
+  is set. Strictly-greater alone left a gap regardless:
+  `{next: 10, lastIssued, updated}` against a stored `10` passes it, because an
+  unchanged `next` never appears in `affectedKeys()`.
+
+So `next` must be strictly greater **only where it is being changed**, and
+configuration may never stamp `lastIssued`. Both are pinned by their own
+emulator tests.
 
 ```
 function numberingSrcOk() {
@@ -570,7 +597,7 @@ of 0.5 must not be lifted to 80.5.
 | **N5.3** | Parties, read side | No | **Done**, `978a495` + fix `d6bf5d5`, CI #130 |
 | **N5.4** | Quotation history and detail, read-only | No | **Done**, `4fe76dd` + fix `38d32a6`, CI #130 |
 | **N5.5** | Parties, write side | No | **Done**, `f2bcd3f` — CI pending at the time of writing |
-| **N5.6** | Settings, Owner-only: numbering and the discount cap | **Yes** | To do |
+| **N5.6** | Settings, Owner-only: numbering and the discount cap | **Yes** | **Done**, `f61eebc` + `74ff81e` + `a849650`, CI #137 |
 | **N5.7** | Minimal product edit — `unit`, dealer/client rate, `minSqft` | **Yes** | To do |
 | **N5.8** | The quotation builder, draft only | No | To do |
 | **N5.9** | Finalise — one transaction, idempotent retry, `src`, `snap`, party snapshot | **Yes** | To do |

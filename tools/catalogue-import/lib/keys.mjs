@@ -1,9 +1,14 @@
 /**
  * Product identity, exactly as the PWA computes it.
  *
- * The native `Keys.productDocId` replaces only `/`; the PWA's `docId`
- * (index.html:5723) also replaces `. # $ [ ]`, and thirteen of the 403 models
- * need that. The PWA's rule is the one on disk, so it is the one used here.
+ * `docId` (`index.html:5723`) replaces `/ . # $ [ ]`, and thirteen of the 403
+ * models need it. The native `Keys.productDocId` replaces the same six —
+ * it once replaced only `/`, which is right for `SIEBAL58H/V` and wrong for
+ * every model carrying a `.`, and this comment described that older state
+ * until N5.7. The two are now character for character the same function, and
+ * they have to stay that way: a native write computing a different id lands
+ * on a second document and re-creates the duplicate the canonical id exists
+ * to prevent.
  */
 
 /** `index.html:5682` — the logical key stored as `id` and `key`. */

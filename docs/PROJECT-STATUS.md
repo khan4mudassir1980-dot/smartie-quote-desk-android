@@ -919,21 +919,34 @@ and was **wrong twice over**, which `74ff81e` corrects.
    alone as firmly as moving it backwards, so renaming `SIE/QD` would have
    cost a real quotation number. Found by the Settings screen test, because
    that screen is the thing which does exactly that edit.
-2. **It did not actually close finding 2 on its own.**
-   `{next: 10, lastIssued, updated}` against a stored `10` passes it, because
-   an unchanged `next` never appears in `affectedKeys()`.
+2. It needed a companion clause, but **not for the reason first recorded
+   here.** An earlier version of this section claimed strictly-greater "did
+   not close finding 2 on its own". **N5.6b's ablation proved that wrong.**
 
-What closes it is a different clause, and it was not in the plan:
-**configuration may never stamp `lastIssued`.** A stale issue carries one by
-definition, so forbidding the key stops a spent number being re-taken however
-`next` is set. Strictly-greater is kept, but only **where `next` is being
-changed**. The plan's other proposed half — `!hasOnly(['next','lastIssued'])`
-— would have refused a `next`-only correction and is deliberately not there.
+**What the ablation established.** Under the strictly-greater rule as first
+shipped, the write `{next: 10, lastIssued, updated}` against a stored `next: 10`
+was **refused**. It becomes allowed only once the `!touched(['next'])` escape
+hatch is added — the hatch that exists so a prefix can be corrected without
+burning a number. So:
 
-**The lesson worth keeping:** the screen was what proved the rule wrong. A
+- **Strictly greater closes N5.1's second finding**, on its own. Remove it
+  alone and two tests fail: `an Owner rolls the financial year, and never
+  rewinds inside one`, `a forward correction is allowed and rewinding is not`.
+- **`!touched().hasAny(['lastIssued'])` closes the gap the escape hatch
+  opens.** Remove it alone and two different tests fail: `a number that is
+  already spent cannot be re-taken, by anybody`, `but configuration may never
+  stamp lastIssued, whatever else it does`.
+
+Neither ablation breaks nothing, so both guards are tested. The plan's other
+proposed half — `!hasOnly(['next','lastIssued'])` — would have refused a
+`next`-only correction and is deliberately not there.
+
+**Two lessons worth keeping.** The screen was what proved the rule wrong: a
 rules change reviewed only against its own emulator tests is reviewed against
-the cases its author already thought of; the first real caller is what finds
-the case they did not.
+the cases its author already thought of, and the first real caller finds the
+case they did not. And an explanation of *which* guard does the work is worth
+nothing until it is ablated — the first account written here was confident,
+plausible and backwards.
 
 A near-miss also worth recording: the first probe that "confirmed" the
 breakage had actually failed on module resolution, not on the rules. It was
@@ -984,6 +997,25 @@ chose a type" and "somebody chose Client" the same value, and `mergeInto`
 would then have demoted every contractor in the book on its first save. The
 fallback belongs to whichever writer has the context — `create` takes V8C4's
 `client`, `edit` and `mergeInto` keep what is stored.
+
+### N5.6b, and the two decisions it left with the Owner
+
+`pad` is now bounded 1–6 on the configuration branch and `fy` must read like
+`2026-27`, both matching what V8C4 itself accepts, so a value set natively
+cannot be silently rewritten by the PWA's clamp on its next settings save.
+The issue branch is untouched, and a test proves a counter holding `pad: 9`
+or `fy: 'FY25'` still issues numbers.
+
+Two things are recorded rather than fixed, both awaiting the Owner:
+
+1. **The prefix pattern is not shipped.** `^[A-Za-z0-9][A-Za-z0-9-]{0,11}$`
+   rejects `SIE/QD`, which is the prefix the exported production counter holds.
+   Applying it would leave the Owner unable to save the counter at all.
+2. **A Manager can read `/teamSettings/access`.** The named rule says
+   `admin()`, but the `/teamSettings/{other}` catch-all ORs in
+   `member() && !worker()` and a narrower named rule cannot take anything away.
+   Pinned as a characterisation test asserting today's behaviour, in the same
+   shape as the N5.1 counter finding.
 
 ## Current next action
 

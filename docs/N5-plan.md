@@ -294,16 +294,32 @@ alone in `f61eebc` and was wrong; both together would also have been wrong.
 - **`!hasOnly(['next','lastIssued'])`, the plan's other half, would have
   refused a `next`-only correction** — an Owner moving the counter forward and
   changing nothing else.
-- **`!touched().hasAny(['lastIssued'])` is what actually closes finding 2.** A
-  stale issue carries a `lastIssued` by definition, so forbidding that key on
-  the configuration branch stops a spent number being re-taken however `next`
-  is set. Strictly-greater alone left a gap regardless:
-  `{next: 10, lastIssued, updated}` against a stored `10` passes it, because an
-  unchanged `next` never appears in `affectedKeys()`.
 
-So `next` must be strictly greater **only where it is being changed**, and
-configuration may never stamp `lastIssued`. Both are pinned by their own
-emulator tests.
+**N5.6b settled which guard does what, by ablation rather than by argument.**
+An earlier version of this section claimed strictly-greater "left a gap
+regardless" and credited the `lastIssued` guard with closing the original
+finding. That was wrong, and the ablation proved it:
+
+| Rule variant | `{next: 10, lastIssued, updated}` against a stored `next: 10` |
+|---|---|
+| Strictly-greater alone, as first shipped | **refused** |
+| Current rule minus `!touched().hasAny(['lastIssued'])` | **allowed** |
+| Current rule, both guards | **refused** |
+
+So:
+
+- **Strictly greater closes N5.1's second finding**, on its own. Removing it
+  alone fails `an Owner rolls the financial year, and never rewinds inside one`
+  and `a forward correction is allowed and rewinding is not`.
+- **`!touched().hasAny(['lastIssued'])` closes the gap that the
+  `!touched(['next'])` prefix-correction escape hatch opens.** That hatch is
+  what allows a prefix to be corrected without burning a number; with it
+  present and this guard gone, a stale re-stamp that leaves `next` alone walks
+  straight through. Removing it alone fails `a number that is already spent
+  cannot be re-taken, by anybody` and `but configuration may never stamp
+  lastIssued, whatever else it does`.
+
+Neither ablation breaks nothing, so both guards are tested.
 
 ```
 function numberingSrcOk() {
@@ -325,6 +341,38 @@ so it falls through to the configuration branch, every type check holds, and
 the extra keys are permitted because that branch carries no `hasOnly`. **An
 Owner's `fbSaveNumbering` write passes**, and an emulator test pins exactly
 that shape. The narrowing itself is safe for the reason above.
+
+### Done: N5.6b — `pad` and `fy` bounded to V8C4's own limits
+
+The configuration branch type-checked `next`, `prefix` and `fy` but not `pad`,
+and bounded none of them by shape. Added, **on the configuration branch only**
+— issuing a number must never fail because a stored configuration value is
+stale:
+
+```
+&& request.resource.data.fy.matches('^[0-9]{4}-[0-9]{2}$')
+&& request.resource.data.pad is number
+&& request.resource.data.pad >= 1 && request.resource.data.pad <= 6
+```
+
+`pad` is 1–6 because that is what V8C4 clamps to on both of its save paths
+(`Math.min(6, Math.max(1, pd||3))`) and what its inputs allow. A pad of 7 set
+natively would have appeared in that `max="6"` input and been silently
+rewritten to 6 on the PWA's next settings save, changing the printed number
+format with nobody asking.
+
+**The prefix pattern was specified but is NOT shipped.** The Owner's reading of
+V8C4 gives `^[A-Za-z0-9][A-Za-z0-9-]{0,11}$`, which rejects `SIE/QD` — the
+prefix the exported production counter actually holds, and the one every
+number in `lastIssued` is built from. Applying it would leave the Owner unable
+to save the counter at all, because a merged configuration write always carries
+`prefix`. Held pending a decision; `the prefix V8C4 actually stores still
+saves` pins the real value meanwhile.
+
+**`allow create` is still unbounded.** Seeding a fresh counter checks
+`pad is number` but not its range, and does not check the `fy` shape. Narrow,
+Owner-only, and reachable only on an unseeded project — recorded rather than
+silently extended, because the instruction was the configuration branch only.
 
 ### N5.7 — `/products`, the minimal edit
 

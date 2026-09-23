@@ -17,16 +17,20 @@ const { createTestEnvironment, seed, as, UIDS } = require('./helpers');
  * is signed in. That is why an Administrator issuing from a stale read used to
  * be able to re-take a spent number: their write failed the issue branch's
  * exact `+ 1` and fell through to a configuration branch that asked only for
- * `next >= resource.data.next`. Three things close it now: an Administrator
- * no longer reaches configuration at all; configuration may never stamp
- * `lastIssued`, which a stale issue carries by definition; and `next` must be
- * strictly greater wherever it is being changed inside a financial year.
+ * `next >= resource.data.next`. Three things close it now, and N5.6b's
+ * ablation established which does what:
  *
- * The middle one is the load-bearing half, and it was not in the plan.
- * Strictly-greater alone looked sufficient and shipped for one commit — until
- * a screen test showed it also made renaming the prefix cost a quotation
- * number, because leaving `next` where it is was being refused along with
- * moving it backwards.
+ *   1. An Administrator no longer reaches configuration at all.
+ *   2. `next` must be **strictly greater** wherever it is being changed. This
+ *      is what refuses the original re-take; it did so on its own.
+ *   3. Configuration may never stamp `lastIssued`. This closes the gap that
+ *      (2)'s `!touched(['next'])` escape hatch opens — the hatch exists so a
+ *      prefix can be corrected without burning a quotation number, and with
+ *      it present a stale re-stamp that leaves `next` alone would otherwise
+ *      walk through.
+ *
+ * Removing either of (2) or (3) alone fails two tests in this file; that is
+ * how the division of labour above was established rather than argued.
  *
  * `/teamSettings/quoting` is new and holds the Manager discount cap alone.
  *
@@ -282,4 +286,93 @@ test('but a cap outside nought to a hundred is not', async () => {
 test('the cap document can never be deleted', async () => {
   await givenCap();
   await assertFails(quoting(as(testEnv, UIDS.primaryOwner)).delete());
+});
+
+// --- N5.6b: what V8C4 will accept back ------------------------------------------
+
+test('pad is bounded to what V8C4 itself allows, 1 to 6', async () => {
+  // V8C4 clamps with `Math.min(6, Math.max(1, pd||3))` on both of its save
+  // paths, and its inputs are min="1" max="6". A pad of 7 set here would show
+  // up in that input and be silently rewritten to 6 on the PWA's next
+  // settings save — changing the printed number format with nobody asking.
+  await givenCounter();
+  const db = numbering(as(testEnv, UIDS.primaryOwner));
+  const at = { prefix: 'SIE/QD', fy: '2025-26', next: 12 };
+
+  await assertFails(db.update({ ...at, pad: 0 }));
+  await assertFails(db.update({ ...at, pad: 7 }));
+  await assertFails(db.update({ ...at, pad: '3' }));
+
+  await assertSucceeds(db.update({ ...at, pad: 1 }));
+  await assertSucceeds(db.update({ prefix: 'SIE/QD', fy: '2025-26', next: 13, pad: 6 }));
+  assert.equal((await stored('numbering')).pad, 6);
+});
+
+test('the financial year must read like 2026-27, and matches() is proved to anchor', async () => {
+  // `matches()` is not assumed to anchor — `2026-278` differs from an
+  // accepted value only at the *end*, so it can only be refused if the `$` is
+  // being honoured. `2026-27` differing only at the start is covered by the
+  // accepted case below.
+  await givenCounter();
+  const db = numbering(as(testEnv, UIDS.primaryOwner));
+  const at = { prefix: 'SIE/QD', pad: 3, next: 12 };
+
+  await assertFails(db.update({ ...at, fy: '2026-278' }));
+  await assertFails(db.update({ ...at, fy: 'x2026-27' }));
+  await assertFails(db.update({ ...at, fy: '2026-2' }));
+  await assertFails(db.update({ ...at, fy: '202-267' }));
+
+  await assertSucceeds(db.update({ ...at, fy: '2026-27' }));
+  assert.equal((await stored('numbering')).fy, '2026-27');
+});
+
+test('the prefix V8C4 actually stores still saves', async () => {
+  // `SIE/QD` is what the exported production counter holds, and what every
+  // issued number in `lastIssued` is built from. A prefix pattern that
+  // refused it would leave the Owner unable to save the counter at all, so
+  // this pins the real value against whatever pattern is chosen later.
+  await givenCounter();
+  await assertSucceeds(numbering(as(testEnv, UIDS.primaryOwner)).update({
+    prefix: 'SIE/QD', fy: '2025-26', next: 12, pad: 3, updated: Date.now(), by: 'Primary Owner',
+  }));
+});
+
+test('a stored pad the configuration branch would now refuse does not stop a number going out', async () => {
+  // The reason `pad` and `fy` are checked on the configuration branch only.
+  // A counter seeded by an older V8C4 build can hold `pad: 9`; issuing reads
+  // that value and freezes it, and must not start failing because of it.
+  await givenCounter({ pad: 9 });
+  await assertSucceeds(numbering(as(testEnv, UIDS.staff)).update(issuing(UIDS.staff)));
+  assert.equal((await stored('numbering')).next, 10);
+
+  // And the same for a financial year the pattern would refuse.
+  await givenCounter({ fy: 'FY25', pad: 3 });
+  await assertSucceeds(numbering(as(testEnv, UIDS.staff)).update(issuing(UIDS.staff)));
+});
+
+// --- a defect being recorded, not approved ----------------------------------------
+
+test('a Manager can read /teamSettings/access — a gap, not a feature', async () => {
+  // **Known defect, pinned so it cannot be lost**, in the same shape as the
+  // N5.1 counter finding: this asserts what the rules do *today*, with the
+  // defect named beside it, and the assertion flips when it is fixed.
+  //
+  // `/teamSettings/access` declares `allow read: if admin()`. It is overridden
+  // by the `/teamSettings/{other}` catch-all, which grants
+  // `member() && !worker()` read to every document in the collection —
+  // Firestore ORs across every matching rule, so the narrower named rule
+  // cannot take anything away. A Manager therefore reads `primaryOwnerUid`,
+  // `secondOwnerUid` and `updatedBy`.
+  //
+  // No credential leaks, and V8C4 touches this document only inside the
+  // Owner's own appoint / remove-second-owner transaction, so tightening it
+  // would not break the PWA. Left as-is pending the Owner's decision.
+  await assertSucceeds(
+    as(testEnv, UIDS.staff).collection('teamSettings').doc('access').get()
+  );
+
+  // A Staff account is refused, because the catch-all still excludes a worker.
+  await assertFails(
+    as(testEnv, UIDS.worker).collection('teamSettings').doc('access').get()
+  );
 });

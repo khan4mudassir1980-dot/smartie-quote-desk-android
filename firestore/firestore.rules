@@ -654,26 +654,42 @@ service cloud.firestore {
         ||
         // --- configuring the counter: Owner only, from N5.6 ---------------
         //
-        // Two guards, and they close N5.1's second finding between them.
+        // Two guards, and N5.6b's ablation established which does what. The
+        // earlier comment here credited the wrong one; this is what the
+        // evidence says.
         //
-        // 1. **Configuration never stamps `lastIssued`.** Only issuing does,
-        //    and that branch advances the counter by exactly one. This is what
-        //    actually stops a spent number being re-taken: the stale write
-        //    that caused the finding — `next: 10` when the stored value was
-        //    already 10, with a `lastIssued` naming the writer — carries a
-        //    `lastIssued` by definition, so it can never reach this branch
-        //    whatever it does to `next`.
+        // 1. **`next` may only move forward inside a financial year.** This is
+        //    what closes N5.1's second finding — the original re-take, where an
+        //    administrator issuing from a stale read wrote `next: 10` against a
+        //    stored 10 and `10 >= 10` held. Strictly greater refuses it on its
+        //    own. Removing this clause alone fails
+        //    `an Owner rolls the financial year, and never rewinds inside one`
+        //    and `a forward correction is allowed and rewinding is not`.
         //
-        // 2. **`next` may only move forward inside a financial year.** Where
-        //    it is being changed at all, it must be strictly greater; a new
-        //    financial year restarts the sequence and lifts the guard.
-        //    Leaving `next` alone is not a move, and has to stay allowed —
+        //    It applies only **where `next` is being changed**. Leaving it
+        //    where it is is not a move forward, and has to stay allowed —
         //    otherwise correcting a prefix or a padding would force the Owner
         //    to burn a quotation number to do it.
+        //
+        // 2. **Configuration never stamps `lastIssued`.** This closes the gap
+        //    that the `!touched(['next'])` escape hatch in (1) opens: with the
+        //    hatch present and this guard gone, a stale re-stamp that leaves
+        //    `next` alone walks straight through. Removing this clause alone
+        //    fails `a number that is already spent cannot be re-taken, by
+        //    anybody` and `but configuration may never stamp lastIssued,
+        //    whatever else it does`.
+        //
+        // `pad` and `fy` are bounded to exactly what V8C4 accepts, so a value
+        // set here cannot be silently rewritten by the PWA's own clamp on its
+        // next settings save. They are on this branch only: issuing a number
+        // must never fail because a stored configuration value is stale.
         (owner()
           && request.resource.data.next is number && request.resource.data.next >= 1
           && request.resource.data.prefix is string
           && request.resource.data.fy is string
+          && request.resource.data.fy.matches('^[0-9]{4}-[0-9]{2}$')
+          && request.resource.data.pad is number
+          && request.resource.data.pad >= 1 && request.resource.data.pad <= 6
           && !touched().hasAny(['lastIssued'])
           && (request.resource.data.fy != resource.data.fy
               || !touched().hasAny(['next'])

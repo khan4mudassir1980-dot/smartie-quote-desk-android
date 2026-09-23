@@ -205,6 +205,37 @@ class PartyWriteTest {
     // --- the other semantics: a fill ------------------------------------------------------
 
     @Test
+    fun `a type nobody chose does not turn a contractor into a client`() {
+        // The fallback belongs to the writer, not to the draft. A default of
+        // `client` on `PartyDraft` made "nobody picked one" and "somebody
+        // picked Client" the same value, so the quotation side's first
+        // "Save this customer" silently demoted every contractor — the exact
+        // thing `mergeInto` promises never to do.
+        assertEquals("a draft states nothing until somebody types", "", PartyDraft().type)
+
+        // `create` still answers V8C4's fallback for an unstated type...
+        assertEquals(
+            "client",
+            written(PartyWrite.create("c_new", PartyDraft(name = "X"), author, 1L))["type"]
+        )
+        // ...while a merge of the same silence leaves the stored one alone.
+        assertEquals(
+            PartyPlan.NoChange,
+            PartyWrite.mergeInto(stored, PartyDraft(name = stored.name), author, 4_000L)
+        )
+
+        // A type the person did choose is taken, and canonicalised on the way.
+        assertEquals(
+            "dealer",
+            written(
+                PartyWrite.mergeInto(
+                    stored, PartyDraft(name = stored.name, type = " Dealer "), author, 4_000L
+                )
+            )["type"]
+        )
+    }
+
+    @Test
     fun `merge fills a gap the stored party has`() {
         val bare = stored.copy(email = "", notes = "")
         val draft = PartyDraft(name = stored.name, email = "new@sunrise.invalid")

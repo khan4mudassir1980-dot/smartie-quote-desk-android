@@ -14,6 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import `in`.smartie.quotedesk.data.model.PartyRecord
@@ -82,7 +83,7 @@ internal fun PartyEditPanel(
     val nameIsEditable = creating || capabilities.canRename
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().testTag(PARTY_EDITOR_TAG),
         contentPadding = PaddingValues(
             start = dimens.screenPadding,
             end = dimens.screenPadding,
@@ -100,7 +101,7 @@ internal fun PartyEditPanel(
         }
 
         if (duplicate != null) {
-            item(key = "duplicate") { DuplicateWarning(duplicate, onOpenDuplicate) }
+            item(key = DUPLICATE_KEY) { DuplicateWarning(duplicate, onOpenDuplicate) }
         }
 
         if (error != null) {
@@ -109,7 +110,7 @@ internal fun PartyEditPanel(
             }
         }
 
-        item(key = "name") {
+        item(key = NAME_LABEL) {
             if (nameIsEditable) {
                 Field(NAME_LABEL, name, saving) { name = it }
             } else {
@@ -135,7 +136,7 @@ internal fun PartyEditPanel(
             }
         }
 
-        item(key = "type") {
+        item(key = TYPE_LABEL) {
             Column(verticalArrangement = Arrangement.spacedBy(dimens.gapXs)) {
                 Text(
                     TYPE_LABEL,
@@ -151,29 +152,29 @@ internal fun PartyEditPanel(
             }
         }
 
-        item(key = "contact") {
+        item(key = CONTACT_LABEL) {
             Field(CONTACT_LABEL, contact, saving) { contact = it }
         }
-        item(key = "phone") {
+        item(key = PHONE_LABEL) {
             Field(PHONE_LABEL, phone, saving) { phone = it }
         }
-        item(key = "email") {
+        item(key = EMAIL_LABEL) {
             Field(EMAIL_LABEL, email, saving) { email = it }
         }
-        item(key = "gstin") {
+        item(key = GSTIN_LABEL) {
             Field(GSTIN_LABEL, gstin, saving) { gstin = it }
         }
-        item(key = "city") {
+        item(key = CITY_LABEL) {
             Field(CITY_LABEL, city, saving) { city = it }
         }
-        item(key = "address") {
+        item(key = ADDRESS_LABEL) {
             Field(ADDRESS_LABEL, address, saving) { address = it }
         }
-        item(key = "notes") {
+        item(key = NOTES_LABEL) {
             Field(NOTES_LABEL, notes, saving) { notes = it }
         }
 
-        item(key = "save") {
+        item(key = SAVE_KEY) {
             SmartiePrimaryButton(
                 text = if (creating) SAVE_NEW else SAVE_CHANGES,
                 onClick = { onSave(draft) },
@@ -248,6 +249,20 @@ private fun Field(label: String, value: String, saving: Boolean, onChange: (Stri
 
 internal fun duplicateHeadline(match: PartyMatch): String =
     "${Parties.displayName(match.party)} already has ${match.on.label}"
+
+/**
+ * The editor list, and the keys a test scrolls to. Nine fields sit above the
+ * Save button, so on any real phone it starts below the fold — and a
+ * `LazyColumn` does not merely hide an off-screen item, it never composes it,
+ * so an un-scrolled `onNodeWithContentDescription(SAVE_NEW)` finds nothing
+ * however correct the screen is.
+ *
+ * Each field's list key **is** its label, so a test scrolls to a box by the
+ * same name it then types into and the two cannot drift apart.
+ */
+internal const val PARTY_EDITOR_TAG = "party-editor"
+internal const val SAVE_KEY = "save"
+internal const val DUPLICATE_KEY = "duplicate"
 
 internal const val ADD_HEADING = "New party"
 internal const val EDIT_HEADING = "Edit party"

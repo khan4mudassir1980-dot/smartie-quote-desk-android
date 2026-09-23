@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -149,7 +150,7 @@ internal fun PartiesScreen(
     }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().testTag(PARTIES_LIST_TAG),
         contentPadding = PaddingValues(
             start = dimens.screenPadding,
             end = dimens.screenPadding,
@@ -176,7 +177,7 @@ internal fun PartiesScreen(
         }
 
         if (capabilities.canAdd) {
-            item(key = "add") {
+            item(key = ADD_KEY) {
                 SmartiePrimaryButton(
                     text = ADD_PARTY,
                     onClick = { adding = true },
@@ -267,7 +268,7 @@ private fun PartyDetail(
     val name = Parties.displayName(party)
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().testTag(PARTY_DETAIL_TAG),
         contentPadding = PaddingValues(
             start = dimens.screenPadding,
             end = dimens.screenPadding,
@@ -331,7 +332,7 @@ private fun PartyDetail(
         }
 
         if (capabilities.canAdd) {
-            item(key = "edit") {
+            item(key = EDIT_KEY) {
                 SmartiePrimaryButton(
                     text = EDIT_PARTY,
                     onClick = onEdit,
@@ -346,7 +347,7 @@ private fun PartyDetail(
         // a Manager an `archived` key in either direction, so no control is
         // drawn for one rather than one that produces a permission error.
         if (capabilities.canArchive) {
-            item(key = "archive") {
+            item(key = ARCHIVE_KEY) {
                 val label = if (party.archived) UNARCHIVE_PARTY else ARCHIVE_PARTY
                 SmartieGhostButton(
                     text = label,
@@ -358,7 +359,7 @@ private fun PartyDetail(
             }
         }
 
-        item(key = "read-only") {
+        item(key = READ_ONLY_KEY) {
             Text(
                 READ_ONLY_NOTE,
                 style = MaterialTheme.typography.bodySmall,
@@ -390,6 +391,22 @@ internal fun openLabel(name: String): String = "Open $name"
 
 private fun formatDate(millis: Long): String =
     SimpleDateFormat("d MMM yyyy", Locale.forLanguageTag("en-IN")).format(Date(millis))
+
+/**
+ * The two lists, so a test can scroll to a control instead of asserting
+ * against whatever happens to fit the emulated screen. A `LazyColumn` never
+ * composes an off-screen item, so an un-scrolled assertion about a control
+ * near the bottom passes or fails on the device size rather than on the code
+ * — which is exactly how N5.4's totals card slipped through.
+ */
+internal const val PARTIES_LIST_TAG = "parties-list"
+internal const val PARTY_DETAIL_TAG = "party-detail"
+internal const val ADD_KEY = "add"
+internal const val EDIT_KEY = "edit"
+internal const val ARCHIVE_KEY = "archive"
+
+/** Last on the detail, so scrolling to it composes the action row above. */
+internal const val READ_ONLY_KEY = "read-only"
 
 internal const val SEARCH_LABEL = "Search"
 internal const val SEARCH_PLACEHOLDER = "Name, contact, phone or GSTIN"

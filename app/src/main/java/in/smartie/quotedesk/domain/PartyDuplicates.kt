@@ -57,7 +57,7 @@ object PartyDuplicates {
 
         val phone = digitsOf(draft.phone)
         if (phone.length >= MIN_PHONE_DIGITS) {
-            candidates.firstOrNull { digitsOf(it.phone) == phone }
+            candidates.firstOrNull { sameLine(phone, digitsOf(it.phone)) }
                 ?.let { return PartyMatch(it, PartyMatcher.PHONE) }
         }
 
@@ -75,6 +75,28 @@ object PartyDuplicates {
         value.filter { !it.isWhitespace() }.uppercase()
 
     fun digitsOf(value: String): String = value.filter { it.isDigit() }
+
+    /**
+     * Whether two numbers, already reduced to digits, are the same line.
+     *
+     * **Not string equality**, and that is the whole of it: a number pasted
+     * out of a phone's contacts carries its country code and the same number
+     * typed by hand does not, so `919876543210` and `9876543210` are one
+     * customer and comparing them as strings would let the duplicate through
+     * — which is the mistake this object exists to stop. The test is a suffix
+     * in either direction, and **both** sides must clear [MIN_PHONE_DIGITS],
+     * because a stored fragment matching every number that happens to end in
+     * it would be noise rather than a find.
+     *
+     * N5.3's search has the same shape for the same reason and deliberately
+     * not the same code: there the typed value is a *partial* search and a
+     * containment anywhere is wanted, whereas this is an identity test
+     * between two numbers somebody wrote down in full.
+     */
+    fun sameLine(one: String, other: String): Boolean {
+        if (one.length < MIN_PHONE_DIGITS || other.length < MIN_PHONE_DIGITS) return false
+        return one.endsWith(other) || other.endsWith(one)
+    }
 
     /** Case, surrounding space and doubled spaces, all of which people type. */
     fun normaliseName(value: String): String =

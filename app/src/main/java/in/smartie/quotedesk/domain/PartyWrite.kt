@@ -12,10 +12,20 @@ data class PartyAuthor(val name: String, val uid: String)
  * party *snapshot* does carry a `site`, because a quotation records where the
  * work is going; a customer record does not, and inventing a parallel field
  * would give the PWA a value it never reads.
+ *
+ * **An unset [type] is empty, not `client`.** A default here would make a
+ * draft nobody chose a type on indistinguishable from one where somebody
+ * chose Client, and the two mean different things, so resolving it belongs to
+ * whichever writer has the context: [PartyWrite.create] takes V8C4's `client`
+ * fallback because there is nothing stored to keep, while [PartyWrite.edit]
+ * and [PartyWrite.mergeInto] keep the stored one. With the fallback baked in
+ * here, the first "Save this customer" from a quotation would have demoted
+ * every contractor — which is exactly what [PartyWrite.mergeInto] promises
+ * never to do.
  */
 data class PartyDraft(
     val name: String = "",
-    val type: String = PartyWrite.TYPE_CLIENT,
+    val type: String = "",
     val city: String = "",
     val gstin: String = "",
     val contact: String = "",
@@ -170,7 +180,16 @@ object PartyWrite {
         if (stored.archived && !canArchive) return PartyPlan.Refused(ARCHIVED_IS_READ_ONLY)
 
         val fields = buildMap {
-            put("type", normaliseType(draft.type))
+            // An unstated type is no statement, and every writer resolves that
+            // the same way: `create` takes V8C4's fallback because there is
+            // nothing stored to keep, while here — and in `mergeInto` — the
+            // stored one is kept. The editor always shows a type, so this only
+            // catches a draft built in code, and catching it is the point: a
+            // correction to somebody's city must not quietly demote a
+            // contractor to a client on the way past.
+            put("type", draft.type.trim().let {
+                if (it.isEmpty()) normaliseType(stored.type) else normaliseType(it)
+            })
             put("city", draft.city.trim())
             put("gstin", draft.gstin.trim())
             put("contact", draft.contact.trim())
@@ -241,7 +260,10 @@ object PartyWrite {
     ): PartyPlan {
         val incoming = mapOf(
             "name" to draft.name.trim(),
-            "type" to draft.type.trim(),
+            // Normalised only when the person actually stated one, so an
+            // untouched selector stays empty and is filtered out below rather
+            // than becoming a `client` that overwrites a stored `contractor`.
+            "type" to draft.type.trim().let { if (it.isEmpty()) "" else normaliseType(it) },
             "city" to draft.city.trim(),
             "gstin" to draft.gstin.trim(),
             "contact" to draft.contact.trim(),

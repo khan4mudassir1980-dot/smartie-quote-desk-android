@@ -2,7 +2,9 @@ package `in`.smartie.quotedesk.domain
 
 import `in`.smartie.quotedesk.data.model.PartyRecord
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -49,6 +51,28 @@ class PartyDuplicatesTest {
 
         assertEquals("c_1", match?.party?.id)
         assertEquals(PartyMatcher.PHONE, match?.on)
+    }
+
+    @Test
+    fun `a country code in front of a number is the same line, not a second customer`() {
+        // The N5.3 search bug in its second home, and it reached CI because
+        // this file tested the *matcher order* and left the comparison itself
+        // to an `==` between digit strings. A number pasted out of a phone's
+        // contacts carries its country code; the same number typed by hand
+        // does not.
+        assertTrue(PartyDuplicates.sameLine("919876543210", "9876543210"))
+        assertTrue(
+            "and the same either way round",
+            PartyDuplicates.sameLine("9876543210", "919876543210")
+        )
+        assertTrue(PartyDuplicates.sameLine("2266554", "2266554"))
+
+        // Below the floor on either side identifies nobody.
+        assertFalse(PartyDuplicates.sameLine("543210", "9876543210"))
+        assertFalse(PartyDuplicates.sameLine("9876543210", "543210"))
+
+        // And two unrelated numbers stay unrelated.
+        assertFalse(PartyDuplicates.sameLine("9820011223", "9876543210"))
     }
 
     @Test

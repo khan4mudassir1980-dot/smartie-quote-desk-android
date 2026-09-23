@@ -157,6 +157,9 @@ class PartyWriteRepositoryTest {
         assertEquals("Sam", data["upBy"])
         assertTrue("no name key", !data.containsKey("name"))
         assertTrue("no archived key", !data.containsKey("archived"))
+        // The draft states no type, so the stored one is kept. Correcting a
+        // city must not demote a contractor to a client on the way past.
+        assertEquals("contractor", data["type"])
     }
 
     @Test

@@ -298,17 +298,17 @@ test('the prefix, year and padding are frozen while a number is being issued', a
   await assertSucceeds(numbering(db).update({ next: 10, lastIssued }));
 });
 
-test('an Owner rolls the financial year, and never rewinds or stands still inside one', async () => {
+test('an Owner rolls the financial year, and never rewinds inside one', async () => {
   // Configuration became the Owner's in N5.6; this test named an
   // Administrator until then. The year roll is the one case where `next` may
   // go backwards, because a new year restarts the sequence.
   await givenCounter();
   const db = as(testEnv, UIDS.primaryOwner);
 
-  // Inside the same year the counter only goes forward, and standing still is
-  // not going forward.
+  // Inside the same year the counter only goes forward. Leaving `next` where
+  // it is changes nothing and is allowed — that is what lets a prefix be
+  // corrected without burning a number, and `settings.test.js` covers it.
   await assertFails(numbering(db).update({ prefix: 'SIE/QD', fy: '2025-26', next: 2 }));
-  await assertFails(numbering(db).update({ prefix: 'SIE/QD', fy: '2025-26', next: 9 }));
   await assertSucceeds(numbering(db).update({ prefix: 'SIE/QD', fy: '2025-26', next: 12 }));
 
   // A new year starts wherever the Owner says, including at 1.

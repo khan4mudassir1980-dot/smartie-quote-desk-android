@@ -132,6 +132,24 @@ object Permissions {
 
     fun canViewSettings(member: Member): Boolean = member.active && !isWorker(member)
 
+    /**
+     * Configuring the quotation counter — its prefix, financial year, padding
+     * and where `next` sits — is the **Owner's alone**, and the deployed rule
+     * says the same thing. It decides what every future quotation number
+     * looks like, and a number is the business's own reference on a document
+     * somebody else is holding.
+     *
+     * *Issuing* a number is not this permission: every quoting role does
+     * that, through the counter's other rule branch, and N5.9 builds it.
+     */
+    fun canConfigureNumbering(member: Member): Boolean = isOwner(member)
+
+    /**
+     * Setting the limit a Manager may discount within. The Owner's, because
+     * an Administrator who could raise their own team's cap is not a cap.
+     */
+    fun canSetDiscountCap(member: Member): Boolean = isOwner(member)
+
     fun canViewTeam(member: Member): Boolean = isAdmin(member)
 
     fun canViewTeamActivity(member: Member): Boolean = isAdmin(member)

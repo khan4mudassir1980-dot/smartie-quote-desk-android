@@ -17,9 +17,16 @@ const { createTestEnvironment, seed, as, UIDS } = require('./helpers');
  * is signed in. That is why an Administrator issuing from a stale read used to
  * be able to re-take a spent number: their write failed the issue branch's
  * exact `+ 1` and fell through to a configuration branch that asked only for
- * `next >= resource.data.next`. Both halves are closed here — an
- * Administrator no longer reaches configuration, and configuration now
- * requires a **strictly greater** `next` within a financial year.
+ * `next >= resource.data.next`. Three things close it now: an Administrator
+ * no longer reaches configuration at all; configuration may never stamp
+ * `lastIssued`, which a stale issue carries by definition; and `next` must be
+ * strictly greater wherever it is being changed inside a financial year.
+ *
+ * The middle one is the load-bearing half, and it was not in the plan.
+ * Strictly-greater alone looked sufficient and shipped for one commit — until
+ * a screen test showed it also made renaming the prefix cost a quotation
+ * number, because leaving `next` where it is was being refused along with
+ * moving it backwards.
  *
  * `/teamSettings/quoting` is new and holds the Manager discount cap alone.
  *
@@ -111,19 +118,53 @@ test('seeding a counter that does not exist is the Owner s alone', async () => {
 
 // --- where `next` may be moved to ---------------------------------------------
 
-test('a forward correction is allowed, standing still and rewinding are not', async () => {
+test('a forward correction is allowed and rewinding is not', async () => {
   await givenCounter();
   const db = numbering(as(testEnv, UIDS.primaryOwner));
   const at = { prefix: 'SIE/QD', fy: '2025-26' };
 
-  // Rewinding.
+  // `next` is the number the *next* quotation will carry, so 9 has not gone
+  // out yet and 8 has. Setting the counter back to 8 would issue a number a
+  // customer is already holding.
   await assertFails(db.update({ ...at, next: 8 }));
-  // Standing still — the one that mattered, because it re-takes a number
-  // that is already spent.
-  await assertFails(db.update({ ...at, next: 9 }));
+  await assertFails(db.update({ ...at, next: 1 }));
+
   await assertSucceeds(db.update({ ...at, next: 10 }));
   await assertSucceeds(db.update({ ...at, next: 40 }));
   assert.equal((await stored('numbering')).next, 40);
+});
+
+test('and the prefix or padding can be corrected without burning a number', async () => {
+  // The rule shipped for one commit requiring `next` to be strictly greater
+  // on *every* configuration write, which made this impossible: renaming the
+  // prefix would have cost a quotation number. Leaving `next` alone is not a
+  // move forward, and has to stay allowed.
+  await givenCounter();
+  const db = numbering(as(testEnv, UIDS.primaryOwner));
+
+  await assertSucceeds(db.update({
+    prefix: 'SIE/QT', fy: '2025-26', next: 9, pad: 4, updated: Date.now(), by: 'Primary Owner',
+  }));
+
+  const after = await stored('numbering');
+  assert.equal(after.prefix, 'SIE/QT');
+  assert.equal(after.pad, 4);
+  assert.equal(after.next, 9);
+});
+
+test('but configuration may never stamp lastIssued, whatever else it does', async () => {
+  // This is what actually closes N5.1's second finding. The stale write that
+  // caused it carries a `lastIssued` by definition, so forbidding the key on
+  // this branch stops a spent number being re-taken however `next` is set —
+  // including by an Owner, who is the only one who reaches this branch now.
+  await givenCounter();
+  const db = numbering(as(testEnv, UIDS.primaryOwner));
+  const lastIssued = { no: 'SIE/QD/2025-26/008', at: Date.now(), by: 'Primary Owner', uid: UIDS.primaryOwner };
+
+  await assertFails(db.update({ prefix: 'SIE/QD', fy: '2025-26', next: 9, updated: Date.now(), lastIssued }));
+  await assertFails(db.update({ prefix: 'SIE/QD', fy: '2025-26', next: 40, updated: Date.now(), lastIssued }));
+  // Issuing still stamps it, through the branch that advances by exactly one.
+  await assertSucceeds(db.update(issuing(UIDS.primaryOwner)));
 });
 
 test('a new financial year may start anywhere at or above one', async () => {

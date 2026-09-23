@@ -1,6 +1,7 @@
 package `in`.smartie.quotedesk.data.mapping
 
 import `in`.smartie.quotedesk.data.model.NumberingRecord
+import `in`.smartie.quotedesk.data.model.QuotingRecord
 import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.data.model.PurchaseRecord
 import `in`.smartie.quotedesk.data.model.QuotationLineRecord
@@ -166,3 +167,9 @@ fun DocData.toNumberingRecord(): NumberingRecord {
         updatedBy = string("by", "updatedBy")
     )
 }
+
+fun DocData.toQuotingRecord(): QuotingRecord = QuotingRecord(
+    managerDiscountPct = double("managerDiscountPct"),
+    updatedAt = millis("updated", "updatedAt"),
+    updatedBy = string("by", "updatedBy")
+)

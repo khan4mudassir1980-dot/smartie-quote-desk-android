@@ -82,8 +82,16 @@ object MoreMenu {
         MoreDestination(
             route = "more/settings",
             label = "Settings",
-            description = "Company, bank, numbering, terms and device preferences",
-            phase = "N6",
+            description = "Quotation numbering and the Manager discount limit",
+            // Built in N5.6, and partial: the quotation counter and the
+            // discount cap only. Company details, bank details, terms and
+            // device preferences arrive later. No placeholder, because the
+            // screen exists — it says for itself what it does not yet hold,
+            // rather than the menu implying it does nothing.
+            //
+            // Everyone who can quote may open it; only the Owner is offered
+            // a control, which is what the deployed rules say too.
+            phase = null,
             isVisible = Permissions::canViewSettings,
         ),
         MoreDestination(

@@ -653,18 +653,30 @@ service cloud.firestore {
           && numberingSrcOk())
         ||
         // --- configuring the counter: Owner only, from N5.6 ---------------
-        // `next` must be **strictly greater** inside a financial year. It used
-        // to be `>=`, and that one character was a real hole: an
-        // administrator issuing from a stale read wrote `next: 10` when the
-        // stored value was already 10, `10 >= 10` held, and two people walked
-        // away holding the same quotation number while `lastIssued` named the
-        // loser. Equality is never a configuration change — it re-takes a
-        // number that is already spent.
+        //
+        // Two guards, and they close N5.1's second finding between them.
+        //
+        // 1. **Configuration never stamps `lastIssued`.** Only issuing does,
+        //    and that branch advances the counter by exactly one. This is what
+        //    actually stops a spent number being re-taken: the stale write
+        //    that caused the finding — `next: 10` when the stored value was
+        //    already 10, with a `lastIssued` naming the writer — carries a
+        //    `lastIssued` by definition, so it can never reach this branch
+        //    whatever it does to `next`.
+        //
+        // 2. **`next` may only move forward inside a financial year.** Where
+        //    it is being changed at all, it must be strictly greater; a new
+        //    financial year restarts the sequence and lifts the guard.
+        //    Leaving `next` alone is not a move, and has to stay allowed —
+        //    otherwise correcting a prefix or a padding would force the Owner
+        //    to burn a quotation number to do it.
         (owner()
           && request.resource.data.next is number && request.resource.data.next >= 1
           && request.resource.data.prefix is string
           && request.resource.data.fy is string
+          && !touched().hasAny(['lastIssued'])
           && (request.resource.data.fy != resource.data.fy
+              || !touched().hasAny(['next'])
               || request.resource.data.next > resource.data.next));
 
       allow delete: if false;

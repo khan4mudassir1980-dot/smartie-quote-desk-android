@@ -90,15 +90,19 @@ class MoreMenuTest {
 
     @Test
     fun `the built destinations are named, and the rest name their phase`() {
-        // Purchase history joined them in N4.3, and Parties and Quotation
-        // history in N5.3 and N5.4. All three are screens now, not promises of
-        // one. Both of the N5 ones are read-only, which each screen says for
-        // itself — a menu entry still claiming "In development" would be the
-        // wrong place to say it, because the lists and the detail views are
-        // there and usable today.
+        // Purchase history joined them in N4.3, Parties and Quotation history
+        // in N5.3 and N5.4, and Settings in N5.6. They are screens now, not
+        // promises of one.
+        //
+        // Settings is deliberately here while it is still **partial**: it
+        // holds the quotation numbering and the discount limit, and not the
+        // company details, bank details or terms. The screen says that for
+        // itself, which is the right place to say it — a menu entry claiming
+        // "In development" would tell somebody the numbering cannot be
+        // changed, when it can.
         val built = MoreMenu.destinations.filter { it.phase == null }.map { it.label }
         assertEquals(
-            listOf("Parties", "Quotation history", "Purchase history", "Team", "About & legal"),
+            listOf("Parties", "Quotation history", "Purchase history", "Team", "Settings", "About & legal"),
             built
         )
         MoreMenu.destinations.filter { it.phase != null }.forEach {

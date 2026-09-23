@@ -396,6 +396,20 @@ data class NumberingRecord(
 )
 
 /**
+ * `/teamSettings/quoting`: the Manager discount cap, and nothing else yet.
+ *
+ * [managerDiscountPct] defaults to zero rather than to "no limit", because
+ * that is what the N5.9 rule does with an absent document. A reader that
+ * guessed generously here would show a Manager a cap the server is about to
+ * refuse.
+ */
+data class QuotingRecord(
+    val managerDiscountPct: Double = 0.0,
+    val updatedAt: Long = 0L,
+    val updatedBy: String = ""
+)
+
+/**
  * One removal, as it survives the item.
  *
  * Deliberately small, and deliberately *not* a hidden copy of the stock row.

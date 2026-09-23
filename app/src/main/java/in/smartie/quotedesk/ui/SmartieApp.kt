@@ -76,6 +76,9 @@ import `in`.smartie.quotedesk.ui.more.PartiesScreen
 import `in`.smartie.quotedesk.ui.more.PartiesViewModel
 import `in`.smartie.quotedesk.ui.more.PartyActions
 import `in`.smartie.quotedesk.ui.more.PlaceholderScreen
+import `in`.smartie.quotedesk.ui.more.SettingsActions
+import `in`.smartie.quotedesk.ui.more.SettingsScreen
+import `in`.smartie.quotedesk.ui.more.SettingsViewModel
 import `in`.smartie.quotedesk.ui.products.ProductsScreen
 import `in`.smartie.quotedesk.ui.products.ProductsViewModel
 import `in`.smartie.quotedesk.ui.purchase.PurchaseHistoryScreen
@@ -273,6 +276,28 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
                             onCreate = partiesViewModel::create,
                             onEdit = partiesViewModel::edit,
                             onArchive = partiesViewModel::setArchived,
+                        ),
+                    )
+                }
+                composable("more/settings") {
+                    val settingsViewModel: SettingsViewModel = viewModel(
+                        key = "settings-${member.uid}",
+                        factory = SettingsViewModel.Factory(container, member),
+                    )
+                    val numbering by settingsViewModel.numbering.collectAsStateWithLifecycle()
+                    val quoting by settingsViewModel.quoting.collectAsStateWithLifecycle()
+                    val savingSettings by settingsViewModel.saving.collectAsStateWithLifecycle()
+                    val settingsError by settingsViewModel.error.collectAsStateWithLifecycle()
+                    SettingsScreen(
+                        numbering = numbering,
+                        quoting = quoting,
+                        capabilities = settingsViewModel.capabilities,
+                        loading = numbering == null,
+                        saving = savingSettings,
+                        error = settingsError,
+                        actions = SettingsActions(
+                            onSaveNumbering = settingsViewModel::saveNumbering,
+                            onSaveDiscountCap = settingsViewModel::saveDiscountCap,
                         ),
                     )
                 }

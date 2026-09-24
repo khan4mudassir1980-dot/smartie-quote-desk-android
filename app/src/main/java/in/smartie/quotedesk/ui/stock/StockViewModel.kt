@@ -572,7 +572,8 @@ class StockViewModel(
         override fun <T : ViewModel> create(modelClass: Class<T>): T = StockViewModel(
             member = member,
             writes = container.stockWriteRepository,
-            drafts = container.devicePreferences,
+            // This account's own pending counts, never the phone's shared key.
+            drafts = container.devicePreferences.forAccount(member.uid),
             onlineFlow = container.connectivity.online,
             photos = container.stockPhotoRepository,
             history = container.stoppedStockRepository,

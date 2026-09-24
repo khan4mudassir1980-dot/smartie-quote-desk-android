@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import `in`.smartie.quotedesk.core.AppContainer
 import `in`.smartie.quotedesk.core.toAppError
+import `in`.smartie.quotedesk.data.mapping.Keys
 import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.domain.Member
@@ -14,6 +15,7 @@ import `in`.smartie.quotedesk.domain.ProductDraft
 import `in`.smartie.quotedesk.domain.ProductPins
 import `in`.smartie.quotedesk.domain.ProductWrite
 import `in`.smartie.quotedesk.domain.QuoteDraft
+import `in`.smartie.quotedesk.domain.QuoteDrafts
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -56,12 +58,29 @@ class ProductsViewModel(
         .catch { emit(emptySet()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
+    /** This account's own device storage, never the phone's shared keys. */
+    private val account = container.devicePreferences.forAccount(member.uid)
+
+    /**
+     * Minted once per view model, not once per save.
+     *
+     * The draft this screen builds gets one id for as long as it exists, so a
+     * second save lands on the same draft instead of storing a twin — the
+     * N4.4 B2 lesson, a level up from the lines.
+     */
+    private val newDraftId = Keys.generateId(QuoteDrafts.DRAFT_PREFIX)
+
     init {
         // The stored draft is read once. After that this view model owns it,
         // so an edit is never overwritten by the store catching up.
         viewModelScope.launch {
-            runCatching { container.devicePreferences.quoteDraft.first() }
-                .onSuccess { stored -> if (!stored.isEmpty) _draft.value = stored }
+            // Rescues a draft and any pending stock counts left under the old
+            // ownerless keys. The **leak** is already closed by the keying
+            // itself — nothing reads those keys any more — so this only saves
+            // work in progress, and it is idempotent.
+            runCatching { account.adoptOwnerlessValues() }.onFailure { report(it) }
+            runCatching { account.drafts.first().current }
+                .onSuccess { stored -> if (stored != null && !stored.isEmpty) _draft.value = stored }
         }
     }
 
@@ -206,9 +225,13 @@ class ProductsViewModel(
     // --- plumbing ----------------------------------------------------------
 
     private fun persist(draft: QuoteDraft) {
-        _draft.value = draft
+        val identified = draft.copy(
+            id = draft.id.ifBlank { newDraftId },
+            updatedAt = System.currentTimeMillis()
+        )
+        _draft.value = identified
         viewModelScope.launch {
-            runCatching { container.devicePreferences.setQuoteDraft(draft) }
+            runCatching { account.setDrafts(account.drafts.first().save(identified)) }
                 .onFailure { report(it) }
         }
     }

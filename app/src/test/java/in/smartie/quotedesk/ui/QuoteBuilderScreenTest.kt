@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import `in`.smartie.quotedesk.data.mapping.Keys
@@ -819,6 +820,10 @@ class QuoteBuilderScreenTest {
     fun `a negative installation rate is refused on the box`() {
         render(oneLine().copy(installation = Installation(InstallationMode.FIXED, 0.0)))
         scrollTo(BUILDER_INSTALLATION_KEY)
+        // The box already reads "0" — a stored rate always renders as
+        // something — so typing alone would make "0-500", which is not a
+        // number at all and would be refused for the wrong reason.
+        compose.field(INSTALLATION_RATE_LABEL).performTextClearance()
         compose.field(INSTALLATION_RATE_LABEL).performTextInput("-500")
 
         compose.onNodeWithText(QuoteDraft.NEGATIVE_INSTALLATION).assertExists()

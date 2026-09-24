@@ -22,7 +22,10 @@ import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.domain.Catalogue
 import `in`.smartie.quotedesk.domain.QuoteDraft
+import `in`.smartie.quotedesk.domain.AreaEntry
 import `in`.smartie.quotedesk.domain.AreaLine
+import `in`.smartie.quotedesk.domain.ManualEntry
+import `in`.smartie.quotedesk.domain.QuoteLineEntry
 import `in`.smartie.quotedesk.domain.QuoteTier
 import `in`.smartie.quotedesk.ui.products.BACK_TO_PRODUCTS
 import `in`.smartie.quotedesk.ui.products.BUILDER_CLEAR_KEY
@@ -34,7 +37,20 @@ import `in`.smartie.quotedesk.ui.products.BUILDER_PICK_PARTY_KEY
 import `in`.smartie.quotedesk.ui.products.BUILDER_TIER_KEY
 import `in`.smartie.quotedesk.ui.products.CHOOSE_PARTY
 import `in`.smartie.quotedesk.ui.products.PARTY_NAME_LABEL
+import `in`.smartie.quotedesk.ui.products.ADD_AREA
+import `in`.smartie.quotedesk.ui.products.ADD_AREA_LINE
+import `in`.smartie.quotedesk.ui.products.ADD_MANUAL
+import `in`.smartie.quotedesk.ui.products.ADD_MANUAL_LINE
+import `in`.smartie.quotedesk.ui.products.BUILDER_ADD_AREA_KEY
+import `in`.smartie.quotedesk.ui.products.BUILDER_ADD_MANUAL_KEY
+import `in`.smartie.quotedesk.ui.products.BUILDER_AREA_ADD_KEY
+import `in`.smartie.quotedesk.ui.products.BUILDER_AREA_WORKING_KEY
+import `in`.smartie.quotedesk.ui.products.BUILDER_MANUAL_ADD_KEY
 import `in`.smartie.quotedesk.ui.products.BUILDER_SAVE_CUSTOMER_KEY
+import `in`.smartie.quotedesk.ui.products.DESCRIPTION_LABEL
+import `in`.smartie.quotedesk.ui.products.HEIGHT_LABEL
+import `in`.smartie.quotedesk.ui.products.SAVE_OPENING
+import `in`.smartie.quotedesk.ui.products.WIDTH_LABEL
 import `in`.smartie.quotedesk.ui.products.PARTY_SEARCH_LABEL
 import `in`.smartie.quotedesk.ui.products.SAVE_CUSTOMER
 import `in`.smartie.quotedesk.ui.products.SITE_LABEL
@@ -49,10 +65,12 @@ import `in`.smartie.quotedesk.ui.products.QuoteBuilderPanel
 import `in`.smartie.quotedesk.ui.products.QUOTE_BUILDER_TAG
 import `in`.smartie.quotedesk.ui.products.AREA_LINE
 import `in`.smartie.quotedesk.ui.products.MANUAL_LINE
+import `in`.smartie.quotedesk.ui.products.RATE_LABEL
 import `in`.smartie.quotedesk.ui.products.RATE_NEEDED
 import `in`.smartie.quotedesk.ui.products.removeLabel
 import `in`.smartie.quotedesk.ui.theme.SmartieTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -97,6 +115,9 @@ class QuoteBuilderScreenTest {
 
     private var changed: Pair<String, Double>? = null
     private var removed: String? = null
+    private var addedManual: Pair<String, ManualEntry>? = null
+    private var addedArea: Pair<String, AreaEntry>? = null
+    private var editedArea: Pair<String, AreaEntry>? = null
     private var retiered: RateTierV2? = null
     private var chosen: PartyRecord? = null
     private var typedParty: QuotationPartySnapshot? = null
@@ -133,6 +154,7 @@ class QuoteBuilderScreenTest {
                     // A different id on every call, so a test can prove the
                     // panel mints once and then holds what it minted.
                     newPartyId = { "c_new_${'$'}{minted++}" },
+                    newLineId = { "ln_new_${'$'}{minted++}" },
                     actions = ProductsActions(
                         onTierChange = { retiered = it },
                         onPartyChange = { typedParty = it },
@@ -140,6 +162,9 @@ class QuoteBuilderScreenTest {
                         onSaveCustomer = { savedWith += it },
                         onChangeLineQuantity = { id, delta -> changed = id to delta },
                         onRemoveLine = { removed = it },
+                        onAddManual = { id, entry -> addedManual = id to entry },
+                        onAddArea = { id, entry -> addedArea = id to entry },
+                        onEditArea = { line, entry -> editedArea = line.id to entry },
                         onClearDraft = { cleared++ }
                     )
                 )
@@ -470,5 +495,129 @@ class QuoteBuilderScreenTest {
         compose.onNodeWithContentDescription(removeLabel("SIE1000")).performClick()
 
         assertEquals("ln_1", removed)
+    }
+
+    // --- the two forms ----------------------------------------------------------
+
+    @Test
+    fun `both forms start collapsed`() {
+        render(oneLine())
+        scrollTo(BUILDER_ADD_MANUAL_KEY)
+        compose.onNodeWithContentDescription(ADD_MANUAL).assertExists()
+        compose.onNodeWithContentDescription(ADD_AREA).assertExists()
+
+        // The boxes are not merely off screen: the two controls above prove
+        // the list reached this far.
+        assertEquals(
+            0,
+            compose.onAllNodesWithContentDescription(DESCRIPTION_LABEL)
+                .fetchSemanticsNodes().size
+        )
+    }
+
+    @Test
+    fun `a hand-typed line is sent under the id the panel minted`() {
+        render(oneLine())
+        scrollTo(BUILDER_ADD_MANUAL_KEY)
+        compose.onNodeWithContentDescription(ADD_MANUAL).performClick()
+
+        scrollTo(DESCRIPTION_LABEL)
+        compose.field(DESCRIPTION_LABEL).performTextInput("Site visit")
+        scrollTo(BUILDER_MANUAL_ADD_KEY)
+        compose.onNodeWithContentDescription(ADD_MANUAL_LINE).performClick()
+
+        assertEquals("ln_new_1", addedManual?.first)
+        assertEquals("Site visit", addedManual?.second?.title)
+    }
+
+    @Test
+    fun `a line with no description says so and cannot be added`() {
+        render(oneLine())
+        scrollTo(BUILDER_ADD_MANUAL_KEY)
+        compose.onNodeWithContentDescription(ADD_MANUAL).performClick()
+        scrollTo(BUILDER_MANUAL_ADD_KEY)
+
+        compose.onNodeWithText(QuoteLineEntry.NO_DESCRIPTION).assertExists()
+        compose.onNodeWithContentDescription(ADD_MANUAL_LINE).performClick()
+        assertNull("nothing was added", addedManual)
+    }
+
+    @Test
+    fun `a rate that is not a number is refused, never partly read`() {
+        render(oneLine())
+        scrollTo(BUILDER_ADD_MANUAL_KEY)
+        compose.onNodeWithContentDescription(ADD_MANUAL).performClick()
+        scrollTo(DESCRIPTION_LABEL)
+        compose.field(DESCRIPTION_LABEL).performTextInput("Site visit")
+        scrollTo(RATE_LABEL)
+        compose.field(RATE_LABEL).performTextInput("12x")
+
+        scrollTo(BUILDER_MANUAL_ADD_KEY)
+        compose.onNodeWithText(QuoteLineEntry.NOT_A_RATE).assertExists()
+        compose.onNodeWithContentDescription(ADD_MANUAL_LINE).performClick()
+        assertNull("nothing was added", addedManual)
+    }
+
+    @Test
+    fun `an opening shows its chargeable area as it is typed`() {
+        render(oneLine())
+        scrollTo(BUILDER_ADD_AREA_KEY)
+        compose.onNodeWithContentDescription(ADD_AREA).performClick()
+
+        scrollTo(DESCRIPTION_LABEL)
+        compose.field(DESCRIPTION_LABEL).performTextInput("Rolling shutter")
+        scrollTo(WIDTH_LABEL)
+        compose.field(WIDTH_LABEL).performTextInput("3000")
+        scrollTo(HEIGHT_LABEL)
+        compose.field(HEIGHT_LABEL).performTextInput("3500")
+
+        scrollTo(BUILDER_AREA_WORKING_KEY)
+        compose.onNodeWithText("113.5 sq ft × 1 nos = 113.5 sq ft").assertExists()
+    }
+
+    @Test
+    fun `adding an opening sends what was typed, not a parsed guess`() {
+        render(oneLine())
+        scrollTo(BUILDER_ADD_AREA_KEY)
+        compose.onNodeWithContentDescription(ADD_AREA).performClick()
+        scrollTo(DESCRIPTION_LABEL)
+        compose.field(DESCRIPTION_LABEL).performTextInput("Rolling shutter")
+        scrollTo(WIDTH_LABEL)
+        compose.field(WIDTH_LABEL).performTextInput("3000")
+        scrollTo(HEIGHT_LABEL)
+        compose.field(HEIGHT_LABEL).performTextInput("3500")
+
+        scrollTo(BUILDER_AREA_ADD_KEY)
+        compose.onNodeWithContentDescription(ADD_AREA_LINE).performClick()
+
+        assertEquals("ln_new_1", addedArea?.first)
+        assertEquals("3000", addedArea?.second?.width)
+        assertEquals("3500", addedArea?.second?.height)
+    }
+
+    @Test
+    fun `tapping an opening reopens its form, filled in, to be saved not added`() {
+        render(
+            QuoteDraft(id = "qd_1").addArea(
+                id = "ln_a",
+                area = AreaLine(width = 3000.0, height = 3500.0, count = 2.0),
+                rate = 450.0,
+                title = "Rolling shutter"
+            )
+        )
+        scrollTo("ln_a")
+        compose.onNodeWithText("Rolling shutter").performClick()
+
+        scrollTo(WIDTH_LABEL)
+        // Filled in from the line, not blank.
+        compose.onNodeWithText("3000").assertExists()
+
+        scrollTo(BUILDER_AREA_ADD_KEY)
+        // Save, not Add: this opening is already on the quotation.
+        compose.onNodeWithContentDescription(SAVE_OPENING).performClick()
+
+        assertEquals("ln_a", editedArea?.first)
+        assertEquals("3500", editedArea?.second?.height)
+        assertNull("nothing was added as a second line", addedArea)
     }
 }

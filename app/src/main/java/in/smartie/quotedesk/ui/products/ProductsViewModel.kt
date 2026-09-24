@@ -11,6 +11,9 @@ import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.data.repository.PartyWriteResult
+import `in`.smartie.quotedesk.domain.AreaEntry
+import `in`.smartie.quotedesk.domain.DraftLine
+import `in`.smartie.quotedesk.domain.ManualEntry
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.PartyWrite
 import `in`.smartie.quotedesk.domain.Permissions
@@ -185,6 +188,40 @@ class ProductsViewModel(
      */
     fun changeLineQuantity(id: String, delta: Double) {
         persist(_draft.value.changeQuantity(id, delta))
+    }
+
+    /**
+     * An id for a line somebody is typing.
+     *
+     * A **line** id, like `mintPartyId`'s party id and unlike a draft id:
+     * `QuoteDraft.addManual` and `addArea` never merge, so the caller holds
+     * one for as long as one form is open and a second press lands on the
+     * same line rather than adding a twin.
+     */
+    fun mintLineId(): String = Keys.generateId(QuoteDraft.LINE_PREFIX)
+
+    /**
+     * A line typed by hand, or an opening priced by the square foot.
+     *
+     * The refusal is `QuoteLineEntry`'s, decided on the strings somebody
+     * typed, so an empty rate box stays "price not set" rather than becoming
+     * a zero. The panel shows it too; this is the floor under that, for a
+     * caller that did not.
+     */
+    fun addManualLine(id: String, entry: ManualEntry) {
+        entry.refusal()?.let { emit(it); return }
+        persist(entry.addTo(_draft.value, id))
+    }
+
+    fun addAreaLine(id: String, entry: AreaEntry) {
+        entry.refusal()?.let { emit(it); return }
+        persist(entry.addTo(_draft.value, id))
+    }
+
+    /** A measurement corrected on an opening that is already on the quotation. */
+    fun editAreaLine(line: DraftLine, entry: AreaEntry) {
+        entry.refusal()?.let { emit(it); return }
+        persist(entry.applyTo(_draft.value, line))
     }
 
     /** Taking one line off, by its id. A stepper down to zero does the same. */

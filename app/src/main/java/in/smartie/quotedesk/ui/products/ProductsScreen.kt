@@ -66,6 +66,9 @@ import `in`.smartie.quotedesk.domain.RoleTitles
 
 import `in`.smartie.quotedesk.domain.PinDrag
 import `in`.smartie.quotedesk.domain.ProductPins
+import `in`.smartie.quotedesk.domain.AreaEntry
+import `in`.smartie.quotedesk.domain.DraftLine
+import `in`.smartie.quotedesk.domain.ManualEntry
 import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.QuoteTier
 import `in`.smartie.quotedesk.domain.ScrollToTop
@@ -113,6 +116,12 @@ data class ProductsActions(
     val onChangeLineQuantity: (String, Double) -> Unit = { _, _ -> },
     /** Taking one line off the quotation, by its id. */
     val onRemoveLine: (String) -> Unit = {},
+    /** A line typed by hand, under the id the panel is holding. */
+    val onAddManual: (String, ManualEntry) -> Unit = { _, _ -> },
+    /** An opening priced by the square foot, likewise. */
+    val onAddArea: (String, AreaEntry) -> Unit = { _, _ -> },
+    /** A measurement corrected on an opening already on the quotation. */
+    val onEditArea: (DraftLine, AreaEntry) -> Unit = { _, _ -> },
     val onTogglePin: (String) -> Unit = {},
     /** One place up (-1) or down (+1), from the drag handle's named actions. */
     val onMovePin: (String, Int) -> Unit = { _, _ -> },
@@ -182,6 +191,7 @@ fun ProductsScreen(
         savingCustomer = savingCustomer,
         customerFailure = customerFailure,
         newPartyId = viewModel::mintPartyId,
+        newLineId = viewModel::mintLineId,
         actions = ProductsActions(
             onQueryChange = viewModel::setQuery,
             onMinimumKgChange = viewModel::setMinimumKg,
@@ -191,6 +201,9 @@ fun ProductsScreen(
             onChangeQuantity = viewModel::changeQuantity,
             onChangeLineQuantity = viewModel::changeLineQuantity,
             onRemoveLine = viewModel::removeLine,
+            onAddManual = viewModel::addManualLine,
+            onAddArea = viewModel::addAreaLine,
+            onEditArea = viewModel::editAreaLine,
             onTogglePin = { key -> viewModel.togglePin(pinnedKeys, key) },
             onMovePin = { key, delta -> viewModel.movePin(pinnedKeys, key, delta) },
             onReorderPin = { moved, target -> viewModel.reorderPin(pinnedKeys, moved, target) },
@@ -227,6 +240,8 @@ fun ProductsCatalogue(
     customerFailure: String? = null,
     /** Minted once per quotation. See `ProductsViewModel.mintPartyId`. */
     newPartyId: () -> String = { "" },
+    /** Minted once per line being typed. See `ProductsViewModel.mintLineId`. */
+    newLineId: () -> String = { "" },
     actions: ProductsActions = ProductsActions(),
 ) {
     if (!canViewProducts) {
@@ -268,6 +283,10 @@ fun ProductsCatalogue(
             onTierChange = actions.onTierChange,
             onChangeLineQuantity = actions.onChangeLineQuantity,
             onRemoveLine = actions.onRemoveLine,
+            onAddManual = actions.onAddManual,
+            onAddArea = actions.onAddArea,
+            onEditArea = actions.onEditArea,
+            newLineId = newLineId,
             parties = parties,
             onPartyChange = actions.onPartyChange,
             onChooseParty = actions.onChooseParty,

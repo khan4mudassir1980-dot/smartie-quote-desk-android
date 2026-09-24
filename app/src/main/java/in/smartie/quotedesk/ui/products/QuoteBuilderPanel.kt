@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,11 +23,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
 import `in`.smartie.quotedesk.data.mapping.Money
 import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.RateTierV2
+import `in`.smartie.quotedesk.domain.AreaEntry
+import `in`.smartie.quotedesk.domain.DimensionUnit
 import `in`.smartie.quotedesk.domain.DraftLine
+import `in`.smartie.quotedesk.domain.ManualEntry
 import `in`.smartie.quotedesk.domain.Parties
 import `in`.smartie.quotedesk.domain.QuoteArea
 import `in`.smartie.quotedesk.domain.QuoteDraft
@@ -37,6 +43,7 @@ import `in`.smartie.quotedesk.ui.components.ListRow
 import `in`.smartie.quotedesk.ui.components.SegmentedChoice
 import `in`.smartie.quotedesk.ui.components.SmartieField
 import `in`.smartie.quotedesk.ui.components.SmartieGhostButton
+import `in`.smartie.quotedesk.ui.components.SmartiePrimaryButton
 import `in`.smartie.quotedesk.ui.components.Tag
 import `in`.smartie.quotedesk.ui.components.TagTone
 import `in`.smartie.quotedesk.ui.quotations.formatDate
@@ -86,8 +93,11 @@ internal fun QuoteBuilderPanel(
     customerFailure: String? = null,
     /** Minted once, and reused on a retry. See `ProductsViewModel.mintPartyId`. */
     newPartyId: () -> String = { "" },
-    /** Reopening an opening's form. The area form itself is the next commit. */
-    onOpenArea: (String) -> Unit = {}
+    onAddManual: (String, ManualEntry) -> Unit = { _, _ -> },
+    onAddArea: (String, AreaEntry) -> Unit = { _, _ -> },
+    onEditArea: (DraftLine, AreaEntry) -> Unit = { _, _ -> },
+    /** Minted once per line being typed, and reused on a retry. */
+    newLineId: () -> String = { "" }
 ) {
     // Which saved customer the picker is showing, and what is typed into its
     // search box. The panel's own state: nothing about it belongs on a draft
@@ -98,6 +108,70 @@ internal fun QuoteBuilderPanel(
     // retry after an ambiguous failure lands on the same customer rather than
     // writing a second — N4.4's B2 lesson, the shape `PartiesScreen` uses.
     var mintedPartyId by rememberSaveable { mutableStateOf("") }
+
+    // The two "add a line" forms, collapsed until asked for. Their contents
+    // are the panel's own: a half-typed form is not part of the quotation,
+    // and pushing every keystroke of it onto the draft would store lines
+    // nobody has added yet.
+    //
+    // Held as the plain strings somebody typed rather than as a parsed entry,
+    // because that is what `rememberSaveable` can carry without a custom
+    // `Saver` — and because an empty rate box has to stay distinguishable
+    // from a zero all the way to `QuoteLineEntry`.
+    var manualOpen by rememberSaveable { mutableStateOf(false) }
+    var manualTitle by rememberSaveable { mutableStateOf("") }
+    var manualQuantity by rememberSaveable { mutableStateOf("1") }
+    var manualUnit by rememberSaveable { mutableStateOf("") }
+    var manualRate by rememberSaveable { mutableStateOf("") }
+    var manualSpec by rememberSaveable { mutableStateOf("") }
+
+    var areaOpen by rememberSaveable { mutableStateOf(false) }
+    var areaTitle by rememberSaveable { mutableStateOf("") }
+    var areaWidth by rememberSaveable { mutableStateOf("") }
+    var areaHeight by rememberSaveable { mutableStateOf("") }
+    var areaUnitWire by rememberSaveable { mutableStateOf(DimensionUnit.MM.wireValue) }
+    var areaCount by rememberSaveable { mutableStateOf("1") }
+    var areaRate by rememberSaveable { mutableStateOf("") }
+    var areaMinimum by rememberSaveable { mutableStateOf("") }
+    // Which existing opening the area form is editing, if any.
+    var editingAreaId by rememberSaveable { mutableStateOf("") }
+    var mintedLineId by rememberSaveable { mutableStateOf("") }
+
+    val manualEntry = ManualEntry(
+        title = manualTitle,
+        quantity = manualQuantity,
+        unit = manualUnit,
+        rate = manualRate,
+        spec = manualSpec
+    )
+    val areaEntry = AreaEntry(
+        width = areaWidth,
+        height = areaHeight,
+        unit = DimensionUnit.from(areaUnitWire),
+        count = areaCount,
+        rate = areaRate,
+        minimumSqft = areaMinimum,
+        title = areaTitle
+    )
+
+    fun closeForms() {
+        manualOpen = false
+        areaOpen = false
+        editingAreaId = ""
+        mintedLineId = ""
+    }
+
+    fun openArea(entry: AreaEntry) {
+        areaTitle = entry.title
+        areaWidth = entry.width
+        areaHeight = entry.height
+        areaUnitWire = entry.unit.wireValue
+        areaCount = entry.count
+        areaRate = entry.rate
+        areaMinimum = entry.minimumSqft
+        areaOpen = true
+        manualOpen = false
+    }
     val dimens = LocalSmartieDimens.current
     LazyColumn(
         modifier = modifier.fillMaxSize().testTag(QUOTE_BUILDER_TAG),
@@ -185,7 +259,112 @@ internal fun QuoteBuilderPanel(
         }
 
         items(draft.lines, key = { line -> line.id }) { line ->
-            BuilderLine(line, onChangeLineQuantity, onRemoveLine, onOpenArea)
+            BuilderLine(line, onChangeLineQuantity, onRemoveLine) { id ->
+                draft.line(id)?.let { existing ->
+                    openArea(AreaEntry.of(existing))
+                    editingAreaId = id
+                }
+            }
+        }
+
+        item(key = BUILDER_ADD_MANUAL_KEY) {
+            SmartieGhostButton(
+                text = ADD_MANUAL,
+                onClick = {
+                    val opening = !manualOpen
+                    closeForms()
+                    manualOpen = opening
+                },
+                modifier = Modifier
+                    .semantics { contentDescription = ADD_MANUAL }
+                    .fillMaxWidth()
+            )
+        }
+
+        if (manualOpen) {
+            entryField(DESCRIPTION_LABEL, manualTitle) { manualTitle = it }
+            entryField(QUANTITY_LABEL, manualQuantity, numeric = true) { manualQuantity = it }
+            entryField(UNIT_LABEL, manualUnit, hint = UNIT_HINT) { manualUnit = it }
+            entryField(RATE_LABEL, manualRate, numeric = true, hint = RATE_HINT) {
+                manualRate = it
+            }
+            entryField(SPEC_LABEL, manualSpec) { manualSpec = it }
+            formFooter(
+                key = BUILDER_MANUAL_ADD_KEY,
+                addLabel = ADD_MANUAL_LINE,
+                refusal = manualEntry.refusal(),
+                onCancel = { closeForms() },
+                onAdd = {
+                    val id = mintedLineId.ifBlank { newLineId().also { mintedLineId = it } }
+                    onAddManual(id, manualEntry)
+                    closeForms()
+                }
+            )
+        }
+
+        item(key = BUILDER_ADD_AREA_KEY) {
+            SmartieGhostButton(
+                text = ADD_AREA,
+                onClick = {
+                    val opening = !areaOpen
+                    closeForms()
+                    areaOpen = opening
+                },
+                modifier = Modifier
+                    .semantics { contentDescription = ADD_AREA }
+                    .fillMaxWidth()
+            )
+        }
+
+        if (areaOpen) {
+            val editing = draft.line(editingAreaId)
+            entryField(DESCRIPTION_LABEL, areaTitle) { areaTitle = it }
+            entryField(WIDTH_LABEL, areaWidth, numeric = true) { areaWidth = it }
+            entryField(HEIGHT_LABEL, areaHeight, numeric = true) { areaHeight = it }
+            item(key = MEASURED_IN_LABEL) {
+                Column(verticalArrangement = Arrangement.spacedBy(dimens.gapXs)) {
+                    Text(
+                        MEASURED_IN_LABEL,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = SmartieColors.Steel
+                    )
+                    SegmentedChoice(
+                        options = DimensionUnit.entries.toList(),
+                        selected = DimensionUnit.from(areaUnitWire),
+                        label = { it.label },
+                        onSelect = { areaUnitWire = it.wireValue }
+                    )
+                }
+            }
+            entryField(OPENINGS_LABEL, areaCount, numeric = true) { areaCount = it }
+            entryField(RATE_LABEL, areaRate, numeric = true, hint = PER_SQFT_HINT) {
+                areaRate = it
+            }
+            entryField(MINIMUM_LABEL, areaMinimum, numeric = true, hint = MINIMUM_HINT) {
+                areaMinimum = it
+            }
+            item(key = BUILDER_AREA_WORKING_KEY) {
+                Text(
+                    areaWorking(areaEntry),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = SmartieColors.Steel
+                )
+            }
+            formFooter(
+                key = BUILDER_AREA_ADD_KEY,
+                addLabel = if (editing != null) SAVE_OPENING else ADD_AREA_LINE,
+                refusal = areaEntry.refusal(),
+                onCancel = { closeForms() },
+                onAdd = {
+                    if (editing != null) {
+                        onEditArea(editing, areaEntry)
+                    } else {
+                        val id = mintedLineId.ifBlank { newLineId().also { mintedLineId = it } }
+                        onAddArea(id, areaEntry)
+                    }
+                    closeForms()
+                }
+            )
         }
 
         if (draft.needsRateCount > 0) {
@@ -290,6 +469,92 @@ private fun LazyListScope.partyFields(
     field(PHONE_LABEL, party.phone) { party.copy(phone = it) }
     field(EMAIL_LABEL, party.email) { party.copy(email = it) }
     field(ADDRESS_LABEL, party.address) { party.copy(address = it) }
+}
+
+/**
+ * One box on an "add a line" form, keyed by its own label.
+ *
+ * A number box gets the decimal keyboard, but **never a filtered one**: a
+ * person who types `12x` sees `12x` and a refusal that says why, rather than
+ * a box that silently swallowed the `x` and priced the line at twelve.
+ */
+private fun LazyListScope.entryField(
+    label: String,
+    value: String,
+    numeric: Boolean = false,
+    hint: String? = null,
+    onChange: (String) -> Unit
+) {
+    item(key = label) {
+        SmartieField(
+            label = label,
+            value = value,
+            onValueChange = onChange,
+            placeholder = hint,
+            keyboardOptions = if (numeric) {
+                KeyboardOptions(keyboardType = KeyboardType.Decimal)
+            } else {
+                KeyboardOptions.Default
+            },
+            modifier = Modifier.semantics { contentDescription = label }
+        )
+    }
+}
+
+/**
+ * Add and Cancel, with the refusal above them.
+ *
+ * **Add stays enabled and the refusal is shown**, rather than the control
+ * greying out with no explanation. A disabled button is a question nobody
+ * can answer; `QuoteMath.discountRefusal`'s KDoc already gives the general
+ * reason — name the number the person may have, do not silently clamp.
+ */
+private fun LazyListScope.formFooter(
+    key: String,
+    addLabel: String,
+    refusal: String?,
+    onCancel: () -> Unit,
+    onAdd: () -> Unit
+) {
+    if (refusal != null) {
+        item(key = "$key-refusal") {
+            Text(
+                refusal,
+                style = MaterialTheme.typography.labelMedium,
+                color = SmartieColors.Danger
+            )
+        }
+    }
+    item(key = key) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SmartiePrimaryButton(
+                text = addLabel,
+                onClick = onAdd,
+                enabled = refusal == null,
+                modifier = Modifier.semantics { contentDescription = addLabel }
+            )
+            SmartieGhostButton(
+                text = CANCEL_LINE,
+                onClick = onCancel,
+                modifier = Modifier.semantics { contentDescription = CANCEL_LINE }
+            )
+        }
+    }
+}
+
+/**
+ * What the opening comes to as it is typed, so nobody has to add it up.
+ *
+ * `113.5 sq ft × 2 nos = 227 sq ft`. Silent while the measurements are not
+ * yet a measurement — a running total that reads zero on a half-typed width
+ * is worse than one that waits.
+ */
+internal fun areaWorking(entry: AreaEntry): String {
+    val area = entry.toArea() ?: return AREA_NOT_YET
+    if (QuoteArea.refusal(area) != null) return AREA_NOT_YET
+    return "${Money.formatQuantity(QuoteArea.chargeableSqft(area))} sq ft × " +
+        "${Money.formatQuantity(area.count)} nos = " +
+        "${Money.formatQuantity(QuoteArea.totalSqft(area))} sq ft"
 }
 
 /** One saved customer, with enough to tell two of the same name apart. */
@@ -477,6 +742,11 @@ internal const val BUILDER_PARTY_SEARCH_KEY = "builder-party-search"
 internal const val BUILDER_NO_PARTIES_KEY = "builder-no-parties"
 internal const val BUILDER_SAVE_CUSTOMER_KEY = "builder-save-customer"
 internal const val BUILDER_CUSTOMER_FAILURE_KEY = "builder-customer-failure"
+internal const val BUILDER_ADD_MANUAL_KEY = "builder-add-manual"
+internal const val BUILDER_ADD_AREA_KEY = "builder-add-area"
+internal const val BUILDER_MANUAL_ADD_KEY = "builder-manual-add"
+internal const val BUILDER_AREA_ADD_KEY = "builder-area-add"
+internal const val BUILDER_AREA_WORKING_KEY = "builder-area-working"
 internal const val BUILDER_EMPTY_KEY = "builder-empty"
 internal const val BUILDER_NEEDS_RATE_KEY = "builder-needs-rate"
 internal const val BUILDER_CLEAR_KEY = "builder-clear"
@@ -485,7 +755,7 @@ internal const val BUILDER_CLEAR_KEY = "builder-clear"
 internal const val BUILDER_TAIL_KEY = "builder-end"
 
 internal const val BUILDER_HEADING = "Quotation"
-internal const val TIER_LABEL = "Rate"
+internal const val TIER_LABEL = "Rate type"
 internal const val CHOOSE_PARTY = "Choose a saved customer"
 internal const val CLOSE_PARTY_PICKER = "Type the customer instead"
 internal const val PARTY_SEARCH_LABEL = "Find a customer"
@@ -504,6 +774,29 @@ internal const val RATE_NEEDED = "Rate needed"
 internal const val REMOVE = "Remove"
 internal const val MANUAL_LINE = "Typed by hand"
 internal const val AREA_LINE = "By area"
+
+internal const val ADD_MANUAL = "Add an item by hand"
+internal const val ADD_AREA = "Add an opening, priced by area"
+internal const val ADD_MANUAL_LINE = "Add this item"
+internal const val ADD_AREA_LINE = "Add this opening"
+internal const val SAVE_OPENING = "Save this opening"
+internal const val CANCEL_LINE = "Cancel"
+
+internal const val DESCRIPTION_LABEL = "Description"
+internal const val QUANTITY_LABEL = "How many"
+internal const val UNIT_LABEL = "Unit"
+internal const val UNIT_HINT = "each, nos, m, kg"
+internal const val RATE_LABEL = "Rate"
+internal const val RATE_HINT = "Leave empty if the price is not set yet"
+internal const val SPEC_LABEL = "Details"
+internal const val WIDTH_LABEL = "Width"
+internal const val HEIGHT_LABEL = "Height"
+internal const val MEASURED_IN_LABEL = "Measured in"
+internal const val OPENINGS_LABEL = "How many openings this size"
+internal const val PER_SQFT_HINT = "Per square foot"
+internal const val MINIMUM_LABEL = "Minimum chargeable area"
+internal const val MINIMUM_HINT = "Leave empty if there is no minimum"
+internal const val AREA_NOT_YET = "Enter a width and a height to see the chargeable area."
 internal const val NOTHING_ON_IT = "Nothing on this quotation yet. Go back and add a product."
 internal const val ISSUING_LATER =
     "A number is issued when this is downloaded, printed or shared."

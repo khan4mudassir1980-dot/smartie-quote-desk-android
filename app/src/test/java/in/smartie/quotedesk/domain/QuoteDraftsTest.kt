@@ -383,6 +383,49 @@ class QuoteDraftsTest {
     }
 
     @Test
+    fun `a CATALOGUE line whose rate was typed survives both mechanisms`() {
+        // **The test that tells `rateEdited` from `manual`.** The one above
+        // uses `addManual`, which sets both — so it would still pass if
+        // `cataloguePriced` had been written `!manual && key.isNotBlank()`,
+        // and a hand-edited catalogue rate would then be silently overwritten
+        // by `alignLinesToTier`. This line is a catalogue line: it has a
+        // product key, it is not manual, and only `rateEdited` protects it.
+        //
+        // The Owner's ruling is that a tier change must never silently move a
+        // rate somebody typed. `withTier` honoured it; `alignLinesToTier` is a
+        // different mechanism, so it has to be shown honouring it too.
+        val motor = product("SIE1000")
+        val stored = QuoteDraft(id = "qd_1", tier = RateTierV2.DEALER)
+            .add(product("SIE600"), id = "ln_1")
+
+        // Tapped in before the store answered, at the default Client tier,
+        // and then given a rate by hand.
+        val typedMeanwhile = QuoteDraft(tier = RateTierV2.CLIENT)
+            .add(motor, id = "ln_2")
+            .setRate("ln_2", 999.0)
+
+        val resumed = QuoteDrafts.resume(typedMeanwhile, stored, "qd_1")
+        val line = resumed.line("ln_2")!!
+        assertTrue("a catalogue line, not a manual one", !line.manual)
+        assertTrue("with a product key", line.key.isNotBlank())
+        assertTrue("whose rate was typed", line.rateEdited)
+
+        // 1. The realignment after `resume` leaves it alone.
+        val aligned = resumed.alignLinesToTier { 100.0 }
+        assertEquals(999.0, aligned.draft.line("ln_2")!!.rate!!, 0.0)
+        assertEquals(RateTierV2.CLIENT, aligned.draft.line("ln_2")!!.tier)
+        assertEquals(1, aligned.kept)
+
+        // 2. And so does an ordinary change of tier, afterwards.
+        val retiered = aligned.draft.withTier(RateTierV2.CLIENT) { 100.0 }
+        assertEquals(999.0, retiered.draft.line("ln_2")!!.rate!!, 0.0)
+        assertTrue("counted as kept, not repriced", retiered.kept >= 1)
+
+        // And it never asks to be realigned, so nothing keeps trying.
+        assertTrue(!aligned.draft.hasLinesOutOfStep)
+    }
+
+    @Test
     fun `an ordinary draft has nothing to align, so the fix costs nothing`() {
         val draft = QuoteDraft(id = "qd_1", tier = RateTierV2.DEALER).add(product("SIE1000"))
         assertTrue(!draft.hasLinesOutOfStep)

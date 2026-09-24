@@ -168,6 +168,19 @@ class ProductsViewModel(
         persist(_draft.value.changeCatalogueQuantity(key, delta))
     }
 
+    /**
+     * A line on the builder, by its **id**.
+     *
+     * [changeQuantity] above takes a catalogue key, because a product card
+     * knows a product and not a line. That is right there and wrong here: a
+     * hand-typed line has no key at all, and two openings of one shutter share
+     * theirs, so a key-addressed stepper on the builder would change a figure
+     * the person was not looking at.
+     */
+    fun changeLineQuantity(id: String, delta: Double) {
+        persist(_draft.value.changeQuantity(id, delta))
+    }
+
     fun setQuantity(key: String, quantity: Double) {
         if (!QuoteDraft.isValidQuantity(quantity)) {
             emit(NEGATIVE_QUANTITY)

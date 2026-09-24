@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.Spacer
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -24,10 +23,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,7 +57,6 @@ import `in`.smartie.quotedesk.data.model.StockRecord
 import `in`.smartie.quotedesk.domain.Catalogue
 import `in`.smartie.quotedesk.domain.CatalogueEntry
 import `in`.smartie.quotedesk.domain.CatalogueView
-import `in`.smartie.quotedesk.domain.DraftLine
 import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.domain.ProductDraft
 import `in`.smartie.quotedesk.domain.ProductUnit
@@ -104,6 +100,14 @@ data class ProductsActions(
     val onToggleShelf: (String, Boolean) -> Unit = { _, _ -> },
     val onAdd: (ProductRecord) -> Unit = {},
     val onChangeQuantity: (String, Double) -> Unit = { _, _ -> },
+    /**
+     * A line on the builder, by its **id**.
+     *
+     * Separate from [onChangeQuantity], which takes a catalogue key: that one
+     * belongs to a product card, which knows a product and not a line, and it
+     * cannot address a hand-typed or area line at all — those have no key.
+     */
+    val onChangeLineQuantity: (String, Double) -> Unit = { _, _ -> },
     val onTogglePin: (String) -> Unit = {},
     /** One place up (-1) or down (+1), from the drag handle's named actions. */
     val onMovePin: (String, Int) -> Unit = { _, _ -> },
@@ -167,6 +171,7 @@ fun ProductsScreen(
             onToggleShelf = viewModel::toggleShelf,
             onAdd = viewModel::add,
             onChangeQuantity = viewModel::changeQuantity,
+            onChangeLineQuantity = viewModel::changeLineQuantity,
             onTogglePin = { key -> viewModel.togglePin(pinnedKeys, key) },
             onMovePin = { key, delta -> viewModel.movePin(pinnedKeys, key, delta) },
             onReorderPin = { moved, target -> viewModel.reorderPin(pinnedKeys, moved, target) },
@@ -222,6 +227,24 @@ fun ProductsCatalogue(
             awaitingSave = false
             if (productFailure == null) editing = null
         }
+    }
+
+    // The builder replaces the catalogue rather than floating over it, for
+    // the two reasons `QuoteBuilderPanel` sets out — a sheet body is capped
+    // far below what this form needs, and a sheet is a dialog, whose own
+    // recomposer Robolectric's clock does not drive.
+    if (showDraft) {
+        QuoteBuilderPanel(
+            draft = draft,
+            onBack = { showDraft = false },
+            onChangeLineQuantity = actions.onChangeLineQuantity,
+            // Clearing empties the LINES and stays put: the party, the
+            // transport and the GST rate on this quotation are not lines and
+            // are not thrown away with them.
+            onClear = actions.onClearDraft,
+        )
+        BackHandler { showDraft = false }
+        return
     }
 
     val correcting = editing
@@ -467,17 +490,6 @@ fun ProductsCatalogue(
         }
     }
 
-    if (showDraft) {
-        DraftSheet(
-            draft = draft,
-            onDismiss = { showDraft = false },
-            onChangeQuantity = actions.onChangeQuantity,
-            onClear = {
-                actions.onClearDraft()
-                showDraft = false
-            },
-        )
-    }
 }
 
 /**
@@ -755,77 +767,6 @@ private fun PinDragHandle(drag: PinDragHandlers, onMovePin: (Int) -> Unit) {
             )
         },
     )
-}
-
-/** What the quotation holds so far. Building it into one is N5's work. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun DraftSheet(
-    draft: QuoteDraft,
-    onDismiss: () -> Unit,
-    onChangeQuantity: (String, Double) -> Unit,
-    onClear: () -> Unit,
-) {
-    val dimens = LocalSmartieDimens.current
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = dimens.screenPadding, vertical = dimens.gapS),
-            verticalArrangement = Arrangement.spacedBy(dimens.gapS),
-        ) {
-            SectionHeader("Quotation draft", trailing = Money.formatRupees(draft.total, decimals = 0))
-            draft.lines.forEach { line -> DraftRow(line, onChangeQuantity) }
-            if (draft.needsRateCount > 0) {
-                Text(
-                    "${draft.needsRateCount} line${if (draft.needsRateCount == 1) "" else "s"} " +
-                        "still need a rate before this can be finalised.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = SmartieColors.Warn,
-                )
-            }
-            Text(
-                "Turning this into a numbered quotation, with a party, GST and a PDF, " +
-                    "arrives with the Quotation phase.",
-                style = MaterialTheme.typography.bodySmall,
-                color = SmartieColors.Steel,
-            )
-            SmartieGhostButton(text = "Clear", onClick = onClear, danger = true)
-            Spacer(Modifier.height(dimens.gapL))
-        }
-    }
-}
-
-@Composable
-private fun DraftRow(line: DraftLine, onChangeQuantity: (String, Double) -> Unit) {
-    val dimens = LocalSmartieDimens.current
-    SmartieCard {
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(dimens.gapS),
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    line.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = SmartieColors.Ink,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    line.amount?.let { Money.formatRupees(it, decimals = 0) } ?: "Rate needed",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (line.needsRate) SmartieColors.Warn else SmartieColors.Steel,
-                )
-            }
-            CompactStepper(
-                value = Money.formatQuantity(line.quantity),
-                onDecrement = { onChangeQuantity(line.key, -1.0) },
-                onIncrement = { onChangeQuantity(line.key, 1.0) },
-            )
-        }
-    }
 }
 
 /** `stockChip` (3508-3514): no chip at all for an untracked product. */

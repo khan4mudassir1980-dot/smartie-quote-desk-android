@@ -29,6 +29,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
@@ -195,7 +197,18 @@ fun CompactStepper(
     modifier: Modifier = Modifier,
     decrementEnabled: Boolean = true,
     incrementEnabled: Boolean = true,
-    highlighted: Boolean = false
+    highlighted: Boolean = false,
+    /**
+     * What a screen reader — and a test — calls these two buttons.
+     *
+     * Null by default, which leaves the bare symbols. On a card carrying one
+     * stepper that is enough, and every existing caller finds it by its "+".
+     * A **list with a stepper on every row** is the case that needs these:
+     * there "+" names four controls at once, and "the third +" is not an
+     * identity anybody should be asserting against.
+     */
+    incrementLabel: String? = null,
+    decrementLabel: String? = null
 ) {
     val dimens = LocalSmartieDimens.current
     Row(
@@ -210,7 +223,7 @@ fun CompactStepper(
             ),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        StepperButton("−", dimens.stepperButtonWidth, decrementEnabled, onDecrement)
+        StepperButton("−", dimens.stepperButtonWidth, decrementEnabled, onDecrement, decrementLabel)
         Box(
             Modifier
                 .width(54.dp)
@@ -225,7 +238,7 @@ fun CompactStepper(
                 maxLines = 1
             )
         }
-        StepperButton("+", dimens.stepperButtonWidth, incrementEnabled, onIncrement)
+        StepperButton("+", dimens.stepperButtonWidth, incrementEnabled, onIncrement, incrementLabel)
     }
 }
 
@@ -234,7 +247,8 @@ private fun StepperButton(
     symbol: String,
     width: androidx.compose.ui.unit.Dp,
     enabled: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    label: String? = null
 ) {
     val dimens = LocalSmartieDimens.current
     Box(
@@ -244,6 +258,9 @@ private fun StepperButton(
             .background(SmartieColors.Panel2)
             .then(
                 if (enabled) Modifier.clickableNoRipple(onClick) else Modifier
+            )
+            .then(
+                if (label != null) Modifier.semantics { contentDescription = label } else Modifier
             ),
         contentAlignment = Alignment.Center
     ) {

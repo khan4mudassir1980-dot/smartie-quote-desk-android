@@ -1179,7 +1179,7 @@ emulator tests, 58 catalogue-tool tests.** N5.8a added 47 Kotlin tests
 rule and no import tooling, and those suites were re-run green on every commit
 regardless.
 
-### N5.8b, the builder — 11 commits
+### N5.8b, the builder — 12 code commits, plus this one for the record
 
 | | Commit | CI |
 |---|---|---|
@@ -1194,6 +1194,7 @@ regardless.
 | 9 | `f3cd3ea` installation and the discount, and the three faults in 8b-1 | **#159 green** |
 | 10 | `c60705d` clear the rate box before typing a negative into it | **#160 green** |
 | 11 | `e97e846` prove `alignLinesToTier` leaves a hand-typed catalogue rate alone | #161 |
+| 12 | `aa58bc7` four findings from the reachability sweep | #162 |
 
 **Two runs went red and both were faults in what the batch itself wrote**, not
 in the app: two top-level constants colliding with `ProductEditor.kt`

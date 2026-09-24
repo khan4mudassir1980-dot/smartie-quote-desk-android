@@ -1138,7 +1138,7 @@ specification** — nothing built depends on those names, the extractor fix is
 correct whatever the count, and the phone pass trusts the catalogue rather
 than the list.
 
-### N5.8a — the quotation draft model (all three commits done)
+### N5.8a — the quotation draft model (complete, CI-green)
 
 N5.8 was split into **8a (model)** and **8b (screen)**. The split point is that
 8a leaves the Products tab's quote bar and draft sheet working unchanged.
@@ -1148,12 +1148,17 @@ N5.8 was split into **8a (model)** and **8b (screen)**. The split point is that
 | 1 | `9d034c6` N5.8a model: a line is identified by its own id | **#148 green** |
 | 2 | `62af89d` N5.8a model: the draft carries the whole quotation | **#149 green** |
 | — | `8b5f2c9` docs: handover | **#150 green** |
-| 3 | `948db4a` N5.8a storage: a draft belongs to an account | **#151 was in flight** |
+| 3 | `948db4a` N5.8a storage: a draft belongs to an account | **#151 green** |
+| 4 | `60e033c` N5.8a: only the store may mint a draft id | **#153 green** |
 
-**Test counts at `948db4a`: 1347 Kotlin test methods across 117 classes, 223
-emulator tests, 58 catalogue-tool tests.** N5.8a added 41 Kotlin tests
-(1306 before). The emulator and tool figures are unchanged and were not
-re-run by this batch: N5.8a touches no rule and no import tooling.
+**Test counts at `60e033c`: 1353 Kotlin test methods across 117 classes, 223
+emulator tests, 58 catalogue-tool tests.** N5.8a added 47 Kotlin tests
+(1306 before). The emulator and tool figures are unchanged: N5.8a touches no
+rule and no import tooling, and those suites were re-run green on every commit
+regardless.
+
+**Every N5.8a commit is CI-green**: #148, #149, #151 and #153, with the two
+documentation commits green at #150 and #152. The batch is closed.
 
 #### The three amendments — all applied, none outstanding
 

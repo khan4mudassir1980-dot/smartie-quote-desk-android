@@ -110,7 +110,20 @@ object StockRemoval {
         if (record.unit.isNotBlank()) put("unit", record.unit)
     }
 
-    /** Fields a history document must never carry, asserted in both layers. */
+    /**
+     * Fields a history document must never carry.
+     *
+     * **The app-layer protection is [eventFields] itself, not this list.**
+     * That function is an allowlist — it `put`s the permitted keys and
+     * nothing else — so a forbidden field cannot be written by construction
+     * and there is no runtime check to perform. This is the *mirror* of the
+     * rules' denial list, read only by `StockRemovalTest`, which asserts that
+     * what `eventFields` builds carries none of them.
+     *
+     * So "asserted in both layers" means the Kotlin test and the emulator
+     * rules test. It does **not** mean the app reads this at runtime; nothing
+     * in `app/src/main` does, and nothing needs to.
+     */
     val FORBIDDEN_FIELDS: List<String> = listOf(
         "note", "stockNote", "bytes", "hasPhoto", "photoRev", "min", "pinned",
         "dealer", "contractor", "client", "gst"

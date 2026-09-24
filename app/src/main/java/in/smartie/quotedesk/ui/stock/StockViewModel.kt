@@ -504,8 +504,6 @@ class StockViewModel(
 
     fun canStopTracking(): Boolean = Permissions.canStopTrackingStock(member)
 
-    /** A Worker may read `/stock`, but the rules refuse them `/stockMoves`. */
-    fun canViewHistory(): Boolean = Permissions.canViewStockHistory(member)
 
     // --- plumbing -----------------------------------------------------------
 

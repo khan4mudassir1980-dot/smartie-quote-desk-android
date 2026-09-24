@@ -60,7 +60,19 @@ data class QuoteDrafts(
 
     fun select(id: String): QuoteDrafts = copy(currentId = id)
 
-    /** Why another draft cannot be started, or null when one can. */
+    /**
+     * Why another draft cannot be started, or null when one can.
+     *
+     * **NOT CALLED BY ANYTHING, so the cap is not enforced at runtime today.**
+     * Nothing can create a second draft: the builder always reuses the one
+     * `AccountPreferences.currentDraftId()` resolves, so there is no honest
+     * call site to give this yet and wiring one would mean inventing a caller.
+     *
+     * It becomes live in the batch that ships a **drafts list** — the first
+     * thing that can start a second quotation. That batch is not scheduled;
+     * it is recorded as owed in `docs/PROJECT-STATUS.md`. Whoever builds it
+     * calls this before [save] and surfaces [TOO_MANY].
+     */
     fun refusalToAdd(): String? =
         if (drafts.size >= MAX) TOO_MANY else null
 
@@ -148,8 +160,15 @@ data class QuoteDrafts(
 
         /**
          * A guard against a bug, not a policy. Nothing creates drafts in bulk,
-         * and nothing prunes them: going past this is refused so a runaway is
-         * visible, and somebody's quotation is never deleted to make room.
+         * and nothing prunes them: somebody's quotation is never deleted to
+         * make room.
+         *
+         * **The refusal this bounds is not wired up yet** — see
+         * [refusalToAdd], which nothing calls. An earlier version of this
+         * comment said going past it "is refused", which was true of the
+         * design and false of the running app. The distinction matters: today
+         * a bug that created drafts in bulk would not be stopped here, it
+         * would simply store them.
          */
         const val MAX = 50
 

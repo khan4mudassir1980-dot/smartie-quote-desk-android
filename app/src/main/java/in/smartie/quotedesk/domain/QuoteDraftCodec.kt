@@ -1,5 +1,6 @@
 package `in`.smartie.quotedesk.domain
 
+import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.RateTierV2
 
 /**
@@ -46,7 +47,30 @@ object QuoteDraftCodec {
     private const val V1_LINE_FIELDS = 9
 
     fun encode(draft: QuoteDraft): String {
-        val head = listOf(VERSION, draft.tier.wireValue).joinToString(FIELD.toString())
+        val head = listOf(
+            VERSION,
+            draft.tier.wireValue,
+            // --- appended in v2; a v1 head stops above ----------------------
+            escape(draft.id),
+            escape(draft.partyId),
+            draft.transport.toString(),
+            draft.installation?.mode?.wireValue.orEmpty(),
+            draft.installation?.rate?.toString().orEmpty(),
+            draft.installation?.basis?.toString().orEmpty(),
+            draft.discount?.kind?.wireValue.orEmpty(),
+            draft.discount?.value?.toString().orEmpty(),
+            if (draft.gstEnabled) "1" else "0",
+            draft.gstPercent?.toString().orEmpty(),
+            draft.updatedAt.toString(),
+            escape(draft.party.name),
+            escape(draft.party.site),
+            escape(draft.party.gstin),
+            escape(draft.party.contact),
+            escape(draft.party.phone),
+            escape(draft.party.email),
+            escape(draft.party.address),
+            escape(draft.party.city),
+        ).joinToString(FIELD.toString())
         val lines = draft.lines.map { line ->
             listOf(
                 escape(line.key),
@@ -77,7 +101,14 @@ object QuoteDraftCodec {
         val records = stored.split(RECORD)
         val head = records.first().split(FIELD)
         if (head.firstOrNull() !in READABLE) return QuoteDraft()
-        val tier = RateTierV2.from(head.getOrNull(1))
+
+        val faults = mutableSetOf<DraftFault>()
+        // Strict, not `RateTierV2.from`, which falls back to DEALER — the
+        // LOWER-priced tier and so the underquote direction. Recovered to
+        // Client, the higher of the two offered, and the fault is surfaced.
+        val tier = RateTierV2.entries
+            .firstOrNull { it.wireValue.equals(head.getOrNull(1)?.trim(), ignoreCase = true) }
+            ?: RateTierV2.CLIENT.also { faults += DraftFault.TIER }
         val lines = records.drop(1).mapNotNull { record ->
             val parts = record.split(FIELD)
             if (parts.size < V1_LINE_FIELDS) return@mapNotNull null
@@ -109,8 +140,59 @@ object QuoteDraftCodec {
                 area = areaOf(parts)
             )
         }
-        return QuoteDraft(tier = tier, lines = lines)
+        // Present only when a rate or a value was stored, so an absent charge
+        // is absent rather than damaged.
+        val installation = head.getOrNull(6)?.takeIf { it.isNotEmpty() }?.let { rawRate ->
+            val mode = InstallationMode.entries
+                .firstOrNull { it.wireValue.equals(head.getOrNull(5)?.trim(), ignoreCase = true) }
+            val rate = rawRate.toDoubleOrNull()
+            if (mode == null || rate == null) {
+                faults += DraftFault.INSTALLATION
+                null
+            } else {
+                Installation(mode, rate, head.getOrNull(7)?.toDoubleOrNull() ?: 0.0)
+            }
+        }
+
+        val discount = head.getOrNull(9)?.takeIf { it.isNotEmpty() }?.let { rawValue ->
+            val kind = DiscountKind.entries
+                .firstOrNull { it.wireValue.equals(head.getOrNull(8)?.trim(), ignoreCase = true) }
+            val value = rawValue.toDoubleOrNull()
+            if (kind == null || value == null) {
+                faults += DraftFault.DISCOUNT
+                null
+            } else {
+                Discount(kind, value)
+            }
+        }
+
+        return QuoteDraft(
+            id = head.getOrNull(2)?.let(::unescape).orEmpty(),
+            tier = tier,
+            lines = lines,
+            partyId = head.getOrNull(3)?.let(::unescape).orEmpty(),
+            party = partyOf(head),
+            transport = head.getOrNull(4)?.toDoubleOrNull() ?: 0.0,
+            installation = installation,
+            discount = discount,
+            // Absent on a v1 head, where GST was never part of a draft.
+            gstEnabled = head.getOrNull(10)?.let { it == "1" } ?: true,
+            gstPercent = head.getOrNull(11)?.takeIf { it.isNotEmpty() }?.toDoubleOrNull(),
+            updatedAt = head.getOrNull(12)?.toLongOrNull() ?: 0L,
+            faults = faults
+        )
     }
+
+    private fun partyOf(head: List<String>): QuotationPartySnapshot = QuotationPartySnapshot(
+        name = head.getOrNull(13)?.let(::unescape).orEmpty(),
+        site = head.getOrNull(14)?.let(::unescape).orEmpty(),
+        gstin = head.getOrNull(15)?.let(::unescape).orEmpty(),
+        contact = head.getOrNull(16)?.let(::unescape).orEmpty(),
+        phone = head.getOrNull(17)?.let(::unescape).orEmpty(),
+        email = head.getOrNull(18)?.let(::unescape).orEmpty(),
+        address = head.getOrNull(19)?.let(::unescape).orEmpty(),
+        city = head.getOrNull(20)?.let(::unescape).orEmpty()
+    )
 
     /** The opening, when every part of one was stored. */
     private fun areaOf(parts: List<String>): AreaLine? {

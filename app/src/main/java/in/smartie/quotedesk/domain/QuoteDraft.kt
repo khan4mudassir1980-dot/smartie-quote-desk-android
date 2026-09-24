@@ -3,6 +3,7 @@ package `in`.smartie.quotedesk.domain
 import `in`.smartie.quotedesk.data.mapping.Keys
 import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.QuotationLineRecord
+import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.RateTierV2
 
 /**
@@ -84,6 +85,57 @@ data class DraftLine(
     }
 }
 
+/**
+ * Something stored that could not be read, and that decides money.
+ *
+ * **No money-affecting fallback is silent.** `RateTierV2.from` falls back to
+ * `DEALER` and `InstallationMode.from` to `FIXED`; both are right for a
+ * document V8C4 wrote, which carries its own figures, and both are wrong for
+ * our own draft. A value we cannot read means the stored text is damaged, and
+ * choosing quietly moves money in the **underquote** direction — an overquote
+ * gets argued down in conversation, an underquote goes out, is accepted and is
+ * honoured. So the draft keeps what it can and says what it could not read.
+ */
+enum class DraftFault(val message: String) {
+    /**
+     * Recovered to Client — the **higher**-priced of the two offered tiers,
+     * never the first in the enum, which is Dealer. Nothing is repriced by
+     * this: every line stores its own rate, so the tier only decides the next
+     * reprice and the name printed on the quotation.
+     */
+    TIER("The rate type on this quotation could not be read - choose Dealer or Client again"),
+
+    /**
+     * Dropped, because installation modes have no order: a `pct` charge of 8
+     * read as `fixed` would bill 8 rupees instead of 1,552. Dropping it lowers
+     * the total, so it blocks finalising rather than merely warning.
+     */
+    INSTALLATION("The installation charge could not be read - enter it again"),
+
+    /**
+     * Dropped for the same reason, and it is the sharpest of the three: a
+     * stored value of 2000 read as a percentage instead of rupees is not a
+     * discount, it is the whole quotation given away. Not named in the brief;
+     * included because it is the same class of silent money-affecting
+     * fallback as the other two.
+     */
+    DISCOUNT("The discount could not be read - enter it again")
+}
+
+/** The tiers a new quotation may be built at. */
+object QuoteTier {
+    /**
+     * **Contractor is not offered, and is never deleted.** `RateTierV2` keeps
+     * all three because a quotation already issued at the contractor tier must
+     * still display in full; the builder simply cannot produce one. The same
+     * shape N5.7 used for product units: the reading type stays complete while
+     * the writing path is narrowed.
+     */
+    val OFFERED: List<RateTierV2> = listOf(RateTierV2.DEALER, RateTierV2.CLIENT)
+
+    fun offers(tier: RateTierV2): Boolean = tier in OFFERED
+}
+
 /** The outcome of changing tier, worded as the PWA reports it (2269-2288). */
 data class Repriced(
     val draft: QuoteDraft,
@@ -100,8 +152,30 @@ data class Repriced(
  * shareable quotation is N5.9's.
  */
 data class QuoteDraft(
+    /** Device-local identity, so N5.9 clears exactly the draft it issued. */
+    val id: String = "",
     val tier: RateTierV2 = RateTierV2.CLIENT,
-    val lines: List<DraftLine> = emptyList()
+    val lines: List<DraftLine> = emptyList(),
+    val partyId: String = "",
+    /** Re-resolved from the customer at finalise; held here for the screen. */
+    val party: QuotationPartySnapshot = QuotationPartySnapshot(),
+    /** Carriage. Stored as a **line** at finalise, inside the subtotal. */
+    val transport: Double = 0.0,
+    /** Null is "no installation", which is not the same as zero. */
+    val installation: Installation? = null,
+    val discount: Discount? = null,
+    val gstEnabled: Boolean = true,
+    /**
+     * **Null means "not resolved yet", not "no GST".**
+     *
+     * A draft that silently charged 0% would go out under-priced and nobody
+     * would notice until the customer did, so an unresolved rate blocks
+     * finalising instead. [gstSuggestion] is where a resolved one comes from.
+     */
+    val gstPercent: Double? = null,
+    val updatedAt: Long = 0L,
+    /** What could not be read back off the device. Never silently resolved. */
+    val faults: Set<DraftFault> = emptySet()
 ) {
     val lineCount: Int get() = lines.size
 
@@ -291,7 +365,84 @@ data class QuoteDraft(
         return Repriced(copy(tier = newTier, lines = updated), repriced, kept)
     }
 
+    // --- what it comes to ---------------------------------------------------------
+
+    /** Every priced line added up, in whole rupees. */
+    val products: Double get() = QuoteMath.rupees(total)
+
+    /** The figure a discount is taken against, and the one the rules bound. */
+    val discountBase: Double get() = QuoteMath.rupees(products + (installation?.amount ?: 0.0))
+
+    /**
+     * The figures this draft would print.
+     *
+     * **Only safe once [refusal] has answered null.** `QuoteMath.totals` has
+     * no floor: given a negative transport or installation it computes a
+     * negative subtotal without complaint. See the invariant on `QuoteMath`.
+     */
+    fun toCharges(): QuoteCharges = QuoteCharges(
+        products = products,
+        installation = installation,
+        discount = discount,
+        transport = transport,
+        // An unresolved rate charges nothing and blocks finalising, rather
+        // than quietly charging zero as though somebody had chosen it.
+        gstEnabled = gstEnabled && gstPercent != null,
+        gstPercent = gstPercent ?: 0.0
+    )
+
+    fun totals(): QuoteTotals = QuoteMath.totals(toCharges())
+
+    /**
+     * The GST the catalogue lines agree on, or null when they disagree or
+     * there are none to ask.
+     *
+     * A quotation carries one rate, so agreement is the only case that can be
+     * resolved without asking somebody. [gstOf] answers a product's rate by
+     * its logical key.
+     */
+    fun gstSuggestion(gstOf: (String) -> Double?): Double? = lines
+        .filter { !it.manual && it.key.isNotBlank() }
+        .mapNotNull { gstOf(it.key) }
+        .distinct()
+        .singleOrNull()
+
+    /**
+     * Why this draft cannot be finalised, or null when it can.
+     *
+     * **This is the single gate.** Every money field that can go negative is
+     * bounded here, and the non-negative invariant `QuoteMath` documents
+     * depends on this having been called — the arithmetic itself has no floor.
+     */
+    fun refusal(capPercent: Double): String? {
+        faults.firstOrNull()?.let { return it.message }
+        if (!QuoteTier.offers(tier)) return TIER_NOT_OFFERED
+        if (isEmpty) return NO_LINES
+        if (lines.any { it.needsRate }) return LINE_NEEDS_RATE
+
+        if (!transport.isFinite() || transport < 0.0) return NEGATIVE_TRANSPORT
+        installation?.let { charge ->
+            if (!charge.rate.isFinite() || charge.rate < 0.0) return NEGATIVE_INSTALLATION
+            if (!charge.basis.isFinite() || charge.basis < 0.0) return NEGATIVE_INSTALLATION
+        }
+        discount?.let { taken ->
+            QuoteMath.discountRefusal(taken, discountBase, capPercent)?.let { return it }
+        }
+
+        if (gstEnabled && gstPercent == null) return GST_NOT_SET
+        if (partyId.isBlank()) return NO_PARTY
+        return null
+    }
+
     companion object {
+        const val TIER_NOT_OFFERED = "A new quotation is priced at Dealer or Client rates"
+        const val NO_LINES = "Add something to the quotation first"
+        const val LINE_NEEDS_RATE = "Every line needs a rate before this can be issued"
+        const val NEGATIVE_TRANSPORT = "Transport cannot be negative"
+        const val NEGATIVE_INSTALLATION = "An installation charge cannot be negative"
+        const val GST_NOT_SET = "Set the GST rate for this quotation"
+        const val NO_PARTY = "Choose the customer this quotation is for"
+
         /**
          * Line ids read as `ln_…`, the same shape as every other id the app
          * mints.

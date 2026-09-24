@@ -146,6 +146,29 @@ data class QuoteTotals(
  */
 object QuoteMath {
 
+    /**
+     * **THE NON-NEGATIVE INVARIANT: no stored figure may be negative, and
+     * THREE gates hold it, not one.**
+     *
+     * `totals` below has **no floor**. It computes
+     * `discountBase - discount + transport` from whatever it is given, so a
+     * negative discount, a negative transport or a negative installation each
+     * produce a negative subtotal without complaint. The invariant lives
+     * entirely in the gates:
+     *
+     * 1. **discount** — [discountRefusal], which bounds it against the base;
+     * 2. **transport** — `QuoteDraft.refusal`;
+     * 3. **installation** — `QuoteDraft.refusal`, on both rate and basis.
+     *
+     * It matters beyond tidiness. Every figure here is rounded HALF_UP, which
+     * rounds a half **away from zero**, while V8C4 prints with JavaScript's
+     * `Math.round`, which rounds a half toward **+infinity**. The two agree on
+     * every non-negative value and disagree on negative halves — so while the
+     * invariant holds, the app and the PWA print the same number, and the
+     * moment it does not, they quietly stop agreeing.
+     *
+     * **Anyone adding a fourth money field adds a fourth gate.**
+     */
     /** Owner and Administrator are uncapped; this is what that reads as. */
     const val NO_CAP: Double = 100.0
 

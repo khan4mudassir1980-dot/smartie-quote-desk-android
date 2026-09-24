@@ -1138,119 +1138,156 @@ specification** — nothing built depends on those names, the extractor fix is
 correct whatever the count, and the phone pass trusts the catalogue rather
 than the list.
 
-### N5.8a — the quotation draft model (IN PROGRESS, handover)
+### N5.8a — the quotation draft model (all three commits done)
 
 N5.8 was split into **8a (model)** and **8b (screen)**. The split point is that
-8a leaves the Products tab's quote bar and draft sheet working unchanged, so
-the app is never broken between the two.
+8a leaves the Products tab's quote bar and draft sheet working unchanged.
 
-**Commits: two of three are done and pushed.**
-
-| # | Commit | State |
+| # | Commit | CI |
 |---|---|---|
-| 1 | `9d034c6` N5.8a model: a line is identified by its own id | **Done, pushed.** CI run #148. |
-| 2 | `62af89d` N5.8a model: the draft carries the whole quotation | **Done, pushed.** CI run #149. |
-| 3 | storage: a draft belongs to an account | **NOT STARTED** |
+| 1 | `9d034c6` N5.8a model: a line is identified by its own id | **#148 green** |
+| 2 | `62af89d` N5.8a model: the draft carries the whole quotation | **#149 green** |
+| — | `8b5f2c9` docs: handover | **#150 green** |
+| 3 | `948db4a` N5.8a storage: a draft belongs to an account | **#151 was in flight** |
 
-**Neither CI run had reported when this session ended.** Check #148 and #149
-before building anything on top. Kotlin cannot be compiled in the container
-(`dl.google.com` is blocked), so CI is the only verification these two have
-had.
+**Test counts at `948db4a`: 1347 Kotlin test methods across 117 classes, 223
+emulator tests, 58 catalogue-tool tests.** N5.8a added 41 Kotlin tests
+(1306 before). The emulator and tool figures are unchanged and were not
+re-run by this batch: N5.8a touches no rule and no import tooling.
 
-#### What commit 3 still has to do
+#### The three amendments — all applied, none outstanding
 
-Keying device storage by account. `DevicePreferences.kt:31` stores the draft
-under one global DataStore key, `quote_draft`, and `AuthRepository.signOut`
-(`:203-209`) clears Firebase credentials but no device preference. So a draft
-survives being killed (correct), survives sign-out, and **is visible to a
-second account signing in on the same phone**, including its customer and its
-rates. `stock_pending` (`:32`) has the identical defect.
-
-This is a rate leak, not housekeeping: a draft carries rates and a Staff
-account may not see rates anywhere in this app. The Owner has two accounts on
-one phone, so it will occur on the final phone pass if it is not fixed.
-
-The ruling, in full:
-
-- Key the draft by account uid. `stock_pending` gets the same treatment in the
-  same commit — same defect, already shipped.
-- Migrate the existing global value **once** into the currently signed-in
-  account's key, then delete the global key. **If nobody is signed in, leave it
-  alone** — do not delete data with no owner.
-- A draft must **survive sign-out and sign-in as the same account**. That is
-  why keying beats clearing on sign-out, and it is the behaviour to pin.
-- The store holds a **collection keyed by draft id** from day one, so adding a
-  drafts list later is a screen-only change that never touches persistence
-  again. 8b ships **no** drafts list and shows one draft at a time.
-- Tests: a second account sees no draft; the same account signing back in sees
-  its own; the one-time migration runs once and not twice.
-
-`QuoteDraft.id` and `QuoteDraft.updatedAt` already exist (commit 2) for this.
-
-#### The three amendments — all reached this session, all applied
-
-1. **The non-negative invariant had two holes.** Applied in `62af89d`. A
-   negative transport made the subtotal negative even with a valid discount,
+1. **The non-negative invariant had two holes** — applied in **`62af89d`**.
+   A negative transport made the subtotal negative even with a valid discount,
    and a negative installation made `discountBase` negative, at which point
-   `discountRefusal`'s `amount > base` stopped meaning what it thinks. Both are
-   now bounded in `QuoteDraft.refusal`, on the installation's rate and basis
-   alike, and the invariant is stated on `QuoteMath` naming all three gates —
-   discount, transport, installation. Each has a test asserting the subtotal
-   stays at or above zero **and** that the arithmetic would have accepted the
-   bad figure.
-2. **A silent money-affecting fallback contradicted the stated principle.**
-   Applied in `62af89d`. `RateTierV2.from` falls back to `DEALER`, the
-   lower-priced tier and so the underquote direction; `InstallationMode.from`
-   falls back to `FIXED`, which bills a `pct` charge of 8 as 8 rupees. The
-   codec now parses both strictly and records a `DraftFault`: a damaged tier
-   recovers to **Client**, the higher of the two offered and never the first in
-   the enum, and says so; a damaged installation is dropped and says so. Both
-   block finalising. A third fault was added that the brief did not name — a
-   discount whose kind cannot be read, where a stored 2000 taken as a
-   percentage rather than rupees gives the whole quotation away.
-3. **Where a new draft's GST comes from.** Applied in `62af89d`.
-   `gstPercent` is nullable and null means "not resolved yet", not "no GST". A
-   draft with an unresolved rate charges nothing and **cannot be finalised**,
-   rather than silently going out at 0%. `gstSuggestion` resolves it from the
-   rate the catalogue lines agree on and answers null when they disagree.
-   Deliberately switching GST off stays distinct from never setting it.
+   `discountRefusal`'s `amount > base` stopped meaning what it thinks.
+   `QuoteDraft.refusal` now bounds both (`QuoteDraft.kt`, `NEGATIVE_TRANSPORT`
+   and `NEGATIVE_INSTALLATION`, the latter on the installation's rate **and**
+   basis). The invariant is stated at `QuoteTotals.kt:150` naming all three
+   gates — discount, transport, installation — and saying that `totals` itself
+   has no floor. Tests in `QuoteDraftRefusalTest` assert the subtotal stays at
+   or above zero **and** that the arithmetic would have accepted the bad
+   figure, which is what makes the gate's absence visible rather than
+   theoretical.
+2. **The silent money-changing fallback** — applied in **`62af89d`**.
+   `RateTierV2.from` falls back to `DEALER` (`Records.kt:81`), the
+   lower-priced tier and so the underquote direction;
+   `InstallationMode.from` falls back to `FIXED`, which bills a `pct` charge
+   of 8 as 8 rupees. Both are right for a document V8C4 wrote and wrong for
+   our own draft. `QuoteDraftCodec` now parses both strictly and records a
+   `DraftFault` (`QuoteDraft.kt:99`): a damaged tier recovers to **Client**,
+   the higher of the two offered and never the enum's first, and says so; a
+   damaged installation is dropped and says so. Both block finalising. A third
+   fault was added that the brief did not name — a discount whose *kind*
+   cannot be read, where a stored 2000 taken as a percentage rather than
+   rupees gives the whole quotation away.
+3. **Where a new draft's GST comes from** — applied in **`62af89d`**.
+   `QuoteDraft.gstPercent` is nullable (`:175`) and null means "not resolved
+   yet", not "no GST". Such a draft charges nothing and **cannot be
+   finalised** (`:432`, `GST_NOT_SET`), rather than silently going out at 0%.
+   `gstSuggestion` (`:404`) resolves it from the rate the catalogue lines
+   agree on and answers null when they disagree — there is **no company-level
+   GST setting in this repository**, so the products are the only honest
+   source. Deliberately switching GST off stays distinct from never setting
+   one.
 
-Nothing is outstanding from the amendments.
+#### OPEN DEFECT, introduced in commit 3 — a process death can mint a second draft
 
-#### Also settled this session, for the record
+**This is real, it is mine, and it is not fixed.** It is the third appearance
+of the B2 shape in N5.8a, this time one level above the lines.
 
-- **The rounding order is proven, not assumed.** `QuoteAreaTest.kt:98-107`,
+`ProductsViewModel.kt:71` **mints** a draft id per view model:
+
+```kotlin
+private val newDraftId = Keys.generateId(QuoteDrafts.DRAFT_PREFIX)
+```
+
+and `persist` uses it whenever the draft in hand has no id
+(`ProductsViewModel.kt:229`, `id = draft.id.ifBlank { newDraftId }`). A view
+model is recreated on process death, so it mints again. The persisted id is
+only recovered indirectly, by `:83` replacing `_draft` with the stored draft —
+and that line is guarded:
+
+```kotlin
+.onSuccess { stored -> if (stored != null && !stored.isEmpty) _draft.value = stored }
+```
+
+Two reachable paths follow, and **neither has a test**:
+
+- **An empty persisted draft.** `persist` runs on `clear()` and on removing the
+  last line, so an empty draft *with an id* is saved. On the next launch
+  `stored.isEmpty` is true, `:83` does not assign, `_draft` keeps a blank id,
+  and the next add mints a new one — leaving **two drafts** in the collection.
+- **A race after process death.** `:82` is asynchronous. A tap on Add before it
+  completes persists a draft under the freshly minted id, and then `:83`
+  overwrites `_draft` with the stored one — so the person's line disappears
+  *and* an orphan draft is left behind.
+
+**The fix**, for whoever picks this up: read the persisted `currentId` and
+adopt it unconditionally — including when the stored draft is empty — and mint
+only when the collection genuinely has no current draft. Guard `:83` so it
+cannot overwrite an edit the person made while the load was in flight. Then
+pin both paths: a draft emptied, the app killed and a line added must stay
+**one** draft; and an add racing the load must not leave an orphan.
+
+Severity: an orphan draft in device-local storage on one phone. No customer
+record is lost and nothing reaches Firestore. But it will ship into N5.8b if
+it is not fixed, and it is exactly the class of defect this phase has been
+catching before it shipped.
+
+#### What commit 3 did do
+
+Keyed the draft and `stock_pending` by account uid. The old global keys leaked
+a draft — and so its customer and its rates — to the next account signing in on
+the same phone, which is a permission failure rather than housekeeping, because
+a Staff account may not see rates anywhere in this app.
+
+The leak is closed by the keying alone: nothing reads the old keys any more.
+The one-time adoption (`AccountPreferences.adoptOwnerlessValues`) exists only
+to rescue work in progress, never overwrites a value the account already has,
+and cannot run unless somebody is signed in, because `AccountPreferences` is
+only reachable through `forAccount(uid)` — which makes "never delete data with
+no owner" structural rather than a rule to remember. The adopted id is minted
+**before** the DataStore transform, because `edit` may re-run it.
+
+The store holds a collection keyed by draft id from the first commit that
+stores one, so adding a drafts list later is screen-only. `QuoteDrafts.MAX`
+refuses a runaway rather than pruning one.
+
+#### Also settled earlier in N5.8a, for the record
+
+- **The area rounding order is proven, not assumed.** `QuoteAreaTest.kt:98-107`,
   `and the minimum applies after the rounding, never before`: 3 ft x 3 ft =
   9.0 sq ft against `minimumSqft = 10.3`, asserting 10.3. Round-then-minimum
   gives 10.3; minimum-then-round gives 10.5. `minSqft` is **not** constrained
-  to halves, which is why that case is the one that can tell them apart.
-- **Three defects were found in the draft model before building.** Two
+  to halves, which is why that case is the one that tells them apart.
+- **Three defects in the draft model, found before building** (commit 1): two
   hand-typed lines could not coexist, two openings of the same product silently
   merged into one wrong figure, and a hand-typed line did not survive a restart
-  at all. All three came from identifying a line by its product key. Fixed in
-  `9d034c6`.
+  at all. All three came from identifying a line by its product key.
 - **A codec version bump would have erased every draft on every phone.**
-  `decode` answers an empty draft for an unknown version string, so fields are
-  appended rather than inserted and every version ever written stays readable.
-  A test built from a hand-written `v1` string keeps that true.
+  `decode` answers an empty draft for an unknown version, so fields are
+  appended and every version ever written stays readable. A test built from a
+  hand-written `v1` string keeps that true.
 - **`assertUnclipped` does not exist.** The N4.4 helpers are
   `assertPaintedInsideCard`, `assertFooterPaintedInsideCard` and
-  `assertNoDeadSpaceBelow`, built on `SemanticsNode.unclippedBounds()`, in
+  `assertNoDeadSpaceBelow`, on `SemanticsNode.unclippedBounds()`, in
   `app/src/test/java/in/smartie/quotedesk/ui/CardClipping.kt`. Use those in 8b.
-- **The stored area spec carries no rate.** `QuoteArea.describeGeometry` is
-  what goes into the line's `s` field; `QuoteArea.describe` keeps the rate and
-  is what the card and the PDF show. A rate baked into the stored sentence
-  would contradict the rate column the first time N5.10 let somebody correct a
+- **The stored area spec carries no rate.** `QuoteArea.describeGeometry` goes
+  into the line's `s` field; `QuoteArea.describe` keeps the rate and is what
+  the card and the PDF show. A rate baked into the stored sentence would
+  contradict the rate column the first time N5.10 let somebody correct a
   finalised line.
 
 ## Current next action
 
-**Check CI runs #148 and #149 on `claude/trusting-hamilton-z12eer`. If either
-is red, fix it before anything else — that is the only verification the two
-N5.8a commits have had. Then build N5.8a commit 3: key the device draft and
-`stock_pending` by account uid, migrate the global value once, and hold the
-drafts as a collection keyed by draft id.** The full ruling and the tests it
-needs are in the N5.8a section above. After that, N5.8b is the builder screen.
+**Fix the open defect recorded under N5.8a: `ProductsViewModel` mints a draft
+id per view model, so a process death can turn one in-progress quotation into
+two drafts.** The two reachable paths, the fix and the tests it needs are
+written out in full in the N5.8a section above; neither path has a test today.
+Check CI run #151 first — it was still in flight when that section was
+written, and it is the only verification commit `948db4a` has had. After that,
+N5.8b is the builder screen.
 
 The rest of this section describes N5.8 as a whole and still stands.
 

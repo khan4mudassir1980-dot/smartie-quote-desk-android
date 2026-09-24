@@ -51,7 +51,9 @@ import androidx.compose.ui.zIndex
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import `in`.smartie.quotedesk.data.mapping.Money
+import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.data.model.ProductRecord
+import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.data.model.StockRecord
 import `in`.smartie.quotedesk.domain.Catalogue
@@ -115,6 +117,10 @@ data class ProductsActions(
     /** A drop: put the first key where the second one currently sits. */
     val onReorderPin: (String, String) -> Unit = { _, _ -> },
     val onClearDraft: () -> Unit = {},
+    /** The customer block on the builder, as it is typed. */
+    val onPartyChange: (QuotationPartySnapshot) -> Unit = {},
+    /** A saved customer chosen from the builder's picker. */
+    val onChooseParty: (PartyRecord) -> Unit = {},
     /** Save one product's corrections. The draft is what the sheet showed. */
     val onSaveProduct: (ProductRecord, ProductDraft) -> Unit = { _, _ -> },
 )
@@ -128,6 +134,7 @@ fun ProductsScreen(
     val categories by data.categories.collectAsStateWithLifecycle()
     val pinnedKeys by data.pinnedKeys.collectAsStateWithLifecycle()
     val stock by data.stock.collectAsStateWithLifecycle()
+    val parties by data.parties.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
     val minimumKg by viewModel.minimumKg.collectAsStateWithLifecycle()
     val openShelves by viewModel.openShelves.collectAsStateWithLifecycle()
@@ -165,6 +172,7 @@ fun ProductsScreen(
         savingProduct = savingProduct,
         productFailure = productFailure,
         stockByKey = stockByKey,
+        parties = parties,
         actions = ProductsActions(
             onQueryChange = viewModel::setQuery,
             onMinimumKgChange = viewModel::setMinimumKg,
@@ -177,6 +185,8 @@ fun ProductsScreen(
             onMovePin = { key, delta -> viewModel.movePin(pinnedKeys, key, delta) },
             onReorderPin = { moved, target -> viewModel.reorderPin(pinnedKeys, moved, target) },
             onClearDraft = viewModel::clearDraft,
+            onPartyChange = viewModel::setPartyDetails,
+            onChooseParty = viewModel::chooseParty,
             onSaveProduct = viewModel::saveProduct,
         ),
     )
@@ -200,6 +210,8 @@ fun ProductsCatalogue(
     savingProduct: Boolean = false,
     productFailure: String? = null,
     stockByKey: Map<String, StockRecord> = emptyMap(),
+    /** The saved customers the builder's picker offers. */
+    parties: List<PartyRecord> = emptyList(),
     actions: ProductsActions = ProductsActions(),
 ) {
     if (!canViewProducts) {
@@ -240,6 +252,9 @@ fun ProductsCatalogue(
             onBack = { showDraft = false },
             onTierChange = actions.onTierChange,
             onChangeLineQuantity = actions.onChangeLineQuantity,
+            parties = parties,
+            onPartyChange = actions.onPartyChange,
+            onChooseParty = actions.onChooseParty,
             // Clearing empties the LINES and stays put: the party, the
             // transport and the GST rate on this quotation are not lines and
             // are not thrown away with them.

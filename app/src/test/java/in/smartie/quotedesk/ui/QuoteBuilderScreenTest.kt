@@ -13,9 +13,12 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import `in`.smartie.quotedesk.data.mapping.Keys
+import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.data.model.ProductRecord
+import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.domain.Catalogue
 import `in`.smartie.quotedesk.domain.QuoteDraft
@@ -24,7 +27,16 @@ import `in`.smartie.quotedesk.ui.products.BACK_TO_PRODUCTS
 import `in`.smartie.quotedesk.ui.products.BUILDER_CLEAR_KEY
 import `in`.smartie.quotedesk.ui.products.BUILDER_HEADING
 import `in`.smartie.quotedesk.ui.products.BUILDER_TAIL_KEY
+import `in`.smartie.quotedesk.ui.products.BUILDER_NO_PARTIES_KEY
+import `in`.smartie.quotedesk.ui.products.BUILDER_PARTY_SEARCH_KEY
+import `in`.smartie.quotedesk.ui.products.BUILDER_PICK_PARTY_KEY
 import `in`.smartie.quotedesk.ui.products.BUILDER_TIER_KEY
+import `in`.smartie.quotedesk.ui.products.CHOOSE_PARTY
+import `in`.smartie.quotedesk.ui.products.PARTY_NAME_LABEL
+import `in`.smartie.quotedesk.ui.products.PARTY_SEARCH_LABEL
+import `in`.smartie.quotedesk.ui.products.SITE_LABEL
+import `in`.smartie.quotedesk.ui.products.chooseLabel
+import `in`.smartie.quotedesk.ui.products.noSavedParty
 import `in`.smartie.quotedesk.ui.products.CLEAR_LINES
 import `in`.smartie.quotedesk.ui.products.moreOf
 import `in`.smartie.quotedesk.ui.products.NOTHING_ON_IT
@@ -79,12 +91,26 @@ class QuoteBuilderScreenTest {
 
     private var changed: Pair<String, Double>? = null
     private var retiered: RateTierV2? = null
+    private var chosen: PartyRecord? = null
+    private var typedParty: QuotationPartySnapshot? = null
+
+    private val sunrise = PartyRecord(
+        id = "c_1", name = "Sunrise Constructions", contact = "Mr Deshmukh",
+        phone = "9876543210", gstin = "27AAACS1234F1Z5", city = "Mumbai",
+        address = "14 Marine Lines"
+    )
+    private val harbour = PartyRecord(id = "c_2", name = "Harbour Interiors", city = "Thane")
+    private val retired = PartyRecord(id = "c_3", name = "Old Steel Works", archived = true)
     private var cleared = 0
 
     /** A draft holding one priced line, the way a catalogue tap leaves it. */
     private fun oneLine() = QuoteDraft(id = "qd_1").add(motor, quantity = 2.0, id = "ln_1")
 
-    private fun render(draft: QuoteDraft, open: Boolean = true) {
+    private fun render(
+        draft: QuoteDraft,
+        open: Boolean = true,
+        parties: List<PartyRecord> = listOf(sunrise, harbour, retired)
+    ) {
         val view = Catalogue.build(listOf(motor, unpriced), emptyList(), emptyList(), "")
         compose.setContent {
             SmartieTheme {
@@ -92,8 +118,11 @@ class QuoteBuilderScreenTest {
                     canViewProducts = true,
                     view = view,
                     draft = draft,
+                    parties = parties,
                     actions = ProductsActions(
                         onTierChange = { retiered = it },
+                        onPartyChange = { typedParty = it },
+                        onChooseParty = { chosen = it },
                         onChangeLineQuantity = { id, delta -> changed = id to delta },
                         onClearDraft = { cleared++ }
                     )
@@ -252,5 +281,89 @@ class QuoteBuilderScreenTest {
         scrollTo(BUILDER_TIER_KEY)
 
         compose.onNodeWithText(QuoteDraft.TIER_NOT_OFFERED).assertExists()
+    }
+
+    // --- who the quotation is for ---------------------------------------------
+
+    @Test
+    fun `the picker lists the saved customers, and never an archived one`() {
+        render(oneLine())
+        scrollTo(BUILDER_PICK_PARTY_KEY)
+        compose.onNodeWithContentDescription(CHOOSE_PARTY).performClick()
+
+        scrollTo("party-c_1")
+        compose.onNodeWithContentDescription(chooseLabel("Sunrise Constructions")).assertExists()
+        compose.onNodeWithContentDescription(chooseLabel("Harbour Interiors")).assertExists()
+        // A quotation raised today against a customer somebody retired is a
+        // mistake nobody makes on purpose. The two above prove the reach.
+        assertEquals(
+            0,
+            compose.onAllNodesWithContentDescription(chooseLabel("Old Steel Works"))
+                .fetchSemanticsNodes().size
+        )
+    }
+
+    @Test
+    fun `the search narrows the picker to what was typed`() {
+        render(oneLine())
+        scrollTo(BUILDER_PICK_PARTY_KEY)
+        compose.onNodeWithContentDescription(CHOOSE_PARTY).performClick()
+        scrollTo(BUILDER_PARTY_SEARCH_KEY)
+        compose.field(PARTY_SEARCH_LABEL).performTextInput("Harbour")
+
+        scrollTo("party-c_2")
+        compose.onNodeWithContentDescription(chooseLabel("Harbour Interiors")).assertExists()
+        assertEquals(
+            0,
+            compose.onAllNodesWithContentDescription(chooseLabel("Sunrise Constructions"))
+                .fetchSemanticsNodes().size
+        )
+    }
+
+    @Test
+    fun `choosing a customer reports it and closes the picker`() {
+        render(oneLine())
+        scrollTo(BUILDER_PICK_PARTY_KEY)
+        compose.onNodeWithContentDescription(CHOOSE_PARTY).performClick()
+        scrollTo("party-c_1")
+        compose.onNodeWithContentDescription(chooseLabel("Sunrise Constructions")).performClick()
+
+        assertEquals("c_1", chosen?.id)
+        // Closed again, so the seven boxes are what is on screen.
+        assertEquals(
+            0,
+            compose.onAllNodesWithContentDescription(PARTY_SEARCH_LABEL)
+                .fetchSemanticsNodes().size
+        )
+    }
+
+    @Test
+    fun `an empty customer list says so rather than showing nothing`() {
+        render(oneLine(), parties = emptyList())
+        scrollTo(BUILDER_PICK_PARTY_KEY)
+        compose.onNodeWithContentDescription(CHOOSE_PARTY).performClick()
+
+        scrollTo(BUILDER_NO_PARTIES_KEY)
+        compose.onNodeWithText(noSavedParty("")).assertExists()
+    }
+
+    @Test
+    fun `typing the customer reaches the draft, so it survives the app dying`() {
+        render(oneLine())
+        scrollTo(PARTY_NAME_LABEL)
+        compose.field(PARTY_NAME_LABEL).performTextInput("Acme")
+
+        assertEquals("Acme", typedParty?.name)
+    }
+
+    @Test
+    fun `the site is its own box, separate from the customer's address`() {
+        render(oneLine())
+        scrollTo(SITE_LABEL)
+        compose.field(SITE_LABEL).performTextInput("Bhiwandi godown")
+
+        assertEquals("Bhiwandi godown", typedParty?.site)
+        // It is not the address: that box is empty and stays empty.
+        assertEquals("", typedParty?.address)
     }
 }

@@ -1,6 +1,7 @@
 package `in`.smartie.quotedesk.domain
 
 import `in`.smartie.quotedesk.data.mapping.Keys
+import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.QuotationLineRecord
 import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
@@ -441,6 +442,22 @@ data class QuoteDraft(
         }
         return Repriced(copy(lines = updated), repriced, kept)
     }
+
+    // --- who it is for --------------------------------------------------------------
+
+    /**
+     * The customer this quotation is for, chosen from the saved ones.
+     *
+     * **A site already typed is kept, never overwritten.** The site is where
+     * this job is and the customer is who pays for it; somebody who writes the
+     * site down first and then picks the firm has not asked for the site to be
+     * forgotten. `QuoteParty.snapshotOf` returns a blank site for that reason,
+     * and this is where the one on the draft survives.
+     */
+    fun withParty(record: PartyRecord): QuoteDraft = copy(
+        partyId = record.id,
+        party = QuoteParty.snapshotOf(record).copy(site = party.site)
+    )
 
     // --- what it comes to ---------------------------------------------------------
 

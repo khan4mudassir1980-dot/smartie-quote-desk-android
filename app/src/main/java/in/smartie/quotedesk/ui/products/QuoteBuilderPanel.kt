@@ -6,23 +6,32 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import `in`.smartie.quotedesk.data.mapping.Money
+import `in`.smartie.quotedesk.data.model.PartyRecord
+import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.domain.DraftLine
+import `in`.smartie.quotedesk.domain.Parties
 import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.QuoteTier
 import `in`.smartie.quotedesk.ui.components.CompactStepper
 import `in`.smartie.quotedesk.ui.components.EmptyState
 import `in`.smartie.quotedesk.ui.components.ListRow
 import `in`.smartie.quotedesk.ui.components.SegmentedChoice
+import `in`.smartie.quotedesk.ui.components.SmartieField
 import `in`.smartie.quotedesk.ui.components.SmartieGhostButton
 import `in`.smartie.quotedesk.ui.quotations.formatDate
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
@@ -61,8 +70,16 @@ internal fun QuoteBuilderPanel(
     onTierChange: (RateTierV2) -> Unit,
     onChangeLineQuantity: (String, Double) -> Unit,
     onClear: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    parties: List<PartyRecord> = emptyList(),
+    onPartyChange: (QuotationPartySnapshot) -> Unit = {},
+    onChooseParty: (PartyRecord) -> Unit = {}
 ) {
+    // Which saved customer the picker is showing, and what is typed into its
+    // search box. The panel's own state: nothing about it belongs on a draft
+    // that survives the app being killed.
+    var picking by rememberSaveable { mutableStateOf(false) }
+    var partyQuery by rememberSaveable { mutableStateOf("") }
     val dimens = LocalSmartieDimens.current
     LazyColumn(
         modifier = modifier.fillMaxSize().testTag(QUOTE_BUILDER_TAG),
@@ -80,6 +97,46 @@ internal fun QuoteBuilderPanel(
         // nobody typed a rate into, so it is a decision taken before the
         // quotation is built rather than after.
         item(key = BUILDER_TIER_KEY) { TierPicker(draft.tier, onTierChange) }
+
+        item(key = BUILDER_PICK_PARTY_KEY) {
+            SmartieGhostButton(
+                text = if (picking) CLOSE_PARTY_PICKER else CHOOSE_PARTY,
+                onClick = { picking = !picking },
+                modifier = Modifier
+                    .semantics {
+                        contentDescription = if (picking) CLOSE_PARTY_PICKER else CHOOSE_PARTY
+                    }
+                    .fillMaxWidth()
+            )
+        }
+
+        if (picking) {
+            item(key = BUILDER_PARTY_SEARCH_KEY) {
+                SmartieField(
+                    label = PARTY_SEARCH_LABEL,
+                    value = partyQuery,
+                    onValueChange = { partyQuery = it },
+                    placeholder = PARTY_SEARCH_HINT,
+                    modifier = Modifier.semantics { contentDescription = PARTY_SEARCH_LABEL }
+                )
+            }
+            // Archived parties are not offered. A quotation raised today
+            // against a customer somebody retired is a mistake nobody would
+            // make on purpose, and `PartyBook` already separates the two.
+            val book = Parties.build(parties, partyQuery)
+            if (book.active.isEmpty()) {
+                item(key = BUILDER_NO_PARTIES_KEY) { EmptyState(noSavedParty(partyQuery)) }
+            }
+            items(book.active, key = { party -> "party-${party.id}" }) { party ->
+                PartyChoice(party) {
+                    onChooseParty(party)
+                    picking = false
+                    partyQuery = ""
+                }
+            }
+        }
+
+        partyFields(draft.party, onPartyChange)
 
         if (draft.isEmpty) {
             item(key = BUILDER_EMPTY_KEY) { EmptyState(NOTHING_ON_IT) }
@@ -154,6 +211,65 @@ private fun BuilderHeader(draft: QuoteDraft, onBack: () -> Unit) {
         )
     }
 }
+
+/**
+ * The customer block: seven boxes, each keyed by its own label.
+ *
+ * **Every keystroke reaches the draft, and that is deliberate.** The party is
+ * part of the quotation, not part of a form that is saved at the end, so a
+ * half-typed customer has to survive the app being killed exactly as a
+ * half-built line list does (audit C8). That costs one small device write per
+ * character, which is the same shape as one per tap on a stepper and is the
+ * price of the draft being honest about what it holds.
+ *
+ * Each item's key **is** its label, so a test scrolls to a box by the name it
+ * then types into and the two cannot drift apart — `PartyEditPanel`'s idiom.
+ */
+private fun LazyListScope.partyFields(
+    party: QuotationPartySnapshot,
+    onPartyChange: (QuotationPartySnapshot) -> Unit
+) {
+    fun field(label: String, value: String, update: (String) -> QuotationPartySnapshot) {
+        item(key = label) {
+            SmartieField(
+                label = label,
+                value = value,
+                onValueChange = { onPartyChange(update(it)) },
+                modifier = Modifier.semantics { contentDescription = label }
+            )
+        }
+    }
+    field(PARTY_NAME_LABEL, party.name) { party.copy(name = it) }
+    // Where the job is, which is not where the firm is. `QuoteParty` keeps
+    // the two apart in both directions.
+    field(SITE_LABEL, party.site) { party.copy(site = it) }
+    field(GSTIN_LABEL, party.gstin) { party.copy(gstin = it) }
+    field(CONTACT_LABEL, party.contact) { party.copy(contact = it) }
+    field(PHONE_LABEL, party.phone) { party.copy(phone = it) }
+    field(EMAIL_LABEL, party.email) { party.copy(email = it) }
+    field(ADDRESS_LABEL, party.address) { party.copy(address = it) }
+}
+
+/** One saved customer, with enough to tell two of the same name apart. */
+@Composable
+private fun PartyChoice(party: PartyRecord, onChoose: () -> Unit) {
+    val name = Parties.displayName(party)
+    ListRow(
+        title = name,
+        secondary = listOf(party.contact, party.city).filter { it.isNotBlank() }
+            .joinToString(" · ")
+            .takeIf { it.isNotBlank() },
+        meta = party.phone.takeIf { it.isNotBlank() },
+        modifier = Modifier.semantics { contentDescription = chooseLabel(name) },
+        onClick = onChoose
+    )
+}
+
+internal fun chooseLabel(name: String): String = "Quote to $name"
+
+internal fun noSavedParty(query: String): String =
+    if (query.isBlank()) "No saved customers yet. Type the details below instead."
+    else "No saved customer matches \u201c${query.trim()}\u201d."
 
 /**
  * Dealer or Client, and **never Contractor**.
@@ -243,6 +359,9 @@ internal const val QUOTE_BUILDER_TAG = "quote-builder"
 
 internal const val BUILDER_HEADER_KEY = "builder-header"
 internal const val BUILDER_TIER_KEY = "builder-tier"
+internal const val BUILDER_PICK_PARTY_KEY = "builder-pick-party"
+internal const val BUILDER_PARTY_SEARCH_KEY = "builder-party-search"
+internal const val BUILDER_NO_PARTIES_KEY = "builder-no-parties"
 internal const val BUILDER_EMPTY_KEY = "builder-empty"
 internal const val BUILDER_NEEDS_RATE_KEY = "builder-needs-rate"
 internal const val BUILDER_CLEAR_KEY = "builder-clear"
@@ -252,6 +371,17 @@ internal const val BUILDER_TAIL_KEY = "builder-end"
 
 internal const val BUILDER_HEADING = "Quotation"
 internal const val TIER_LABEL = "Rate"
+internal const val CHOOSE_PARTY = "Choose a saved customer"
+internal const val CLOSE_PARTY_PICKER = "Type the customer instead"
+internal const val PARTY_SEARCH_LABEL = "Find a customer"
+internal const val PARTY_SEARCH_HINT = "Name, contact, phone or GSTIN"
+internal const val PARTY_NAME_LABEL = "Customer"
+internal const val SITE_LABEL = "Site"
+internal const val GSTIN_LABEL = "GSTIN"
+internal const val CONTACT_LABEL = "Contact person"
+internal const val PHONE_LABEL = "Phone"
+internal const val EMAIL_LABEL = "Email"
+internal const val ADDRESS_LABEL = "Address"
 internal const val BACK_TO_PRODUCTS = "Back to products"
 internal const val CLEAR_LINES = "Clear"
 internal const val RATE_NEEDED = "Rate needed"

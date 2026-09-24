@@ -5,7 +5,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import `in`.smartie.quotedesk.core.AppContainer
 import `in`.smartie.quotedesk.core.toAppError
+import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.data.model.ProductRecord
+import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.Permissions
@@ -187,6 +189,24 @@ class ProductsViewModel(
             return
         }
         persist(_draft.value.setCatalogueQuantity(key, quantity))
+    }
+
+    // --- who the quotation is for (N5.8b) -----------------------------------
+
+    /**
+     * The customer block, as it is typed.
+     *
+     * Persisted on every keystroke, the same as every other change to a
+     * draft: a half-typed customer must survive the app being killed exactly
+     * as a half-built line list does (audit C8).
+     */
+    fun setPartyDetails(party: QuotationPartySnapshot) {
+        persist(_draft.value.copy(party = party))
+    }
+
+    /** A saved customer, chosen from the picker. The site is kept. */
+    fun chooseParty(record: PartyRecord) {
+        persist(_draft.value.withParty(record))
     }
 
     fun clearDraft() {

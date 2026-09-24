@@ -69,6 +69,9 @@ import `in`.smartie.quotedesk.domain.ProductPins
 import `in`.smartie.quotedesk.domain.AreaEntry
 import `in`.smartie.quotedesk.domain.DraftLine
 import `in`.smartie.quotedesk.domain.ManualEntry
+import `in`.smartie.quotedesk.domain.Discount
+import `in`.smartie.quotedesk.domain.Installation
+import `in`.smartie.quotedesk.domain.QuoteDiscount
 import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.QuoteTier
 import `in`.smartie.quotedesk.domain.ScrollToTop
@@ -127,6 +130,9 @@ data class ProductsActions(
     val onGstPercentChange: (Double?) -> Unit = {},
     val onTransportChange: (Double) -> Unit = {},
     val onTransportNoteChange: (String) -> Unit = {},
+    /** Null is "no installation at all", which is not a charge of zero. */
+    val onInstallationChange: (Installation?) -> Unit = {},
+    val onDiscountChange: (Discount?) -> Unit = {},
     val onTogglePin: (String) -> Unit = {},
     /** One place up (-1) or down (+1), from the drag handle's named actions. */
     val onMovePin: (String, Int) -> Unit = { _, _ -> },
@@ -161,6 +167,11 @@ fun ProductsScreen(
     val productFailure by viewModel.productFailure.collectAsStateWithLifecycle()
     val savingCustomer by viewModel.savingParty.collectAsStateWithLifecycle()
     val customerFailure by viewModel.partyFailure.collectAsStateWithLifecycle()
+    val quoting by viewModel.quoting.collectAsStateWithLifecycle()
+    // Null while the settings document has not arrived OR does not exist.
+    // Indistinguishable from here, which is the safe way round: a cap that
+    // has not loaded must not read as permission.
+    val discountCap = QuoteDiscount.capFor(data.member, quoting)
 
     val view = remember(products, categories, pinnedKeys, query, minimumKg) {
         Catalogue.build(products, categories, pinnedKeys, query, minimumKg)
@@ -206,6 +217,7 @@ fun ProductsScreen(
         newPartyId = viewModel::mintPartyId,
         newLineId = viewModel::mintLineId,
         gstOf = { key -> productsByKey[key]?.gst },
+        discountCap = discountCap,
         actions = ProductsActions(
             onQueryChange = viewModel::setQuery,
             onMinimumKgChange = viewModel::setMinimumKg,
@@ -222,6 +234,8 @@ fun ProductsScreen(
             onGstPercentChange = viewModel::setGstPercent,
             onTransportChange = viewModel::setTransport,
             onTransportNoteChange = viewModel::setTransportNote,
+            onInstallationChange = viewModel::setInstallation,
+            onDiscountChange = viewModel::setDiscount,
             onTogglePin = { key -> viewModel.togglePin(pinnedKeys, key) },
             onMovePin = { key, delta -> viewModel.movePin(pinnedKeys, key, delta) },
             onReorderPin = { moved, target -> viewModel.reorderPin(pinnedKeys, moved, target) },
@@ -262,6 +276,8 @@ fun ProductsCatalogue(
     newLineId: () -> String = { "" },
     /** A product's GST rate, by its logical key. */
     gstOf: (String) -> Double? = { null },
+    /** Null when the Owner has not configured one. See `QuoteDiscount`. */
+    discountCap: Double? = null,
     actions: ProductsActions = ProductsActions(),
 ) {
     if (!canViewProducts) {
@@ -312,6 +328,9 @@ fun ProductsCatalogue(
             onGstPercentChange = actions.onGstPercentChange,
             onTransportChange = actions.onTransportChange,
             onTransportNoteChange = actions.onTransportNoteChange,
+            onInstallationChange = actions.onInstallationChange,
+            onDiscountChange = actions.onDiscountChange,
+            discountCap = discountCap,
             parties = parties,
             onPartyChange = actions.onPartyChange,
             onChooseParty = actions.onChooseParty,

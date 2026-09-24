@@ -9,10 +9,13 @@ import `in`.smartie.quotedesk.data.mapping.Keys
 import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
+import `in`.smartie.quotedesk.data.model.QuotingRecord
 import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.data.repository.PartyWriteResult
 import `in`.smartie.quotedesk.domain.AreaEntry
+import `in`.smartie.quotedesk.domain.Discount
 import `in`.smartie.quotedesk.domain.DraftLine
+import `in`.smartie.quotedesk.domain.Installation
 import `in`.smartie.quotedesk.domain.ManualEntry
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.PartyWrite
@@ -349,9 +352,45 @@ class ProductsViewModel(
         persist(_draft.value.copy(transportNote = note))
     }
 
+    /**
+     * The installation charge, or **null for none at all** — which is not the
+     * same as a charge of zero and is why the model keeps it nullable.
+     */
+    fun setInstallation(charge: Installation?) {
+        if (charge != null && !QuoteDraft.isValidInstallation(charge)) {
+            emit(QuoteDraft.NEGATIVE_INSTALLATION)
+            return
+        }
+        persist(_draft.value.copy(installation = charge))
+    }
+
+    /**
+     * The one discount, or null for none.
+     *
+     * Stored as typed and refused at the point of issue rather than clamped
+     * here: `QuoteMath.discountRefusal` names the figure the person may
+     * actually have, and a quotation that went out at a discount nobody chose
+     * is worse than one that would not save.
+     */
+    fun setDiscount(discount: Discount?) {
+        persist(_draft.value.copy(discount = discount))
+    }
+
     fun clearDraft() {
         persist(_draft.value.clear())
     }
+
+    /**
+     * The Owner's discount settings, or null when the document is absent.
+     *
+     * Read here rather than on `AppDataViewModel` because this is the only
+     * screen that needs it, and `WhileSubscribed` means an uncollected flow
+     * costs no listener.
+     */
+    val quoting: StateFlow<QuotingRecord?> =
+        container.settingsRepository.observeQuoting()
+            .catch { report(it) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val _savingParty = MutableStateFlow(false)
     val savingParty: StateFlow<Boolean> = _savingParty.asStateFlow()

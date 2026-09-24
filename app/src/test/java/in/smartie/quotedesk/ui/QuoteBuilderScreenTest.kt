@@ -25,7 +25,13 @@ import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.AreaEntry
 import `in`.smartie.quotedesk.domain.AreaLine
 import `in`.smartie.quotedesk.domain.ManualEntry
+import `in`.smartie.quotedesk.domain.Discount
+import `in`.smartie.quotedesk.domain.DiscountKind
+import `in`.smartie.quotedesk.domain.Installation
+import `in`.smartie.quotedesk.domain.InstallationMode
+import `in`.smartie.quotedesk.domain.QuoteDiscount
 import `in`.smartie.quotedesk.domain.QuoteGst
+import `in`.smartie.quotedesk.domain.QuoteMath
 import `in`.smartie.quotedesk.domain.QuoteLineEntry
 import `in`.smartie.quotedesk.domain.QuoteTier
 import `in`.smartie.quotedesk.ui.products.BACK_TO_PRODUCTS
@@ -46,10 +52,19 @@ import `in`.smartie.quotedesk.ui.products.BUILDER_ADD_AREA_KEY
 import `in`.smartie.quotedesk.ui.products.BUILDER_ADD_MANUAL_KEY
 import `in`.smartie.quotedesk.ui.products.BUILDER_AREA_ADD_KEY
 import `in`.smartie.quotedesk.ui.products.BUILDER_AREA_WORKING_KEY
+import `in`.smartie.quotedesk.ui.products.BUILDER_DISCOUNT_KEY
 import `in`.smartie.quotedesk.ui.products.BUILDER_GST_KEY
+import `in`.smartie.quotedesk.ui.products.BUILDER_INSTALLATION_KEY
+import `in`.smartie.quotedesk.ui.products.DISCOUNT_LABEL
+import `in`.smartie.quotedesk.ui.products.DISCOUNT_VALUE_LABEL
+import `in`.smartie.quotedesk.ui.products.INSTALLATION_BASIS_LABEL
+import `in`.smartie.quotedesk.ui.products.INSTALLATION_LABEL
+import `in`.smartie.quotedesk.ui.products.INSTALLATION_RATE_LABEL
+import `in`.smartie.quotedesk.ui.products.NO_DISCOUNT
+import `in`.smartie.quotedesk.ui.products.NO_INSTALLATION
 import `in`.smartie.quotedesk.ui.products.BUILDER_TOTALS_KEY
 import `in`.smartie.quotedesk.ui.products.BUILDER_TRANSPORT_KEY
-import `in`.smartie.quotedesk.ui.products.GST_LABEL
+import `in`.smartie.quotedesk.ui.products.GST_SWITCH_LABEL
 import `in`.smartie.quotedesk.ui.products.GST_PERCENT_LABEL
 import `in`.smartie.quotedesk.ui.products.GST_UNSET
 import `in`.smartie.quotedesk.ui.products.TOTAL_UNSET
@@ -66,7 +81,9 @@ import `in`.smartie.quotedesk.ui.products.SAVE_CUSTOMER
 import `in`.smartie.quotedesk.ui.products.SITE_LABEL
 import `in`.smartie.quotedesk.ui.products.chooseLabel
 import `in`.smartie.quotedesk.ui.products.noSavedParty
+import `in`.smartie.quotedesk.ui.products.BUILDER_EMPTY_KEY
 import `in`.smartie.quotedesk.ui.products.CLEAR_LINES
+import `in`.smartie.quotedesk.ui.products.ISSUING_LATER
 import `in`.smartie.quotedesk.ui.products.moreOf
 import `in`.smartie.quotedesk.ui.products.NOTHING_ON_IT
 import `in`.smartie.quotedesk.ui.products.ProductsActions
@@ -134,6 +151,10 @@ class QuoteBuilderScreenTest {
     private var gstPercent: Pair<Double?, Boolean>? = null
     private var transport: Double? = null
     private var transportNote: String? = null
+
+    /** Paired with a flag, because null is a value both legitimately send. */
+    private var installation: Pair<Installation?, Boolean>? = null
+    private var discount: Pair<Discount?, Boolean>? = null
     private var retiered: RateTierV2? = null
     private var chosen: PartyRecord? = null
     private var typedParty: QuotationPartySnapshot? = null
@@ -156,7 +177,8 @@ class QuoteBuilderScreenTest {
         draft: QuoteDraft,
         open: Boolean = true,
         parties: List<PartyRecord> = listOf(sunrise, harbour, retired),
-        customerFailure: String? = null
+        customerFailure: String? = null,
+        discountCap: Double? = QuoteMath.NO_CAP
     ) {
         val view = Catalogue.build(listOf(motor, unpriced), emptyList(), emptyList(), "")
         compose.setContent {
@@ -168,10 +190,11 @@ class QuoteBuilderScreenTest {
                     parties = parties,
                     customerFailure = customerFailure,
                     gstOf = { key -> mapOf("gate|SIE1000" to 18.0)[key] },
+                    discountCap = discountCap,
                     // A different id on every call, so a test can prove the
                     // panel mints once and then holds what it minted.
-                    newPartyId = { "c_new_${'$'}{minted++}" },
-                    newLineId = { "ln_new_${'$'}{minted++}" },
+                    newPartyId = { "c_new_${minted++}" },
+                    newLineId = { "ln_new_${minted++}" },
                     actions = ProductsActions(
                         onTierChange = { retiered = it },
                         onPartyChange = { typedParty = it },
@@ -186,6 +209,8 @@ class QuoteBuilderScreenTest {
                         onGstPercentChange = { gstPercent = it to true },
                         onTransportChange = { transport = it },
                         onTransportNoteChange = { transportNote = it },
+                        onInstallationChange = { installation = it to true },
+                        onDiscountChange = { discount = it to true },
                         onClearDraft = { cleared++ }
                     )
                 )
@@ -280,18 +305,19 @@ class QuoteBuilderScreenTest {
                 )
             }
         }
-        scrollTo(BUILDER_TAIL_KEY)
-
+        scrollTo(BUILDER_EMPTY_KEY)
         compose.onNodeWithText(NOTHING_ON_IT).assertExists()
-        // The absence proves its own reach: the heading is still found, so the
-        // list composed and simply has no Clear on it.
+
+        scrollTo(BUILDER_TAIL_KEY)
+        // The absence proves its own reach **where it is looking**. Asserting
+        // a neighbour at the other end of the list proves nothing: a
+        // `LazyColumn` has recycled the header by the time the tail is on
+        // screen, so the back button is legitimately gone too. The last item
+        // is the right witness, and Clear sits immediately above it.
+        compose.onNodeWithText(ISSUING_LATER).assertExists()
         assertEquals(
             0,
             compose.onAllNodesWithContentDescription(CLEAR_LINES).fetchSemanticsNodes().size
-        )
-        assertTrue(
-            compose.onAllNodesWithContentDescription(BACK_TO_PRODUCTS)
-                .fetchSemanticsNodes().isNotEmpty()
         )
     }
 
@@ -683,14 +709,14 @@ class QuoteBuilderScreenTest {
             compose.onAllNodesWithContentDescription(GST_PERCENT_LABEL)
                 .fetchSemanticsNodes().size
         )
-        compose.onNodeWithContentDescription(GST_LABEL).assertExists()
+        compose.onNodeWithContentDescription(GST_SWITCH_LABEL).assertExists()
     }
 
     @Test
     fun `turning GST off reports it rather than blanking the rate`() {
         render(oneLine().copy(gstPercent = 18.0))
         scrollTo(BUILDER_GST_KEY)
-        compose.onNodeWithContentDescription(GST_LABEL).performClick()
+        compose.onNodeWithContentDescription(GST_SWITCH_LABEL).performClick()
 
         assertEquals(false, gstEnabled)
     }
@@ -725,5 +751,147 @@ class QuoteBuilderScreenTest {
         compose.onNodeWithText("₹46,900").assertExists()
         compose.onNodeWithText("₹8,442").assertExists()
         compose.onNodeWithText("₹55,342").assertExists()
+    }
+
+    // --- installation and the discount (8b-2) -----------------------------------
+
+    @Test
+    fun `installation is absent by default, which is not a charge of zero`() {
+        render(oneLine())
+        scrollTo(BUILDER_INSTALLATION_KEY)
+
+        compose.onNodeWithText(NO_INSTALLATION).assertExists()
+        // The rate box is not drawn at all. The switch above proves the reach.
+        assertEquals(
+            0,
+            compose.onAllNodesWithContentDescription(INSTALLATION_RATE_LABEL)
+                .fetchSemanticsNodes().size
+        )
+        compose.onNodeWithContentDescription(INSTALLATION_LABEL).assertExists()
+    }
+
+    @Test
+    fun `turning it on starts a fixed charge, which the model can tell from none`() {
+        render(oneLine())
+        scrollTo(BUILDER_INSTALLATION_KEY)
+        compose.onNodeWithContentDescription(INSTALLATION_LABEL).performClick()
+
+        assertEquals(InstallationMode.FIXED, installation?.first?.mode)
+        assertEquals(0.0, installation?.first?.rate!!, 0.0)
+    }
+
+    @Test
+    fun `turning it off sends null, not a charge of nothing`() {
+        render(oneLine().copy(installation = Installation(InstallationMode.FIXED, 5000.0)))
+        scrollTo(BUILDER_INSTALLATION_KEY)
+        compose.onNodeWithContentDescription(INSTALLATION_LABEL).performClick()
+
+        assertEquals(true, installation?.second)
+        assertNull("absent, and not a zero", installation?.first)
+    }
+
+    @Test
+    fun `a per-door charge shows its basis, and a fixed one has none to show`() {
+        render(
+            oneLine().copy(installation = Installation(InstallationMode.PER_DOOR, 500.0, 4.0))
+        )
+        scrollTo(BUILDER_INSTALLATION_KEY)
+        compose.onNodeWithContentDescription(INSTALLATION_BASIS_LABEL).assertExists()
+        // 4 doors at 500 is 2,000, shown as the working.
+        compose.onNodeWithText("4 × ₹500 = ₹2,000").assertExists()
+    }
+
+    @Test
+    fun `a fixed amount has no basis box, because it ignores one`() {
+        render(oneLine().copy(installation = Installation(InstallationMode.FIXED, 5000.0)))
+        scrollTo(BUILDER_INSTALLATION_KEY)
+
+        assertEquals(
+            0,
+            compose.onAllNodesWithContentDescription(INSTALLATION_BASIS_LABEL)
+                .fetchSemanticsNodes().size
+        )
+        // The absence proves its reach: the rate box beside it is there.
+        compose.onNodeWithContentDescription(INSTALLATION_RATE_LABEL).assertExists()
+    }
+
+    @Test
+    fun `a negative installation rate is refused on the box`() {
+        render(oneLine().copy(installation = Installation(InstallationMode.FIXED, 0.0)))
+        scrollTo(BUILDER_INSTALLATION_KEY)
+        compose.field(INSTALLATION_RATE_LABEL).performTextInput("-500")
+
+        compose.onNodeWithText(QuoteDraft.NEGATIVE_INSTALLATION).assertExists()
+    }
+
+    @Test
+    fun `no discount is the default, and reads as a decision`() {
+        render(oneLine())
+        scrollTo(BUILDER_DISCOUNT_KEY)
+
+        compose.onNodeWithText(NO_DISCOUNT).assertExists()
+        assertEquals(
+            0,
+            compose.onAllNodesWithContentDescription(DISCOUNT_VALUE_LABEL)
+                .fetchSemanticsNodes().size
+        )
+        compose.onNodeWithContentDescription(DISCOUNT_LABEL).assertExists()
+    }
+
+    @Test
+    fun `a discount over the cap names the figure the person may have`() {
+        // Never a silent clamp: a quotation that went out at a discount
+        // nobody chose is worse than one that would not save.
+        render(
+            oneLine().copy(discount = Discount(DiscountKind.PERCENT, 10.0)),
+            discountCap = 5.0
+        )
+        scrollTo(BUILDER_DISCOUNT_KEY)
+
+        // 5% of 44,400 is 2,220.
+        compose.onNodeWithText(QuoteMath.overTheCap(5.0, 2220.0)).assertExists()
+    }
+
+    @Test
+    fun `a cap nobody configured says something different from a cap of zero`() {
+        render(
+            oneLine().copy(discount = Discount(DiscountKind.PERCENT, 10.0)),
+            discountCap = null
+        )
+        scrollTo(BUILDER_DISCOUNT_KEY)
+        compose.onNodeWithText(QuoteDiscount.CAP_NOT_SET).assertExists()
+    }
+
+    @Test
+    fun `a cap of zero says the Owner meant it`() {
+        render(
+            oneLine().copy(discount = Discount(DiscountKind.PERCENT, 10.0)),
+            discountCap = 0.0
+        )
+        scrollTo(BUILDER_DISCOUNT_KEY)
+
+        compose.onNodeWithText(QuoteMath.overTheCap(0.0, 0.0)).assertExists()
+        // And it is not the other message, which would send a Manager to the
+        // Owner for a setting that is already set.
+        assertEquals(
+            0,
+            compose.onAllNodesWithText(QuoteDiscount.CAP_NOT_SET).fetchSemanticsNodes().size
+        )
+    }
+
+    @Test
+    fun `a discount inside the cap is charged, and shows on the totals`() {
+        render(
+            oneLine().copy(
+                discount = Discount(DiscountKind.PERCENT, 5.0),
+                gstPercent = 18.0
+            ),
+            discountCap = QuoteMath.NO_CAP
+        )
+        scrollTo(BUILDER_TOTALS_KEY)
+
+        // 5% of 44,400 is 2,220, leaving a subtotal of 42,180.
+        compose.onNodeWithText("- ₹2,220").assertExists()
+        compose.onNodeWithText("₹42,180").assertExists()
     }
 }

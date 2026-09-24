@@ -273,6 +273,70 @@ private fun StepperButton(
 }
 
 /**
+ * The same selector, wrapped into rows when there are too many options for one.
+ *
+ * **Four options in one strip clip at 360dp, and that is arithmetic rather
+ * than a worry.** [SegmentedChoice] weights its labels equally and clips each
+ * to one line, so four of them share a 360dp screen at roughly 78dp apiece
+ * less padding — and "% of products" and "Fixed amount" do not fit in that.
+ * The label would be silently truncated, which on a control that decides how
+ * installation is charged is the difference between a fixed ₹8 and 8% of the
+ * products.
+ *
+ * So the options are laid out [perRow] at a time inside one bordered box: it
+ * still reads as a single control, and every label has half the width it
+ * needs rather than a quarter.
+ */
+@Composable
+fun <T> SegmentedChoiceGrid(
+    options: List<T>,
+    selected: T,
+    label: (T) -> String,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    perRow: Int = 2,
+    accent: (T) -> Color = { SmartieColors.Purple }
+) {
+    val dimens = LocalSmartieDimens.current
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(dimens.radius))
+            .border(dimens.hairline, SmartieColors.Rule, RoundedCornerShape(dimens.radius))
+    ) {
+        options.chunked(perRow).forEach { row ->
+            Row(Modifier.fillMaxWidth()) {
+                row.forEach { option ->
+                    val isSelected = option == selected
+                    val tint = accent(option)
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .heightIn(min = dimens.buttonHeightCompact)
+                            .background(
+                                if (isSelected) tint.copy(alpha = 0.12f) else SmartieColors.Panel
+                            )
+                            .clickableNoRipple { onSelect(option) }
+                            .padding(horizontal = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            label(option),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = if (isSelected) tint else SmartieColors.Ink2,
+                            maxLines = 1
+                        )
+                    }
+                }
+                // A last row that is short keeps the others' width, so the
+                // options stay in columns instead of stretching to fill.
+                repeat(perRow - row.size) { Box(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/**
  * Single-line segmented selector. Labels are weighted and clipped to one line
  * so "Normal" can never wrap vertically at 360dp (audit U8).
  */

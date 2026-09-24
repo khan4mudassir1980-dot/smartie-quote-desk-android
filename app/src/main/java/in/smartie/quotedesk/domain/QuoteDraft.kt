@@ -459,6 +459,38 @@ data class QuoteDraft(
         party = QuoteParty.snapshotOf(record).copy(site = party.site)
     )
 
+    // --- what installation is charged against ---------------------------------------
+
+    /**
+     * Openings on this quotation, for a per-door installation charge.
+     *
+     * **Area lines only, and it can legitimately be zero.** A shutter's `nos`
+     * is a door count; a catalogue line's quantity is a count of things, which
+     * is not the same question — two motors are not two doors. A quotation
+     * with no openings therefore offers a basis of zero, and the basis box is
+     * editable precisely so the person can say what it actually is. Guessing
+     * from the line quantities would put a figure there that looks derived and
+     * is not.
+     */
+    val doorCount: Double get() = lines.sumOf { it.area?.count ?: 0.0 }
+
+    /**
+     * The chargeable area on this quotation, for a per-square-foot charge.
+     *
+     * An area line's stored quantity **is** its total chargeable area, which
+     * is the tie `setArea` keeps and the card has no stepper in order not to
+     * break. So this is a sum of quantities and not a recomputation.
+     */
+    val chargeableSqft: Double get() = lines.filter { it.isArea }.sumOf { it.quantity }
+
+    /** What the basis box starts at for [mode], before anybody edits it. */
+    fun defaultBasisFor(mode: InstallationMode): Double = Installation.defaultBasis(
+        mode = mode,
+        doors = doorCount,
+        chargeableSqft = chargeableSqft,
+        products = products
+    )
+
     // --- what it comes to ---------------------------------------------------------
 
     /** Every priced line added up, in whole rupees. */
@@ -547,6 +579,17 @@ data class QuoteDraft(
         const val NEGATIVE_INSTALLATION = "An installation charge cannot be negative"
         const val GST_NOT_SET = "Set the GST rate for this quotation"
         const val NO_PARTY = "Choose the customer this quotation is for"
+
+        /**
+         * Whether this charge may be stored at all — the second of the
+         * invariant's three gates, applied before `refusal` rather than only
+         * at the point of issue. `QuoteMath.totals` has no floor, so a
+         * negative rate or basis would produce a negative subtotal without
+         * complaint.
+         */
+        fun isValidInstallation(charge: Installation): Boolean =
+            charge.rate.isFinite() && charge.rate >= 0.0 &&
+                charge.basis.isFinite() && charge.basis >= 0.0
 
         /**
          * Line ids read as `ln_…`, the same shape as every other id the app

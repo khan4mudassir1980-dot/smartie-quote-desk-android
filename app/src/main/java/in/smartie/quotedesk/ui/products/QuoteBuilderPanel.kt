@@ -32,10 +32,15 @@ import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.domain.AreaEntry
 import `in`.smartie.quotedesk.domain.DimensionUnit
+import `in`.smartie.quotedesk.domain.Discount
+import `in`.smartie.quotedesk.domain.DiscountKind
 import `in`.smartie.quotedesk.domain.DraftLine
+import `in`.smartie.quotedesk.domain.Installation
+import `in`.smartie.quotedesk.domain.InstallationMode
 import `in`.smartie.quotedesk.domain.ManualEntry
 import `in`.smartie.quotedesk.domain.Parties
 import `in`.smartie.quotedesk.domain.QuoteArea
+import `in`.smartie.quotedesk.domain.QuoteDiscount
 import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.QuoteGst
 import `in`.smartie.quotedesk.domain.QuoteLineEntry
@@ -44,6 +49,7 @@ import `in`.smartie.quotedesk.ui.components.CompactStepper
 import `in`.smartie.quotedesk.ui.components.EmptyState
 import `in`.smartie.quotedesk.ui.components.ListRow
 import `in`.smartie.quotedesk.ui.components.SegmentedChoice
+import `in`.smartie.quotedesk.ui.components.SegmentedChoiceGrid
 import `in`.smartie.quotedesk.ui.components.SmartieCard
 import `in`.smartie.quotedesk.ui.components.SmartieField
 import `in`.smartie.quotedesk.ui.components.SmartieGhostButton
@@ -107,7 +113,11 @@ internal fun QuoteBuilderPanel(
     onGstEnabledChange: (Boolean) -> Unit = {},
     onGstPercentChange: (Double?) -> Unit = {},
     onTransportChange: (Double) -> Unit = {},
-    onTransportNoteChange: (String) -> Unit = {}
+    onTransportNoteChange: (String) -> Unit = {},
+    onInstallationChange: (Installation?) -> Unit = {},
+    onDiscountChange: (Discount?) -> Unit = {},
+    /** Null when the Owner has not configured one. See `QuoteDiscount`. */
+    discountCap: Double? = null
 ) {
     // Which saved customer the picker is showing, and what is typed into its
     // search box. The panel's own state: nothing about it belongs on a draft
@@ -155,6 +165,17 @@ internal fun QuoteBuilderPanel(
     }
     var transportTyped by rememberSaveable {
         mutableStateOf(if (draft.transport > 0.0) QuoteLineEntry.plain(draft.transport) else "")
+    }
+
+    // Installation and the discount are **absent by default, which is not
+    // zero**: a quotation that does not charge for fitting carries no
+    // installation at all, and one that charges nothing for it is a different
+    // statement. The model keeps them nullable for that reason, and these
+    // switches are what tell the two apart on screen.
+    var installTyped by rememberSaveable { mutableStateOf(rateTextOf(draft.installation)) }
+    var basisTyped by rememberSaveable { mutableStateOf(basisTextOf(draft.installation)) }
+    var discountTyped by rememberSaveable {
+        mutableStateOf(draft.discount?.value?.let(QuoteLineEntry::plain).orEmpty())
     }
 
     val manualEntry = ManualEntry(
@@ -304,7 +325,7 @@ internal fun QuoteBuilderPanel(
         if (manualOpen) {
             entryField(DESCRIPTION_LABEL, manualTitle) { manualTitle = it }
             entryField(QUANTITY_LABEL, manualQuantity, numeric = true) { manualQuantity = it }
-            entryField(UNIT_LABEL, manualUnit, hint = UNIT_HINT) { manualUnit = it }
+            entryField(LINE_UNIT_LABEL, manualUnit, hint = UNIT_HINT) { manualUnit = it }
             entryField(RATE_LABEL, manualRate, numeric = true, hint = RATE_HINT) {
                 manualRate = it
             }
@@ -387,6 +408,27 @@ internal fun QuoteBuilderPanel(
             )
         }
 
+        item(key = BUILDER_INSTALLATION_KEY) {
+            InstallationBlock(
+                draft = draft,
+                rateTyped = installTyped,
+                basisTyped = basisTyped,
+                onRateTyped = { installTyped = it },
+                onBasisTyped = { basisTyped = it },
+                onChange = onInstallationChange
+            )
+        }
+
+        item(key = BUILDER_DISCOUNT_KEY) {
+            DiscountBlock(
+                draft = draft,
+                typed = discountTyped,
+                cap = discountCap,
+                onTyped = { discountTyped = it },
+                onChange = onDiscountChange
+            )
+        }
+
         item(key = BUILDER_TRANSPORT_KEY) {
             SmartieField(
                 label = TRANSPORT_LABEL,
@@ -425,7 +467,7 @@ internal fun QuoteBuilderPanel(
                     horizontalArrangement = Arrangement.spacedBy(dimens.gapS)
                 ) {
                     Text(
-                        GST_LABEL,
+                        GST_SWITCH_LABEL,
                         style = MaterialTheme.typography.labelMedium,
                         color = SmartieColors.Steel,
                         modifier = Modifier.weight(1f)
@@ -433,7 +475,7 @@ internal fun QuoteBuilderPanel(
                     Switch(
                         checked = draft.gstEnabled,
                         onCheckedChange = onGstEnabledChange,
-                        modifier = Modifier.semantics { contentDescription = GST_LABEL }
+                        modifier = Modifier.semantics { contentDescription = GST_SWITCH_LABEL }
                     )
                 }
                 if (draft.gstEnabled) {
@@ -650,6 +692,252 @@ internal fun areaWorking(entry: AreaEntry): String {
     return "${Money.formatQuantity(QuoteArea.chargeableSqft(area))} sq ft × " +
         "${Money.formatQuantity(area.count)} nos = " +
         "${Money.formatQuantity(QuoteArea.totalSqft(area))} sq ft"
+}
+
+/**
+ * Installation: absent, or one of four ways of charging for it.
+ *
+ * **Absent is not zero.** A quotation that does not charge for fitting
+ * carries no installation at all; one that charges nothing for it is a
+ * different statement, and `QuoteDraft.installation` is nullable to keep the
+ * two apart. The switch is what says which.
+ *
+ * **The basis is defaulted and then editable**, which is why it is stored
+ * rather than re-derived: a quotation reopened a month later must show the
+ * figure the price was actually struck on, not whatever the lines would
+ * produce today. The default comes from the lines — the door count for a
+ * per-door charge, the chargeable area for a per-square-foot one, the
+ * products figure for a percentage — and a fixed amount ignores it entirely.
+ */
+@Composable
+private fun InstallationBlock(
+    draft: QuoteDraft,
+    rateTyped: String,
+    basisTyped: String,
+    onRateTyped: (String) -> Unit,
+    onBasisTyped: (String) -> Unit,
+    onChange: (Installation?) -> Unit
+) {
+    val dimens = LocalSmartieDimens.current
+    val charge = draft.installation
+    val mode = charge?.mode ?: InstallationMode.FIXED
+
+    fun push(
+        newMode: InstallationMode = mode,
+        rate: String = rateTyped,
+        basis: String = basisTyped
+    ) {
+        val amount = QuoteLineEntry.number(rate) ?: 0.0
+        val against = QuoteLineEntry.number(basis) ?: draft.defaultBasisFor(newMode)
+        onChange(Installation(newMode, amount, against))
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(dimens.gapXs)) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(dimens.gapS)
+        ) {
+            Text(
+                INSTALLATION_LABEL,
+                style = MaterialTheme.typography.labelMedium,
+                color = SmartieColors.Steel,
+                modifier = Modifier.weight(1f)
+            )
+            Switch(
+                checked = charge != null,
+                onCheckedChange = { on ->
+                    if (!on) {
+                        onChange(null)
+                    } else {
+                        val basis = draft.defaultBasisFor(InstallationMode.FIXED)
+                        onBasisTyped(QuoteLineEntry.plain(basis))
+                        onChange(Installation(InstallationMode.FIXED, 0.0, basis))
+                    }
+                },
+                modifier = Modifier.semantics { contentDescription = INSTALLATION_LABEL }
+            )
+        }
+        if (charge == null) {
+            Text(
+                NO_INSTALLATION,
+                style = MaterialTheme.typography.labelMedium,
+                color = SmartieColors.Steel
+            )
+            return@Column
+        }
+
+        // Two rows of two. Four in one strip clips "% of products" at 360dp,
+        // and a truncated label here is the difference between a fixed 8
+        // rupees and 8% of the products.
+        SegmentedChoiceGrid(
+            options = InstallationMode.entries.toList(),
+            selected = mode,
+            label = { it.label },
+            onSelect = { chosen ->
+                // The basis follows the mode until somebody edits it: a
+                // per-door figure means nothing to a per-square-foot charge.
+                val basis = draft.defaultBasisFor(chosen)
+                onBasisTyped(QuoteLineEntry.plain(basis))
+                push(newMode = chosen, basis = QuoteLineEntry.plain(basis))
+            },
+            modifier = Modifier.semantics { contentDescription = INSTALLATION_MODE_LABEL }
+        )
+        SmartieField(
+            label = installationRateLabel(mode),
+            value = rateTyped,
+            onValueChange = {
+                onRateTyped(it)
+                push(rate = it)
+            },
+            isError = negativeRefusal(rateTyped) != null,
+            supportingText = negativeRefusal(rateTyped),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.semantics { contentDescription = INSTALLATION_RATE_LABEL }
+        )
+        if (mode != InstallationMode.FIXED) {
+            SmartieField(
+                label = basisLabel(mode),
+                value = basisTyped,
+                onValueChange = {
+                    onBasisTyped(it)
+                    push(basis = it)
+                },
+                isError = negativeRefusal(basisTyped) != null,
+                supportingText = negativeRefusal(basisTyped),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.semantics { contentDescription = INSTALLATION_BASIS_LABEL }
+            )
+        }
+        Text(
+            installationWorking(charge),
+            style = MaterialTheme.typography.labelMedium,
+            color = SmartieColors.Steel
+        )
+    }
+}
+
+/**
+ * The one discount a quotation may carry, as a percentage or as an amount.
+ *
+ * **The refusal names the number the person may have rather than clamping
+ * what they typed** — `QuoteMath.discountRefusal`'s own rule, because a
+ * quotation that went out at a discount nobody chose is worse than one that
+ * would not save. And a cap nobody configured is told apart from a cap of
+ * zero: both permit no discount, only one is somebody's mistake.
+ */
+@Composable
+private fun DiscountBlock(
+    draft: QuoteDraft,
+    typed: String,
+    cap: Double?,
+    onTyped: (String) -> Unit,
+    onChange: (Discount?) -> Unit
+) {
+    val dimens = LocalSmartieDimens.current
+    val discount = draft.discount
+    val kind = discount?.kind ?: DiscountKind.PERCENT
+    val refusal = discount?.let { QuoteDiscount.refusal(it, draft.discountBase, cap) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(dimens.gapXs)) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(dimens.gapS)
+        ) {
+            Text(
+                DISCOUNT_LABEL,
+                style = MaterialTheme.typography.labelMedium,
+                color = SmartieColors.Steel,
+                modifier = Modifier.weight(1f)
+            )
+            Switch(
+                checked = discount != null,
+                onCheckedChange = { on ->
+                    onChange(if (on) Discount(DiscountKind.PERCENT, 0.0) else null)
+                },
+                modifier = Modifier.semantics { contentDescription = DISCOUNT_LABEL }
+            )
+        }
+        if (discount == null) {
+            Text(
+                NO_DISCOUNT,
+                style = MaterialTheme.typography.labelMedium,
+                color = SmartieColors.Steel
+            )
+            return@Column
+        }
+
+        SegmentedChoice(
+            options = DiscountKind.entries.toList(),
+            selected = kind,
+            label = { discountKindLabel(it) },
+            onSelect = { onChange(Discount(it, QuoteLineEntry.number(typed) ?: 0.0)) },
+            modifier = Modifier.semantics { contentDescription = DISCOUNT_KIND_LABEL }
+        )
+        SmartieField(
+            label = discountValueLabel(kind),
+            value = typed,
+            onValueChange = {
+                onTyped(it)
+                onChange(Discount(kind, QuoteLineEntry.number(it) ?: 0.0))
+            },
+            isError = refusal != null,
+            supportingText = refusal,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.semantics { contentDescription = DISCOUNT_VALUE_LABEL }
+        )
+    }
+}
+
+internal fun rateTextOf(charge: Installation?): String =
+    charge?.rate?.let(QuoteLineEntry::plain).orEmpty()
+
+internal fun basisTextOf(charge: Installation?): String =
+    charge?.basis?.let(QuoteLineEntry::plain).orEmpty()
+
+/** Why this installation figure cannot be charged, or null when it can. */
+internal fun negativeRefusal(typed: String): String? = when {
+    typed.isBlank() -> null
+    !QuoteLineEntry.reads(typed) -> QuoteLineEntry.NOT_A_RATE
+    (QuoteLineEntry.number(typed) ?: 0.0) < 0.0 -> QuoteDraft.NEGATIVE_INSTALLATION
+    else -> null
+}
+
+internal fun installationRateLabel(mode: InstallationMode): String = when (mode) {
+    InstallationMode.FIXED -> "Amount"
+    InstallationMode.PER_DOOR -> "Rate per door"
+    InstallationMode.PER_SQFT -> "Rate per sq ft"
+    InstallationMode.PERCENT -> "Percentage of products"
+}
+
+internal fun basisLabel(mode: InstallationMode): String = when (mode) {
+    InstallationMode.PER_DOOR -> "How many doors"
+    InstallationMode.PER_SQFT -> "How many sq ft"
+    InstallationMode.PERCENT -> "Charged against"
+    InstallationMode.FIXED -> "Charged against"
+}
+
+internal fun installationWorking(charge: Installation): String = when (charge.mode) {
+    InstallationMode.FIXED -> Money.formatRupees(charge.amount, decimals = 0)
+    InstallationMode.PERCENT ->
+        "${Money.formatQuantity(charge.rate)}% of " +
+            "${Money.formatRupees(charge.basis, decimals = 0)} = " +
+            Money.formatRupees(charge.amount, decimals = 0)
+    else ->
+        "${Money.formatQuantity(charge.basis)} × " +
+            "${Money.formatRupees(charge.rate, decimals = 0)} = " +
+            Money.formatRupees(charge.amount, decimals = 0)
+}
+
+internal fun discountKindLabel(kind: DiscountKind): String = when (kind) {
+    DiscountKind.PERCENT -> "Percentage"
+    DiscountKind.RUPEES -> "Amount"
+}
+
+internal fun discountValueLabel(kind: DiscountKind): String = when (kind) {
+    DiscountKind.PERCENT -> "Discount %"
+    DiscountKind.RUPEES -> "Discount ₹"
 }
 
 /**
@@ -937,6 +1225,8 @@ internal const val BUILDER_ADD_AREA_KEY = "builder-add-area"
 internal const val BUILDER_MANUAL_ADD_KEY = "builder-manual-add"
 internal const val BUILDER_AREA_ADD_KEY = "builder-area-add"
 internal const val BUILDER_AREA_WORKING_KEY = "builder-area-working"
+internal const val BUILDER_INSTALLATION_KEY = "builder-installation"
+internal const val BUILDER_DISCOUNT_KEY = "builder-discount"
 internal const val BUILDER_TRANSPORT_KEY = "builder-transport"
 internal const val BUILDER_GST_KEY = "builder-gst"
 internal const val BUILDER_TOTALS_KEY = "builder-totals"
@@ -977,7 +1267,7 @@ internal const val CANCEL_LINE = "Cancel"
 
 internal const val DESCRIPTION_LABEL = "Description"
 internal const val QUANTITY_LABEL = "How many"
-internal const val UNIT_LABEL = "Unit"
+internal const val LINE_UNIT_LABEL = "Unit"
 internal const val UNIT_HINT = "each, nos, m, kg"
 internal const val RATE_LABEL = "Rate"
 internal const val RATE_HINT = "Leave empty if the price is not set yet"
@@ -991,10 +1281,19 @@ internal const val MINIMUM_LABEL = "Minimum chargeable area"
 internal const val MINIMUM_HINT = "Leave empty if there is no minimum"
 internal const val AREA_NOT_YET = "Enter a width and a height to see the chargeable area."
 
+internal const val INSTALLATION_LABEL = "Charge for installation"
+internal const val INSTALLATION_MODE_LABEL = "How installation is charged"
+internal const val INSTALLATION_RATE_LABEL = "Installation rate"
+internal const val INSTALLATION_BASIS_LABEL = "Installation basis"
+internal const val NO_INSTALLATION = "No installation charge on this quotation."
+internal const val DISCOUNT_LABEL = "Give a discount"
+internal const val DISCOUNT_KIND_LABEL = "Discount as"
+internal const val DISCOUNT_VALUE_LABEL = "Discount"
+internal const val NO_DISCOUNT = "No discount on this quotation."
 internal const val TRANSPORT_LABEL = "Transport"
 internal const val TRANSPORT_NOTE_LABEL = "What the transport is for"
 internal const val TRANSPORT_NOTE_HINT = "e.g. Mumbai to Vadodara"
-internal const val GST_LABEL = "Include GST"
+internal const val GST_SWITCH_LABEL = "Include GST"
 internal const val GST_PERCENT_LABEL = "GST %"
 internal const val PRODUCTS_ROW = "Products"
 internal const val INSTALLATION_ROW = "Installation"

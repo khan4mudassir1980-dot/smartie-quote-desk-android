@@ -1,6 +1,8 @@
 package `in`.smartie.quotedesk.ui
 
 import android.app.Application
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -10,15 +12,19 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToKey
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import `in`.smartie.quotedesk.data.mapping.Keys
 import `in`.smartie.quotedesk.data.model.ProductRecord
+import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.domain.Catalogue
 import `in`.smartie.quotedesk.domain.QuoteDraft
+import `in`.smartie.quotedesk.domain.QuoteTier
 import `in`.smartie.quotedesk.ui.products.BACK_TO_PRODUCTS
 import `in`.smartie.quotedesk.ui.products.BUILDER_CLEAR_KEY
 import `in`.smartie.quotedesk.ui.products.BUILDER_HEADING
 import `in`.smartie.quotedesk.ui.products.BUILDER_TAIL_KEY
+import `in`.smartie.quotedesk.ui.products.BUILDER_TIER_KEY
 import `in`.smartie.quotedesk.ui.products.CLEAR_LINES
 import `in`.smartie.quotedesk.ui.products.moreOf
 import `in`.smartie.quotedesk.ui.products.NOTHING_ON_IT
@@ -72,6 +78,7 @@ class QuoteBuilderScreenTest {
     private val unpriced = product("SIE600", client = null)
 
     private var changed: Pair<String, Double>? = null
+    private var retiered: RateTierV2? = null
     private var cleared = 0
 
     /** A draft holding one priced line, the way a catalogue tap leaves it. */
@@ -86,6 +93,7 @@ class QuoteBuilderScreenTest {
                     view = view,
                     draft = draft,
                     actions = ProductsActions(
+                        onTierChange = { retiered = it },
                         onChangeLineQuantity = { id, delta -> changed = id to delta },
                         onClearDraft = { cleared++ }
                     )
@@ -171,6 +179,7 @@ class QuoteBuilderScreenTest {
                 QuoteBuilderPanel(
                     draft = QuoteDraft(id = "qd_1"),
                     onBack = {},
+                    onTierChange = {},
                     onChangeLineQuantity = { _, _ -> },
                     onClear = {}
                 )
@@ -189,5 +198,59 @@ class QuoteBuilderScreenTest {
             compose.onAllNodesWithContentDescription(BACK_TO_PRODUCTS)
                 .fetchSemanticsNodes().isNotEmpty()
         )
+    }
+
+    @Test
+    fun `the builder offers two rates, and Contractor is not one of them`() {
+        render(oneLine())
+        scrollTo(BUILDER_TIER_KEY)
+
+        compose.onNodeWithText("Dealer").assertExists()
+        compose.onNodeWithText("Client").assertExists()
+        // `RateTierV2` still has three, and a quotation already issued at the
+        // contractor tier still displays as one. Only building is narrowed.
+        assertEquals(2, QuoteTier.OFFERED.size)
+        assertEquals(0, compose.onAllNodesWithText("Contractor").fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun `the catalogue's own picker offers the same two, never a third`() {
+        render(oneLine(), open = false)
+        // Scrolled to a tier that IS offered first, so the absence below
+        // proves the filters row composed rather than the list stopping short.
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Dealer"))
+
+        // It offered all three until now, so a person could price a quotation
+        // at a tier `QuoteDraft.refusal` then refused to issue.
+        compose.onNodeWithText("Dealer").assertExists()
+        assertEquals(0, compose.onAllNodesWithText("Contractor").fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun `choosing a rate reports it, so the lines can be repriced`() {
+        render(oneLine())
+        scrollTo(BUILDER_TIER_KEY)
+        compose.onNodeWithText("Dealer").performClick()
+
+        assertEquals(RateTierV2.DEALER, retiered)
+    }
+
+    @Test
+    fun `a draft somehow at Contractor says why, rather than showing nothing lit`() {
+        compose.setContent {
+            SmartieTheme {
+                QuoteBuilderPanel(
+                    draft = QuoteDraft(id = "qd_1", tier = RateTierV2.CONTRACTOR)
+                        .addManual("ln_1", "Motor", rate = 100.0),
+                    onBack = {},
+                    onTierChange = {},
+                    onChangeLineQuantity = { _, _ -> },
+                    onClear = {}
+                )
+            }
+        }
+        scrollTo(BUILDER_TIER_KEY)
+
+        compose.onNodeWithText(QuoteDraft.TIER_NOT_OFFERED).assertExists()
     }
 }

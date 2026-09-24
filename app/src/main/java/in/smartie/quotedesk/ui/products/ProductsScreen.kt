@@ -65,6 +65,7 @@ import `in`.smartie.quotedesk.domain.RoleTitles
 import `in`.smartie.quotedesk.domain.PinDrag
 import `in`.smartie.quotedesk.domain.ProductPins
 import `in`.smartie.quotedesk.domain.QuoteDraft
+import `in`.smartie.quotedesk.domain.QuoteTier
 import `in`.smartie.quotedesk.domain.ScrollToTop
 import `in`.smartie.quotedesk.ui.AppDataViewModel
 import `in`.smartie.quotedesk.ui.components.CompactStepper
@@ -237,6 +238,7 @@ fun ProductsCatalogue(
         QuoteBuilderPanel(
             draft = draft,
             onBack = { showDraft = false },
+            onTierChange = actions.onTierChange,
             onChangeLineQuantity = actions.onChangeLineQuantity,
             // Clearing empties the LINES and stays put: the party, the
             // transport and the GST rate on this quotation are not lines and
@@ -313,8 +315,13 @@ fun ProductsCatalogue(
 
             item(key = "filters") {
                 Column(verticalArrangement = Arrangement.spacedBy(dimens.gapS)) {
+                    // `QuoteTier.OFFERED`, not every tier there is. This
+                    // offered Contractor until now, which `QuoteDraft.refusal`
+                    // then refused to issue — a control that earns a refusal.
+                    // `RateTierV2` keeps all three for the quotations already
+                    // issued at one; only building is narrowed.
                     SegmentedChoice(
-                        options = RateTierV2.entries.toList(),
+                        options = QuoteTier.OFFERED,
                         selected = draft.tier,
                         label = { it.label },
                         onSelect = actions.onTierChange,
@@ -497,7 +504,7 @@ fun ProductsCatalogue(
  *
  * Small, and only there once there is somewhere to go back from — see
  * [ScrollToTop]. It **scrolls and nothing else**: the search text, the
- * Dealer/Contractor/Client tier, the load filter, the pinned order and the
+ * Dealer/Client tier, the load filter, the pinned order and the
  * draft quotation are all held elsewhere and are untouched by a tap.
  *
  * Its size is its touch target, so there is no invisible ring around it that

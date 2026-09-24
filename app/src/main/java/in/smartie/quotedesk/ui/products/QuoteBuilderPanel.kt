@@ -15,11 +15,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import `in`.smartie.quotedesk.data.mapping.Money
+import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.domain.DraftLine
 import `in`.smartie.quotedesk.domain.QuoteDraft
+import `in`.smartie.quotedesk.domain.QuoteTier
 import `in`.smartie.quotedesk.ui.components.CompactStepper
 import `in`.smartie.quotedesk.ui.components.EmptyState
 import `in`.smartie.quotedesk.ui.components.ListRow
+import `in`.smartie.quotedesk.ui.components.SegmentedChoice
 import `in`.smartie.quotedesk.ui.components.SmartieGhostButton
 import `in`.smartie.quotedesk.ui.quotations.formatDate
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
@@ -55,6 +58,7 @@ import `in`.smartie.quotedesk.ui.theme.SmartieColors
 internal fun QuoteBuilderPanel(
     draft: QuoteDraft,
     onBack: () -> Unit,
+    onTierChange: (RateTierV2) -> Unit,
     onChangeLineQuantity: (String, Double) -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier
@@ -71,6 +75,11 @@ internal fun QuoteBuilderPanel(
         verticalArrangement = Arrangement.spacedBy(dimens.gapS)
     ) {
         item(key = BUILDER_HEADER_KEY) { BuilderHeader(draft, onBack) }
+
+        // Above the lines, and not by habit: changing it reprices every line
+        // nobody typed a rate into, so it is a decision taken before the
+        // quotation is built rather than after.
+        item(key = BUILDER_TIER_KEY) { TierPicker(draft.tier, onTierChange) }
 
         if (draft.isEmpty) {
             item(key = BUILDER_EMPTY_KEY) { EmptyState(NOTHING_ON_IT) }
@@ -146,6 +155,45 @@ private fun BuilderHeader(draft: QuoteDraft, onBack: () -> Unit) {
     }
 }
 
+/**
+ * Dealer or Client, and **never Contractor**.
+ *
+ * `RateTierV2` keeps all three because a quotation already issued at the
+ * contractor tier must still display in full; `QuoteTier.OFFERED` is what may
+ * be *built*. The catalogue's own picker offered all three until now, which
+ * meant a person could price a quotation at a tier `QuoteDraft.refusal` then
+ * refused to issue — a control that earns a refusal, which is the thing
+ * `PartyEditPanel` already says is worse than no control at all.
+ *
+ * A draft that somehow arrives at Contractor — a `v1` record written before
+ * the narrowing, say — lights neither option, so it says why instead of
+ * showing an unlit picker with no explanation.
+ */
+@Composable
+private fun TierPicker(tier: RateTierV2, onTierChange: (RateTierV2) -> Unit) {
+    val dimens = LocalSmartieDimens.current
+    Column(verticalArrangement = Arrangement.spacedBy(dimens.gapXs)) {
+        Text(
+            TIER_LABEL,
+            style = MaterialTheme.typography.labelMedium,
+            color = SmartieColors.Steel
+        )
+        SegmentedChoice(
+            options = QuoteTier.OFFERED,
+            selected = tier,
+            label = { it.label },
+            onSelect = onTierChange
+        )
+        if (!QuoteTier.offers(tier)) {
+            Text(
+                QuoteDraft.TIER_NOT_OFFERED,
+                style = MaterialTheme.typography.labelMedium,
+                color = SmartieColors.Warn
+            )
+        }
+    }
+}
+
 /** One line: what it is, what it comes to, and how many. */
 @Composable
 private fun BuilderLine(line: DraftLine, onChangeLineQuantity: (String, Double) -> Unit) {
@@ -194,6 +242,7 @@ internal fun needsRateNote(count: Int): String =
 internal const val QUOTE_BUILDER_TAG = "quote-builder"
 
 internal const val BUILDER_HEADER_KEY = "builder-header"
+internal const val BUILDER_TIER_KEY = "builder-tier"
 internal const val BUILDER_EMPTY_KEY = "builder-empty"
 internal const val BUILDER_NEEDS_RATE_KEY = "builder-needs-rate"
 internal const val BUILDER_CLEAR_KEY = "builder-clear"
@@ -202,6 +251,7 @@ internal const val BUILDER_CLEAR_KEY = "builder-clear"
 internal const val BUILDER_TAIL_KEY = "builder-end"
 
 internal const val BUILDER_HEADING = "Quotation"
+internal const val TIER_LABEL = "Rate"
 internal const val BACK_TO_PRODUCTS = "Back to products"
 internal const val CLEAR_LINES = "Clear"
 internal const val RATE_NEEDED = "Rate needed"

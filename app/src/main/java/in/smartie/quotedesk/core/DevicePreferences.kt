@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import `in`.smartie.quotedesk.data.mapping.Keys
+import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.QuoteDraftCodec
 import `in`.smartie.quotedesk.domain.QuoteDrafts
 import `in`.smartie.quotedesk.domain.QuoteDraftsCodec
@@ -103,6 +104,42 @@ class AccountPreferences internal constructor(
 
     override suspend fun setPending(pending: Map<String, Double>) {
         store.edit { it[pendingKey] = StockPendingCodec.encode(pending) }
+    }
+
+    /**
+     * The draft the builder is on, creating one only if this account has
+     * none.
+     *
+     * **This is the only place a draft id comes into existence**, and that is
+     * the point of it. The same mistake had already been made three times in
+     * one batch — a line identified by its product key, an id minted inside a
+     * DataStore transform that `edit` may re-run, and an id minted per view
+     * model, which is per *process*, so a process death turned one quotation
+     * into two. Each was fixed where it was found, and the shape came back.
+     *
+     * A caller that cannot mint cannot mint at the wrong moment. Callers ask
+     * for the current id; they never make one. The one remaining hazard —
+     * minting before a transform rather than inside it — now exists in
+     * exactly one function instead of in every caller, where it is stated and
+     * tested once.
+     */
+    suspend fun currentDraftId(): String {
+        // Minted **before** the transform, because `edit` may run it more
+        // than once under contention and an id made inside would differ
+        // between attempts. Unused when a draft already exists.
+        val candidate = Keys.generateId(QuoteDrafts.DRAFT_PREFIX)
+        val after = store.edit { stored ->
+            val drafts = QuoteDraftsCodec.decode(stored[draftsKey])
+            val resolved = drafts.current
+            stored[draftsKey] = QuoteDraftsCodec.encode(
+                // `select` pins the resolved draft, so a collection whose
+                // named draft had been finalised stops falling back on every
+                // read and answers the same id twice running.
+                if (resolved == null) drafts.save(QuoteDraft(id = candidate))
+                else drafts.select(resolved.id)
+            )
+        }
+        return QuoteDraftsCodec.decode(after[draftsKey]).currentId
     }
 
     /**

@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import `in`.smartie.quotedesk.core.AppContainer
 import `in`.smartie.quotedesk.core.toAppError
-import `in`.smartie.quotedesk.data.mapping.Keys
 import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.domain.Member
@@ -16,6 +15,7 @@ import `in`.smartie.quotedesk.domain.ProductPins
 import `in`.smartie.quotedesk.domain.ProductWrite
 import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.QuoteDrafts
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -62,13 +62,16 @@ class ProductsViewModel(
     private val account = container.devicePreferences.forAccount(member.uid)
 
     /**
-     * Minted once per view model, not once per save.
+     * The draft's id, once the store has answered.
      *
-     * The draft this screen builds gets one id for as long as it exists, so a
-     * second save lands on the same draft instead of storing a twin — the
-     * N4.4 B2 lesson, a level up from the lines.
+     * **This view model cannot mint one**, and that is deliberate. Minting
+     * here was the third appearance of one shape in a single batch: a view
+     * model is recreated on process death, so an id made in its constructor
+     * made a *second* draft out of one quotation. `currentDraftId` owns
+     * creation now, and every save waits for its answer rather than
+     * inventing one to get on with.
      */
-    private val newDraftId = Keys.generateId(QuoteDrafts.DRAFT_PREFIX)
+    private val draftId = CompletableDeferred<String>()
 
     init {
         // The stored draft is read once. After that this view model owns it,
@@ -79,8 +82,26 @@ class ProductsViewModel(
             // itself — nothing reads those keys any more — so this only saves
             // work in progress, and it is idempotent.
             runCatching { account.adoptOwnerlessValues() }.onFailure { report(it) }
-            runCatching { account.drafts.first().current }
-                .onSuccess { stored -> if (stored != null && !stored.isEmpty) _draft.value = stored }
+
+            runCatching {
+                val id = account.currentDraftId()
+                id to account.drafts.first()[id]
+            }.onSuccess { (id, stored) ->
+                // Never a straight assignment. A tap on Add can land before
+                // this returns, and overwriting would take the person's line
+                // away silently; skipping when the stored draft is empty
+                // would leave this holding no id and mint a second one on the
+                // next save. `resume` is where both are decided, and it is
+                // unit-tested — this view model cannot be.
+                _draft.value = QuoteDrafts.resume(_draft.value, stored, id)
+                draftId.complete(id)
+            }.onFailure { failure ->
+                report(failure)
+                // The store is unreadable. The screen still works and the
+                // draft simply is not persisted — it is never given an
+                // invented id to carry on with.
+                draftId.complete("")
+            }
         }
     }
 
@@ -225,14 +246,18 @@ class ProductsViewModel(
     // --- plumbing ----------------------------------------------------------
 
     private fun persist(draft: QuoteDraft) {
-        val identified = draft.copy(
-            id = draft.id.ifBlank { newDraftId },
-            updatedAt = System.currentTimeMillis()
-        )
-        _draft.value = identified
+        // Shown immediately; stored once the id is known. The person never
+        // waits on a disk read to see their own tap.
+        _draft.value = draft.copy(updatedAt = System.currentTimeMillis())
         viewModelScope.launch {
-            runCatching { account.setDrafts(account.drafts.first().save(identified)) }
-                .onFailure { report(it) }
+            runCatching {
+                val id = draftId.await()
+                if (id.isNotBlank()) {
+                    val latest = _draft.value.copy(id = id)
+                    _draft.value = latest
+                    account.setDrafts(account.drafts.first().save(latest))
+                }
+            }.onFailure { report(it) }
         }
     }
 

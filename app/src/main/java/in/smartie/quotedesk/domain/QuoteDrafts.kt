@@ -69,6 +69,34 @@ data class QuoteDrafts(
         const val DRAFT_PREFIX = "qd_"
 
         /**
+         * Reconciling what was stored with what somebody typed while it was
+         * still loading.
+         *
+         * Reading the store is asynchronous, so a screen can be tapped before
+         * it answers. [edited] is whatever the screen has built meanwhile and
+         * [stored] is what came back. **Neither set of lines is ever
+         * discarded**, and the resolved [id] is always adopted — never minted
+         * — so an in-progress quotation cannot become two drafts.
+         *
+         * Pure, because the view model that needs it cannot be unit-tested:
+         * it takes an `AppContainer`. Putting the decision here is what makes
+         * the two failure paths testable at all.
+         */
+        fun resume(edited: QuoteDraft, stored: QuoteDraft?, id: String): QuoteDraft = when {
+            // Nothing was stored: keep what the person has, under the
+            // resolved id.
+            stored == null -> edited.copy(id = id)
+            // Nothing was typed meanwhile: the stored draft stands, empty or
+            // not. Adopting it **even when empty** is the half that stops a
+            // second draft being minted on the next edit.
+            edited.isEmpty -> stored.copy(id = id)
+            // Both hold lines, which means the person added one while this
+            // was loading. Keeping only one side is silent data loss, so
+            // neither is dropped.
+            else -> stored.copy(id = id, lines = stored.lines + edited.lines)
+        }
+
+        /**
          * A guard against a bug, not a policy. Nothing creates drafts in bulk,
          * and nothing prunes them: going past this is refused so a runaway is
          * visible, and somebody's quotation is never deleted to make room.

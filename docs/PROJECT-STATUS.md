@@ -28,7 +28,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
 | N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2, N4.3 and N4.4 are all code complete and CI-verified**, and both are waiting on the same Owner-run staging rules deployment paired with the APK rollout — they were never deployed separately and must not be. Purchase History is built and open to every role, so what was Batch 5 is done; the tab badge is Batch 6 |
 | N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.6 are complete and CI-verified at `a849650` ([run #137](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35838856077)).** Parties can be added and corrected, and an Owner can configure the quotation numbering and the Manager discount limit. **N5.7 is complete and CI-verified**: the catalogue now has a product editor, and it needed no rule change. Quotations themselves are still read-only — **nothing issues a number yet** — and the Quotation tab keeps its "Keep using the PWA to issue quotations" banner until the cutover batch. Next is N5.8 |
-| N6 Products & Categories | Not started. The Products & Categories editing screen, which T-P7 is blocked on |
+| N6 Products & Categories | Not started. The Products & Categories editing screen, which T-P7 is blocked on. **Also owed here: read the company GST from `teamSettings/company.defaultGst`.** V8C4's `stSave` writes it there and the native app is already permitted to read that document. N5.8a resolves a quotation's GST from the rate its catalogue lines agree on, which is an honest stopgap and not the final answer — a quotation whose lines disagree, or which has only hand-typed lines, has nothing to agree on and currently refuses to finalise until somebody sets the rate |
 | N7 Calculators | Not started. Port the four V8C4 calculators — rolling shutter, high-speed door, garage door, glass door — whose output becomes ordinary quotation lines carrying the opening size in the line's spec text |
 | N8 Migration & cutover | Not started. **The production migration and cutover.** `docs/N2-delivery.md:40` calls N8 "the catalogue migration"; that line is the stale one and `docs/N3-plan.md:585` is right. **Read the blocking warning about `import-staging.mjs` under "Decisions that bind future work" before planning any part of this** — the importer carries seed rates in every payload and would destroy live pricing if pointed at production |
 
@@ -1191,49 +1191,42 @@ re-run by this batch: N5.8a touches no rule and no import tooling.
    source. Deliberately switching GST off stays distinct from never setting
    one.
 
-#### OPEN DEFECT, introduced in commit 3 — a process death can mint a second draft
+#### The B2 shape appeared three times in one batch, and is now structural
 
-**This is real, it is mine, and it is not fixed.** It is the third appearance
-of the B2 shape in N5.8a, this time one level above the lines.
+Three occurrences in N5.8a, all the same cause — an identity available at a
+moment where creating one is wrong:
 
-`ProductsViewModel.kt:71` **mints** a draft id per view model:
+1. a line identified by its **product key**, so two openings of one product
+   merged into a single wrong figure (fixed in `9d034c6`);
+2. a draft id minted **inside a DataStore transform**, which `edit` may re-run
+   (fixed in `948db4a` before it shipped);
+3. a draft id minted **per view model**, which is per *process*, so a process
+   death turned one quotation into two drafts.
 
-```kotlin
-private val newDraftId = Keys.generateId(QuoteDrafts.DRAFT_PREFIX)
-```
+Three is not coincidence, and a third point fix would have invited a fourth
+occurrence in N5.8b or N5.9. So the third was fixed **structurally**:
+`AccountPreferences.currentDraftId()` is now the only place a draft id comes
+into existence, and `ProductsViewModel` cannot mint at all — it has no
+reference to `Keys`. A caller that cannot mint cannot mint at the wrong
+moment. The one remaining hazard, minting before a transform rather than
+inside it, now lives in exactly one function where it is stated and tested
+once, instead of in every caller.
 
-and `persist` uses it whenever the draft in hand has no id
-(`ProductsViewModel.kt:229`, `id = draft.id.ifBlank { newDraftId }`). A view
-model is recreated on process death, so it mints again. The persisted id is
-only recovered indirectly, by `:83` replacing `_draft` with the stored draft —
-and that line is guarded:
+The two failure paths are fixed and each has a test:
 
-```kotlin
-.onSuccess { stored -> if (stored != null && !stored.isEmpty) _draft.value = stored }
-```
+- **The emptied draft.** `persist` runs when the last line is removed, so an
+  empty draft *with an id* is stored. Skipping the assignment because it was
+  empty left the screen holding no id, and the next add minted a second one.
+  `QuoteDrafts.resume` now adopts the stored draft **even when empty**.
+- **The race after process death.** Reading the store is asynchronous; a tap
+  on Add before it answered was overwritten by a straight assignment, losing
+  the person's line *and* leaving an orphan. `resume` merges instead, so
+  neither set of lines is discarded. This was silent data loss and was the
+  more serious of the two.
 
-Two reachable paths follow, and **neither has a test**:
-
-- **An empty persisted draft.** `persist` runs on `clear()` and on removing the
-  last line, so an empty draft *with an id* is saved. On the next launch
-  `stored.isEmpty` is true, `:83` does not assign, `_draft` keeps a blank id,
-  and the next add mints a new one — leaving **two drafts** in the collection.
-- **A race after process death.** `:82` is asynchronous. A tap on Add before it
-  completes persists a draft under the freshly minted id, and then `:83`
-  overwrites `_draft` with the stored one — so the person's line disappears
-  *and* an orphan draft is left behind.
-
-**The fix**, for whoever picks this up: read the persisted `currentId` and
-adopt it unconditionally — including when the stored draft is empty — and mint
-only when the collection genuinely has no current draft. Guard `:83` so it
-cannot overwrite an edit the person made while the load was in flight. Then
-pin both paths: a draft emptied, the app killed and a line added must stay
-**one** draft; and an add racing the load must not leave an orphan.
-
-Severity: an orphan draft in device-local storage on one phone. No customer
-record is lost and nothing reaches Firestore. But it will ship into N5.8b if
-it is not fixed, and it is exactly the class of defect this phase has been
-catching before it shipped.
+The decision lives in `QuoteDrafts.resume` rather than in the view model
+because **`ProductsViewModel` has no test and cannot have one** — it takes an
+`AppContainer`. Putting it in pure code is what made both paths testable.
 
 #### What commit 3 did do
 
@@ -1281,13 +1274,15 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**Fix the open defect recorded under N5.8a: `ProductsViewModel` mints a draft
-id per view model, so a process death can turn one in-progress quotation into
-two drafts.** The two reachable paths, the fix and the tests it needs are
-written out in full in the N5.8a section above; neither path has a test today.
-Check CI run #151 first — it was still in flight when that section was
-written, and it is the only verification commit `948db4a` has had. After that,
-N5.8b is the builder screen.
+**Build N5.8b — the quotation builder screen**, over the model N5.8a proved.
+N5.8a is complete: its three commits plus the structural fix for the B2 shape
+are done, and the open defect recorded here earlier is closed.
+
+Carry two things into 8b. The four screen traps are unchanged, and the
+clipping helpers are `assertPaintedInsideCard`, `assertFooterPaintedInsideCard`
+and `assertNoDeadSpaceBelow` — **there is no `assertUnclipped`**. And the
+builder must ask `AccountPreferences.currentDraftId()` for a draft id; nothing
+outside that function may mint one.
 
 The rest of this section describes N5.8 as a whole and still stands.
 

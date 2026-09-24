@@ -171,4 +171,92 @@ class QuoteDraftsTest {
     fun `an empty collection round trips as empty`() {
         assertEquals(QuoteDrafts(), QuoteDraftsCodec.decode(QuoteDraftsCodec.encode(QuoteDrafts())))
     }
+
+    // --- resuming a draft, which is where two drafts used to come from ----------
+
+    @Test
+    fun `an emptied draft keeps its id, so the next line does not start a second one`() {
+        // The first of the two paths. `persist` runs when the last line is
+        // removed, so an EMPTY draft with an id is stored. Skipping the
+        // assignment because it is empty left the screen holding no id, and
+        // the next add minted a new one — one quotation, two drafts.
+        val stored = QuoteDraft(id = "qd_1", updatedAt = 7L)
+        assertTrue(stored.isEmpty)
+
+        val resumed = QuoteDrafts.resume(edited = QuoteDraft(), stored = stored, id = "qd_1")
+
+        assertEquals("qd_1", resumed.id)
+        assertTrue(resumed.isEmpty)
+
+        // And the line added next lands on that same draft, not a second.
+        val after = QuoteDrafts().save(stored).save(resumed.addManual("ln_1", "Motor", rate = 10.0))
+        assertEquals(1, after.drafts.size)
+        assertEquals("qd_1", after.drafts.single().id)
+    }
+
+    @Test
+    fun `a line added while the store was still loading is not lost`() {
+        // The second path, and the one that mattered more: it was silent data
+        // loss. A straight assignment replaced what the person had just typed
+        // with the stored draft, and left an orphan behind.
+        val typedMeanwhile = QuoteDraft().addManual("ln_new", "Site visit", rate = 2000.0)
+        val stored = QuoteDraft(id = "qd_1")
+            .addManual("ln_old", "Motor", rate = 100.0)
+
+        val resumed = QuoteDrafts.resume(typedMeanwhile, stored, "qd_1")
+
+        assertEquals("qd_1", resumed.id)
+        assertEquals(2, resumed.lineCount)
+        assertTrue(resumed.lines.any { it.id == "ln_old" })
+        assertTrue(resumed.lines.any { it.id == "ln_new" })
+    }
+
+    @Test
+    fun `with nothing stored, what the person typed is kept under the resolved id`() {
+        val typed = QuoteDraft().addManual("ln_1", "Site visit", rate = 2000.0)
+        val resumed = QuoteDrafts.resume(typed, stored = null, id = "qd_9")
+
+        assertEquals("qd_9", resumed.id)
+        assertEquals(1, resumed.lineCount)
+    }
+
+    @Test
+    fun `resuming never invents an id of its own`() {
+        // Whatever the inputs, the id is the one it was handed. Nothing here
+        // can mint, which is the whole point of moving the decision out of
+        // the view model.
+        listOf(
+            QuoteDrafts.resume(QuoteDraft(), null, "qd_x"),
+            QuoteDrafts.resume(QuoteDraft(id = "stale"), QuoteDraft(id = "other"), "qd_x"),
+            QuoteDrafts.resume(
+                QuoteDraft().addManual("a", "A", rate = 1.0),
+                QuoteDraft(id = "other").addManual("b", "B", rate = 1.0),
+                "qd_x"
+            )
+        ).forEach { assertEquals("qd_x", it.id) }
+    }
+
+    @Test
+    fun `an empty stored draft is still the current one`() {
+        // What `currentDraftId` relies on: a draft with no lines is a real
+        // draft with a real id, and must be found rather than replaced.
+        val drafts = QuoteDrafts().save(QuoteDraft(id = "qd_1"))
+        assertEquals("qd_1", drafts.current!!.id)
+        assertEquals("qd_1", drafts.currentId)
+    }
+
+    @Test
+    fun `selecting pins the fallback, so the same id comes back twice running`() {
+        // Without this, a collection whose named draft had been finalised
+        // would fall back on every read, and two reads could disagree.
+        val drafts = QuoteDrafts()
+            .save(draft("qd_1", at = 5L))
+            .save(draft("qd_2", at = 9L))
+            .remove("qd_2")
+        assertEquals("", drafts.currentId)
+
+        val pinned = drafts.select(drafts.current!!.id)
+        assertEquals("qd_1", pinned.currentId)
+        assertEquals("qd_1", pinned.current!!.id)
+    }
 }

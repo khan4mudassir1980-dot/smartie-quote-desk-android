@@ -1,15 +1,37 @@
 # Project status
 
 **The single current-status record. Read this before planning or changing
-anything.** Last updated 2026-09-23.
+anything.** Last updated 2026-09-24.
 
 ## Where the work is
 
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `a849650` — [run #137](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35838856077), fully green (unit tests, lint, Firestore rules emulator, APK build). **This is the commit to deploy the rules from, and its `smartie-native-apks` artifact is the APK to install.** |
-| **The ruleset has moved since N4.4** | `505b8d9` (run #123) was the deploy commit while N4.4 was the tip, and it is **no longer current**. N5.0b changed `/users` and **N5.6 changed `/teamSettings`**, so `a849650` carries two rules changes beyond what N4.2 and N4.3 left. N5.0b: an Administrator may no longer manage another Administrator. N5.6: configuring the quotation counter is the Owner's alone, the counter's *issue* branch is untouched, and `/teamSettings/quoting` is new. Both are safe to ship together — there is no Administrator account in staging or production, so neither narrowing interrupts anyone. N5.2 to N5.5 changed no rule at all. Deploy from `a849650`, not from `505b8d9`. |
+| **Last CI-verified head** | `c60705d` — [run #160](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36027462955), fully green (unit tests, lint, Firestore rules emulator, APK build). Its `smartie-native-apks` artifact is the APK to install. Later commits may sit above it. |
+| **Ruleset anchor** | `a794d64` — the **last commit that changed `firestore.rules`**. This moves only when a rule changes, which is why it is recorded separately from the head. |
+| **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **five rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c). |
+| **To deploy next** | The **latest CI-verified head**, not a hash copied into this file. Check it before deploying: `git diff --quiet <head> a794d64 -- firestore/firestore.rules` — silence means that head carries the current ruleset. No index deploy: `firestore.indexes.json` is unchanged since `69d0fce`. |
+
+> **Three fields, three meanings — they were one field until 2026-09-24 and it
+> had gone wrong.** The table said `a849650` was "the commit to deploy the rules
+> from"; line ~1327 said `2127d48`; the Owner's ledger said `a6c5839`. All three
+> were about different questions, and two were stale.
+>
+> **`a849650` was the dangerous one.** `git merge-base` puts it *before*
+> `677e751` and `a794d64`, so deploying from it would have shipped a ruleset
+> missing N5.6b and N5.6c — among them "a closed catch-all", a narrowing that
+> would have stayed open. It was correct when written, on the day the head and
+> the last rules change were the same commit, and became wrong a few hours later
+> when two more rules commits landed on top. That is the failure mode: a head
+> hash used as a ruleset hash goes stale silently, because nothing about the
+> head changing tells you the rules did not.
+>
+> So: **"last CI-verified head" answers what CI has proven. "Ruleset anchor"
+> answers which rules text is current. "Live on staging" answers what is
+> actually deployed. "To deploy next" is derived from the first two and is never
+> written down as a hash.**
+
 | **Historical branch** | `claude/sweet-fermi-ejyrg2` — carries N0 through N2 and **must not receive new work** |
 | **`main`** | The old native beta. Not the port. Do not branch new work from it. |
 
@@ -27,7 +49,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
 | N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2, N4.3 and N4.4 are all code complete and CI-verified**, and both are waiting on the same Owner-run staging rules deployment paired with the APK rollout — they were never deployed separately and must not be. Purchase History is built and open to every role, so what was Batch 5 is done; the tab badge is Batch 6 |
-| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.6 are complete and CI-verified at `a849650` ([run #137](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/35838856077)).** Parties can be added and corrected, and an Owner can configure the quotation numbering and the Manager discount limit. **N5.7 is complete and CI-verified**: the catalogue now has a product editor, and it needed no rule change. Quotations themselves are still read-only — **nothing issues a number yet** — and the Quotation tab keeps its "Keep using the PWA to issue quotations" banner until the cutover batch. Next is N5.8 |
+| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.7 are complete and CI-verified.** **N5.8a and N5.8b are complete and CI-verified at `c60705d` ([run #160](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36027462955)).** The quotation builder now exists: it replaces the Products tab's catalogue when the quote bar is tapped, and carries the rate type, the customer with a picker and "Save this customer", catalogue, hand-typed and area-priced lines, installation, the discount with the Manager cap, transport and GST, with live totals in the printed page's order. **Nothing is written to `/quotations` and no number is allocated** — the single Firestore write in the whole of N5.8 is "Save this customer", through `PartyWrite.mergeInto` under rules that already allow it. N5.8 changed **no rule**: `git diff 8784f90..HEAD` touches nothing under `firestore/` or `tools/`. Quotations themselves are still read-only and the Quotation tab keeps its "Keep using the PWA to issue quotations" banner until the cutover batch. Next is N5.9, the finalise transaction that takes a number from the counter |
 | N6 Products & Categories | Not started. The Products & Categories editing screen, which T-P7 is blocked on. **Also owed here: read the company GST from `teamSettings/company.defaultGst`.** V8C4's `stSave` writes it there and the native app is already permitted to read that document. N5.8a resolves a quotation's GST from the rate its catalogue lines agree on, which is an honest stopgap and not the final answer — a quotation whose lines disagree, or which has only hand-typed lines, has nothing to agree on and currently refuses to finalise until somebody sets the rate |
 | N7 Calculators | Not started. Port the four V8C4 calculators — rolling shutter, high-speed door, garage door, glass door — whose output becomes ordinary quotation lines carrying the opening size in the line's spec text |
 | N8 Migration & cutover | Not started. **The production migration and cutover.** `docs/N2-delivery.md:40` calls N8 "the catalogue migration"; that line is the stale one and `docs/N3-plan.md:585` is right. **Read the blocking warning about `import-staging.mjs` under "Decisions that bind future work" before planning any part of this** — the importer carries seed rates in every payload and would destroy live pricing if pointed at production |
@@ -1157,6 +1179,40 @@ emulator tests, 58 catalogue-tool tests.** N5.8a added 47 Kotlin tests
 rule and no import tooling, and those suites were re-run green on every commit
 regardless.
 
+### N5.8b, the builder — 11 commits
+
+| | Commit | CI |
+|---|---|---|
+| 1 | `9a3d011` both `resume` faults, and the transport note | **#155 green** |
+| 2 | `03b986e` the builder panel, in place of the draft sheet | *(covered by #156)* |
+| 3 | `fe02a32` two rates on the builder, and two on the catalogue | **#156 green** |
+| 4 | `d341100` who the quotation is for | *(covered by #157)* |
+| 5 | `1100751` Save this customer, the one write this phase makes | *(covered by #157)* |
+| 6 | `25fd6c5` three kinds of line, and Remove on all of them | **#157 red — 3 test faults** |
+| 7 | `c6993d7` a line by hand, and an opening priced by area | *(covered by #158)* |
+| 8 | `4221ed1` GST, transport and what it all comes to | **#158 red — a compile error** |
+| 9 | `f3cd3ea` installation and the discount, and the three faults in 8b-1 | **#159 green** |
+| 10 | `c60705d` clear the rate box before typing a negative into it | **#160 green** |
+| 11 | `e97e846` prove `alignLinesToTier` leaves a hand-typed catalogue rate alone | #161 |
+
+**Two runs went red and both were faults in what the batch itself wrote**, not
+in the app: two top-level constants colliding with `ProductEditor.kt`
+(`UNIT_LABEL`, `GST_LABEL` — a compile error), a shell heredoc's `${'$'}` escape
+written into a Python one so a test's ids were the source text, and an absence
+check whose witness sat at the opposite end of the `LazyColumn` from where it
+scrolled. The last is trap 2, got wrong in the file whose own KDoc explains
+trap 2.
+
+**Test counts at `e97e846`: 1459 Kotlin test methods across 123 classes**, 223
+emulator tests, 58 catalogue-tool tests. N5.8b added **106** Kotlin tests
+(1353 before). The emulator and tool figures are unchanged, and this time that
+is checked rather than assumed: `git diff --stat 8784f90..e97e846` touches 20
+files and **none** under `firestore/` or `tools/`.
+
+**No rule changed, nothing was written to `/quotations`, and no number was
+allocated.** The single Firestore write in the whole of N5.8 is "Save this
+customer", through `PartyWrite.mergeInto` under rules that already allow it.
+
 **Every N5.8a commit is CI-green**: #148, #149, #151 and #153, with the two
 documentation commits green at #150 and #152. The batch is closed.
 
@@ -1279,17 +1335,43 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**Build N5.8b — the quotation builder screen**, over the model N5.8a proved.
-N5.8a is complete: its three commits plus the structural fix for the B2 shape
-are done, and the open defect recorded here earlier is closed.
+**Build N5.9 — finalise: write the quotation and take its number.**
 
-Carry two things into 8b. The four screen traps are unchanged, and the
-clipping helpers are `assertPaintedInsideCard`, `assertFooterPaintedInsideCard`
-and `assertNoDeadSpaceBelow` — **there is no `assertUnclipped`**. And the
-builder must ask `AccountPreferences.currentDraftId()` for a draft id; nothing
-outside that function may mint one.
+N5.8b is complete and CI-verified, so the builder holds everything a
+quotation needs and nothing issues one. N5.9 is the transaction that writes
+`/quotations` and takes the next number from `/teamSettings/numbering` — the
+counter's *issue* branch, which N5.6 deliberately left untouched while it
+narrowed the *configure* branch to the Owner.
 
-The rest of this section describes N5.8 as a whole and still stands.
+Three things are already built for it and are waiting:
+
+- `QuoteDraft.toRecord()` turns a draft line into a `QuotationLineRecord`. It
+  has no caller today; N5.9 is the caller it was written for.
+- `Numbering` holds the formatting and the refusals from N5.6.
+- Transport becomes a manual line titled `Transportation` whose `s` is
+  `QuoteDraft.transportNote`, which is why the note exists.
+
+**Carry the N5.8b lesson into it:** when a plan prescribes a mechanism, check
+the mechanism actually fires. `withTier(resolved.tier, priceOf)` was the plan's
+fix for the tier half of the `resume` defect and it is a **no-op**, because it
+returns early when the tier is not changing — which is exactly the state
+`resume` leaves. A test now pins the no-op.
+
+### Owed, and recorded rather than done
+
+- **The 50-draft cap is not enforced.** `QuoteDrafts.refusalToAdd()` is called
+  by nothing, because nothing can create a second draft. It becomes live in the
+  first batch that ships a **drafts list**; that batch is not scheduled.
+- **`Permissions.canEditSettings` contradicts what shipped** — it permits an
+  Administrator to edit settings, while N5.6's Settings screen is Owner-only
+  with a view-only notice for everyone else. Left in place with a comment; it
+  is the Owner's call whether to delete it or change the policy.
+- **The stale `quotations.json` fixture** still carries `"unit": "sqft"`, the
+  spelling N5.7 corrected to `per sq ft`. Checked and safe to defer — neither
+  test class that reads it touches area pricing — and it moves with the N5.12
+  fixture pass.
+
+The rest of this section describes N5.8 as a whole and is kept for the record.
 
 **Build N5.8 — the quotation builder, draft only.**
 
@@ -1324,10 +1406,13 @@ cd firestore
 firebase.cmd deploy --only firestore:rules --project smartie-quote-desk-staging
 ```
 
-Deploy from the **last CI-verified head**, which is `2127d48` today and will
-have moved again by then — not from `505b8d9`, which is the N4.4 ruleset and
-no longer current. No index deploy: `firestore.indexes.json` has not changed
-since `69d0fce`.
+Deploy from the **latest CI-verified head**, and check it first with
+`git diff --quiet <head> a794d64 -- firestore/firestore.rules` — see "Where the
+work is" at the top of this file, which is the only place these hashes are
+maintained. **Do not copy a hash into this paragraph**: it read `2127d48` until
+2026-09-24, which was the verified head at the time of writing and by then sat
+*five* rules commits behind. No index deploy: `firestore.indexes.json` has not
+changed since `69d0fce`.
 
 **Three things to know before the pass, so none of them reads as a defect.**
 The two existing "yysh" rows are two real documents — N4.4 stops new ones and

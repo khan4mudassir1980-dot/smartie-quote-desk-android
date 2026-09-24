@@ -63,6 +63,33 @@ data class DraftLine(
     val isArea: Boolean get() = area != null
 
     /**
+     * Whether the **catalogue** sets this line's rate, rather than a person.
+     *
+     * The one rule both [QuoteDraft.withTier] and [QuoteDraft.alignLinesToTier]
+     * price by, written once so they cannot drift apart. A hand-typed rate and
+     * a manual line are a person's decision; a line with no product key has
+     * nothing to look a rate up by.
+     */
+    internal val cataloguePriced: Boolean
+        get() = !rateEdited && !manual && key.isNotBlank()
+
+    /**
+     * This line at [newTier] — or **itself, identically**, when the catalogue is
+     * not what sets its rate.
+     *
+     * Returning `this` rather than an equal copy is load-bearing: both callers
+     * count what moved with `===`, and a `copy()` that changed nothing would be
+     * reported as a reprice.
+     *
+     * A product that has left the catalogue prices to null, which reads as
+     * "Rate needed" and blocks finalising. That is the honest answer — we
+     * cannot say what it costs at this tier — and it is the overquote-safe one.
+     */
+    internal fun at(newTier: RateTierV2, priceOf: (String) -> Double?): DraftLine =
+        if (!cataloguePriced) this
+        else priceOf(key).let { copy(rate = it, originalRate = it, tier = newTier) }
+
+    /**
      * The quotation line this would become, or null while the rate is unset.
      * `QuotationLineRecord.rate` is a plain `Double`, so an unrated line has no
      * honest representation there — it must be priced first, which is exactly
@@ -161,6 +188,17 @@ data class QuoteDraft(
     val party: QuotationPartySnapshot = QuotationPartySnapshot(),
     /** Carriage. Stored as a **line** at finalise, inside the subtotal. */
     val transport: Double = 0.0,
+    /**
+     * What the carriage was for — V8C4's own field, placeholder
+     * "e.g. Mumbai to Vadodara". It reaches the printed quotation.
+     *
+     * A gap in N5.8a, which carried the amount and nowhere to put this. It
+     * needs no new wire field: at finalise transport becomes a manual line
+     * titled `Transportation`, and this becomes that line's `s` — the spec,
+     * which V8C4 already prints and which the read side already renders as a
+     * row's secondary text.
+     */
+    val transportNote: String = "",
     /** Null is "no installation", which is not the same as zero. */
     val installation: Installation? = null,
     val discount: Discount? = null,
@@ -353,16 +391,55 @@ data class QuoteDraft(
         var repriced = 0
         var kept = 0
         val updated = lines.map { line ->
-            if (line.rateEdited || line.manual || line.key.isBlank()) {
-                kept++
-                line
-            } else {
-                val rate = priceOf(line.key)
-                repriced++
-                line.copy(rate = rate, originalRate = rate, tier = newTier)
-            }
+            val moved = line.at(newTier, priceOf)
+            if (moved === line) kept++ else repriced++
+            moved
         }
         return Repriced(copy(tier = newTier, lines = updated), repriced, kept)
+    }
+
+    /**
+     * Lines whose own [DraftLine.tier] disagrees with the draft's, and that
+     * the catalogue could put right.
+     *
+     * How that happens at all: `QuoteDrafts.resume` adopts the *stored* tier
+     * while a line tapped in before the store answered was priced at whatever
+     * the screen was showing — the default Client. So the draft says Dealer
+     * and one line is Client-priced.
+     */
+    val hasLinesOutOfStep: Boolean
+        get() = lines.any { it.cataloguePriced && it.tier != tier }
+
+    /**
+     * Those lines brought back into step, at the draft's own tier.
+     *
+     * **[withTier] cannot do this, and must not be changed so it can.** It
+     * short-circuits when the tier is not changing — right for a tier picker,
+     * and exactly wrong here, where the tier is already correct and the
+     * *lines* are not. An earlier draft of `QuoteDrafts.resume` told its caller
+     * to "just call `withTier(resolved.tier, …)`", which is a no-op for
+     * precisely that reason: the fix would have shipped doing nothing.
+     *
+     * [Repriced.kept] counts out-of-step lines left alone because a person
+     * typed their rate. Those keep their own tier: the rate was struck at it,
+     * and recording something else would misstate what was quoted.
+     *
+     * A no-op on any draft that was never resumed, so it is safe to call
+     * whenever the catalogue arrives.
+     */
+    fun alignLinesToTier(priceOf: (String) -> Double?): Repriced {
+        var repriced = 0
+        var kept = 0
+        val updated = lines.map { line ->
+            if (line.tier == tier) return@map line
+            if (!line.cataloguePriced) {
+                kept++
+                return@map line
+            }
+            repriced++
+            line.at(tier, priceOf)
+        }
+        return Repriced(copy(lines = updated), repriced, kept)
     }
 
     // --- what it comes to ---------------------------------------------------------

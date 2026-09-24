@@ -1,6 +1,9 @@
 package `in`.smartie.quotedesk.domain
 
 import `in`.smartie.quotedesk.core.AccountStorage
+import `in`.smartie.quotedesk.data.model.RateTierV2
+import `in`.smartie.quotedesk.data.model.ProductRecord
+import `in`.smartie.quotedesk.data.mapping.Keys
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
@@ -23,6 +26,16 @@ import org.junit.Test
  * on a shared phone signing out is the ordinary way to hand over.
  */
 class QuoteDraftsTest {
+
+    private fun product(seedModel: String) = ProductRecord(
+        documentId = Keys.productDocId("gate", seedModel),
+        key = Keys.productKey("gate", seedModel),
+        group = "gate",
+        seedModel = seedModel,
+        model = seedModel,
+        dealer = 100.0,
+        client = 140.0
+    )
 
     private fun draft(id: String, at: Long = 0L, title: String = "Motor") =
         QuoteDraft(id = id, updatedAt = at).addManual(id = "ln_$id", title = title, rate = 100.0)
@@ -258,5 +271,167 @@ class QuoteDraftsTest {
         val pinned = drafts.select(drafts.current!!.id)
         assertEquals("qd_1", pinned.currentId)
         assertEquals("qd_1", pinned.current!!.id)
+    }
+
+    // --- resume follows add's own merge rule ------------------------------------
+
+    @Test
+    fun `a product in both sets becomes one line, not two that look identical`() {
+        // The hole in the merge. A blind concatenation produced two lines with
+        // the same title, unit and rate — and the same quantity when both were
+        // one. Indistinguishable on screen, different ids underneath, and the
+        // rule that adding the same product twice never makes two of it broken
+        // by a path that rule never looked at.
+        val motor = product("SIE1000")
+        val stored = QuoteDraft(id = "qd_1").add(motor, id = "ln_stored")
+        val typedMeanwhile = QuoteDraft().add(motor, id = "ln_typed")
+
+        val resumed = QuoteDrafts.resume(typedMeanwhile, stored, "qd_1")
+
+        assertEquals(1, resumed.lineCount)
+        assertEquals(2.0, resumed.quantityOf(motor.key), 0.0)
+        assertEquals("ln_stored", resumed.lines.single().id)
+    }
+
+    @Test
+    fun `but two hand-typed lines stay two, and two openings stay two`() {
+        // The other half of the same rule: merging is right for a catalogue
+        // tap and wrong for everything else.
+        val stored = QuoteDraft(id = "qd_1").addManual("ln_a", "Site visit", rate = 2000.0)
+        val typed = QuoteDraft().addManual("ln_b", "Site visit", rate = 2000.0)
+        assertEquals(2, QuoteDrafts.resume(typed, stored, "qd_1").lineCount)
+
+        val opening = AreaLine(width = 3000.0, height = 3500.0)
+        val storedArea = QuoteDraft(id = "qd_1")
+            .addArea("ln_c", opening, 450.0, "Shutter", key = "rs|RS500")
+        val typedArea = QuoteDraft()
+            .addArea("ln_d", opening, 450.0, "Shutter", key = "rs|RS500")
+        assertEquals(2, QuoteDrafts.resume(typedArea, storedArea, "qd_1").lineCount)
+    }
+
+    @Test
+    fun `a different product typed meanwhile is added rather than merged`() {
+        val stored = QuoteDraft(id = "qd_1").add(product("SIE1000"), id = "ln_1")
+        val typed = QuoteDraft().add(product("SIE600"), id = "ln_2")
+
+        val resumed = QuoteDrafts.resume(typed, stored, "qd_1")
+        assertEquals(2, resumed.lineCount)
+    }
+
+    @Test
+    fun `the resolved draft keeps the stored tier, so the caller must reprice`() {
+        // The second fault. Lines typed before the store answered were priced
+        // at whatever the screen showed — the default Client — while the
+        // resolved draft takes the stored tier. A Dealer quotation holding a
+        // Client-priced line is the overquote direction, so the safe one, but
+        // it is still wrong; `withTier` is what puts it right.
+        val motor = product("SIE1000")
+        val stored = QuoteDraft(id = "qd_1", tier = RateTierV2.DEALER)
+            .add(motor, id = "ln_1")
+        val typed = QuoteDraft(tier = RateTierV2.CLIENT).add(product("SIE600"), id = "ln_2")
+
+        val resumed = QuoteDrafts.resume(typed, stored, "qd_1")
+        assertEquals(RateTierV2.DEALER, resumed.tier)
+        assertEquals(RateTierV2.CLIENT, resumed.line("ln_2")!!.tier)
+
+        // The draft says so itself, rather than the caller having to look.
+        assertTrue(resumed.hasLinesOutOfStep)
+    }
+
+    @Test
+    fun `withTier cannot fix it, which is why alignLinesToTier exists`() {
+        // The fix this KDoc first prescribed. `withTier` returns early when
+        // the tier is not changing — and after `resume` the tier is already
+        // right and the LINES are not, so the prescribed fix did nothing at
+        // all. Asserted here so nobody reinstates it.
+        val motor = product("SIE1000")
+        val stored = QuoteDraft(id = "qd_1", tier = RateTierV2.DEALER).add(motor, id = "ln_1")
+        val typed = QuoteDraft(tier = RateTierV2.CLIENT).add(product("SIE600"), id = "ln_2")
+        val resumed = QuoteDrafts.resume(typed, stored, "qd_1")
+
+        val viaWithTier = resumed.withTier(RateTierV2.DEALER) { 100.0 }
+        assertEquals(0, viaWithTier.repriced)
+        assertEquals(RateTierV2.CLIENT, viaWithTier.draft.line("ln_2")!!.tier)
+        assertTrue(viaWithTier.draft.hasLinesOutOfStep)
+
+        val aligned = resumed.alignLinesToTier { 100.0 }
+        assertEquals(1, aligned.repriced)
+        assertEquals(RateTierV2.DEALER, aligned.draft.line("ln_2")!!.tier)
+        assertEquals(100.0, aligned.draft.line("ln_2")!!.rate!!, 0.0)
+        // The line that was already in step is untouched, not repriced twice.
+        assertEquals(100.0, aligned.draft.line("ln_1")!!.rate!!, 0.0)
+        assertTrue(!aligned.draft.hasLinesOutOfStep)
+    }
+
+    @Test
+    fun `a hand-typed rate is kept at its own tier, never realigned`() {
+        // Its rate was struck at the tier it carries. Recording a different
+        // one would misstate what was quoted, so the line is counted as kept
+        // and left exactly as it is.
+        val stored = QuoteDraft(id = "qd_1", tier = RateTierV2.DEALER)
+            .addManual("ln_1", "Site visit", rate = 2000.0)
+        val typed = QuoteDraft(tier = RateTierV2.CLIENT).addManual("ln_2", "Crane", rate = 9000.0)
+        val resumed = QuoteDrafts.resume(typed, stored, "qd_1")
+
+        val aligned = resumed.alignLinesToTier { 1.0 }
+        assertEquals(0, aligned.repriced)
+        assertEquals(1, aligned.kept)
+        assertEquals(9000.0, aligned.draft.line("ln_2")!!.rate!!, 0.0)
+        assertEquals(RateTierV2.CLIENT, aligned.draft.line("ln_2")!!.tier)
+        // And it never asks again, because nothing here can be put right.
+        assertTrue(!resumed.hasLinesOutOfStep)
+    }
+
+    @Test
+    fun `an ordinary draft has nothing to align, so the fix costs nothing`() {
+        val draft = QuoteDraft(id = "qd_1", tier = RateTierV2.DEALER).add(product("SIE1000"))
+        assertTrue(!draft.hasLinesOutOfStep)
+        val aligned = draft.alignLinesToTier { error("nothing should be priced") }
+        assertEquals(0, aligned.repriced)
+        assertEquals(0, aligned.kept)
+        assertEquals(draft, aligned.draft)
+    }
+
+    @Test
+    fun `a product that has left the catalogue prices to nothing, not to zero`() {
+        val stored = QuoteDraft(id = "qd_1", tier = RateTierV2.DEALER)
+            .addManual("ln_0", "Motor", rate = 100.0)
+        val typed = QuoteDraft(tier = RateTierV2.CLIENT).add(product("SIE600"), id = "ln_2")
+        val resumed = QuoteDrafts.resume(typed, stored, "qd_1")
+
+        val aligned = resumed.alignLinesToTier { null }.draft
+        assertNull(aligned.line("ln_2")!!.rate)
+        assertTrue(aligned.line("ln_2")!!.needsRate)
+        assertEquals(QuoteDraft.LINE_NEEDS_RATE, aligned.refusal(QuoteMath.NO_CAP))
+    }
+
+    // --- the transport note, which 8a had nowhere to put --------------------------
+
+    @Test
+    fun `the transport note survives a round trip`() {
+        val drafts = QuoteDrafts().save(
+            QuoteDraft(id = "qd_1", transport = 2500.0, transportNote = "Mumbai to Vadodara")
+                .addManual("ln_1", "Motor", rate = 100.0)
+        )
+        val restored = QuoteDraftsCodec.decode(QuoteDraftsCodec.encode(drafts))
+        assertEquals("Mumbai to Vadodara", restored.drafts.single().transportNote)
+        assertEquals(2500.0, restored.drafts.single().transport, 0.0)
+    }
+
+    @Test
+    fun `a draft stored before the note existed decodes with an empty one`() {
+        // Appended, not inserted, so nothing already on a phone is disturbed.
+        // The head is rebuilt one field short, exactly as it was written
+        // before `transportNote` existed.
+        val before = QuoteDraft(id = "qd_1").addManual("ln_1", "Motor", rate = 100.0)
+        val encoded = QuoteDraftCodec.encode(before)
+        val head = encoded.substringBefore('\u001e')
+        val records = encoded.substring(head.length)
+        val shorter = head.split('\u001f').dropLast(1).joinToString("\u001f")
+
+        val restored = QuoteDraftCodec.decode(shorter + records)
+        assertEquals("", restored.transportNote)
+        assertEquals("qd_1", restored.id)
+        assertEquals(1, restored.lineCount)
     }
 }

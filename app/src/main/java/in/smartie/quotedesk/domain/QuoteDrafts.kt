@@ -78,6 +78,21 @@ data class QuoteDrafts(
          * discarded**, and the resolved [id] is always adopted — never minted
          * — so an in-progress quotation cannot become two drafts.
          *
+         * **The caller must reprice after this, with
+         * [QuoteDraft.alignLinesToTier] and not with `withTier`.** The resolved
+         * draft takes the *stored* tier, while any line typed meanwhile was
+         * priced at whatever tier the screen was showing before the store
+         * answered — the default Client. So a Dealer quotation can come out of
+         * here holding a Client-priced line. That is the overquote direction,
+         * and so the safe one, but it is still wrong.
+         *
+         * `withTier(resolved.tier, priceOf)` looks like the fix and **is a
+         * no-op**: it returns early when the tier is not changing, and here
+         * the tier is already right — it is the lines that are not.
+         * [QuoteDraft.alignLinesToTier] is the one that hangs the reprice on
+         * the line's own tier instead, and [QuoteDraft.hasLinesOutOfStep] says
+         * whether there is anything to do.
+         *
          * Pure, because the view model that needs it cannot be unit-tested:
          * it takes an `AppContainer`. Putting the decision here is what makes
          * the two failure paths testable at all.
@@ -92,8 +107,43 @@ data class QuoteDrafts(
             edited.isEmpty -> stored.copy(id = id)
             // Both hold lines, which means the person added one while this
             // was loading. Keeping only one side is silent data loss, so
-            // neither is dropped.
-            else -> stored.copy(id = id, lines = stored.lines + edited.lines)
+            // neither is dropped — but a blind concatenation is not a merge.
+            else -> stored.copy(id = id, lines = mergedLines(stored, edited))
+        }
+
+        /**
+         * Two sets of lines joined by **the same rule `QuoteDraft.add` uses**.
+         *
+         * A blind `stored.lines + edited.lines` broke the rule that adding the
+         * same catalogue product twice never produces two of it: a product in
+         * both sets arrived as two lines with the same title, unit and rate —
+         * and the same quantity when both were one. Indistinguishable on
+         * screen, and different ids underneath.
+         *
+         * So a catalogue product found in both has its quantities summed, and
+         * manual and area lines are never merged, because two openings of one
+         * product are two lines and two hand-typed lines are two lines. One
+         * rule with two callers, rather than two rules that disagree.
+         */
+        private fun mergedLines(stored: QuoteDraft, edited: QuoteDraft): List<DraftLine> {
+            var lines = stored.lines
+            for (line in edited.lines) {
+                val existing = lines.firstOrNull {
+                    it.key.isNotBlank() && it.key == line.key && !it.manual && it.area == null
+                }
+                lines = if (existing != null && !line.manual && line.area == null) {
+                    lines.map {
+                        if (it.id == existing.id) {
+                            it.copy(quantity = it.quantity + line.quantity)
+                        } else {
+                            it
+                        }
+                    }
+                } else {
+                    lines + line
+                }
+            }
+            return lines
         }
 
         /**

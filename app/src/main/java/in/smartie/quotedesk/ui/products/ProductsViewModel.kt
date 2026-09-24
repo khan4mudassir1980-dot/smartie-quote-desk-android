@@ -120,6 +120,26 @@ class ProductsViewModel(
     }
 
     /**
+     * Brings lines typed while the stored draft was still loading into step
+     * with its tier.
+     *
+     * Called when the catalogue is ready, because that is the first moment
+     * there is anything to reprice *from* — this view model has no catalogue
+     * of its own, which is why the screen hands it one. A no-op on every
+     * ordinary start, so it costs nothing to call.
+     */
+    fun alignDraftToTier(products: List<ProductRecord>) {
+        val current = _draft.value
+        if (!current.hasLinesOutOfStep) return
+        val byKey = products.associateBy { it.key }
+        val outcome = current.alignLinesToTier { key -> byKey[key]?.priceFor(current.tier) }
+        persist(outcome.draft)
+        if (outcome.repriced > 0) {
+            emit("${outcome.repriced} repriced at ${current.tier.label} rates")
+        }
+    }
+
+    /**
      * Switches tier and reprices the lines nobody typed a rate into, saying
      * what moved and what was kept, as the PWA does (2269-2288).
      */

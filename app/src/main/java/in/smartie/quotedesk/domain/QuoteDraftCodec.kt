@@ -70,6 +70,8 @@ object QuoteDraftCodec {
             escape(draft.party.email),
             escape(draft.party.address),
             escape(draft.party.city),
+            // --- appended after v2 shipped; an older head simply stops above -
+            escape(draft.transportNote),
         ).joinToString(FIELD.toString())
         val lines = draft.lines.map { line ->
             listOf(
@@ -179,6 +181,7 @@ object QuoteDraftCodec {
             gstEnabled = head.getOrNull(10)?.let { it == "1" } ?: true,
             gstPercent = head.getOrNull(11)?.takeIf { it.isNotEmpty() }?.toDoubleOrNull(),
             updatedAt = head.getOrNull(12)?.toLongOrNull() ?: 0L,
+            transportNote = head.getOrNull(21)?.let(::unescape).orEmpty(),
             faults = faults
         )
     }

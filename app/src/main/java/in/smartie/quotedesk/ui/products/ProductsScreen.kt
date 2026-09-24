@@ -137,6 +137,16 @@ fun ProductsScreen(
     // renamed product keeps the stock row and the history it already had.
     val stockByKey = remember(stock) { stock.associateBy { it.key } }
 
+    // A line tapped in before the stored draft answered was priced at the tier
+    // the screen was showing, not the tier the draft turned out to carry.
+    // Keyed on the mismatch itself rather than on the draft, so it fires
+    // whichever of the two arrives second and stops as soon as it is fixed.
+    LaunchedEffect(products.isNotEmpty(), draft.hasLinesOutOfStep) {
+        if (products.isNotEmpty() && draft.hasLinesOutOfStep) {
+            viewModel.alignDraftToTier(products)
+        }
+    }
+
     ProductsCatalogue(
         canViewProducts = Permissions.canViewProducts(data.member),
         view = view,

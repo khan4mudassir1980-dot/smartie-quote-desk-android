@@ -309,6 +309,46 @@ class ProductsViewModel(
         }
     }
 
+    // --- GST and transport (N5.8b) ------------------------------------------
+
+    fun setGstEnabled(enabled: Boolean) {
+        persist(_draft.value.copy(gstEnabled = enabled))
+    }
+
+    /** Null is "not resolved yet", which blocks finalising. Never a zero. */
+    fun setGstPercent(percent: Double?) {
+        persist(_draft.value.copy(gstPercent = percent?.takeIf { it.isFinite() && it >= 0.0 }))
+    }
+
+    /**
+     * The GST rate the products agree on, filled in **only while none is set**.
+     *
+     * A pre-fill and nothing more. A rate somebody typed is never moved
+     * because a product joined the quotation: the disagreement is shown by
+     * `QuoteGst.note` and the person decides. Silently changing a money field
+     * because the lines changed is the fallback N5.8a's second amendment
+     * forbade.
+     */
+    fun suggestGst(products: List<ProductRecord>) {
+        val current = _draft.value
+        if (current.gstPercent != null || !current.gstEnabled) return
+        val byKey = products.associateBy { it.key }
+        val agreed = current.gstSuggestion { key -> byKey[key]?.gst } ?: return
+        persist(current.copy(gstPercent = agreed))
+    }
+
+    fun setTransport(amount: Double) {
+        if (!amount.isFinite() || amount < 0.0) {
+            emit(QuoteDraft.NEGATIVE_TRANSPORT)
+            return
+        }
+        persist(_draft.value.copy(transport = amount))
+    }
+
+    fun setTransportNote(note: String) {
+        persist(_draft.value.copy(transportNote = note))
+    }
+
     fun clearDraft() {
         persist(_draft.value.clear())
     }

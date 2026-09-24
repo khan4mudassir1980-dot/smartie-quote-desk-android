@@ -495,6 +495,17 @@ data class QuoteDraft(
      * resolved without asking somebody. [gstOf] answers a product's rate by
      * its logical key.
      */
+    /**
+     * Every distinct GST rate the catalogue lines carry.
+     *
+     * Empty on a quotation of nothing but hand-typed lines, which is not the
+     * same as the products disagreeing — `QuoteGst.note` tells the two apart.
+     */
+    fun gstRates(gstOf: (String) -> Double?): List<Double> = lines
+        .filter { !it.manual && it.key.isNotBlank() }
+        .mapNotNull { gstOf(it.key) }
+        .distinct()
+
     fun gstSuggestion(gstOf: (String) -> Double?): Double? = lines
         .filter { !it.manual && it.key.isNotBlank() }
         .mapNotNull { gstOf(it.key) }

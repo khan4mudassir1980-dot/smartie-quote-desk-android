@@ -122,6 +122,11 @@ data class ProductsActions(
     val onAddArea: (String, AreaEntry) -> Unit = { _, _ -> },
     /** A measurement corrected on an opening already on the quotation. */
     val onEditArea: (DraftLine, AreaEntry) -> Unit = { _, _ -> },
+    val onGstEnabledChange: (Boolean) -> Unit = {},
+    /** Null is "not resolved yet", which blocks finalising. Never a zero. */
+    val onGstPercentChange: (Double?) -> Unit = {},
+    val onTransportChange: (Double) -> Unit = {},
+    val onTransportNoteChange: (String) -> Unit = {},
     val onTogglePin: (String) -> Unit = {},
     /** One place up (-1) or down (+1), from the drag handle's named actions. */
     val onMovePin: (String, Int) -> Unit = { _, _ -> },
@@ -163,6 +168,14 @@ fun ProductsScreen(
     // Joined on the product's immutable key, never its display model: a
     // renamed product keeps the stock row and the history it already had.
     val stockByKey = remember(stock) { stock.associateBy { it.key } }
+    val productsByKey = remember(products) { products.associateBy { it.key } }
+
+    // The rate the products agree on, filled in only while none is set — a
+    // pre-fill, never an overwrite. Keyed on the unresolved state itself, so
+    // it fires whichever of the two arrives second and stops once it is set.
+    LaunchedEffect(products.isNotEmpty(), draft.gstPercent == null, draft.lineCount) {
+        if (products.isNotEmpty() && draft.gstPercent == null) viewModel.suggestGst(products)
+    }
 
     // A line tapped in before the stored draft answered was priced at the tier
     // the screen was showing, not the tier the draft turned out to carry.
@@ -192,6 +205,7 @@ fun ProductsScreen(
         customerFailure = customerFailure,
         newPartyId = viewModel::mintPartyId,
         newLineId = viewModel::mintLineId,
+        gstOf = { key -> productsByKey[key]?.gst },
         actions = ProductsActions(
             onQueryChange = viewModel::setQuery,
             onMinimumKgChange = viewModel::setMinimumKg,
@@ -204,6 +218,10 @@ fun ProductsScreen(
             onAddManual = viewModel::addManualLine,
             onAddArea = viewModel::addAreaLine,
             onEditArea = viewModel::editAreaLine,
+            onGstEnabledChange = viewModel::setGstEnabled,
+            onGstPercentChange = viewModel::setGstPercent,
+            onTransportChange = viewModel::setTransport,
+            onTransportNoteChange = viewModel::setTransportNote,
             onTogglePin = { key -> viewModel.togglePin(pinnedKeys, key) },
             onMovePin = { key, delta -> viewModel.movePin(pinnedKeys, key, delta) },
             onReorderPin = { moved, target -> viewModel.reorderPin(pinnedKeys, moved, target) },
@@ -242,6 +260,8 @@ fun ProductsCatalogue(
     newPartyId: () -> String = { "" },
     /** Minted once per line being typed. See `ProductsViewModel.mintLineId`. */
     newLineId: () -> String = { "" },
+    /** A product's GST rate, by its logical key. */
+    gstOf: (String) -> Double? = { null },
     actions: ProductsActions = ProductsActions(),
 ) {
     if (!canViewProducts) {
@@ -287,6 +307,11 @@ fun ProductsCatalogue(
             onAddArea = actions.onAddArea,
             onEditArea = actions.onEditArea,
             newLineId = newLineId,
+            gstOf = gstOf,
+            onGstEnabledChange = actions.onGstEnabledChange,
+            onGstPercentChange = actions.onGstPercentChange,
+            onTransportChange = actions.onTransportChange,
+            onTransportNoteChange = actions.onTransportNoteChange,
             parties = parties,
             onPartyChange = actions.onPartyChange,
             onChooseParty = actions.onChooseParty,

@@ -25,6 +25,7 @@ import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.AreaEntry
 import `in`.smartie.quotedesk.domain.AreaLine
 import `in`.smartie.quotedesk.domain.ManualEntry
+import `in`.smartie.quotedesk.domain.QuoteGst
 import `in`.smartie.quotedesk.domain.QuoteLineEntry
 import `in`.smartie.quotedesk.domain.QuoteTier
 import `in`.smartie.quotedesk.ui.products.BACK_TO_PRODUCTS
@@ -45,6 +46,15 @@ import `in`.smartie.quotedesk.ui.products.BUILDER_ADD_AREA_KEY
 import `in`.smartie.quotedesk.ui.products.BUILDER_ADD_MANUAL_KEY
 import `in`.smartie.quotedesk.ui.products.BUILDER_AREA_ADD_KEY
 import `in`.smartie.quotedesk.ui.products.BUILDER_AREA_WORKING_KEY
+import `in`.smartie.quotedesk.ui.products.BUILDER_GST_KEY
+import `in`.smartie.quotedesk.ui.products.BUILDER_TOTALS_KEY
+import `in`.smartie.quotedesk.ui.products.BUILDER_TRANSPORT_KEY
+import `in`.smartie.quotedesk.ui.products.GST_LABEL
+import `in`.smartie.quotedesk.ui.products.GST_PERCENT_LABEL
+import `in`.smartie.quotedesk.ui.products.GST_UNSET
+import `in`.smartie.quotedesk.ui.products.TOTAL_UNSET
+import `in`.smartie.quotedesk.ui.products.TRANSPORT_LABEL
+import `in`.smartie.quotedesk.ui.products.TRANSPORT_NOTE_LABEL
 import `in`.smartie.quotedesk.ui.products.BUILDER_MANUAL_ADD_KEY
 import `in`.smartie.quotedesk.ui.products.BUILDER_SAVE_CUSTOMER_KEY
 import `in`.smartie.quotedesk.ui.products.DESCRIPTION_LABEL
@@ -118,6 +128,12 @@ class QuoteBuilderScreenTest {
     private var addedManual: Pair<String, ManualEntry>? = null
     private var addedArea: Pair<String, AreaEntry>? = null
     private var editedArea: Pair<String, AreaEntry>? = null
+    private var gstEnabled: Boolean? = null
+
+    /** Paired with a flag, because null is a value this one legitimately sends. */
+    private var gstPercent: Pair<Double?, Boolean>? = null
+    private var transport: Double? = null
+    private var transportNote: String? = null
     private var retiered: RateTierV2? = null
     private var chosen: PartyRecord? = null
     private var typedParty: QuotationPartySnapshot? = null
@@ -151,6 +167,7 @@ class QuoteBuilderScreenTest {
                     draft = draft,
                     parties = parties,
                     customerFailure = customerFailure,
+                    gstOf = { key -> mapOf("gate|SIE1000" to 18.0)[key] },
                     // A different id on every call, so a test can prove the
                     // panel mints once and then holds what it minted.
                     newPartyId = { "c_new_${'$'}{minted++}" },
@@ -165,6 +182,10 @@ class QuoteBuilderScreenTest {
                         onAddManual = { id, entry -> addedManual = id to entry },
                         onAddArea = { id, entry -> addedArea = id to entry },
                         onEditArea = { line, entry -> editedArea = line.id to entry },
+                        onGstEnabledChange = { gstEnabled = it },
+                        onGstPercentChange = { gstPercent = it to true },
+                        onTransportChange = { transport = it },
+                        onTransportNoteChange = { transportNote = it },
                         onClearDraft = { cleared++ }
                     )
                 )
@@ -619,5 +640,90 @@ class QuoteBuilderScreenTest {
         assertEquals("ln_a", editedArea?.first)
         assertEquals("3500", editedArea?.second?.height)
         assertNull("nothing was added as a second line", addedArea)
+    }
+
+    // --- GST, transport and the totals ------------------------------------------
+
+    @Test
+    fun `an unresolved GST rate says so on the row, and on the total`() {
+        // `toCharges` turns an unresolved rate into "no GST", which is right
+        // for the arithmetic and would be a lie on the page. So the rows say
+        // so in words rather than printing a zero somebody might trust.
+        render(oneLine())
+        scrollTo(BUILDER_TOTALS_KEY)
+
+        compose.onNodeWithText(GST_UNSET).assertExists()
+        compose.onNodeWithText(TOTAL_UNSET).assertExists()
+    }
+
+    @Test
+    fun `a resolved rate shows the tax and the grand total`() {
+        render(oneLine().copy(gstPercent = 18.0))
+        scrollTo(BUILDER_TOTALS_KEY)
+
+        // 2 x 22,200 = 44,400, 18% of which is 7,992. The figure appears on
+        // the line, on Products and on Subtotal, which is three nodes and not
+        // an ambiguity to assert around.
+        assertTrue(compose.onAllNodesWithText("₹44,400").fetchSemanticsNodes().isNotEmpty())
+        compose.onNodeWithText("GST 18%").assertExists()
+        compose.onNodeWithText("₹7,992").assertExists()
+        compose.onNodeWithText("₹52,392").assertExists()
+    }
+
+    @Test
+    fun `switching GST off is a decision, and reads as one`() {
+        render(oneLine().copy(gstEnabled = false))
+        scrollTo(BUILDER_GST_KEY)
+
+        compose.onNodeWithText(QuoteGst.NO_GST).assertExists()
+        // The percentage box is not merely empty, it is not drawn — and the
+        // switch above proves the block composed.
+        assertEquals(
+            0,
+            compose.onAllNodesWithContentDescription(GST_PERCENT_LABEL)
+                .fetchSemanticsNodes().size
+        )
+        compose.onNodeWithContentDescription(GST_LABEL).assertExists()
+    }
+
+    @Test
+    fun `turning GST off reports it rather than blanking the rate`() {
+        render(oneLine().copy(gstPercent = 18.0))
+        scrollTo(BUILDER_GST_KEY)
+        compose.onNodeWithContentDescription(GST_LABEL).performClick()
+
+        assertEquals(false, gstEnabled)
+    }
+
+    @Test
+    fun `transport takes an amount and the note that reaches the printed page`() {
+        render(oneLine())
+        scrollTo(BUILDER_TRANSPORT_KEY)
+        compose.field(TRANSPORT_LABEL).performTextInput("2500")
+        assertEquals(2500.0, transport!!, 0.0)
+
+        scrollTo(TRANSPORT_NOTE_LABEL)
+        compose.field(TRANSPORT_NOTE_LABEL).performTextInput("Mumbai to Vadodara")
+        assertEquals("Mumbai to Vadodara", transportNote)
+    }
+
+    @Test
+    fun `a negative transport is refused on the box, and never charged`() {
+        render(oneLine())
+        scrollTo(BUILDER_TRANSPORT_KEY)
+        compose.field(TRANSPORT_LABEL).performTextInput("-500")
+
+        compose.onNodeWithText(QuoteDraft.NEGATIVE_TRANSPORT).assertExists()
+    }
+
+    @Test
+    fun `transport is inside the subtotal, so GST falls on it too`() {
+        render(oneLine().copy(gstPercent = 18.0, transport = 2500.0))
+        scrollTo(BUILDER_TOTALS_KEY)
+
+        // 44,400 + 2,500 = 46,900 subtotal; 18% of that is 8,442.
+        compose.onNodeWithText("₹46,900").assertExists()
+        compose.onNodeWithText("₹8,442").assertExists()
+        compose.onNodeWithText("₹55,342").assertExists()
     }
 }

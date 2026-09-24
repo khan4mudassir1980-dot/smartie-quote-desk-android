@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,11 +37,14 @@ import `in`.smartie.quotedesk.domain.ManualEntry
 import `in`.smartie.quotedesk.domain.Parties
 import `in`.smartie.quotedesk.domain.QuoteArea
 import `in`.smartie.quotedesk.domain.QuoteDraft
+import `in`.smartie.quotedesk.domain.QuoteGst
+import `in`.smartie.quotedesk.domain.QuoteLineEntry
 import `in`.smartie.quotedesk.domain.QuoteTier
 import `in`.smartie.quotedesk.ui.components.CompactStepper
 import `in`.smartie.quotedesk.ui.components.EmptyState
 import `in`.smartie.quotedesk.ui.components.ListRow
 import `in`.smartie.quotedesk.ui.components.SegmentedChoice
+import `in`.smartie.quotedesk.ui.components.SmartieCard
 import `in`.smartie.quotedesk.ui.components.SmartieField
 import `in`.smartie.quotedesk.ui.components.SmartieGhostButton
 import `in`.smartie.quotedesk.ui.components.SmartiePrimaryButton
@@ -97,7 +101,13 @@ internal fun QuoteBuilderPanel(
     onAddArea: (String, AreaEntry) -> Unit = { _, _ -> },
     onEditArea: (DraftLine, AreaEntry) -> Unit = { _, _ -> },
     /** Minted once per line being typed, and reused on a retry. */
-    newLineId: () -> String = { "" }
+    newLineId: () -> String = { "" },
+    /** A product's GST rate, by its logical key. */
+    gstOf: (String) -> Double? = { null },
+    onGstEnabledChange: (Boolean) -> Unit = {},
+    onGstPercentChange: (Double?) -> Unit = {},
+    onTransportChange: (Double) -> Unit = {},
+    onTransportNoteChange: (String) -> Unit = {}
 ) {
     // Which saved customer the picker is showing, and what is typed into its
     // search box. The panel's own state: nothing about it belongs on a draft
@@ -136,6 +146,16 @@ internal fun QuoteBuilderPanel(
     // Which existing opening the area form is editing, if any.
     var editingAreaId by rememberSaveable { mutableStateOf("") }
     var mintedLineId by rememberSaveable { mutableStateOf("") }
+
+    // The money boxes hold what was typed, so a half-typed "18." is not
+    // rounded to 18 under the person's fingers and an emptied box is not
+    // read as a zero. The draft takes the parsed value as it becomes one.
+    var gstTyped by rememberSaveable(draft.gstPercent) {
+        mutableStateOf(draft.gstPercent?.let(QuoteLineEntry::plain).orEmpty())
+    }
+    var transportTyped by rememberSaveable {
+        mutableStateOf(if (draft.transport > 0.0) QuoteLineEntry.plain(draft.transport) else "")
+    }
 
     val manualEntry = ManualEntry(
         title = manualTitle,
@@ -367,6 +387,81 @@ internal fun QuoteBuilderPanel(
             )
         }
 
+        item(key = BUILDER_TRANSPORT_KEY) {
+            SmartieField(
+                label = TRANSPORT_LABEL,
+                value = transportTyped,
+                onValueChange = {
+                    transportTyped = it
+                    // An emptied box is no carriage, which is zero. An
+                    // unreadable one changes nothing at all rather than
+                    // quietly zeroing a figure somebody entered.
+                    if (it.isBlank()) onTransportChange(0.0)
+                    else QuoteLineEntry.number(it)?.let(onTransportChange)
+                },
+                isError = transportRefusal(transportTyped) != null,
+                supportingText = transportRefusal(transportTyped),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.semantics { contentDescription = TRANSPORT_LABEL }
+            )
+        }
+
+        item(key = TRANSPORT_NOTE_LABEL) {
+            SmartieField(
+                label = TRANSPORT_NOTE_LABEL,
+                value = draft.transportNote,
+                onValueChange = onTransportNoteChange,
+                placeholder = TRANSPORT_NOTE_HINT,
+                modifier = Modifier.semantics { contentDescription = TRANSPORT_NOTE_LABEL }
+            )
+        }
+
+        item(key = BUILDER_GST_KEY) {
+            val rates = draft.gstRates(gstOf)
+            Column(verticalArrangement = Arrangement.spacedBy(dimens.gapXs)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(dimens.gapS)
+                ) {
+                    Text(
+                        GST_LABEL,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = SmartieColors.Steel,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(
+                        checked = draft.gstEnabled,
+                        onCheckedChange = onGstEnabledChange,
+                        modifier = Modifier.semantics { contentDescription = GST_LABEL }
+                    )
+                }
+                if (draft.gstEnabled) {
+                    SmartieField(
+                        label = GST_PERCENT_LABEL,
+                        value = gstTyped,
+                        onValueChange = {
+                            gstTyped = it
+                            onGstPercentChange(QuoteLineEntry.number(it))
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.semantics { contentDescription = GST_PERCENT_LABEL }
+                    )
+                }
+                Text(
+                    QuoteGst.note(draft.gstEnabled, draft.gstPercent, rates),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (draft.gstEnabled && draft.gstPercent == null) {
+                        SmartieColors.Warn
+                    } else {
+                        SmartieColors.Steel
+                    }
+                )
+            }
+        }
+
+        item(key = BUILDER_TOTALS_KEY) { Totals(draft) }
+
         if (draft.needsRateCount > 0) {
             item(key = BUILDER_NEEDS_RATE_KEY) {
                 Text(
@@ -555,6 +650,101 @@ internal fun areaWorking(entry: AreaEntry): String {
     return "${Money.formatQuantity(QuoteArea.chargeableSqft(area))} sq ft × " +
         "${Money.formatQuantity(area.count)} nos = " +
         "${Money.formatQuantity(QuoteArea.totalSqft(area))} sq ft"
+}
+
+/**
+ * What the quotation comes to, in the order the printed page builds it.
+ *
+ * Products, then installation, then the discount, then transport, then GST on
+ * the lot — `QuoteMath.totals`' own order, which is also V8C4's and the one
+ * `docs/N5-plan.md` sets out. A row that is not on this quotation is not
+ * drawn, so a quotation with no discount does not carry a line reading zero.
+ *
+ * **GST reads as unset rather than as nothing.** `toCharges` turns an
+ * unresolved rate into "no GST", which is right for the arithmetic — it
+ * refuses to invent a rate — and would be a lie on the page. So the row says
+ * so in words instead of printing a zero somebody might trust.
+ */
+@Composable
+private fun Totals(draft: QuoteDraft) {
+    val dimens = LocalSmartieDimens.current
+    val totals = draft.totals()
+    val gstUnset = draft.gstEnabled && draft.gstPercent == null
+    SmartieCard {
+        Column(verticalArrangement = Arrangement.spacedBy(dimens.gapXs)) {
+            TotalRow(PRODUCTS_ROW, Money.formatRupees(totals.products, decimals = 0))
+            if (totals.installation != 0.0) {
+                TotalRow(INSTALLATION_ROW, Money.formatRupees(totals.installation, decimals = 0))
+            }
+            if (totals.discount != 0.0) {
+                TotalRow(DISCOUNT_ROW, "- ${Money.formatRupees(totals.discount, decimals = 0)}")
+            }
+            if (totals.transport != 0.0) {
+                TotalRow(TRANSPORT_ROW, Money.formatRupees(totals.transport, decimals = 0))
+            }
+            TotalRow(SUBTOTAL_ROW, Money.formatRupees(totals.subtotal, decimals = 0))
+            if (draft.gstEnabled) {
+                TotalRow(
+                    if (gstUnset) GST_ROW else gstRowLabel(totals.gstPercent),
+                    if (gstUnset) GST_UNSET else Money.formatRupees(totals.gst, decimals = 0),
+                    warn = gstUnset
+                )
+            }
+            TotalRow(
+                TOTAL_ROW,
+                if (gstUnset) TOTAL_UNSET else Money.formatRupees(totals.total, decimals = 0),
+                emphasise = true,
+                warn = gstUnset
+            )
+        }
+    }
+}
+
+@Composable
+private fun TotalRow(
+    label: String,
+    value: String,
+    emphasise: Boolean = false,
+    warn: Boolean = false
+) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            style = if (emphasise) {
+                MaterialTheme.typography.titleSmall
+            } else {
+                MaterialTheme.typography.bodySmall
+            },
+            color = SmartieColors.Steel
+        )
+        Text(
+            value,
+            style = if (emphasise) {
+                MaterialTheme.typography.titleMedium
+            } else {
+                MaterialTheme.typography.bodyMedium
+            },
+            color = when {
+                warn -> SmartieColors.Warn
+                emphasise -> SmartieColors.Ink
+                else -> SmartieColors.Ink2
+            }
+        )
+    }
+}
+
+internal fun gstRowLabel(percent: Double): String = "GST ${Money.formatQuantity(percent)}%"
+
+/** Why this carriage cannot be charged, or null when it can. */
+internal fun transportRefusal(typed: String): String? = when {
+    typed.isBlank() -> null
+    !QuoteLineEntry.reads(typed) -> QuoteLineEntry.NOT_A_RATE
+    (QuoteLineEntry.number(typed) ?: 0.0) < 0.0 -> QuoteDraft.NEGATIVE_TRANSPORT
+    else -> null
 }
 
 /** One saved customer, with enough to tell two of the same name apart. */
@@ -747,6 +937,9 @@ internal const val BUILDER_ADD_AREA_KEY = "builder-add-area"
 internal const val BUILDER_MANUAL_ADD_KEY = "builder-manual-add"
 internal const val BUILDER_AREA_ADD_KEY = "builder-area-add"
 internal const val BUILDER_AREA_WORKING_KEY = "builder-area-working"
+internal const val BUILDER_TRANSPORT_KEY = "builder-transport"
+internal const val BUILDER_GST_KEY = "builder-gst"
+internal const val BUILDER_TOTALS_KEY = "builder-totals"
 internal const val BUILDER_EMPTY_KEY = "builder-empty"
 internal const val BUILDER_NEEDS_RATE_KEY = "builder-needs-rate"
 internal const val BUILDER_CLEAR_KEY = "builder-clear"
@@ -797,6 +990,21 @@ internal const val PER_SQFT_HINT = "Per square foot"
 internal const val MINIMUM_LABEL = "Minimum chargeable area"
 internal const val MINIMUM_HINT = "Leave empty if there is no minimum"
 internal const val AREA_NOT_YET = "Enter a width and a height to see the chargeable area."
+
+internal const val TRANSPORT_LABEL = "Transport"
+internal const val TRANSPORT_NOTE_LABEL = "What the transport is for"
+internal const val TRANSPORT_NOTE_HINT = "e.g. Mumbai to Vadodara"
+internal const val GST_LABEL = "Include GST"
+internal const val GST_PERCENT_LABEL = "GST %"
+internal const val PRODUCTS_ROW = "Products"
+internal const val INSTALLATION_ROW = "Installation"
+internal const val DISCOUNT_ROW = "Discount"
+internal const val TRANSPORT_ROW = "Transport"
+internal const val SUBTOTAL_ROW = "Subtotal"
+internal const val GST_ROW = "GST"
+internal const val TOTAL_ROW = "Grand total"
+internal const val GST_UNSET = "rate not set"
+internal const val TOTAL_UNSET = "set the GST rate"
 internal const val NOTHING_ON_IT = "Nothing on this quotation yet. Go back and add a product."
 internal const val ISSUING_LATER =
     "A number is issued when this is downloaded, printed or shared."

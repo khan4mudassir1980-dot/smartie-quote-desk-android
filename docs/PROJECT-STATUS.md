@@ -1888,3 +1888,28 @@ single most dangerous operation in this repository.
    stop and ask.
 4. If this file and the repository disagree, the repository is right. Correct
    the file in the same commit that discovers the difference.
+5. **Every count names the command that produced it.** Commits from `git log`
+   with its range, tests from the runner's own output, files from
+   `git diff --stat`. A count written from what somebody intended is not
+   checkable; a count carrying its command is, by anyone, in one paste.
+
+   This rule exists because N5.8b produced **four** miscounts in one phase, all
+   the same shape — a number written from the plan rather than read from the
+   repository. Correcting each total fixed that total and left the shape
+   untouched. So the rule is not "count carefully": it is that an unchecked
+   count may not be written down. A drifting count is how a lost or duplicated
+   commit, or a quietly deleted test, hides in plain sight.
+
+   Same move as the structural draft-id fix in N5.8a — **make the mistake
+   unavailable rather than remembered.**
+6. **No field may be right by coincidence.** If a value is only correct because
+   two things happen to agree today — a head hash that is also the current
+   ruleset, a run number that is also the installed build — it will go stale in
+   silence, because nothing about the first changing tells you the second did
+   not. Record what each field actually answers, and derive anything that
+   depends on two of them, with the command that settles it.
+
+   This is the deploy-hash lesson. `a849650` was recorded as "the commit to
+   deploy the rules from" and was correct the day it was written, when the
+   verified head and the last rules change were the same commit. Two rules
+   commits landed hours later and it became wrong with no signal.

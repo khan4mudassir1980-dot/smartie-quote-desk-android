@@ -128,21 +128,6 @@ object Permissions {
 
     // --- settings and team -------------------------------------------------
 
-    /**
-     * **Not used, and do not wire it without deciding which policy is right.**
-     *
-     * It says an Administrator may edit settings. The Settings screen that
-     * actually shipped in N5.6 says the opposite: editing the counter and the
-     * discount cap is the **Owner's alone** — `canConfigureNumbering`, which
-     * is `isOwner` — and an Administrator gets the fields read-only with a
-     * note saying so (`SettingsScreen.kt:158`, `VIEW_ONLY_KEY`).
-     *
-     * So this is not policy waiting for its feature; it contradicts a feature
-     * that exists, and the rules would refuse what it permits. Wiring it
-     * would reopen what N5.6 deliberately closed.
-     */
-    fun canEditSettings(member: Member): Boolean = isAdmin(member)
-
     fun canViewSettings(member: Member): Boolean = member.active && !isWorker(member)
 
     /**

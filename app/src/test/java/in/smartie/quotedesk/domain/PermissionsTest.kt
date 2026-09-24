@@ -176,11 +176,25 @@ class PermissionsTest {
     // --- settings and team -------------------------------------------------
 
     @Test
-    fun `settings are editable by administrators, readable by staff, hidden from workers`() {
-        assertTrue(Permissions.canEditSettings(admin))
-        assertFalse(Permissions.canEditSettings(staff))
+    fun `settings are readable by staff, hidden from workers, and editable by nobody but the Owner`() {
+        // **This test used to assert the opposite of what shipped.** It read
+        // `canEditSettings(admin)` is true — a predicate that said an
+        // Administrator may edit settings — while N5.6's Settings screen gives
+        // an Administrator the fields read-only and the deployed rule refuses
+        // the write. The predicate had no caller and has been deleted; editing
+        // is `canConfigureNumbering` and `canSetDiscountCap`, both `isOwner`.
         assertTrue(Permissions.canViewSettings(staff))
+        assertTrue(Permissions.canViewSettings(admin))
         assertFalse(Permissions.canViewSettings(worker))
+
+        assertTrue(Permissions.canConfigureNumbering(primaryOwner))
+        assertFalse("an Administrator reads settings, and does not change them",
+            Permissions.canConfigureNumbering(admin))
+        assertFalse(Permissions.canConfigureNumbering(staff))
+
+        assertTrue(Permissions.canSetDiscountCap(primaryOwner))
+        assertFalse("a cap an Administrator could raise is not a cap",
+            Permissions.canSetDiscountCap(admin))
     }
 
     @Test

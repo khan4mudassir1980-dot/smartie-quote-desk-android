@@ -22,6 +22,7 @@ import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.domain.Catalogue
 import `in`.smartie.quotedesk.domain.QuoteDraft
+import `in`.smartie.quotedesk.domain.AreaLine
 import `in`.smartie.quotedesk.domain.QuoteTier
 import `in`.smartie.quotedesk.ui.products.BACK_TO_PRODUCTS
 import `in`.smartie.quotedesk.ui.products.BUILDER_CLEAR_KEY
@@ -46,7 +47,10 @@ import `in`.smartie.quotedesk.ui.products.ProductsActions
 import `in`.smartie.quotedesk.ui.products.ProductsCatalogue
 import `in`.smartie.quotedesk.ui.products.QuoteBuilderPanel
 import `in`.smartie.quotedesk.ui.products.QUOTE_BUILDER_TAG
+import `in`.smartie.quotedesk.ui.products.AREA_LINE
+import `in`.smartie.quotedesk.ui.products.MANUAL_LINE
 import `in`.smartie.quotedesk.ui.products.RATE_NEEDED
+import `in`.smartie.quotedesk.ui.products.removeLabel
 import `in`.smartie.quotedesk.ui.theme.SmartieTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -92,6 +96,7 @@ class QuoteBuilderScreenTest {
     private val unpriced = product("SIE600", client = null)
 
     private var changed: Pair<String, Double>? = null
+    private var removed: String? = null
     private var retiered: RateTierV2? = null
     private var chosen: PartyRecord? = null
     private var typedParty: QuotationPartySnapshot? = null
@@ -134,6 +139,7 @@ class QuoteBuilderScreenTest {
                         onChooseParty = { chosen = it },
                         onSaveCustomer = { savedWith += it },
                         onChangeLineQuantity = { id, delta -> changed = id to delta },
+                        onRemoveLine = { removed = it },
                         onClearDraft = { cleared++ }
                     )
                 )
@@ -175,8 +181,11 @@ class QuoteBuilderScreenTest {
         scrollTo("ln_1")
 
         compose.onNodeWithText("SIE1000").assertExists()
-        // 2 each at 22,200 is 44,400 — the working, not just the answer.
-        compose.onNodeWithText("2 each × ₹22,200 = ₹44,400").assertExists()
+        // The working in the meta line, and the answer as the trailing figure
+        // — `QuotationDetail`'s shape, so a draft and a finalised quotation
+        // read alike.
+        compose.onNodeWithText("2 each × ₹22,200").assertExists()
+        compose.onNodeWithText("₹44,400").assertExists()
     }
 
     @Test
@@ -195,7 +204,7 @@ class QuoteBuilderScreenTest {
         render(QuoteDraft(id = "qd_1").add(unpriced, id = "ln_2"))
         scrollTo("ln_2")
 
-        compose.onNodeWithText(RATE_NEEDED).assertExists()
+        assertTrue(compose.onAllNodesWithText(RATE_NEEDED).fetchSemanticsNodes().isNotEmpty())
         assertEquals(0, compose.onAllNodesWithText("₹0").fetchSemanticsNodes().size)
     }
 
@@ -220,6 +229,7 @@ class QuoteBuilderScreenTest {
                     onBack = {},
                     onTierChange = {},
                     onChangeLineQuantity = { _, _ -> },
+                    onRemoveLine = {},
                     onClear = {}
                 )
             }
@@ -284,6 +294,7 @@ class QuoteBuilderScreenTest {
                     onBack = {},
                     onTierChange = {},
                     onChangeLineQuantity = { _, _ -> },
+                    onRemoveLine = {},
                     onClear = {}
                 )
             }
@@ -407,5 +418,57 @@ class QuoteBuilderScreenTest {
         scrollTo(BUILDER_SAVE_CUSTOMER_KEY)
 
         compose.onNodeWithText("Enter the party's name").assertExists()
+    }
+
+    // --- the three card types ---------------------------------------------------
+
+    @Test
+    fun `a hand-typed line says so, and a catalogue line does not`() {
+        render(
+            oneLine().addManual("ln_m", "Site visit", rate = 2000.0)
+        )
+        scrollTo("ln_m")
+        compose.onNodeWithText(MANUAL_LINE).assertExists()
+
+        // One tag, on the one line that earned it.
+        assertEquals(1, compose.onAllNodesWithText(MANUAL_LINE).fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun `an opening shows its working, and gets no stepper`() {
+        render(
+            QuoteDraft(id = "qd_1").addArea(
+                id = "ln_a",
+                area = AreaLine(width = 3000.0, height = 3500.0, count = 2.0),
+                rate = 450.0,
+                title = "Rolling shutter",
+                key = "rs|RS500"
+            )
+        )
+        scrollTo("ln_a")
+
+        // `QuoteArea.describe`, which already produces exactly this.
+        compose.onNodeWithText("3000 × 3500 mm = 113.5 sq ft × ₹450 × 2 nos").assertExists()
+        compose.onNodeWithText(AREA_LINE).assertExists()
+
+        // No stepper: the quantity IS the chargeable area, recomputed from the
+        // opening. Typing it directly would leave the figure and the sentence
+        // describing different lines.
+        assertEquals(
+            0,
+            compose.onAllNodesWithContentDescription(moreOf("Rolling shutter"))
+                .fetchSemanticsNodes().size
+        )
+        // And the absence proves its reach — the card itself is on screen.
+        compose.onNodeWithContentDescription(removeLabel("Rolling shutter")).assertExists()
+    }
+
+    @Test
+    fun `every line can be taken off, by its id`() {
+        render(oneLine())
+        scrollTo("ln_1")
+        compose.onNodeWithContentDescription(removeLabel("SIE1000")).performClick()
+
+        assertEquals("ln_1", removed)
     }
 }

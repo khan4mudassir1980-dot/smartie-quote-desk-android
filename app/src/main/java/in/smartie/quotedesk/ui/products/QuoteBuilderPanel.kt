@@ -3,6 +3,8 @@ package `in`.smartie.quotedesk.ui.products
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -25,6 +28,7 @@ import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.domain.DraftLine
 import `in`.smartie.quotedesk.domain.Parties
+import `in`.smartie.quotedesk.domain.QuoteArea
 import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.QuoteTier
 import `in`.smartie.quotedesk.ui.components.CompactStepper
@@ -33,6 +37,8 @@ import `in`.smartie.quotedesk.ui.components.ListRow
 import `in`.smartie.quotedesk.ui.components.SegmentedChoice
 import `in`.smartie.quotedesk.ui.components.SmartieField
 import `in`.smartie.quotedesk.ui.components.SmartieGhostButton
+import `in`.smartie.quotedesk.ui.components.Tag
+import `in`.smartie.quotedesk.ui.components.TagTone
 import `in`.smartie.quotedesk.ui.quotations.formatDate
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
 import `in`.smartie.quotedesk.ui.theme.SmartieColors
@@ -69,6 +75,7 @@ internal fun QuoteBuilderPanel(
     onBack: () -> Unit,
     onTierChange: (RateTierV2) -> Unit,
     onChangeLineQuantity: (String, Double) -> Unit,
+    onRemoveLine: (String) -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
     parties: List<PartyRecord> = emptyList(),
@@ -78,7 +85,9 @@ internal fun QuoteBuilderPanel(
     savingCustomer: Boolean = false,
     customerFailure: String? = null,
     /** Minted once, and reused on a retry. See `ProductsViewModel.mintPartyId`. */
-    newPartyId: () -> String = { "" }
+    newPartyId: () -> String = { "" },
+    /** Reopening an opening's form. The area form itself is the next commit. */
+    onOpenArea: (String) -> Unit = {}
 ) {
     // Which saved customer the picker is showing, and what is typed into its
     // search box. The panel's own state: nothing about it belongs on a draft
@@ -176,7 +185,7 @@ internal fun QuoteBuilderPanel(
         }
 
         items(draft.lines, key = { line -> line.id }) { line ->
-            BuilderLine(line, onChangeLineQuantity)
+            BuilderLine(line, onChangeLineQuantity, onRemoveLine, onOpenArea)
         }
 
         if (draft.needsRateCount > 0) {
@@ -343,23 +352,78 @@ private fun TierPicker(tier: RateTierV2, onTierChange: (RateTierV2) -> Unit) {
     }
 }
 
-/** One line: what it is, what it comes to, and how many. */
+/**
+ * One line, in one of three shapes, reusing `QuotationDetail`'s row so a
+ * draft and the finalised quotation read alike.
+ *
+ * **The area line is the one that is different, and it is not a preference.**
+ * A catalogue or hand-typed line gets a stepper; an opening gets neither
+ * stepper nor quantity box. Its stored quantity is the *total chargeable
+ * area* — `chargeableSqft × nos` — which `QuoteDraft.setArea` recomputes
+ * from the opening every time the opening changes. Letting the quantity be
+ * typed directly would break that: the stored figure would stop matching the
+ * geometry, and the spec sentence — `3000 × 3500 mm = 113.5 sq ft × 2 nos` —
+ * would start describing a line that no longer exists. The editable inputs
+ * are W, H, the unit and the door count, all inside the area form, which
+ * tapping the card reopens.
+ *
+ * The amount is the trailing figure, as it is on the detail screen, and the
+ * controls sit in the card's own footer row rather than beside the
+ * information. That is `ListRow`'s `footer` slot doing what N4.4's B1 taught:
+ * a second thing in the trailing position is what wraps and gets clipped.
+ */
 @Composable
-private fun BuilderLine(line: DraftLine, onChangeLineQuantity: (String, Double) -> Unit) {
+private fun BuilderLine(
+    line: DraftLine,
+    onChangeLineQuantity: (String, Double) -> Unit,
+    onRemoveLine: (String) -> Unit,
+    onOpenArea: (String) -> Unit
+) {
+    val dimens = LocalSmartieDimens.current
     ListRow(
         title = line.title,
-        secondary = line.spec.takeIf { it.isNotBlank() },
+        secondary = lineSecondary(line),
         meta = lineMeta(line),
+        tags = {
+            // An opening is labelled too: `unit` reads "per sq ft", which is
+            // not something a reader should have to infer from the spec.
+            if (line.isArea) Tag(AREA_LINE, TagTone.PURPLE)
+            else if (line.manual) Tag(MANUAL_LINE, TagTone.NEUTRAL)
+        },
         trailing = {
-            CompactStepper(
-                value = Money.formatQuantity(line.quantity),
-                onDecrement = { onChangeLineQuantity(line.id, -1.0) },
-                onIncrement = { onChangeLineQuantity(line.id, 1.0) },
-                // Named, because a list with a stepper on every row makes
-                // "+" the name of four controls at once.
-                incrementLabel = moreOf(line.title),
-                decrementLabel = fewerOf(line.title)
+            Text(
+                line.amount?.let { Money.formatRupees(it, decimals = 0) } ?: RATE_NEEDED,
+                style = MaterialTheme.typography.titleSmall,
+                color = if (line.needsRate) SmartieColors.Warn else SmartieColors.Ink
             )
+        },
+        onClick = if (line.isArea) ({ onOpenArea(line.id) }) else null,
+        footer = {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(dimens.gapS)
+            ) {
+                if (!line.isArea) {
+                    CompactStepper(
+                        value = Money.formatQuantity(line.quantity),
+                        onDecrement = { onChangeLineQuantity(line.id, -1.0) },
+                        onIncrement = { onChangeLineQuantity(line.id, 1.0) },
+                        // Named, because a list with a stepper on every row
+                        // makes "+" the name of four controls at once.
+                        incrementLabel = moreOf(line.title),
+                        decrementLabel = fewerOf(line.title)
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                SmartieGhostButton(
+                    text = REMOVE,
+                    onClick = { onRemoveLine(line.id) },
+                    danger = true,
+                    compact = true,
+                    modifier = Modifier.semantics { contentDescription = removeLabel(line.title) }
+                )
+            }
         }
     )
 }
@@ -368,13 +432,29 @@ internal fun moreOf(title: String): String = "One more $title"
 
 internal fun fewerOf(title: String): String = "One fewer $title"
 
-/** `2 each × ₹22,200 = ₹44,400`, or the warning when there is no rate yet. */
+internal fun removeLabel(title: String): String = "Remove $title"
+
+/**
+ * The line under the title: the opening's own working for an area line, and
+ * whatever spec the product carries for every other kind.
+ *
+ * `QuoteArea.describe` is `3000 × 3500 mm = 113.5 sq ft × ₹450 × 2 nos` — the
+ * rate included, because this is the card and not the stored `s` field.
+ * `describeGeometry` is the rate-free one that goes on the wire, so a later
+ * correction to the rate cannot leave a stored sentence contradicting the
+ * rate column printed beside it.
+ */
+internal fun lineSecondary(line: DraftLine): String? {
+    val area = line.area ?: return line.spec.takeIf { it.isNotBlank() }
+    val rate = line.rate ?: return QuoteArea.describeGeometry(area)
+    return QuoteArea.describe(area, rate)
+}
+
+/** `2 each × ₹22,200`, or the warning when there is no rate yet. */
 internal fun lineMeta(line: DraftLine): String {
-    val amount = line.amount ?: return RATE_NEEDED
     val rate = line.rate ?: return RATE_NEEDED
     return "${Money.formatQuantity(line.quantity)} ${line.unit} × " +
-        "${Money.formatRupees(rate, decimals = 0)} = " +
-        Money.formatRupees(amount, decimals = 0)
+        Money.formatRupees(rate, decimals = 0)
 }
 
 /** `Dealer rates · 24 Sep 2026`, with the date only once there is one. */
@@ -421,6 +501,9 @@ internal const val SAVE_CUSTOMER = "Save this customer"
 internal const val BACK_TO_PRODUCTS = "Back to products"
 internal const val CLEAR_LINES = "Clear"
 internal const val RATE_NEEDED = "Rate needed"
+internal const val REMOVE = "Remove"
+internal const val MANUAL_LINE = "Typed by hand"
+internal const val AREA_LINE = "By area"
 internal const val NOTHING_ON_IT = "Nothing on this quotation yet. Go back and add a product."
 internal const val ISSUING_LATER =
     "A number is issued when this is downloaded, printed or shared."

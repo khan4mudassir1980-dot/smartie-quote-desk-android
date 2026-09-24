@@ -111,6 +111,8 @@ data class ProductsActions(
      * cannot address a hand-typed or area line at all — those have no key.
      */
     val onChangeLineQuantity: (String, Double) -> Unit = { _, _ -> },
+    /** Taking one line off the quotation, by its id. */
+    val onRemoveLine: (String) -> Unit = {},
     val onTogglePin: (String) -> Unit = {},
     /** One place up (-1) or down (+1), from the drag handle's named actions. */
     val onMovePin: (String, Int) -> Unit = { _, _ -> },
@@ -188,6 +190,7 @@ fun ProductsScreen(
             onAdd = viewModel::add,
             onChangeQuantity = viewModel::changeQuantity,
             onChangeLineQuantity = viewModel::changeLineQuantity,
+            onRemoveLine = viewModel::removeLine,
             onTogglePin = { key -> viewModel.togglePin(pinnedKeys, key) },
             onMovePin = { key, delta -> viewModel.movePin(pinnedKeys, key, delta) },
             onReorderPin = { moved, target -> viewModel.reorderPin(pinnedKeys, moved, target) },
@@ -264,6 +267,7 @@ fun ProductsCatalogue(
             onBack = { showDraft = false },
             onTierChange = actions.onTierChange,
             onChangeLineQuantity = actions.onChangeLineQuantity,
+            onRemoveLine = actions.onRemoveLine,
             parties = parties,
             onPartyChange = actions.onPartyChange,
             onChooseParty = actions.onChooseParty,

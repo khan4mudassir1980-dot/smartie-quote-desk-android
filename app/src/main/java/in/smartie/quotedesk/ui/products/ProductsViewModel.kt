@@ -187,6 +187,11 @@ class ProductsViewModel(
         persist(_draft.value.changeQuantity(id, delta))
     }
 
+    /** Taking one line off, by its id. A stepper down to zero does the same. */
+    fun removeLine(id: String) {
+        persist(_draft.value.remove(id))
+    }
+
     fun setQuantity(key: String, quantity: Double) {
         if (!QuoteDraft.isValidQuantity(quantity)) {
             emit(NEGATIVE_QUANTITY)

@@ -1138,7 +1138,121 @@ specification** — nothing built depends on those names, the extractor fix is
 correct whatever the count, and the phone pass trusts the catalogue rather
 than the list.
 
+### N5.8a — the quotation draft model (IN PROGRESS, handover)
+
+N5.8 was split into **8a (model)** and **8b (screen)**. The split point is that
+8a leaves the Products tab's quote bar and draft sheet working unchanged, so
+the app is never broken between the two.
+
+**Commits: two of three are done and pushed.**
+
+| # | Commit | State |
+|---|---|---|
+| 1 | `9d034c6` N5.8a model: a line is identified by its own id | **Done, pushed.** CI run #148. |
+| 2 | `62af89d` N5.8a model: the draft carries the whole quotation | **Done, pushed.** CI run #149. |
+| 3 | storage: a draft belongs to an account | **NOT STARTED** |
+
+**Neither CI run had reported when this session ended.** Check #148 and #149
+before building anything on top. Kotlin cannot be compiled in the container
+(`dl.google.com` is blocked), so CI is the only verification these two have
+had.
+
+#### What commit 3 still has to do
+
+Keying device storage by account. `DevicePreferences.kt:31` stores the draft
+under one global DataStore key, `quote_draft`, and `AuthRepository.signOut`
+(`:203-209`) clears Firebase credentials but no device preference. So a draft
+survives being killed (correct), survives sign-out, and **is visible to a
+second account signing in on the same phone**, including its customer and its
+rates. `stock_pending` (`:32`) has the identical defect.
+
+This is a rate leak, not housekeeping: a draft carries rates and a Staff
+account may not see rates anywhere in this app. The Owner has two accounts on
+one phone, so it will occur on the final phone pass if it is not fixed.
+
+The ruling, in full:
+
+- Key the draft by account uid. `stock_pending` gets the same treatment in the
+  same commit — same defect, already shipped.
+- Migrate the existing global value **once** into the currently signed-in
+  account's key, then delete the global key. **If nobody is signed in, leave it
+  alone** — do not delete data with no owner.
+- A draft must **survive sign-out and sign-in as the same account**. That is
+  why keying beats clearing on sign-out, and it is the behaviour to pin.
+- The store holds a **collection keyed by draft id** from day one, so adding a
+  drafts list later is a screen-only change that never touches persistence
+  again. 8b ships **no** drafts list and shows one draft at a time.
+- Tests: a second account sees no draft; the same account signing back in sees
+  its own; the one-time migration runs once and not twice.
+
+`QuoteDraft.id` and `QuoteDraft.updatedAt` already exist (commit 2) for this.
+
+#### The three amendments — all reached this session, all applied
+
+1. **The non-negative invariant had two holes.** Applied in `62af89d`. A
+   negative transport made the subtotal negative even with a valid discount,
+   and a negative installation made `discountBase` negative, at which point
+   `discountRefusal`'s `amount > base` stopped meaning what it thinks. Both are
+   now bounded in `QuoteDraft.refusal`, on the installation's rate and basis
+   alike, and the invariant is stated on `QuoteMath` naming all three gates —
+   discount, transport, installation. Each has a test asserting the subtotal
+   stays at or above zero **and** that the arithmetic would have accepted the
+   bad figure.
+2. **A silent money-affecting fallback contradicted the stated principle.**
+   Applied in `62af89d`. `RateTierV2.from` falls back to `DEALER`, the
+   lower-priced tier and so the underquote direction; `InstallationMode.from`
+   falls back to `FIXED`, which bills a `pct` charge of 8 as 8 rupees. The
+   codec now parses both strictly and records a `DraftFault`: a damaged tier
+   recovers to **Client**, the higher of the two offered and never the first in
+   the enum, and says so; a damaged installation is dropped and says so. Both
+   block finalising. A third fault was added that the brief did not name — a
+   discount whose kind cannot be read, where a stored 2000 taken as a
+   percentage rather than rupees gives the whole quotation away.
+3. **Where a new draft's GST comes from.** Applied in `62af89d`.
+   `gstPercent` is nullable and null means "not resolved yet", not "no GST". A
+   draft with an unresolved rate charges nothing and **cannot be finalised**,
+   rather than silently going out at 0%. `gstSuggestion` resolves it from the
+   rate the catalogue lines agree on and answers null when they disagree.
+   Deliberately switching GST off stays distinct from never setting it.
+
+Nothing is outstanding from the amendments.
+
+#### Also settled this session, for the record
+
+- **The rounding order is proven, not assumed.** `QuoteAreaTest.kt:98-107`,
+  `and the minimum applies after the rounding, never before`: 3 ft x 3 ft =
+  9.0 sq ft against `minimumSqft = 10.3`, asserting 10.3. Round-then-minimum
+  gives 10.3; minimum-then-round gives 10.5. `minSqft` is **not** constrained
+  to halves, which is why that case is the one that can tell them apart.
+- **Three defects were found in the draft model before building.** Two
+  hand-typed lines could not coexist, two openings of the same product silently
+  merged into one wrong figure, and a hand-typed line did not survive a restart
+  at all. All three came from identifying a line by its product key. Fixed in
+  `9d034c6`.
+- **A codec version bump would have erased every draft on every phone.**
+  `decode` answers an empty draft for an unknown version string, so fields are
+  appended rather than inserted and every version ever written stays readable.
+  A test built from a hand-written `v1` string keeps that true.
+- **`assertUnclipped` does not exist.** The N4.4 helpers are
+  `assertPaintedInsideCard`, `assertFooterPaintedInsideCard` and
+  `assertNoDeadSpaceBelow`, built on `SemanticsNode.unclippedBounds()`, in
+  `app/src/test/java/in/smartie/quotedesk/ui/CardClipping.kt`. Use those in 8b.
+- **The stored area spec carries no rate.** `QuoteArea.describeGeometry` is
+  what goes into the line's `s` field; `QuoteArea.describe` keeps the rate and
+  is what the card and the PDF show. A rate baked into the stored sentence
+  would contradict the rate column the first time N5.10 let somebody correct a
+  finalised line.
+
 ## Current next action
+
+**Check CI runs #148 and #149 on `claude/trusting-hamilton-z12eer`. If either
+is red, fix it before anything else — that is the only verification the two
+N5.8a commits have had. Then build N5.8a commit 3: key the device draft and
+`stock_pending` by account uid, migrate the global value once, and hold the
+drafts as a collection keyed by draft id.** The full ruling and the tests it
+needs are in the N5.8a section above. After that, N5.8b is the builder screen.
+
+The rest of this section describes N5.8 as a whole and still stands.
 
 **Build N5.8 — the quotation builder, draft only.**
 

@@ -121,6 +121,8 @@ data class ProductsActions(
     val onPartyChange: (QuotationPartySnapshot) -> Unit = {},
     /** A saved customer chosen from the builder's picker. */
     val onChooseParty: (PartyRecord) -> Unit = {},
+    /** "Save this customer", under the id the panel is holding. */
+    val onSaveCustomer: (String) -> Unit = {},
     /** Save one product's corrections. The draft is what the sheet showed. */
     val onSaveProduct: (ProductRecord, ProductDraft) -> Unit = { _, _ -> },
 )
@@ -141,6 +143,8 @@ fun ProductsScreen(
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val savingProduct by viewModel.savingProduct.collectAsStateWithLifecycle()
     val productFailure by viewModel.productFailure.collectAsStateWithLifecycle()
+    val savingCustomer by viewModel.savingParty.collectAsStateWithLifecycle()
+    val customerFailure by viewModel.partyFailure.collectAsStateWithLifecycle()
 
     val view = remember(products, categories, pinnedKeys, query, minimumKg) {
         Catalogue.build(products, categories, pinnedKeys, query, minimumKg)
@@ -173,6 +177,9 @@ fun ProductsScreen(
         productFailure = productFailure,
         stockByKey = stockByKey,
         parties = parties,
+        savingCustomer = savingCustomer,
+        customerFailure = customerFailure,
+        newPartyId = viewModel::mintPartyId,
         actions = ProductsActions(
             onQueryChange = viewModel::setQuery,
             onMinimumKgChange = viewModel::setMinimumKg,
@@ -187,6 +194,7 @@ fun ProductsScreen(
             onClearDraft = viewModel::clearDraft,
             onPartyChange = viewModel::setPartyDetails,
             onChooseParty = viewModel::chooseParty,
+            onSaveCustomer = viewModel::saveCustomer,
             onSaveProduct = viewModel::saveProduct,
         ),
     )
@@ -212,6 +220,10 @@ fun ProductsCatalogue(
     stockByKey: Map<String, StockRecord> = emptyMap(),
     /** The saved customers the builder's picker offers. */
     parties: List<PartyRecord> = emptyList(),
+    savingCustomer: Boolean = false,
+    customerFailure: String? = null,
+    /** Minted once per quotation. See `ProductsViewModel.mintPartyId`. */
+    newPartyId: () -> String = { "" },
     actions: ProductsActions = ProductsActions(),
 ) {
     if (!canViewProducts) {
@@ -255,6 +267,10 @@ fun ProductsCatalogue(
             parties = parties,
             onPartyChange = actions.onPartyChange,
             onChooseParty = actions.onChooseParty,
+            onSaveCustomer = actions.onSaveCustomer,
+            savingCustomer = savingCustomer,
+            customerFailure = customerFailure,
+            newPartyId = newPartyId,
             // Clearing empties the LINES and stays put: the party, the
             // transport and the GST rate on this quotation are not lines and
             // are not thrown away with them.

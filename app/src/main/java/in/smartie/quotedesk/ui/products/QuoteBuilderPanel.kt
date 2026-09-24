@@ -73,13 +73,22 @@ internal fun QuoteBuilderPanel(
     modifier: Modifier = Modifier,
     parties: List<PartyRecord> = emptyList(),
     onPartyChange: (QuotationPartySnapshot) -> Unit = {},
-    onChooseParty: (PartyRecord) -> Unit = {}
+    onChooseParty: (PartyRecord) -> Unit = {},
+    onSaveCustomer: (String) -> Unit = {},
+    savingCustomer: Boolean = false,
+    customerFailure: String? = null,
+    /** Minted once, and reused on a retry. See `ProductsViewModel.mintPartyId`. */
+    newPartyId: () -> String = { "" }
 ) {
     // Which saved customer the picker is showing, and what is typed into its
     // search box. The panel's own state: nothing about it belongs on a draft
     // that survives the app being killed.
     var picking by rememberSaveable { mutableStateOf(false) }
     var partyQuery by rememberSaveable { mutableStateOf("") }
+    // One id for as long as this person is filling one quotation in, so a
+    // retry after an ambiguous failure lands on the same customer rather than
+    // writing a second — N4.4's B2 lesson, the shape `PartiesScreen` uses.
+    var mintedPartyId by rememberSaveable { mutableStateOf("") }
     val dimens = LocalSmartieDimens.current
     LazyColumn(
         modifier = modifier.fillMaxSize().testTag(QUOTE_BUILDER_TAG),
@@ -137,6 +146,30 @@ internal fun QuoteBuilderPanel(
         }
 
         partyFields(draft.party, onPartyChange)
+
+        if (customerFailure != null) {
+            item(key = BUILDER_CUSTOMER_FAILURE_KEY) {
+                Text(
+                    customerFailure,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = SmartieColors.Danger
+                )
+            }
+        }
+
+        item(key = BUILDER_SAVE_CUSTOMER_KEY) {
+            SmartieGhostButton(
+                text = SAVE_CUSTOMER,
+                onClick = {
+                    val id = mintedPartyId.ifBlank { newPartyId().also { mintedPartyId = it } }
+                    onSaveCustomer(id)
+                },
+                enabled = !savingCustomer,
+                modifier = Modifier
+                    .semantics { contentDescription = SAVE_CUSTOMER }
+                    .fillMaxWidth()
+            )
+        }
 
         if (draft.isEmpty) {
             item(key = BUILDER_EMPTY_KEY) { EmptyState(NOTHING_ON_IT) }
@@ -362,6 +395,8 @@ internal const val BUILDER_TIER_KEY = "builder-tier"
 internal const val BUILDER_PICK_PARTY_KEY = "builder-pick-party"
 internal const val BUILDER_PARTY_SEARCH_KEY = "builder-party-search"
 internal const val BUILDER_NO_PARTIES_KEY = "builder-no-parties"
+internal const val BUILDER_SAVE_CUSTOMER_KEY = "builder-save-customer"
+internal const val BUILDER_CUSTOMER_FAILURE_KEY = "builder-customer-failure"
 internal const val BUILDER_EMPTY_KEY = "builder-empty"
 internal const val BUILDER_NEEDS_RATE_KEY = "builder-needs-rate"
 internal const val BUILDER_CLEAR_KEY = "builder-clear"
@@ -382,6 +417,7 @@ internal const val CONTACT_LABEL = "Contact person"
 internal const val PHONE_LABEL = "Phone"
 internal const val EMAIL_LABEL = "Email"
 internal const val ADDRESS_LABEL = "Address"
+internal const val SAVE_CUSTOMER = "Save this customer"
 internal const val BACK_TO_PRODUCTS = "Back to products"
 internal const val CLEAR_LINES = "Clear"
 internal const val RATE_NEEDED = "Rate needed"

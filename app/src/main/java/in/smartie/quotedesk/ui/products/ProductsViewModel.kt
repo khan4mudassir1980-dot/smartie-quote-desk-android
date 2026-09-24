@@ -5,11 +5,14 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import `in`.smartie.quotedesk.core.AppContainer
 import `in`.smartie.quotedesk.core.toAppError
+import `in`.smartie.quotedesk.data.mapping.Keys
 import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.RateTierV2
+import `in`.smartie.quotedesk.data.repository.PartyWriteResult
 import `in`.smartie.quotedesk.domain.Member
+import `in`.smartie.quotedesk.domain.PartyWrite
 import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.domain.PinChange
 import `in`.smartie.quotedesk.domain.ProductDraft
@@ -17,6 +20,7 @@ import `in`.smartie.quotedesk.domain.ProductPins
 import `in`.smartie.quotedesk.domain.ProductWrite
 import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.QuoteDrafts
+import `in`.smartie.quotedesk.domain.QuoteParty
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -209,9 +213,75 @@ class ProductsViewModel(
         persist(_draft.value.withParty(record))
     }
 
+    /**
+     * An id for a customer this quotation is about to create.
+     *
+     * **A party id, never a draft id, and the difference is the whole of
+     * 8a's structural fix.** A draft id may only come from
+     * `AccountPreferences.currentDraftId()`, because a draft is one per
+     * account, resolved from the store, and minting one here turned a
+     * process death into two drafts. A *new customer* is a document this
+     * person is creating right now: it has no stored id to resolve, and the
+     * id must stay the same across a retry — which is why the screen holds
+     * the answer in `rememberSaveable` rather than calling this again.
+     *
+     * The same shape as `PartiesViewModel.mintId`, and called on demand,
+     * never from `init`.
+     */
+    fun mintPartyId(): String = Keys.generateId(PartyWrite.ID_PREFIX)
+
+    /**
+     * "Save this customer": merge into the chosen one, or create a new one.
+     *
+     * On a create, the draft **adopts** the new id, so saving twice corrects
+     * the same customer instead of making a second.
+     */
+    fun saveCustomer(newId: String) {
+        val draft = _draft.value
+        val party = QuoteParty.draftOf(draft.party)
+        party.refusal()?.let {
+            _partyFailure.value = it
+            return
+        }
+        _partyFailure.value = null
+        _savingParty.value = true
+        viewModelScope.launch {
+            runCatching {
+                container.partyWriteRepository.saveFromQuotation(
+                    member = member,
+                    partyId = draft.partyId,
+                    draft = party,
+                    newId = newId
+                )
+            }.onSuccess { result ->
+                if (draft.partyId.isBlank()) persist(_draft.value.copy(partyId = newId))
+                emit(
+                    if (result == PartyWriteResult.WRITTEN) CUSTOMER_SAVED
+                    else CUSTOMER_UNCHANGED
+                )
+            }.onFailure { failure ->
+                val refusal = (failure as? IllegalStateException)?.message
+                if (refusal != null) _partyFailure.value = refusal else report(failure)
+            }
+            _savingParty.value = false
+        }
+    }
+
     fun clearDraft() {
         persist(_draft.value.clear())
     }
+
+    private val _savingParty = MutableStateFlow(false)
+    val savingParty: StateFlow<Boolean> = _savingParty.asStateFlow()
+
+    /**
+     * The last refusal from "Save this customer", kept on the panel.
+     *
+     * A refusal names something the person has to act on — a customer with
+     * no name — so it stays on screen rather than passing by as a message.
+     */
+    private val _partyFailure = MutableStateFlow<String?>(null)
+    val partyFailure: StateFlow<String?> = _partyFailure.asStateFlow()
 
     // --- pins --------------------------------------------------------------
 
@@ -338,5 +408,9 @@ class ProductsViewModel(
         const val NEGATIVE_QUANTITY = "Quantity cannot be negative"
         const val NOT_ALLOWED = "Only an Owner or Administrator can manage pinned products"
         const val PRODUCT_SAVED = "Product saved"
+        const val CUSTOMER_SAVED = "Customer saved"
+        // Not a failure. Everything on the quotation already matches what is
+        // stored, so there was nothing to write.
+        const val CUSTOMER_UNCHANGED = "Nothing to save — this customer is already up to date"
     }
 }

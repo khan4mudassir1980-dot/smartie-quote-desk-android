@@ -33,7 +33,9 @@ import `in`.smartie.quotedesk.ui.products.BUILDER_PICK_PARTY_KEY
 import `in`.smartie.quotedesk.ui.products.BUILDER_TIER_KEY
 import `in`.smartie.quotedesk.ui.products.CHOOSE_PARTY
 import `in`.smartie.quotedesk.ui.products.PARTY_NAME_LABEL
+import `in`.smartie.quotedesk.ui.products.BUILDER_SAVE_CUSTOMER_KEY
 import `in`.smartie.quotedesk.ui.products.PARTY_SEARCH_LABEL
+import `in`.smartie.quotedesk.ui.products.SAVE_CUSTOMER
 import `in`.smartie.quotedesk.ui.products.SITE_LABEL
 import `in`.smartie.quotedesk.ui.products.chooseLabel
 import `in`.smartie.quotedesk.ui.products.noSavedParty
@@ -93,6 +95,8 @@ class QuoteBuilderScreenTest {
     private var retiered: RateTierV2? = null
     private var chosen: PartyRecord? = null
     private var typedParty: QuotationPartySnapshot? = null
+    private val savedWith = mutableListOf<String>()
+    private var minted = 1
 
     private val sunrise = PartyRecord(
         id = "c_1", name = "Sunrise Constructions", contact = "Mr Deshmukh",
@@ -109,7 +113,8 @@ class QuoteBuilderScreenTest {
     private fun render(
         draft: QuoteDraft,
         open: Boolean = true,
-        parties: List<PartyRecord> = listOf(sunrise, harbour, retired)
+        parties: List<PartyRecord> = listOf(sunrise, harbour, retired),
+        customerFailure: String? = null
     ) {
         val view = Catalogue.build(listOf(motor, unpriced), emptyList(), emptyList(), "")
         compose.setContent {
@@ -119,10 +124,15 @@ class QuoteBuilderScreenTest {
                     view = view,
                     draft = draft,
                     parties = parties,
+                    customerFailure = customerFailure,
+                    // A different id on every call, so a test can prove the
+                    // panel mints once and then holds what it minted.
+                    newPartyId = { "c_new_${'$'}{minted++}" },
                     actions = ProductsActions(
                         onTierChange = { retiered = it },
                         onPartyChange = { typedParty = it },
                         onChooseParty = { chosen = it },
+                        onSaveCustomer = { savedWith += it },
                         onChangeLineQuantity = { id, delta -> changed = id to delta },
                         onClearDraft = { cleared++ }
                     )
@@ -365,5 +375,37 @@ class QuoteBuilderScreenTest {
         assertEquals("Bhiwandi godown", typedParty?.site)
         // It is not the address: that box is empty and stays empty.
         assertEquals("", typedParty?.address)
+    }
+
+    // --- "Save this customer" -------------------------------------------------
+
+    @Test
+    fun `saving a typed customer sends the id the panel minted`() {
+        render(oneLine())
+        scrollTo(BUILDER_SAVE_CUSTOMER_KEY)
+        compose.onNodeWithContentDescription(SAVE_CUSTOMER).performClick()
+
+        assertEquals(listOf("c_new_1"), savedWith)
+    }
+
+    @Test
+    fun `pressing it twice sends the same id, so a retry cannot make two`() {
+        // N4.4's B2. An id minted per press writes a second customer when the
+        // first commit landed and its acknowledgement did not — and every
+        // quotation ever issued points at one of the two.
+        render(oneLine())
+        scrollTo(BUILDER_SAVE_CUSTOMER_KEY)
+        compose.onNodeWithContentDescription(SAVE_CUSTOMER).performClick()
+        compose.onNodeWithContentDescription(SAVE_CUSTOMER).performClick()
+
+        assertEquals(listOf("c_new_1", "c_new_1"), savedWith)
+    }
+
+    @Test
+    fun `a refusal stays on the panel, where the person can act on it`() {
+        render(oneLine(), customerFailure = "Enter the party's name")
+        scrollTo(BUILDER_SAVE_CUSTOMER_KEY)
+
+        compose.onNodeWithText("Enter the party's name").assertExists()
     }
 }

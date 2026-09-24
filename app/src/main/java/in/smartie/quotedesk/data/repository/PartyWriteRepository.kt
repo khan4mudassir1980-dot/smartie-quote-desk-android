@@ -107,6 +107,48 @@ class PartyWriteRepository(
         }
     }
 
+    /**
+     * "Save this customer", from the quotation side (N5.8b).
+     *
+     * **Two genuinely different writes, decided by whether a customer was
+     * chosen.**
+     *
+     * A customer chosen from the picker is *merged* into, through
+     * `PartyWrite.mergeInto`: gaps are filled, real corrections are taken and
+     * **nothing already stored is blanked**. The person was quoting, not
+     * editing a customer, so a box they left empty is silence rather than an
+     * instruction to forget. That is the opposite of [edit], where an empty
+     * box *is* the instruction — and it is why the quotation side must never
+     * be routed through [edit].
+     *
+     * A customer typed from scratch is *created*, under [newId], which the
+     * screen holds for as long as the person is filling one quotation in. A
+     * retry after an ambiguous failure therefore lands on the same document
+     * and is refused honestly rather than writing a twin — N4.4's B2 lesson,
+     * the same one [create] already carries.
+     *
+     * A [partyId] naming a customer that has since been deleted writes
+     * nothing and says nothing, exactly as [update] does: it is not this
+     * person's mistake and there is nothing for them to do about it.
+     */
+    suspend fun saveFromQuotation(
+        member: Member,
+        partyId: String,
+        draft: PartyDraft,
+        newId: String
+    ): PartyWriteResult {
+        require(Permissions.canUseParties(member)) { NOT_ALLOWED }
+        if (partyId.isBlank()) return create(member, draft, newId)
+
+        draft.refusal()?.let { throw IllegalStateException(it) }
+        val author = authorOf(member)
+        val at = now()
+        return store.transaction { transaction ->
+            val doc = transaction.read(partyId) ?: return@transaction PartyWriteResult.NO_CHANGE
+            commit(transaction, PartyWrite.mergeInto(doc.toPartyRecord(), draft, author, at))
+        }
+    }
+
     // --- plumbing ---------------------------------------------------------------
 
     private suspend fun update(

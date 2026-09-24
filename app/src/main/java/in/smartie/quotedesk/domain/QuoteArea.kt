@@ -132,6 +132,29 @@ object QuoteArea {
         append(" nos")
     }
 
+    /**
+     * The same opening **without the rate**: `3000 × 3500 mm = 113.5 sq ft × 2 nos`.
+     *
+     * This is what is stored in the line's `s` field, and [describe] is what
+     * the card and the PDF show. The difference matters once N5.10 lets
+     * somebody correct a finalised line's rate: a rate baked into the spec
+     * text would then contradict the rate column printed beside it, and the
+     * stored sentence is the one nobody would think to regenerate. V8C4
+     * prints `s` *and* the rate column, so it loses nothing.
+     */
+    fun describeGeometry(line: AreaLine): String = buildString {
+        append(plain(line.width))
+        append(" × ")
+        append(plain(line.height))
+        append(' ')
+        append(line.unit.label)
+        append(" = ")
+        append(Money.formatQuantity(chargeableSqft(line)))
+        append(" sq ft × ")
+        append(plain(line.count))
+        append(" nos")
+    }
+
     /** Why this opening cannot be priced, or null when it can. */
     fun refusal(line: AreaLine): String? = when {
         !line.width.isFinite() || !line.height.isFinite() -> NOT_A_MEASUREMENT

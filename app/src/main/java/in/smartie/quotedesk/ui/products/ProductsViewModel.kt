@@ -105,7 +105,7 @@ class ProductsViewModel(
     }
 
     fun changeQuantity(key: String, delta: Double) {
-        persist(_draft.value.changeQuantity(key, delta))
+        persist(_draft.value.changeCatalogueQuantity(key, delta))
     }
 
     fun setQuantity(key: String, quantity: Double) {
@@ -113,7 +113,7 @@ class ProductsViewModel(
             emit(NEGATIVE_QUANTITY)
             return
         }
-        persist(_draft.value.setQuantity(key, quantity))
+        persist(_draft.value.setCatalogueQuantity(key, quantity))
     }
 
     fun clearDraft() {

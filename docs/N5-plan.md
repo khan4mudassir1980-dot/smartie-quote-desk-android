@@ -81,6 +81,24 @@ and totals still read.
 
 ---
 
+## Who a quotation is for
+
+**A party NAME is required; a saved customer is not.** Finalise re-resolves
+the party from `/customers` only when `partyId` is present, and otherwise
+writes the typed snapshot with `partyId` absent.
+
+A walk-in or a first enquiry gets quoted without being filed as a customer.
+Forcing every quotation through Parties first would make the native app
+harder to use than the one it replaces, and the builder already offers "Save
+this customer" for when somebody does want it. V8C4 stores `partyId: null`
+with a typed party object, so this is the ordinary shape rather than an edge
+case, and the deployed rule requires no `partyId` at all — pinned by the
+emulator test `a quotation with no saved customer is accepted, as V8C4
+writes one`.
+
+`QuoteDraft.refusal`'s `NO_PARTY` therefore asks for a name, not an id.
+**N5.10 must never try to re-resolve an absent `partyId`.**
+
 ## One discount, and what it may not touch
 
 - **One per quotation**, typed as a percentage or as a rupee amount.

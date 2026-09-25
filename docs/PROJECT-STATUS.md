@@ -1376,6 +1376,56 @@ fix for the tier half of the `resume` defect and it is a **no-op**, because it
 returns early when the tier is not changing — which is exactly the state
 `resume` leaves. A test now pins the no-op.
 
+### N5.9a decisions, taken in chat and recorded here because chat is not memory
+
+**1. Finalise requires a party NAME, not a saved customer.**
+`partyId` is re-resolved from `/customers` **only when it is present**;
+otherwise the typed snapshot is written with `partyId` absent.
+`QuoteDraft.refusal`'s `NO_PARTY` moves from "no `partyId`" to "no party
+name" accordingly.
+
+The reason is the Owner's business, not symmetry with the PWA: a walk-in or
+a first enquiry gets quoted without being filed as a customer, and forcing
+every quotation through Parties first would make the native app harder to
+use than the one it replaces. The builder already offers "Save this
+customer" for when they do want it. V8C4 writes `partyId: null` with a typed
+party object, and the emulator test `a quotation with no saved customer is
+accepted, as V8C4 writes one` (N5.9a commit 1) proves the deployed rule
+takes that shape. **N5.10 must never try to re-resolve an absent `partyId`.**
+
+**2. The retry cannot tell which write was refused, and will not pretend to.**
+A Firestore transaction surfaces one exception; `PERMISSION_DENIED` names no
+document. The emulator shows the shape — the server reports *rule lines*
+(`false for 'update' @ L802`), and the SDK does not pass that through as
+structured data.
+
+So the design is: **refuse locally everything that can be refused locally**
+— role, cap, GST unset, no lines, no party name, through `QuoteDraft.refusal`
+and `QuoteDiscount.refusal` — so the transaction carries only the contention
+case. A `permission-denied` from inside the transaction is then,
+overwhelmingly, the counter. **That is an inference, not a discrimination**,
+and the repository's KDoc must say so in those words rather than claim a
+precision the code does not have. A Manager over the cap therefore never
+reaches the retry, and neither does a Staff account.
+
+**3. Three retries is a starting point, not a finding.** N5.1 measured that
+two concurrent transactions inside one app lost one *every* time, so one
+retry is plainly too few; three is not yet evidence. **N5.9a commit 6 reports
+attempts-per-contender from the contended emulator test and moves the number
+if a meaningful share exhausts the bound** — before the Owner meets it on a
+Friday afternoon.
+
+**4. The rules sweep: only the discount cap was absent.** Every other Owner
+decision claiming server-side enforcement is enforced —
+Staff locked out of quotations (`:611`, `:612`), parties add/correct
+(`:596`), parties rename/archive Owner-Admin only (`:600-606`), products
+`admin()` (`:167`), numbering and the cap Owner-only (`:722` and the
+configuration branch), and the counter advancing by exactly one (`:651`).
+**The Manager-sees-only-their-own-quotations restriction is app-level BY
+DESIGN** — `docs/N5-plan.md:56` explains why a rules-level version would
+refuse the PWA's own listener, and forbids describing it as rules-enforced.
+Recorded so nobody re-runs this sweep.
+
 ### N5.10 is coupled to the finalise retry — read this before widening the rule
 
 The Owner's ruling of 2026-09-25, and the guard it costs:

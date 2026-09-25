@@ -3,6 +3,8 @@ package `in`.smartie.quotedesk.domain
 import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -107,5 +109,50 @@ class QuotePartyTest {
         assertEquals(null, write.data["type"])
         assertEquals(null, write.data["notes"])
         assertEquals(true, write.merge)
+    }
+
+    // --- the party link, derived from the form ------------------------------------------
+
+    private val metro = PartyRecord(id = "c_2", name = "Metro Glass", gstin = "27AABCM9999K1Z2", phone = "9822001100")
+    private val saved = listOf(sunrise, metro)
+
+    @Test
+    fun `a form with nothing identifying links to nothing`() {
+        assertEquals(null, QuoteParty.linkFor(QuotationPartySnapshot(site = "Plot 7"), "c_1", saved))
+    }
+
+    @Test
+    fun `the picked customer survives while the form still matches it`() {
+        val form = QuoteParty.snapshotOf(sunrise).copy(site = "Godown 4", address = "a new address")
+        assertEquals("c_1", QuoteParty.linkFor(form, "c_1", saved))
+    }
+
+    @Test
+    fun `typing another firm over the picked one moves the link, or drops it`() {
+        val typedOver = QuotationPartySnapshot(name = "Metro Glass", gstin = "27aabcm9999k1z2")
+        assertEquals("c_2", QuoteParty.linkFor(typedOver, "c_1", saved))
+        assertEquals(null, QuoteParty.linkFor(typedOver, "c_1", listOf(sunrise)))
+    }
+
+    @Test
+    fun `a picked customer that has gone costs only the link`() {
+        val form = QuoteParty.snapshotOf(sunrise)
+        assertEquals(null, QuoteParty.linkFor(form, "c_1", listOf(metro)))
+    }
+
+    @Test
+    fun `the stand-in for sameParty is strict about identity and blind to the job`() {
+        val form = QuoteParty.snapshotOf(sunrise)
+        // Case, spacing and a pasted country code are the same firm.
+        assertTrue(QuoteParty.sameParty(form.copy(name = "  sunrise  CONSTRUCTIONS "), sunrise))
+        assertTrue(QuoteParty.sameParty(form.copy(phone = "+91 98765 43210"), sunrise))
+        // A site, an address or a contact typed for this job never breaks it.
+        assertTrue(QuoteParty.sameParty(form.copy(site = "x", address = "y", contact = "z"), sunrise))
+        // A different name, GSTIN or phone does.
+        assertFalse(QuoteParty.sameParty(form.copy(name = "Sunrise Builders"), sunrise))
+        assertFalse(QuoteParty.sameParty(form.copy(gstin = "27AABCM9999K1Z2"), sunrise))
+        assertFalse(QuoteParty.sameParty(form.copy(phone = "9822001100"), sunrise))
+        // Blank on the form is silence, not disagreement.
+        assertTrue(QuoteParty.sameParty(form.copy(gstin = "", phone = ""), sunrise))
     }
 }

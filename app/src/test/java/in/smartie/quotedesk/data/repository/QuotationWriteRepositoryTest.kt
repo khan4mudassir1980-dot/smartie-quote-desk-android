@@ -1,6 +1,7 @@
 package `in`.smartie.quotedesk.data.repository
 
 import `in`.smartie.quotedesk.data.mapping.DocData
+import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.domain.Discount
 import `in`.smartie.quotedesk.domain.DiscountKind
@@ -57,7 +58,6 @@ class QuotationWriteRepositoryTest {
                     override fun readQuotation(id: String) = read("quotations/$id")
                     override fun readNumbering() = read(NUMBERING)
                     override fun readQuoting() = read("teamSettings/quoting")
-                    override fun readCustomer(id: String) = read("customers/$id")
 
                     override fun writeQuotation(id: String, data: Map<String, Any?>) {
                         staged += "quotations/$id" to data
@@ -113,7 +113,7 @@ class QuotationWriteRepositoryTest {
     @Test
     fun `a first finalise writes the quotation and moves the counter on by one`() = runBlocking {
         val store = FakeStore(seeded())
-        val outcome = repository(store).finalise(manager, draft, snap = emptyMap())
+        val outcome = repository(store).finalise(manager, draft, customers = emptyList(), snap = emptyMap())
 
         assertEquals(FinaliseOutcome.Issued("qd_1", "SIE/QD/2025-26/009"), outcome)
         assertEquals(listOf("quotations/qd_1"), store.quotations())
@@ -131,8 +131,8 @@ class QuotationWriteRepositoryTest {
         val store = FakeStore(seeded())
         val repository = repository(store)
 
-        repository.finalise(manager, draft, snap = emptyMap())
-        val again = repository.finalise(manager, draft, snap = emptyMap())
+        repository.finalise(manager, draft, customers = emptyList(), snap = emptyMap())
+        val again = repository.finalise(manager, draft, customers = emptyList(), snap = emptyMap())
 
         assertEquals(FinaliseOutcome.AlreadyIssued("qd_1", "SIE/QD/2025-26/009"), again)
         assertEquals(1, store.quotations().size)
@@ -151,12 +151,12 @@ class QuotationWriteRepositoryTest {
         store.loseNextResponse = true
 
         try {
-            repository.finalise(manager, draft, snap = emptyMap())
+            repository.finalise(manager, draft, customers = emptyList(), snap = emptyMap())
             fail("the lost response should have surfaced")
         } catch (expected: IllegalStateException) {
             // What the person sees: something went wrong. The quotation exists.
         }
-        val retry = repository.finalise(manager, draft, snap = emptyMap())
+        val retry = repository.finalise(manager, draft, customers = emptyList(), snap = emptyMap())
 
         assertEquals(FinaliseOutcome.AlreadyIssued("qd_1", "SIE/QD/2025-26/009"), retry)
         assertEquals(10, store.doc(NUMBERING)["next"])
@@ -166,10 +166,10 @@ class QuotationWriteRepositoryTest {
     fun `an issued quotation is answered without reading the counter`() = runBlocking {
         val store = FakeStore(seeded())
         val repository = repository(store)
-        repository.finalise(manager, draft, snap = emptyMap())
+        repository.finalise(manager, draft, customers = emptyList(), snap = emptyMap())
         store.reads.clear()
 
-        repository.finalise(manager, draft, snap = emptyMap())
+        repository.finalise(manager, draft, customers = emptyList(), snap = emptyMap())
 
         // Not in the read set, so a busy counter cannot make Firestore re-run
         // a body that is only fetching a number it already has.
@@ -184,7 +184,7 @@ class QuotationWriteRepositoryTest {
             if (run == 1) docs[NUMBERING] = counter + ("next" to 12)
         }
 
-        val outcome = repository(store).finalise(manager, draft, snap = emptyMap())
+        val outcome = repository(store).finalise(manager, draft, customers = emptyList(), snap = emptyMap())
 
         assertEquals(FinaliseOutcome.Issued("qd_1", "SIE/QD/2025-26/012"), outcome)
         assertEquals(13, store.doc(NUMBERING)["next"])
@@ -199,7 +199,7 @@ class QuotationWriteRepositoryTest {
     @Test
     fun `a refusal writes nothing`() = runBlocking {
         val store = FakeStore()
-        val outcome = repository(store).finalise(manager, draft, snap = emptyMap())
+        val outcome = repository(store).finalise(manager, draft, customers = emptyList(), snap = emptyMap())
 
         assertEquals(FinaliseOutcome.Refused(QuotationWrite.NUMBERING_NOT_SET), outcome)
         assertTrue(store.docs.isEmpty())
@@ -214,11 +214,11 @@ class QuotationWriteRepositoryTest {
 
         assertEquals(
             FinaliseOutcome.Refused(QuotationWrite.NOT_ALLOWED),
-            repository.finalise(staff, draft, snap = emptyMap())
+            repository.finalise(staff, draft, customers = emptyList(), snap = emptyMap())
         )
         assertEquals(
             FinaliseOutcome.Refused(QuotationWrite.NO_IDENTITY),
-            repository.finalise(manager, draft.copy(id = ""), snap = emptyMap())
+            repository.finalise(manager, draft.copy(id = ""), customers = emptyList(), snap = emptyMap())
         )
         assertEquals(0, store.transactions)
     }
@@ -232,44 +232,48 @@ class QuotationWriteRepositoryTest {
             assertEquals(
                 // 2% of 1,000 is 20; 5% asks for 50.
                 FinaliseOutcome.Refused(QuoteMath.overTheCap(2.0, 20.0)),
-                repository(lowered).finalise(manager, discounted, snap = emptyMap())
+                repository(lowered).finalise(manager, discounted, customers = emptyList(), snap = emptyMap())
             )
             assertTrue(lowered.quotations().isEmpty())
 
             val unset = FakeStore(seeded())
             assertEquals(
                 FinaliseOutcome.Refused(QuoteDiscount.CAP_NOT_SET),
-                repository(unset).finalise(manager, discounted, snap = emptyMap())
+                repository(unset).finalise(manager, discounted, customers = emptyList(), snap = emptyMap())
             )
         }
 
     // --- who it is for ------------------------------------------------------------------
 
     @Test
-    fun `a saved customer is read inside the transaction and written as it stands now`() = runBlocking {
-        val picked = draft.copy(
-            partyId = "c_1",
-            party = QuotationPartySnapshot(name = "Sunrise Constructions", site = "Plot 7")
-        )
-        val store = FakeStore(
-            seeded("customers/c_1" to mapOf("id" to "c_1", "name" to "Sunrise Constructions Pvt Ltd"))
-        )
+    fun `the party link comes from the screen's customers, and the transaction reads only its own two documents`() =
+        runBlocking {
+            // As V8C4: its transaction reads the quotation and the counter and
+            // nothing else; the link is derived from `state.customers`.
+            val sunrise = PartyRecord(id = "c_1", name = "Sunrise Constructions")
+            val picked = draft.copy(
+                partyId = "c_1",
+                party = QuotationPartySnapshot(name = "Sunrise Constructions", site = "Plot 7")
+            )
+            val store = FakeStore(seeded())
 
-        repository(store).finalise(manager, picked, snap = emptyMap())
+            repository(store).finalise(manager, picked, customers = listOf(sunrise), snap = emptyMap())
 
-        @Suppress("UNCHECKED_CAST")
-        val party = store.doc("quotations/qd_1")["party"] as Map<String, Any?>
-        assertEquals("Sunrise Constructions Pvt Ltd", party["name"])
-        assertEquals("Plot 7", party["site"])
-        assertEquals("c_1", store.doc("quotations/qd_1")["partyId"])
-    }
+            assertEquals(listOf("quotations/qd_1", NUMBERING), store.reads)
+            assertEquals("c_1", store.doc("quotations/qd_1")["partyId"])
+            @Suppress("UNCHECKED_CAST")
+            val party = store.doc("quotations/qd_1")["party"] as Map<String, Any?>
+            assertEquals("Plot 7", party["site"])
+        }
 
     @Test
-    fun `a walk-in never reads the customers collection`() = runBlocking {
+    fun `a saved customer missing from the list costs the link, never the quotation`() = runBlocking {
+        val picked = draft.copy(partyId = "c_gone", party = QuotationPartySnapshot(name = "Sunrise Constructions"))
         val store = FakeStore(seeded())
-        repository(store).finalise(manager, draft, snap = emptyMap())
 
-        assertFalse(store.reads.any { it.startsWith("customers/") })
+        val outcome = repository(store).finalise(manager, picked, customers = emptyList(), snap = emptyMap())
+
+        assertEquals(FinaliseOutcome.Issued("qd_1", "SIE/QD/2025-26/009"), outcome)
         assertFalse(store.doc("quotations/qd_1").containsKey("partyId"))
     }
 

@@ -200,9 +200,11 @@ data class QuoteDraft(
     /**
      * Who the quotation is for, as the screen shows it.
      *
-     * **Re-resolved from `/customers` at finalise only when [partyId] is
-     * present** (`QuotationWrite`); otherwise this typed snapshot *is* the
-     * record, and is written as it stands.
+     * **This snapshot is what the quotation keeps**, as it stands at
+     * finalise; it is never rewritten from a customer record. [partyId] is
+     * only a cross-reference, and finalise re-derives it from this form
+     * (`QuoteParty.linkFor`): a customer picked and then typed over is not
+     * carried into the record.
      */
     val party: QuotationPartySnapshot = QuotationPartySnapshot(),
     /** Carriage. Stored as a **line** at finalise, inside the subtotal. */

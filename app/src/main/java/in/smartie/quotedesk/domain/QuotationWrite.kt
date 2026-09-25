@@ -60,23 +60,27 @@ sealed interface QuotationPlan {
  *
  * ## Who the quotation is for
  *
- * The Owner's ruling of 2026-09-25: a party **name** is required, a saved
- * customer is not. When the draft names a saved customer, the party is
- * **re-resolved** from the `/customers` record the caller read, not trusted
- * from the draft, whose snapshot was taken whenever the customer was picked
- * and may be days stale. The site is kept from the draft, because the site is
- * where this job is and the customer record does not hold one. With no saved
- * customer the typed snapshot is written as it stands and `partyId` is
- * **absent** — there is nothing to look up, now or in N5.10.
+ * A party **name** is required, a saved customer is not (the Owner's ruling
+ * of 2026-09-25). **The quotation keeps the form's own snapshot** of the
+ * party and never rewrites it from a customer record — "editing the party
+ * later never rewrites it" (V8C4, 6270). `partyId` is optional metadata,
+ * **derived from the form** by `QuoteParty.linkFor`, V8C4's `resolvePartyId`:
+ * the customer the person picked survives only while the form still matches
+ * it, else a saved customer the form matches, else nothing — and then
+ * `partyId` is **absent**.
+ *
+ * **A customer that cannot be found never refuses finalise.** `3db056b` did,
+ * with a `CUSTOMER_GONE` refusal; V8C4 sets the link to null and issues, and
+ * so does this since N5.9a commit 3c.
  *
  * ## `snap` is frozen here, and only here
  *
  * It records what the terms, validity and bank block were **at issue**, and
  * N5.10 never re-freezes it. [plan] writes the map it is given exactly as
- * given and derives nothing into it. **What V8C4 puts in `snap{}` is not
- * recorded anywhere in this repository** — the only example is a test fixture
- * this project wrote itself — so its contents are the caller's to supply once
- * that is known, and it is an open question in `docs/PROJECT-STATUS.md`.
+ * given and derives nothing into it. V8C4's shape — company identity, the
+ * bank block, terms, notes and five quote settings, text only — is recorded
+ * in `docs/PROJECT-STATUS.md` as **N6's target**: none of that data exists
+ * natively until N6 builds company settings.
  *
  * ## What is written that V8C4 does not write
  *
@@ -120,16 +124,14 @@ object QuotationWrite {
         "Another quotation already uses this draft's identity - nothing was issued"
     const val NUMBERING_NOT_SET =
         "Quotation numbering has not been set up - the Owner sets it in Settings"
-    const val CUSTOMER_GONE =
-        "The saved customer on this quotation could not be found - choose them again, or type the name"
 
     /**
      * What issuing [draft] comes to.
      *
      * [existing] is this draft's quotation document if it is already there —
-     * read **first**, inside the transaction. [customer] is
-     * `/customers/{draft.partyId}` as read now, and is ignored when the draft
-     * names no saved customer. [counter] is `/teamSettings/numbering`, null
+     * read **first**, inside the transaction. [customers] is the saved
+     * customers the screen holds, which the party link is derived against
+     * (`QuoteParty.linkFor`). [counter] is `/teamSettings/numbering`, null
      * when it has never been seeded.
      */
     fun plan(
@@ -138,7 +140,7 @@ object QuotationWrite {
         quoting: QuotingRecord?,
         counter: NumberingRecord?,
         existing: QuotationRecord?,
-        customer: PartyRecord?,
+        customers: List<PartyRecord>,
         snap: Map<String, Any?>,
         at: Long
     ): QuotationPlan {
@@ -156,11 +158,11 @@ object QuotationWrite {
         if (!Permissions.canQuote(member)) return QuotationPlan.Refused(NOT_ALLOWED)
         if (counter == null || !isIssuable(counter)) return QuotationPlan.Refused(NUMBERING_NOT_SET)
 
-        val resolved = if (draft.partyId.isBlank()) {
-            draft
-        } else {
-            draft.withParty(customer ?: return QuotationPlan.Refused(CUSTOMER_GONE))
-        }
+        // The form's snapshot stands; only the link is derived, and a
+        // customer that has gone simply leaves it empty.
+        val resolved = draft.copy(
+            partyId = QuoteParty.linkFor(draft.party, draft.partyId, customers).orEmpty()
+        )
 
         val cap = QuoteDiscount.capFor(member, quoting)
         resolved.discount?.let { taken ->

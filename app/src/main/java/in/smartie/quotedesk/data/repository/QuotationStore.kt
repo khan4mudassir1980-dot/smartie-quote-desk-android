@@ -5,11 +5,15 @@ import `in`.smartie.quotedesk.data.mapping.DocData
 /**
  * The slice of Firestore that finalising a quotation uses.
  *
- * **It spans four documents, so its reads are named rather than generic.**
+ * **It spans three documents, so its reads are named rather than generic.**
  * `PartyStore` reads one collection by id; finalise reads this draft's
- * quotation, the counter, the Owner's discount limit and the saved customer,
- * and writes two of them. Naming each keeps the fake in the tests simple and
- * keeps the rules-relevant shape of every write visible at its call site.
+ * quotation, the counter and the Owner's discount limit, and writes the first
+ * two. V8C4's transaction reads only the first two — the discount limit is
+ * this app's addition, for the cap V8C4 does not have. **No customer is read
+ * here**: the party link is derived from the list the screen already holds,
+ * as V8C4 derives it from `state.customers`. Naming each read keeps the fake
+ * in the tests simple and the rules-relevant shape of every write visible at
+ * its call site.
  *
  * **No Firebase type appears here.** The real implementation is
  * [FirestoreQuotationStore], in its own file, so this interface and
@@ -32,8 +36,8 @@ interface QuotationStore {
  * The reads and writes available inside one finalise.
  *
  * Every read comes before every write, as a Firestore transaction requires.
- * **No delete, and no write to `/customers` or `/teamSettings/quoting`:**
- * finalise reads those and changes neither.
+ * **No delete, and no write to `/teamSettings/quoting`**, which finalise
+ * reads and never changes.
  */
 interface QuotationTransaction {
     /** `/quotations/{id}` — this draft's own quotation, if it was already issued. */
@@ -44,9 +48,6 @@ interface QuotationTransaction {
 
     /** `/teamSettings/quoting`, the Owner's discount limit for a Manager. */
     fun readQuoting(): DocData?
-
-    /** `/customers/{id}`, the saved customer the draft names. */
-    fun readCustomer(id: String): DocData?
 
     /** A whole new document at `/quotations/{id}` — a set, never a merge. */
     fun writeQuotation(id: String, data: Map<String, Any?>)

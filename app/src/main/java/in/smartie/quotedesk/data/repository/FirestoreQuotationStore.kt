@@ -22,9 +22,6 @@ class FirestoreQuotationStore(private val firestore: FirebaseFirestore) : Quotat
                     override fun readQuoting(): DocData? =
                         transaction.read(firestore.collection(TEAM_SETTINGS).document(QUOTING))
 
-                    override fun readCustomer(id: String): DocData? =
-                        transaction.read(firestore.collection(CUSTOMERS).document(id))
-
                     override fun writeQuotation(id: String, data: Map<String, Any?>) {
                         transaction.set(
                             firestore.collection(QUOTATIONS).document(id),
@@ -52,8 +49,6 @@ class FirestoreQuotationStore(private val firestore: FirebaseFirestore) : Quotat
 
     private companion object {
         const val QUOTATIONS = "quotations"
-        /** V8C4's collection name. The app calls them parties; the wire does not. */
-        const val CUSTOMERS = "customers"
         const val TEAM_SETTINGS = "teamSettings"
         const val NUMBERING = "numbering"
         const val QUOTING = "quoting"

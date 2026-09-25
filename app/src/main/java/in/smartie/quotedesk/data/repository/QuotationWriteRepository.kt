@@ -1,9 +1,9 @@
 package `in`.smartie.quotedesk.data.repository
 
 import `in`.smartie.quotedesk.data.mapping.toNumberingRecord
-import `in`.smartie.quotedesk.data.mapping.toPartyRecord
 import `in`.smartie.quotedesk.data.mapping.toQuotationRecord
 import `in`.smartie.quotedesk.data.mapping.toQuotingRecord
+import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.domain.QuotationPlan
@@ -44,9 +44,12 @@ sealed interface FinaliseOutcome {
  * body, and a retry that is only fetching a number it already has should not
  * queue behind every other issue in the business.
  *
- * Only when there is no such document are the counter, the Owner's discount
- * limit and the saved customer read, and [QuotationWrite.plan] decides from
- * those fresh reads — not from what the screen was showing when it loaded.
+ * Only when there is no such document are the counter and the Owner's
+ * discount limit read, and [QuotationWrite.plan] decides from those fresh
+ * reads — not from what the screen was showing when it loaded. The party link
+ * is the exception, and deliberately: it is derived from the customers the
+ * screen holds, as V8C4 derives it from `state.customers`, because it is
+ * metadata — a list a moment old costs at most a cross-reference.
  * The cap in particular is read here so that a limit the Owner lowered a
  * minute ago refuses **locally**, with the figure named, rather than reaching
  * the rule and coming back as an unexplained `permission-denied`.
@@ -74,13 +77,15 @@ class QuotationWriteRepository(
      * Issues [draft] under the next number, or answers with the number it was
      * already issued under.
      *
-     * [snap] is frozen into the quotation exactly as given — see
-     * `QuotationWrite`. Until N6 builds company settings the caller has
-     * nothing to put in it.
+     * [customers] is the saved-customer list the screen holds; the party
+     * link is derived against it (`QuoteParty.linkFor`). [snap] is frozen
+     * into the quotation exactly as given — see `QuotationWrite`. Until N6
+     * builds company settings the caller has nothing to put in it.
      */
     suspend fun finalise(
         member: Member,
         draft: QuoteDraft,
+        customers: List<PartyRecord>,
         snap: Map<String, Any?>
     ): FinaliseOutcome {
         if (!Permissions.canQuote(member)) return FinaliseOutcome.Refused(QuotationWrite.NOT_ALLOWED)
@@ -96,19 +101,13 @@ class QuotationWriteRepository(
             } else {
                 null
             }
-            val customer = if (fresh && draft.partyId.isNotBlank()) {
-                transaction.readCustomer(draft.partyId)?.toPartyRecord()
-            } else {
-                null
-            }
-
             val plan = QuotationWrite.plan(
                 draft = draft,
                 member = member,
                 quoting = quoting,
                 counter = counter,
                 existing = existing,
-                customer = customer,
+                customers = customers,
                 snap = snap,
                 at = at
             )

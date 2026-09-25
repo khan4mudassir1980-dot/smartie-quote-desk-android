@@ -1418,6 +1418,10 @@ rule sketch that now differs from what shipped).
 **1. Finalise requires a party NAME, not a saved customer.**
 `partyId` is re-resolved from `/customers` **only when it is present**;
 otherwise the typed snapshot is written with `partyId` absent.
+*(The name requirement stands. The "re-resolved from `/customers`" half is
+**superseded** by the Owner's re-read of 2026-09-25 — the form's snapshot is
+kept and only the link is re-derived from it; see "V8C4's fbFinaliseAtomic,
+re-read 2026-09-25" below. Built in N5.9a commit 3c.)*
 `QuoteDraft.refusal`'s `NO_PARTY` moves from "no `partyId`" to "no party
 name" accordingly.
 
@@ -1550,8 +1554,13 @@ TESTS=$(grep -L -e '^import android' -e '^import androidx' -e '^import com.googl
 java -cp "$KC" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect -classpath "$RT" -d $OUT/main $SRC
 java -cp "$KC" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect -classpath "$RT:$L/junit-4.13.2.jar:$OUT/main" -d $OUT/test $TESTS
 CLASSES=$(cd $OUT/test && find . -name '*Test.class' | grep -v '\$' | sed 's|^\./||; s|\.class$||; s|/|.|g')
-java -cp "$RT:$L/junit-4.13.2.jar:$L/hamcrest-core-1.3.jar:$OUT/main:$OUT/test:app/src/test/resources" org.junit.runner.JUnitCore $CLASSES
+java -ea -cp "$RT:$L/junit-4.13.2.jar:$L/hamcrest-core-1.3.jar:$OUT/main:$OUT/test:app/src/test/resources" org.junit.runner.JUnitCore $CLASSES
 ```
+
+**`-ea` is not optional.** Kotlin's `assert(...)` does nothing unless the JVM
+enables assertions; Gradle's test task does by default, a bare `java` does
+not. Without it `QuoteDiscountTest`'s one `assert` passed locally whatever it
+checked — found and fixed in N5.9a commit 3c.
 
 **What it is not.** It is not the build: the compiler version, flags and
 dependency versions are the distribution's, not the app's, and every file
@@ -1692,6 +1701,44 @@ and gives the command (rule 5). Then:
   file names the other in a comment**, so a change to one not made to the
   other is visible in review. That correspondence is the only thing joining
   (1) to (2).
+
+### After the re-read: what N5.9a commit 3c did, and what it left open
+
+**Done in 3c.** `CUSTOMER_GONE` is gone: a saved customer that cannot be
+found leaves the link empty and the quotation is issued. The form's snapshot
+is written and never rewritten from a record. The link is derived from the
+form by `QuoteParty.linkFor` — the picked customer survives only while the
+form still matches it, else a saved customer the form matches (N5.5's port
+of `findCustomer`, `PartyDuplicates.find`), else nothing — against the
+customer list the screen holds, as V8C4 uses `state.customers`. The finalise
+transaction no longer reads `/customers`; like V8C4's it reads the quotation
+and the counter, plus the discount limit V8C4 has no need of.
+
+**QUESTION FOR THE OWNER — V8C4's `sameParty` text.** It is not in this
+repository, and nothing here ports it. `QuoteParty.sameParty` is a
+**stand-in**, deliberately strict — the name must match, and a GSTIN or phone
+present on both sides must agree — because too strict costs a cross-reference
+that `findCustomer` may restore, while too loose files one firm's quotation
+under another. Its KDoc says it is a stand-in. The real text lets it become
+a port. Blocks nothing in 9a; wanted before 9b ships finalise.
+
+**FINDING, not fixed — "Save this customer" has the same typed-over shape.**
+`ProductsViewModel.saveCustomer` passes the draft's **held** `partyId` with
+the **form's** details to `PartyWriteRepository.saveFromQuotation`, which
+merges them into that record. Pick Sunrise, type Metro Glass's details over
+the form, press "Save this customer", and Metro Glass's phone and GSTIN are
+merged into Sunrise's record. N5.8b code, outside this batch; recorded for
+the Owner rather than fixed, per "do not fix anything beyond" the batch.
+
+**FOR 9b — remove the finalised draft; never clear it.** The document id is
+the draft's id, and it is cleared in this app only by removing the draft
+(`QuoteDrafts.remove`), after which `currentDraftId()` mints a fresh one.
+The builder's existing `clearDraft()` empties the lines and **keeps the id**.
+Used after a successful finalise, the next quotation would carry the issued
+one's id, the read-first would find it, and the new quotation would be
+answered with the **previous number** and never issued. V8C4 clears
+`state.draftId` only on success (6262) and never in the catch; 9b does the
+same with `remove`, and only on `Issued` or `AlreadyIssued`.
 
 ### N5.10 is coupled to the finalise retry — read this before widening the rule
 

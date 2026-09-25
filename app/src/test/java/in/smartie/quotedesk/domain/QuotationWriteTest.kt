@@ -78,14 +78,14 @@ class QuotationWriteTest {
         quoting: QuotingRecord? = capOfFive,
         numbering: NumberingRecord? = counter,
         existing: QuotationRecord? = null,
-        customer: PartyRecord? = null
+        customers: List<PartyRecord> = emptyList()
     ): QuotationPlan = QuotationWrite.plan(
         draft = draft,
         member = member,
         quoting = quoting,
         counter = numbering,
         existing = existing,
-        customer = customer,
+        customers = customers,
         snap = snap,
         at = at
     )
@@ -152,7 +152,7 @@ class QuotationWriteTest {
         // — `Keys.generateId` per call — fails this: two attempts, two
         // documents, two numbers.
         val first = write(plan())
-        val second = write(QuotationWrite.plan(ready, manager, capOfFive, counter, null, null, snap, at + 5_000))
+        val second = write(QuotationWrite.plan(ready, manager, capOfFive, counter, null, emptyList(), snap, at + 5_000))
         assertEquals("qd_1", first.quotationId)
         assertEquals(first.quotationId, second.quotationId)
     }
@@ -286,42 +286,76 @@ class QuotationWriteTest {
 
     // --- who it is for ----------------------------------------------------------------------
 
+    private val sunrise = PartyRecord(
+        id = "c_1",
+        name = "Sunrise Constructions",
+        phone = "9876543210",
+        address = "Plot 14, Andheri East"
+    )
+    private val metro = PartyRecord(id = "c_2", name = "Metro Glass", phone = "9822001100")
+
     @Test
     fun `a walk-in is written from the typed name, with partyId absent`() {
-        // A customer record handed in anyway is ignored: there is no saved
-        // customer to resolve.
-        val q = write(plan(customer = PartyRecord(id = "c_9", name = "Someone Else"))).quotation
+        // Saved customers the form matches nothing of are no reason to link.
+        val q = write(plan(customers = listOf(sunrise, metro))).quotation
         assertFalse(q.containsKey("partyId"))
         assertEquals("Walk-in Builders", q.child("party")["name"])
         assertEquals("Plot 7", q.child("party")["site"])
     }
 
     @Test
-    fun `a saved customer is re-resolved from the record, keeping the draft's site`() {
-        // Picked days ago under an older name; renamed since.
-        val picked = ready.copy(
-            partyId = "c_1",
-            party = QuotationPartySnapshot(name = "Sunrise Constructions", site = "Plot 7")
+    fun `a picked customer the form still matches keeps its link, and the form is what is written`() {
+        // Picked when the address read one thing; the record has moved on
+        // since. The quotation keeps the form — "editing the party later never
+        // rewrites it" (V8C4, 6270) — and only the link comes from the list.
+        val picked = ready.withParty(sunrise).copy(
+            party = QuoteParty.snapshotOf(sunrise).copy(site = "Plot 7")
         )
-        val now = PartyRecord(
-            id = "c_1",
-            name = "Sunrise Constructions Pvt Ltd",
-            phone = "9876543210",
-            city = "Mumbai"
-        )
-        val q = write(plan(draft = picked, customer = now)).quotation
+        val moved = sunrise.copy(address = "Unit 3, Powai")
+        val q = write(plan(draft = picked, customers = listOf(moved, metro))).quotation
+
         assertEquals("c_1", q["partyId"])
-        val party = q.child("party")
-        assertEquals("Sunrise Constructions Pvt Ltd", party["name"])
-        assertEquals("9876543210", party["phone"])
-        assertEquals("Mumbai", party["city"])
-        assertEquals("Plot 7", party["site"])
+        assertEquals("Plot 14, Andheri East", q.child("party")["address"])
+        assertEquals("Plot 7", q.child("party")["site"])
     }
 
     @Test
-    fun `a saved customer that cannot be found is refused, not written from the stale snapshot`() {
-        val picked = ready.copy(partyId = "c_1")
-        assertEquals(QuotationPlan.Refused(QuotationWrite.CUSTOMER_GONE), plan(draft = picked, customer = null))
+    fun `a customer picked and then typed over is not filed under the first`() {
+        // The defect the Owner named: pick Sunrise, then type Metro Glass's
+        // details over the form. `3db056b` checked only that Sunrise's record
+        // existed and would have filed this under Sunrise.
+        val typedOver = ready.withParty(sunrise).copy(
+            party = QuotationPartySnapshot(name = "Metro Glass", phone = "98220 01100")
+        )
+        assertEquals("c_1", typedOver.partyId)
+
+        // Metro Glass is saved: the form finds it, as V8C4's findCustomer does.
+        val found = write(plan(draft = typedOver, customers = listOf(sunrise, metro))).quotation
+        assertEquals("c_2", found["partyId"])
+
+        // Metro Glass is not saved: no link at all, and never Sunrise.
+        val none = write(plan(draft = typedOver, customers = listOf(sunrise))).quotation
+        assertFalse(none.containsKey("partyId"))
+        assertEquals("Metro Glass", none.child("party")["name"])
+    }
+
+    @Test
+    fun `a saved customer that cannot be found leaves the link empty, and the quotation is still issued`() {
+        // `3db056b` refused here. V8C4 sets the link to null and finalises:
+        // the details are already in the quotation, and a cross-reference is
+        // all that is lost. Restoring the refusal fails this test.
+        val picked = ready.withParty(sunrise)
+        val write = write(plan(draft = picked, customers = emptyList()))
+
+        assertEquals("SIE/QD/2025-26/009", write.number)
+        assertFalse(write.quotation.containsKey("partyId"))
+        assertEquals("Sunrise Constructions", write.quotation.child("party")["name"])
+    }
+
+    @Test
+    fun `typed details that match a saved customer are linked to it, as V8C4 links them`() {
+        val typed = ready.copy(party = QuotationPartySnapshot(name = "Walk-in Builders", phone = "+91 98220 01100"))
+        assertEquals("c_2", write(plan(draft = typed, customers = listOf(sunrise, metro))).quotation["partyId"])
     }
 
     @Test

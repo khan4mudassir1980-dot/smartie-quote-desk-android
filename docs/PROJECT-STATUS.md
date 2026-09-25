@@ -1775,6 +1775,118 @@ answered with the **previous number** and never issued. V8C4 clears
 `state.draftId` only on success (6262) and never in the catch; 9b does the
 same with `remove`, and only on `Issued` or `AlreadyIssued`.
 
+### The Owner's answers of 2026-09-25 (second re-read) — recorded before acting
+
+Advisor-read evidence from V8C4, not authority; checked against the
+repository where it can be. Two of the three reverse what this batch had
+assumed.
+
+**1. `sameParty` is OR, not AND — `3c`'s stand-in is too strict.** V8C4
+6362-6371, with its own KDoc:
+
+```
+/** Do these typed details still describe this saved party? GSTIN first,
+    then phone, then company name — the order of reliability. */
+function sameParty(p, c){
+  if(!p || !c) return false;
+  const g=norm(p.gstin), ph=digits(p.phone), nm=norm(p.name);
+  return !!((g  && norm(c.gstin)===g) ||
+            (ph && ph.length>=7 && digits(c.phone)===ph) ||
+            (nm && norm(c.name)===nm));
+}
+```
+
+**Any one of the three matching is enough.** The stand-in required the name
+**and** any GSTIN or phone present on both sides — stricter in the direction
+that hurts: correct a spelling in the company name on a party whose GSTIN is
+unchanged and the stand-in drops the link, where V8C4 keeps it on the GSTIN
+alone. V8C4 accepted the loose end deliberately: GSTIN first, "the order of
+reliability", and a ≥7-digit floor that stops a short or junk phone
+matching. **Replace the stand-in with this, exactly, including the ≥7
+check.**
+
+**`findCustomer` is `sameParty` over the list**, not a separate rule:
+
+```
+function findCustomer(p, exceptId){
+  return state.customers.find(c => c.id!==exceptId && !c.archived
+                                   && sameParty(p, c));
+}
+```
+
+- **a. One definition of "same party", never two.** If
+  `PartyDuplicates.find` already contains this predicate inline, expose it
+  and have `linkFor` call it rather than ship a second copy that can drift.
+- **b. Does our find exclude archived parties?** V8C4's does; if ours does
+  not, a quotation can link to a party the person archived. To be reported
+  yes or no.
+
+V8C4's KDoc on `resolvePartyId` states the principle: **"A link that no
+longer matches what is typed is never kept — that is how a quotation ends
+up on the wrong party."**
+
+**2. The "Save this customer" defect is native-only. FIX IT — as commit 8
+of this batch**, after commit 7 and before 9b. V8C4's `saveParty` (6404)
+opens `if(!p || !p.name) return null; ... let c=findCustomer(p);` — it
+re-finds from the **form's own details** and never consults the held id.
+Picking Sunrise, typing Metro Glass over it and pressing Save creates or
+updates **Metro Glass**; Sunrise is untouched. Ours merges the form into the
+held id and silently corrupts a saved customer. Its own commit, saying it
+is a behaviour change to N5.8b code. Timing: same predicate, context hot,
+and 9b is the Finalise control, which a party-store fix would muddy.
+
+**3. `N` is the device's numbering settings — and the answer changes at
+N6.** `state.numbering` (2020) is
+`{prefix:"SIE", fy:"", next:1, pad:3, lastIssued:null, fyAsked:""}`:
+device-local, defaulted on the device, edited in Settings (3220-3223),
+persisted locally (3457, 3466, 3624), re-synced after a transaction (5177,
+"keep the local view in step"). So 4b's answer — no financial-year check,
+because nothing on the phone holds a year — is right **for the app as it
+stands**, and only until N6 builds a numbering settings screen. See the N6
+requirement below.
+
+**4. The measurement's two numbers are in tension.** With no retry, one
+winner per simultaneous batch; with unlimited retry at ten contenders the
+worst case was 5 attempts, where strictly one winner per round would need
+about ten. The explanation is almost certainly that the herd disperses —
+the losers fail at slightly different moments and their retries arrive
+spread out — so **the bound depends on timing dispersion, not on any
+guarantee**, and the KDoc must say so plainly. The question to answer: **does
+the retry wait at all before re-attempting?** If not, add a randomised
+backoff and re-measure; report the worst case with and without it. And state
+in the KDoc: **exhausting the bound is safe** — "Not finalised — … Your
+quotation is untouched", the draft and its id survive, and the next press
+picks up where it left off. The bound must make exhaustion rare; it need not
+be provably sufficient.
+
+**5. For 9b's plan:** the control disables on the first press, and for the
+up-to-three seconds a non-contention refusal can take it must be **visibly
+busy and say what it is doing — taking a number** — not a dead button.
+
+**Order from here:** the `sameParty` correction first, then commit 7, then
+commit 8 (the Save defect), then 9b.
+
+### Owed in N6: the financial-year guard, and the year-turn prompt — a REQUIREMENT
+
+Recorded 2026-09-25 at the Owner's instruction, as a requirement and not a
+note. **The moment a person can type a financial year on the phone — which
+N6's numbering settings screen will allow — finalise must refuse when the
+device's year and the shared counter's disagree**, with V8C4's own message.
+V8C4 has the guard twice, at 5138 inside `fbFinaliseAtomic` and at 4733 in
+the older reserve path:
+
+```
+if(cur && cur.fy && N.fy && cur.fy !== N.fy)
+  throw new Error(`The team is on financial year ${cur.fy}; this device is on ${N.fy}. Reload before finalising.`);
+```
+
+**The failure it prevents is silent:** a device left open across the year
+rollover keeps issuing numbers in last year's series, and nobody sees it
+until the numbering is already wrong. V8C4 also prompts when the year turns
+(4796-4798): "Financial year is now X — open Settings to roll the numbering
+over". N6 wants that too. Until N6, no screen holds a year, so no year can
+disagree (N5.9a commit 4b).
+
 ### N5.10 is coupled to the finalise retry — read this before widening the rule
 
 The Owner's ruling of 2026-09-25, and the guard it costs:

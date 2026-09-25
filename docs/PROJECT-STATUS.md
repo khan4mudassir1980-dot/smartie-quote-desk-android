@@ -1043,6 +1043,13 @@ hard-codes it. **Do not remove or obfuscate it.**
 
 Repository visibility is being checked; assume private until told otherwise.
 
+**Also in the N5.12 pass — the Transportation line in `quotations.json`.**
+`q_pwa_finalised` stores it with `u: "lot"` and `manual: true`. V8C4 stores
+`u: ""`, `manual: false`, `k: null` and an `origRate` (answered 2026-09-25,
+see "N5.9a questions for the Owner"). The Owner's ruling is that the fixture
+moves with this pass rather than before it, together with any test that
+reads the line as typed by hand.
+
 ### N5.6b, and the two decisions it left with the Owner
 
 `pad` is now bounded 1–6 on the configuration branch and `fy` must read like
@@ -1451,27 +1458,68 @@ DESIGN** — `docs/N5-plan.md:56` explains why a rules-level version would
 refuse the PWA's own listener, and forbids describing it as rules-enforced.
 Recorded so nobody re-runs this sweep.
 
-### N5.9a questions for the Owner — V8C4 facts this repository does not hold
+### N5.9a questions for the Owner — V8C4 facts, ANSWERED 2026-09-25
 
-Asked in N5.9a commit 3, and recorded before they are answered (rule 8).
-**Neither blocks 9a**, which ships no caller; both must be answered before
-9b wires the Finalise control. Each is answered by
-`tools/catalogue-import/inspect-v8c4.mjs`-style reading on the Owner's
-machine, never by guessing.
+Asked in N5.9a commit 3 and recorded before they were answered (rule 8). The
+Owner answered both from the V8C4 file. **Advisor-read evidence, not
+authority**: it is checked against the repository below wherever the
+repository can check it, and nothing here is a V8C4 figure or company datum.
 
-1. **What does V8C4's `fbFinaliseAtomic` put in `snap{}`?** `QuotationWrite`
-   writes the map it is given exactly as given and derives nothing into it,
-   because the only example in this repository is
-   `app/src/test/resources/fixtures/quotations.json` —
-   `{gstPct: 18, validityDays: 15}` — which this project wrote itself and is
-   not evidence. The native app holds no terms, validity or bank details yet
-   (the Settings screen says so), so 9b needs to know both the keys and where
-   their values come from.
-2. **What unit does V8C4 write on the Transportation line?**
-   `docs/N5-plan.md` records a V8C4 manual line as unit `no`, so
-   `QuotationWrite.TRANSPORT_UNIT` is `"no"`; the same fixture file says
-   `lot`, invented. It moves no money — the line is one of it at its own
-   amount — but it prints.
+**1. What `fbFinaliseAtomic` freezes into `snap{}` — the target for N6.**
+V8C4 line 6230, under its own comment "what the quotation said on the day.
+Text only — the logo and QR are not copied into every record, the current
+images are used":
+
+```
+snap: {
+  name, tag, addr, phones, email, web, gstin, pan,
+  bank: { name, branch, acc, ifsc, upi },
+  terms: termsList(), notes: notesList(),
+  validityDays, gstPct, payTerms, warranty, pdfFooter
+}
+```
+
+Three groups: **company identity** (`name` … `pan`), the **bank block**, then
+**terms and notes plus five quote settings** (`validityDays`, `gstPct`,
+`payTerms`, `warranty`, `pdfFooter`). **Text only, by deliberate design — no
+logo, no QR.** None of this data exists in the native app yet (the Settings
+screen says so), so 9a's `QuotationWrite` writing "whatever map it is given"
+is right, and **N6 fills it** when company settings are built. This shape is
+N6's target, not a guess. Checked against the repository: the only `snap` in
+it is `fixtures/quotations.json`'s `{gstPct: 18, validityDays: 15}`, two keys
+of the fifteen, invented by this project — consistent with, and much smaller
+than, the real shape.
+
+**2. The Transportation line V8C4 stores — and two corrections to the plan.**
+`quoteLines()` pushes
+`normLine({ t:"Transportation", s: t.note||"", amt: t.amt, q:"1 no", transport:true })`,
+and `normLine` resolves it: `qty` 1 (`+"1 no"` is NaN, so the `q` string is
+not a number), `rate = amt / 1`, `u = l.u || ""` with `l.u` undefined, and
+`manual = !!l.manual` with nothing passed. The stored mapping at 6223-6224 is
+`{ t, s, u, qty, rate, origRate, k, manual, amt }`, so V8C4 stores exactly:
+
+```
+t: "Transportation", s: <the note>, u: "", qty: 1,
+rate: <amount>, origRate: <amount>, k: null, manual: false, amt: <amount>
+```
+
+- **Correction 1 — `u` is `""`,** not `"no"` and not `"lot"`. The plan's
+  "manual lines use unit `no`" is V8C4's **display** fallback — `qLabel`
+  reads `l.u || "no"` only when rendering — not the stored value.
+  `QuotationWrite.TRANSPORT_UNIT` was `"no"` in `3db056b`, taken from that
+  line of the plan. The invented fixture's `"lot"` is wrong too and **moves
+  with the N5.12 fixture pass**, not before.
+- **Correction 2 — `manual` is `false`.** "Transport becomes a manual line at
+  finalise" is wrong as written: it becomes an **ordinary** line with
+  `k: null` and `manual: false`. Writing `manual: true`, as `3db056b` does,
+  would make V8C4 and this app's own detail screen both tag it "typed by
+  hand", which it is not. The fixture's `manual: true` moves with N5.12 as
+  well.
+- **`amt` and `origRate` are both written.** Absence would be safe — V8C4's
+  `amtOf` falls back to `qty × rate` and `normLine` defaults `origRate` to
+  `rate` — but writing them matches the PWA byte for byte and costs nothing.
+
+Corrected in the commit after this one.
 
 ### Running the pure Kotlin tests locally — found in N5.9a, and its limits
 
@@ -1507,6 +1555,16 @@ covers 44 of the suite's 124 test classes (`grep -rl "@Test" app/src/test |
 wc -l`). A pass here can still be red on CI. It is for catching a type error
 or a wrong figure **before** a push costs a cycle.
 The `verify` job remains the only evidence a commit is green.
+
+### Owed by 9b's plan: how a person recovers when their saved customer is gone
+
+The Owner's flag of 2026-09-25. `QuotationWrite` refuses finalise with
+`CUSTOMER_GONE` when the draft names a saved customer whose record cannot be
+found. **The refusal is the right default; a refusal with no way forward is
+not.** Pressing Finalise is the worst place in the app to strand somebody, so
+**9b's plan must say how they recover**: the message tells them the customer
+is gone and offers, right there, to re-pick a customer or type the name —
+not merely refuses.
 
 ### N5.10 is coupled to the finalise retry — read this before widening the rule
 
@@ -1612,6 +1670,13 @@ is the Owner's call.**
   proof, and the slack does not change that.
 - **Recommendation: record the bound, do not add the field.** It closes
   nothing against the case the cap exists for.
+- **DECIDED 2026-09-25 — the Owner accepted the recommendation.** It stays a
+  recorded limit. A top-level `transport` field moves the false figure
+  rather than closing the hole, because whoever writes straight to Firestore
+  controls that field too; and hand-typed line rates are already outside the
+  cap by the Owner's accepted design, a larger route. Closing the smaller gap
+  while the larger stands by agreement buys nothing. **Keep the pinning test**
+  (`KNOWN BOUND: ...`) so it flips the day the gap closes.
 
 ### Owed, and recorded rather than done
 

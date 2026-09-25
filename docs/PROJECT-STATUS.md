@@ -1416,8 +1416,9 @@ Emulator: **246** at `5955e04`. Emulator: **243** at `ead0a52`
 (`npx firebase emulators:exec --only firestore "node --test
 --test-concurrency=1 tests/*.test.js"`, run from `firestore/`).
 
-Still to build after commit 6: 7 (the N5-plan line table, and the N5.9 rule
-sketch that now differs from what shipped).
+Still to build: 8 (the "Save this customer" defect, per the Owner's second
+re-read). Commit 7 — the N5-plan line table and the note on the N5.9 rule
+sketch — is done.
 
 ### N5.9a decisions, taken in chat and recorded here because chat is not memory
 

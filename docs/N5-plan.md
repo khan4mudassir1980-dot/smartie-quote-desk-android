@@ -502,6 +502,25 @@ function qnDiscountWithinCap() {
 }
 ```
 
+> **Shipped differently in N5.9a — the rule file is the authority, and this
+> sketch is kept as the plan it was.** It shipped as `discountCap()` and
+> `discountOk()` in `firestore/firestore.rules` (commits `ccc08c4` and
+> `ead0a52`), and differs from the sketch in two places, both measured:
+>
+> - **No margin on the base bound.** `discBase <= subtotal + disc.amt`
+>   exactly. Every stored figure is built from already-rounded whole rupees
+>   (`QuoteMath.totals`), so the identity `discBase == subtotal − transport +
+>   disc.amt` is exact and the sketch's `+ 1` there bought nothing.
+> - **A one-rupee margin on the cap check instead** —
+>   `amount <= base × cap ÷ 100 + 1`. The app rounds the cap HALF_UP and the
+>   rule sees the unrounded figure; without the rupee, 5% of 44,410 (₹2,221
+>   in the app) was refused. Generous by at most one rupee, never strict
+>   (commit 2b, with five fractional vectors on both sides).
+>
+> And one recorded limit the sketch did not name: the base bound is slack by
+> `transport × cap ÷ 100`, accepted by the Owner and pinned by a test — see
+> "N5.9a's recorded bounds" in `docs/PROJECT-STATUS.md`.
+
 **V8C4 verdict — compatible.** The predicate is **gated on the discount being
 present**, and V8C4 writes no `disc` key, so a PWA quotation short-circuits
 before any `get()` and before `subtotal` is type-checked — which matters,
@@ -638,6 +657,27 @@ Existing keys unchanged. New:
 
 ### A quotation line
 
+*Corrected in N5.9a commit 7 to match what 9a writes (`QuotationWrite.lineData`).
+Until then this table listed only the area fields, which neither side
+carried.*
+
+**Every line carries V8C4's nine stored keys, always** — the stored mapping
+at V8C4 6223-6224 picks exactly these, so every PWA line has all nine:
+
+| Key | Type | Meaning |
+|---|---|---|
+| `t` | string | Title |
+| `s` | string | Spec — written even when empty (`""`); on an area line, the working |
+| `u` | string | Unit, as stored — `""` on the Transportation line, never the `no` V8C4 only *prints* |
+| `qty` | number | Quantity — on an area line, the **total** chargeable sq ft |
+| `rate` | number | The rate charged |
+| `origRate` | number | The catalogue rate the line started from; **defaults to `rate`**, as `normLine` (2201) defaults it |
+| `k` | string or **null** | The product key; **null** on a line with no product, as `normLine` (2200) and the mapping (6224) both resolve it |
+| `manual` | boolean | Typed by hand. **`false` on the Transportation line**, which is an ordinary line |
+| `amt` | number | `qty × rate` in whole rupees, always written though `amtOf` could fall back to it |
+
+**An area line adds five more, and they are cutover-fragile:**
+
 | Key | Type | Meaning |
 |---|---|---|
 | `w` / `h` | number | Opening width and height, as typed |
@@ -647,6 +687,20 @@ Existing keys unchanged. New:
 
 with `qty` = total chargeable sq ft, `rate` = the per-sq-ft rate, `amt` =
 `qty × rate`, `u` = `"per sq ft"` — the product's own unit, copied.
+
+**Cutover-fragile, and a convenience that may be absent — never the source of
+truth** (the Owner's ruling). V8C4 rebuilds `lines` by picking the nine keys
+above, and a Firestore array is replaced whole, so these five are **dropped
+the moment anybody saves the quotation in the PWA**. Nothing is lost that
+matters: `s` carries the working as text, and `qty` and `rate` carry every
+rupee. So a reader treats them as optional — present, N5.10 reopens the area
+form pre-filled; absent, the line is edited as a plain line — reads them
+**all or nothing** (`toQuotationLine`), and **never re-derives them by parsing
+`s`**. The limitation ends when the PWA retires.
+
+**The Transportation line**, exactly as V8C4 stores it (`quoteLines()` →
+`normLine`): `{t: "Transportation", s: <note>, u: "", qty: 1, rate: <amt>,
+origRate: <amt>, k: null, manual: false, amt: <amt>}`.
 
 ### Where V8C4 will still look different
 

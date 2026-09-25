@@ -1409,9 +1409,8 @@ sweep at `64e2abf`: 674 tests across 45 classes, all passing. Emulator: **243** 
 (`npx firebase emulators:exec --only firestore "node --test
 --test-concurrency=1 tests/*.test.js"`, run from `firestore/`).
 
-Still to build: 5 (the bounded retry), 6 (the contended emulator test,
-reporting attempts per contender), 7 (the N5-plan line table, and the N5.9
-rule sketch that now differs from what shipped).
+Still to build after commit 6: 7 (the N5-plan line table, and the N5.9 rule
+sketch that now differs from what shipped).
 
 ### N5.9a decisions, taken in chat and recorded here because chat is not memory
 
@@ -1449,7 +1448,8 @@ and the repository's KDoc must say so in those words rather than claim a
 precision the code does not have. A Manager over the cap therefore never
 reaches the retry, and neither does a Staff account.
 
-**3. Three retries is a starting point, not a finding.** N5.1 measured that
+**3. Three retries is a starting point, not a finding.** *(Moved to **6** by
+N5.9a commit 6's measurement — see "Commit 6's answer" below.)* N5.1 measured that
 two concurrent transactions inside one app lost one *every* time, so one
 retry is plainly too few; three is not yet evidence. **N5.9a commit 6 reports
 attempts-per-contender from the contended emulator test and moves the number
@@ -1701,6 +1701,34 @@ and gives the command (rule 5). Then:
   file names the other in a comment**, so a change to one not made to the
   other is visible in review. That correspondence is the only thing joining
   (1) to (2).
+
+**Commit 6's answer — measured, not assumed.** In
+`firestore/tests/finalise-contention.test.js`, which mirrors
+`QuotationWriteRepository` step for step and names it (and is named back),
+against the shipped rules, ten runs of
+
+```
+cd firestore && npx firebase emulators:exec --project smartie-rules-test --only firestore \
+  "node --test --test-concurrency=1 tests/finalise-contention.test.js"
+```
+
+- **Counter contention surfaces as `permission-denied` — never `aborted` —
+  and the SDK re-runs no transaction body on its own**: bodies run equalled
+  attempts in every run. Pinned as an assertion, so a future SDK or emulator
+  that changes it fails CI.
+- **With no self-retry — V8C4's behaviour — one contender per round wins.**
+  3 simultaneous finalises: 20 of 60 issued, 40 refused, in every run. 10
+  simultaneous: 10 or 11 of 100 issued.
+- **Retry unbounded:** at 3 contenders never more than 3 attempts; at 10 the
+  worst case was **5**, seen once in ten runs, and 37 of 1,000 (3.7%) needed
+  more than 3 — so a bound of 3 would have refused about one in twenty-seven
+  finalises in the pessimistic case.
+- **At the new bound of 6** (worst case plus one): **0 of 800** exhausted it.
+  The headroom costs only a refusal that is not contention — five pauses,
+  2.25 to 3.0 seconds, before it is reported.
+- **The emulator is one process, and all of this is an indication, not a
+  production measurement.** None of these numbers may later be quoted as
+  measured against real Firestore.
 
 ### After the re-read: what N5.9a commit 3c did, and what it left open
 
@@ -2359,6 +2387,14 @@ retries silently inside the SDK and succeeds, it would show "Not finalised".
 **Do not change V8C4 and do not touch production.** Before cutover, settle
 what the PWA does under the new rules — commit 6's measured error code is the
 starting evidence, with its single-process caveat.
+
+**Commit 6 measured it: `permission-denied`.** In the emulator, with no
+self-retry — exactly V8C4's behaviour — two of three simultaneous finalises
+were refused, in every run. So the risk is real in the only place this
+repository can measure it. Whether production's *current* ruleset already
+behaves this way — so the PWA already meets it on the rare busy minute —
+is not something this repository can see; that is the first thing to check
+at N8.
 
 ### Owed in N8: normalise the products no edit ever reaches
 

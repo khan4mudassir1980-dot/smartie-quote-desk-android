@@ -103,10 +103,32 @@ sealed interface FinaliseOutcome {
  * locally on the retry. The read-first still leads every attempt, so a retry
  * can never issue a second number for one draft.
  *
- * **[MAX_ATTEMPTS] is a starting point, not a finding.** N5.1 showed one try
- * is too few; three is not yet evidence. N5.9a commit 6 measures what error
- * contention actually produces under the shipped rules, and how many attempts
- * contenders need, and moves this number if it must.
+ * **Mirrored step for step by `firestore/tests/finalise-contention.test.js`**,
+ * which names this file back. The Kotlin cannot run against the emulator, so
+ * that Node test is the only place this protocol meets the real rules under
+ * real contention; a change to one not made to the other breaks the only
+ * thing joining them.
+ *
+ * ## [MAX_ATTEMPTS] is 6, and here is the measurement
+ *
+ * N5.9a commit 6, in that Node test, against the shipped rules, ten runs of
+ * `npx firebase emulators:exec --project smartie-rules-test --only firestore
+ * "node --test --test-concurrency=1 tests/finalise-contention.test.js"`:
+ *
+ * - **Contention surfaces as `permission-denied`, never `aborted`, and the SDK
+ *   re-runs nothing** — every transaction body ran once per attempt. With no
+ *   self-retry, which is V8C4's behaviour, one contender per round won: 20 of
+ *   60 issued at 3 simultaneous finalises, 10 or 11 of 100 at 10. So this loop
+ *   is not redundant; it is the only thing that issues the other numbers.
+ * - Retry unbounded: at 3 contenders never more than 3 attempts; at 10 the
+ *   worst case was **5**, seen once, and 37 of 1,000 (3.7%) needed more than 3.
+ * - At 6: **none of 800** exhausted it.
+ *
+ * So the bound is the pessimistic worst case plus one. **The emulator is one
+ * process, and this is an indication, not a production measurement** — never
+ * to be quoted as measured against real Firestore. The cost of the headroom
+ * falls only on a refusal that is not contention: five pauses, 2.25 to 3.0
+ * seconds, before it is reported.
  *
  * ## Refused before a transaction opens
  *
@@ -203,10 +225,12 @@ class QuotationWriteRepository(
 
     companion object {
         /**
-         * Tries at one number before [finalise] gives up and says so. A
-         * starting point, not a finding — see the class KDoc.
+         * Tries at one number before [finalise] gives up and says so — the
+         * emulator's pessimistic worst case (5) plus one. See the class KDoc
+         * and `firestore/tests/finalise-contention.test.js`, which carries the
+         * same number; change both or neither.
          */
-        const val MAX_ATTEMPTS = 3
+        const val MAX_ATTEMPTS = 6
 
         /** The first pause; each later one grows by the same step. */
         const val BACKOFF_STEP_MS = 150L

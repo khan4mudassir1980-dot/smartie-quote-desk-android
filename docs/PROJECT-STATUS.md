@@ -1561,15 +1561,137 @@ wc -l`). A pass here can still be red on CI. It is for catching a type error
 or a wrong figure **before** a push costs a cycle.
 The `verify` job remains the only evidence a commit is green.
 
-### Owed by 9b's plan: how a person recovers when their saved customer is gone
+### V8C4's `fbFinaliseAtomic`, re-read 2026-09-25 — what finalise must match
 
-The Owner's flag of 2026-09-25. `QuotationWrite` refuses finalise with
-`CUSTOMER_GONE` when the draft names a saved customer whose record cannot be
-found. **The refusal is the right default; a refusal with no way forward is
-not.** Pressing Finalise is the worst place in the app to strand somebody, so
-**9b's plan must say how they recover**: the message tells them the customer
-is gone and offers, right there, to re-pick a customer or type the name —
-not merely refuses.
+The Owner re-read V8C4 and sent the whole of `fbFinaliseAtomic` because this
+phase rebuilds it. **Advisor-read evidence, not authority**; checked against
+the repository wherever the repository can check it. Recorded before any code
+acts on it (rule 8).
+
+**1. `k: null` on a product-less line is read, not inferred — twice.**
+`normLine` (2200) resolves `k: l.k||null`, `s: l.s||""`, `u: l.u||""`,
+`qty`/`rate` floored at zero, and `origRate: l.origRate!=null ? +l.origRate :
+Math.max(0,rate||0)` (2201) — which `QuotationWrite.lineData`'s fallback
+matches. The store mapping at 6224 applies `k` again. `qlabel` and
+`needsRate` exist in memory and are **not** in the stored mapping — dropped
+at save, as this app already has it. The KDoc calling `k: null` "an
+inference" is to be downgraded to read.
+
+**2. The transaction, 5111-5157**, as the Owner quoted it:
+
+```
+const qRef = doc(f.db, "quotations", draft.id);   // the draft keeps this id across retries
+runTransaction(f.db, async tx => {
+  const qSnap   = await tx.get(qRef);             // both reads before any write
+  const numSnap = await tx.get(numRef);
+  if(qSnap.exists()){                             // retry after a dropped commit
+    const prev = qSnap.data();
+    return {no: prev.no, doc: prev, counter: null, lastIssued: null, reused: true};
+  }
+  ...
+  if(cur) tx.update(numRef, {next: n+1, lastIssued});
+  else    tx.set(numRef, {prefix, fy, pad, next: n+1, lastIssued, serverAt: serverTimestamp()});
+  tx.set(qRef, Object.assign({}, draft, {no, serverAt: serverTimestamp()}));
+})
+```
+
+- **a. The read-first is V8C4's own design.** It returns the **whole prior
+  record** with `reused: true`, and the caller does
+  `if(out.reused) Object.assign(draft, out.doc)`. Ours must hand back the
+  record, not only the number.
+- **b. The document id is the draft id**, minted at 6209
+  (`if(!state.draftId) state.draftId = newDraftId()` — "survives a failed
+  attempt") and cleared **only on success** at 6262 ("this record is
+  closed"), never in the catch. That is the whole mechanism the read-first
+  depends on: an id re-minted on the second press finds nothing and mints a
+  second number.
+- **c. `if(cur) update else set`** — "never a set followed by an update on a
+  document that did not exist when we read it."
+- **d. Two guards with their own messages:**
+  - no counter and not admin: "Numbering has not been set up yet. An
+    administrator must open Settings and press Save shared settings once."
+  - financial-year mismatch: `The team is on financial year ${cur.fy}; this
+    device is on ${N.fy}. Reload before finalising.`
+- **e. V8C4 has no self-retry loop.** None. It relies entirely on the
+  Firestore JS SDK's own transaction retry.
+
+**3. DEFECT, in a design not yet built: the saved-customer refusal must not
+exist.** `QuotationWrite` (`3db056b`) refuses finalise with `CUSTOMER_GONE`
+when the saved customer's record cannot be found. V8C4 does the opposite,
+deliberately. `resolvePartyId` (6379) returns null and never throws:
+
+```
+const onForm = partyFromForm();
+if(!onForm.name && !onForm.gstin && !onForm.phone) return null;
+const held = state.partyId ? state.customers.find(c=>c.id===state.partyId) : null;
+if(held && sameParty(onForm, held)) return held.id;
+const found = findCustomer(onForm);
+return found ? found.id : null;
+```
+
+and at 6270: "No party is created here. A party joins the Parties list only
+when the user presses 'Save this customer', or picks one that is already
+saved... Either way the quotation keeps its own snapshot of the details in
+draft.party, so editing the party later never rewrites it."
+
+- **The party id is optional metadata.** The quotation is self-contained —
+  name, GSTIN, phone and address are copied into it — so a missing record
+  removes a cross-reference and loses no quotation data. **When the record
+  cannot be found, set the link to null and finalise. Do not refuse, do not
+  prompt, do not ask the person to re-pick.** A refusal there is a
+  native-only failure the PWA does not have, at the one moment the person
+  most needs the number.
+- **The link is re-derived from the form, not merely re-read from the
+  record.** 6211: "a party that was picked and then typed over cannot be
+  carried into the record" — `if(held && sameParty(onForm, held))`. A held
+  id survives only while it still matches what is on the form now. Checking
+  only that the record exists would file a quotation for Party B's details
+  under Party A.
+- **The Owner's earlier note — "the message must offer to re-pick" — is
+  withdrawn.** It was written believing the refusal was correct. There is no
+  message to write.
+
+**4. 9b's messaging — V8C4's own text, to be used:**
+
+- Offline, checked **before** anything is built (6203): "Finalising needs an
+  internet connection — the number is shared with the team"
+- Counter returns nothing: "The shared counter did not respond"
+- Any failure (the catch at 6274): `"Not finalised — " +
+  friendlyAuthError(e) + " Your quotation is untouched."` — and in that same
+  catch `state.quoteNo = null`, the draft is **not** cleared, the draft id is
+  **not** cleared: "nothing was consumed and nothing is marked finalised."
+- Success, in this order (6259-6264): `draft.no = no` → `state.draftId =
+  null` → `upsertQuote(draft)` → `clearDraft()` → toast `Finalised as
+  ${no}`. The draft is cleared **after** the number is in hand, and
+  `upsertQuote` carries "the listener may have beaten us to it" — ours needs
+  the same tolerance.
+
+**5. Commit 6 — the Owner's decision, and the question it must answer
+first.** Do (1), the Node emulator test of the protocol under the real
+rules, and (2), the Kotlin retry against a fake. **Do not build the
+Android-SDK-against-emulator CI job now** — out of N5.9a's scope, large, and
+the binding gets a real exercise at the single phone pass; a candidate to
+revisit only if that pass shows trouble (see "N5.9a's recorded bounds").
+
+Because V8C4 has been live with **no** self-retry and no reported duplicate
+or failed numbers, the first question is not "how many tries" but:
+**under the shipped rules, what error code does counter contention actually
+produce?** ABORTED means the SDK already retries and our loop may be largely
+redundant; `permission-denied` is terminal, the SDK will not retry it, and
+the self-retry is the only thing between a busy minute and a hard failure.
+Commit 6 **measures** it — never assumes it — names it before any number,
+and gives the command (rule 5). Then:
+
+- a realistic level (2-3 contenders, a small team) **and** a pessimistic one
+  (8-10); the bound comes from the pessimistic worst case with headroom;
+  both reported;
+- the commit **states that the emulator is single-process and its contention
+  is an indication, not a production measurement** — that number is never
+  to be quoted later as measured against real Firestore;
+- the Node test mirrors the Kotlin transaction step for step, and **each
+  file names the other in a comment**, so a change to one not made to the
+  other is visible in review. That correspondence is the only thing joining
+  (1) to (2).
 
 ### N5.10 is coupled to the finalise retry — read this before widening the rule
 
@@ -2097,6 +2219,29 @@ import is run.
 These are findings from N5.6c, N5.7 and N5.9a that were deliberately not fixed in the
 batch that found them. A plan document gets superseded; this list does not.
 
+### N5.9a's recorded bounds — two, in one place
+
+The Owner's instruction of 2026-09-25: both honest limits of N5.9a live
+here, not scattered through commit messages.
+
+1. **The transport slack.** The cap rule bounds `discBase` by
+   `subtotal + disc.amt`, so a client writing straight to Firestore can buy
+   `transport × cap ÷ 100` past the cap. **Accepted by the Owner**; pinned by
+   the emulator test `KNOWN BOUND: transport buys transport × cap ÷ 100 past
+   the cap`, which flips the day the gap closes. Detail in the entry below
+   and under "N5.9a questions on the discount cap rule".
+2. **The Kotlin-to-Firestore binding is proven only by CI's compile.**
+   `FirestoreQuotationStore` — the code that turns a finalise into real
+   Firestore reads and writes — is exercised by **no test anywhere**: the
+   repository's tests run against a fake, and the emulator tests are Node.
+   **The only exercise it ever gets is the single final phone pass**, as
+   `PHONE-TEST-CHECKLIST.md` row **T-Q1**: a real Finalise against staging
+   that writes a quotation and takes a number, both checked in the console.
+   If that row is not run, this bound is never closed. An
+   Android-SDK-against-emulator CI job would close it earlier; the Owner
+   ruled it out of N5.9a and it is a candidate **only if the phone pass
+   shows trouble**.
+
 ### The discount cap rule is slack by `transport × cap ÷ 100` — a known bound
 
 `discountOk()` bounds `discBase` by `subtotal + disc.amt`, and transport is a
@@ -2156,6 +2301,17 @@ closed the catch-all that used to let them. Any fix must therefore tell a
 permanent permission denial from a transient failure and retry only the
 second. The swallow also means a genuine breakage never reaches the log,
 which is why the phone pass carries a *negative* check for it.
+
+### Owed before the N8 cutover: counter contention in the live PWA
+
+Recorded 2026-09-25 at the Owner's instruction; **act at N8, not before.**
+If N5.9a commit 6 finds that counter contention surfaces as
+`permission-denied` under this repository's rules, then at production cutover
+the **live PWA** meets it too — and V8C4 has no retry loop, so where today it
+retries silently inside the SDK and succeeds, it would show "Not finalised".
+**Do not change V8C4 and do not touch production.** Before cutover, settle
+what the PWA does under the new rules — commit 6's measured error code is the
+starting evidence, with its single-process caveat.
 
 ### Owed in N8: normalise the products no edit ever reaches
 

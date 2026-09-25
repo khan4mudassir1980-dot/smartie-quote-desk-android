@@ -83,9 +83,25 @@ and totals still read.
 
 ## Who a quotation is for
 
-**A party NAME is required; a saved customer is not.** Finalise re-resolves
-the party from `/customers` only when `partyId` is present, and otherwise
-writes the typed snapshot with `partyId` absent.
+**A party NAME is required; a saved customer is not.** The quotation keeps
+**the form's own snapshot** of the party, and `partyId` is optional metadata
+— a cross-reference, not a source of the details.
+
+**Corrected 2026-09-25 from the Owner's re-read of V8C4's `resolvePartyId`
+(6379)**; this section said finalise "re-resolves the party from
+`/customers`", and `3db056b` built that plus a refusal when the record was
+gone. V8C4 does neither:
+
+- **The link is re-derived from the form.** A held id survives only while
+  `sameParty(onForm, held)` — "a party that was picked and then typed over
+  cannot be carried into the record" (6211). Otherwise V8C4 looks for a
+  saved customer matching the form (`findCustomer`), and failing that the
+  link is null.
+- **A record that cannot be found sets the link to null, and finalise goes
+  ahead.** Never a refusal: the details are already in the quotation, so
+  nothing is lost but a cross-reference.
+- **The snapshot is never rewritten from the record**: "editing the party
+  later never rewrites it" (6270).
 
 A walk-in or a first enquiry gets quoted without being filed as a customer.
 Forcing every quotation through Parties first would make the native app

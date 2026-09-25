@@ -8,7 +8,7 @@ run once, at the end, against one staging APK and one staging rules
 deployment. That is why this file exists: nothing else carries the memory of
 what is owed.
 
-Last updated for **N4.4**.
+Last updated for **N5.9a**.
 
 ## How to use it
 
@@ -22,6 +22,18 @@ Last updated for **N4.4**.
 ---
 
 ## Owed now
+
+### N5.9 — finalise
+
+**Added ahead of the batch landing, at the Owner's instruction of
+2026-09-25** — an exception to maintaining-rule 1, because this row is the
+only thing that ever exercises the real Kotlin-to-Firestore store (see "N5.9a's
+recorded bounds" in `PROJECT-STATUS.md`). Without it that bound is never
+closed. 9b adds the rest of the finalise rows when it lands.
+
+| Row | Check |
+|---|---|
+| T-Q1 | **A real Finalise against staging** that writes a quotation and takes a number. In the Firebase console, check **both**: the `/quotations/{id}` document exists with that number in `no`, and `/teamSettings/numbering` has `next` moved on by exactly one with `lastIssued.no` equal to it and `lastIssued.src` reading `android` |
 
 ### N5.7 — the product editor
 

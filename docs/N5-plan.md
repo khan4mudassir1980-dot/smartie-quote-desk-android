@@ -36,7 +36,8 @@ The Owner's matrix. Wire values never change: `owner` / `admin` /
 | Quotation tab and history | ✅ | ✅ | ✅ | ❌ no access at all |
 | Create a quotation | ✅ | ✅ | ✅ | ❌ |
 | See whose quotations | everyone's | everyone's | **only their own** | — |
-| Edit / cancel a finalised quotation | anyone's | anyone's | **their own only** | ❌ |
+| **Edit** a finalised quotation | anyone's | anyone's | **their own only** | ❌ |
+| **Cancel** a finalised quotation | ✅ | ✅ | ❌ **not even their own** | ❌ |
 | Parties: add, correct details | ✅ | ✅ | ✅ | ❌ |
 | Parties: rename, archive | ✅ | ✅ | ❌ | ❌ |
 | Products and prices | ✅ | ✅ | ❌ | ❌ |
@@ -88,6 +89,11 @@ and totals still read.
   quoting a delivery below what it is about to cost.
 - A **Manager is capped** by a limit the Owner sets, enforced in the rules as
   well as in the app. Owner and Administrator are uncapped.
+  **Enforced from N5.9a** by `discountOk()` in `firestore/firestore.rules`,
+  which bounds `disc.amt` against the cap *and* bounds `discBase` against
+  `subtotal + disc.amt` — a cap checked against a base the writer chooses is
+  not a cap. Between N5.6 and N5.9a this line described an intention rather
+  than a rule; the app enforced it and the server did not.
 - The refusal **names the figure the person may have** — "The most you can
   discount is 10% (₹9,483)" — rather than silently clamping what they typed. A
   quotation that went out at a discount nobody chose is worse than one that
@@ -458,6 +464,30 @@ write. A Manager writing a discount with the document missing gets cap `0` and
 is refused: safe by default.
 
 ### N5.10 — `/quotations` update, edit and cancel
+
+> **Corrected 2026-09-25 by the Owner's ruling.** This row read "Edit /
+> cancel … **their own only**" for a Manager, treating the two as one
+> permission. They are not, and V8C4 settles cancel: `if(!admin) return
+> toast("Only an administrator can cancel a quotation")`. So:
+>
+> - **Edit** — the creator, and an Owner or Administrator on anyone's. This is
+>   a **new capability**: V8C4 cannot edit a finalised quotation at all, so
+>   N5.10 writes a **new update branch** for it.
+> - **Cancel** — Owner and Administrator only, as V8C4 has it and as the
+>   deployed rule already says. A Manager cannot cancel, including their own.
+>   The deployed rule was stricter than this plan's old row, in the safe
+>   direction, and there is no deploy-day break.
+>
+> **And widening for edit removes a guard.** Today a retry that blindly
+> re-writes a quotation is evaluated as an *update*, fails
+> `hasOnly(['status','cancelledBy','cancelledAt'])`, and takes the whole
+> transaction down — so the counter never advances and no second number is
+> burned. That is the second of two defences against a duplicate number. The
+> moment an edit branch accepts a full document it stops holding, and the
+> finalise transaction's **read-first is the only thing left** between a lost
+> response and a customer holding two quotations for one job. Keep cancel at
+> `admin()` and bound the edit branch to what an edit may actually change.
+
 
 ```
 function qnCreator() {

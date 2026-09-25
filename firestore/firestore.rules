@@ -88,6 +88,55 @@ service cloud.firestore {
     function touched()    { return request.resource.data.diff(resource.data).affectedKeys(); }
     function priceOk(v)   { return v == null || (v is number && v >= 0); }
 
+    // --- the Manager's discount cap, enforced here for the first time ------
+    //
+    // **The Owner's decision has always read "a Manager is capped by a limit
+    // the Owner sets, ENFORCED IN THE RULES" (docs/N5-plan.md:89). Until N5.9a
+    // it was not.** `/teamSettings/quoting` bounded `managerDiscountPct` when
+    // the Owner wrote it, and nothing bounded what a quotation could claim, so
+    // the cap was a client-side guard a Manager writing straight to Firestore
+    // never met. N5.9a commit 1 pinned that as two passing tests before this
+    // commit turned them round.
+
+    /** The Owner's limit. Only ever called when a discount is actually taken. */
+    function discountCap() {
+      return get(/databases/$(database)/documents/teamSettings/quoting)
+               .data.get('managerDiscountPct', 0);
+    }
+
+    /**
+     * Whether the discount on this quotation is one this person may give.
+     *
+     * **The base is bounded as well as the amount, because a cap checked
+     * against a base the writer chooses is not a cap.** `QuoteMath` keeps
+     * `subtotal == discBase - disc.amt + transport` in exact whole rupees, and
+     * transport can never be negative, so `discBase <= subtotal + disc.amt`
+     * holds for every honest quotation and is tight when transport is zero.
+     * It needs only stored fields, which matters: transport is a *line* inside
+     * the subtotal, so no rule can see it on its own.
+     *
+     * An absent `/teamSettings/quoting` refuses a Manager's discount rather
+     * than allowing any — an unseeded project is not an uncapped one.
+     */
+    function discountOk() {
+      let disc = request.resource.data.get('disc', {});
+      let amount = disc.get('amt', 0);
+      let base = request.resource.data.get('discBase', 0);
+      let subtotal = request.resource.data.get('subtotal', 0);
+      return amount is number && amount == 0 || (
+        amount is number && amount > 0
+        && base is number && base >= 0
+        && subtotal is number
+        && base <= subtotal + amount
+        && amount <= base
+        && (
+          admin()
+          || (exists(/databases/$(database)/documents/teamSettings/quoting)
+              && amount <= base * discountCap() / 100)
+        )
+      );
+    }
+
     // The issuer marker on the counter's `lastIssued`: which app took the
     // number. It exists so a number that somehow goes out twice during
     // cutover can be traced to an app rather than argued about.
@@ -614,7 +663,27 @@ service cloud.firestore {
                     && request.resource.data.no is string
                     && request.resource.data.byUid == mine()
                     && request.resource.data.at is number
-                    && request.resource.data.total is number;
+                    && request.resource.data.total is number
+                    && discountOk();
+      // **CANCEL, and only cancel.** Owner and Administrator, as V8C4 has it:
+      // `if(!admin) return toast("Only an administrator can cancel a
+      // quotation")`. A Manager cannot cancel, including their own.
+      //
+      // **N5.10 WIDENS THIS, AND DOING SO REMOVES A DEFENCE.** The Owner's
+      // ruling is that a finalised quotation may be EDITED — by its creator,
+      // and by an Owner or Administrator on anyone's — which V8C4 cannot do at
+      // all, so it needs a new branch beside this one while cancel stays at
+      // `admin()`.
+      //
+      // What that costs: today a retry that blindly re-writes a quotation is
+      // evaluated as an *update*, fails this `hasOnly`, and takes the whole
+      // transaction down with it — so the counter never advances and no second
+      // number is burned. That is the second of two defences against a
+      // duplicate. **The moment an edit branch accepts a full document, it
+      // stops holding**, and the finalise transaction's read-first is the only
+      // thing between a lost response and a customer holding two quotations
+      // for one job. Whoever widens this is removing a guard, not only adding
+      // a capability.
       allow update: if admin()
                     && touched().hasOnly(['status','cancelledBy','cancelledAt'])
                     && request.resource.data.no == resource.data.no

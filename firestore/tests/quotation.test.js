@@ -44,6 +44,14 @@ async function givenCounter(fields = {}) {
   });
 }
 
+/** The Owner's discount limit, planted with the rules disabled. */
+async function givenCap(managerDiscountPct) {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await context.firestore().collection('teamSettings').doc('quoting')
+      .set({ managerDiscountPct });
+  });
+}
+
 /** What the counter actually holds right now, rules bypassed. */
 async function counter() {
   let stored;
@@ -382,46 +390,93 @@ test('an area line carries its geometry, and the rule does not mind', async () =
   })));
 });
 
-test('TODAY a Manager may write any discount at all, which is the gap', async () => {
-  // **The Owner's decision reads "a Manager is capped by an Owner-set limit
-  // enforced in the rules" (docs/N5-plan.md:89). It is not in the rules.**
-  // `/teamSettings/quoting` bounds `managerDiscountPct` when the Owner writes
-  // it; `/quotations` create checks nothing about `disc`, `discBase` or the
-  // cap. So the cap is a client-side guard only, and a Manager writing
-  // straight to Firestore is bounded by nothing.
-  //
-  // This test is green because that is true today. The next commit makes it
-  // fail and moves it to its proper name.
+test('a Manager may not discount past the Owner\'s limit', async () => {
+  // **Flipped from commit 1's `TODAY a Manager may write any discount at
+  // all`, which passed.** The Owner's decision always read "enforced in the
+  // rules"; until this commit it was not, and a Manager writing straight to
+  // Firestore was bounded by nothing.
   await givenCounter();
-  await testEnv.withSecurityRulesDisabled(async (context) => {
-    await context.firestore().collection('teamSettings').doc('quoting')
-      .set({ managerDiscountPct: 5 });
-  });
+  await givenCap(5);
   const db = as(testEnv, UIDS.staff);
 
-  await assertSucceeds(quotations(db).doc('q_disc').set(quotation('q_disc', UIDS.staff, {
-    // 90% off, against a cap of 5.
+  // 90% off, against a cap of 5.
+  await assertFails(quotations(db).doc('q_disc').set(quotation('q_disc', UIDS.staff, {
     disc: { kind: 'pct', value: 90, amt: 39960 },
-    discBase: 44400,
-    subtotal: 4440,
-    total: 5239,
+    discBase: 44400, subtotal: 4440, total: 5239,
   })));
 });
 
-test('TODAY an inflated discBase is accepted too, which is the other half', async () => {
-  // A cap checked against a base the writer chooses is not a cap. `QuoteMath`
-  // keeps `discountBase == subtotal − transport + discount` exact in whole
-  // rupees precisely so a rule can bound it; nothing bounds it yet.
+test('but may discount exactly up to it', async () => {
+  await givenCounter();
+  await givenCap(5);
+  const db = as(testEnv, UIDS.staff);
+
+  // 5% of 44,400 is 2,220, leaving 42,180.
+  await assertSucceeds(quotations(db).doc('q_ok').set(quotation('q_ok', UIDS.staff, {
+    disc: { kind: 'pct', value: 5, amt: 2220 },
+    discBase: 44400, subtotal: 42180, total: 49772,
+  })));
+});
+
+test('an inflated discBase cannot buy a bigger discount', async () => {
+  // **Flipped from commit 1's `TODAY an inflated discBase is accepted too`.**
+  // A cap checked against a base the writer chooses is not a cap. The bound
+  // is `discBase <= subtotal + disc.amt`, which holds for every honest
+  // quotation because transport is never negative — and needs only stored
+  // fields, since transport is a line inside the subtotal and no rule can see
+  // it on its own.
+  await givenCounter();
+  await givenCap(5);
+  const db = as(testEnv, UIDS.staff);
+
+  await assertFails(quotations(db).doc('q_base').set(quotation('q_base', UIDS.staff, {
+    disc: { kind: 'amt', value: 40000, amt: 40000 },
+    // The lines come to 44,400. This claims four million.
+    discBase: 4000000, subtotal: 4440, total: 5239,
+  })));
+});
+
+test('transport inside the subtotal does not break the base bound', async () => {
+  // The bound is tight when transport is zero and slack when it is not, so a
+  // real quotation carrying carriage must still pass.
+  await givenCounter();
+  await givenCap(10);
+  const db = as(testEnv, UIDS.staff);
+
+  // 44,400 products, 2,220 off, 2,500 transport -> subtotal 44,680.
+  await assertSucceeds(quotations(db).doc('q_tr').set(quotation('q_tr', UIDS.staff, {
+    disc: { kind: 'pct', value: 5, amt: 2220 },
+    discBase: 44400, subtotal: 44680, total: 52722,
+  })));
+});
+
+test('an Owner and an Administrator are uncapped', async () => {
+  await givenCounter();
+  await givenCap(5);
+
+  for (const uid of [UIDS.primaryOwner, UIDS.admin]) {
+    await assertSucceeds(quotations(as(testEnv, uid)).doc(`q_unc_${uid}`)
+      .set(quotation(`q_unc_${uid}`, uid, {
+        disc: { kind: 'pct', value: 90, amt: 39960 },
+        discBase: 44400, subtotal: 4440, total: 5239,
+      })));
+  }
+});
+
+test('with no quoting document at all, a Manager gets no discount', async () => {
+  // An unseeded project is not an uncapped one. `/teamSettings/quoting` is
+  // absent here, and the refusal is the safe direction.
   await givenCounter();
   const db = as(testEnv, UIDS.staff);
 
-  await assertSucceeds(quotations(db).doc('q_base').set(quotation('q_base', UIDS.staff, {
-    disc: { kind: 'amt', value: 40000, amt: 40000 },
-    // The lines come to 44,400. This says they come to four million.
-    discBase: 4000000,
-    subtotal: 4440,
-    total: 5239,
+  await assertFails(quotations(db).doc('q_nocap').set(quotation('q_nocap', UIDS.staff, {
+    disc: { kind: 'pct', value: 5, amt: 2220 },
+    discBase: 44400, subtotal: 42180, total: 49772,
   })));
+
+  // And a quotation with no discount is untouched by any of this.
+  await assertSucceeds(quotations(db).doc('q_plain')
+    .set(quotation('q_plain', UIDS.staff)));
 });
 
 test('installation rides along unremarked, as the shape N5.9 will send', async () => {

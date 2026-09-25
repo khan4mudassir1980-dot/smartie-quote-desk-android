@@ -16,8 +16,14 @@ import `in`.smartie.quotedesk.data.model.QuotingRecord
  * Owner and Administrator are uncapped, which reads as [QuoteMath.NO_CAP].
  * The cap is a guardrail and not a proof: it bounds this one discount against
  * products plus installation, and it does **not** bound a hand-typed line
- * rate. The rules apply the same bound server-side, which is what actually
- * stops it.
+ * rate. **From N5.9a the rules apply the same bound server-side**, through
+ * `discountOk()` in `firestore.rules`, which is what actually stops a write
+ * that never came through this screen.
+ *
+ * That sentence was here before the rule was, and it was false: between N5.6
+ * and N5.9a the cap lived only in this file, so a Manager writing straight to
+ * Firestore met nothing. The Owner's decision had said "enforced in the rules"
+ * throughout. It is the reason maintenance rule 7 exists.
  */
 object QuoteDiscount {
 

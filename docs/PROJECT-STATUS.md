@@ -1376,6 +1376,34 @@ fix for the tier half of the `resume` defect and it is a **no-op**, because it
 returns early when the tier is not changing — which is exactly the state
 `resume` leaves. A test now pins the no-op.
 
+### N5.10 is coupled to the finalise retry — read this before widening the rule
+
+The Owner's ruling of 2026-09-25, and the guard it costs:
+
+- **Edit** a finalised quotation: the creator, and Owner/Administrator on
+  anyone's. **New capability** — V8C4 cannot edit a finalised quotation at
+  all — so N5.10 writes a **new update branch**.
+- **Cancel**: Owner and Administrator only, as V8C4 has it
+  (`if(!admin) return toast("Only an administrator can cancel a quotation")`)
+  and as the deployed rule already says. A Manager cannot cancel, including
+  their own. The rule was stricter than the old plan row, in the safe
+  direction; no deploy-day break.
+
+**Widening for edit removes the second defence against a duplicate number.**
+Today a retry that blindly re-writes a quotation is evaluated as an *update*,
+fails `hasOnly(['status','cancelledBy','cancelledAt'])`, and takes the whole
+transaction with it, so the counter never advances. The moment an edit branch
+accepts a full document that stops holding, and the finalise transaction's
+**read-first is the only thing left** between a lost response and a customer
+holding two quotations for one job. Keep cancel at `admin()`, bound the edit
+branch to what an edit may actually change, and never let it accept the
+document whole.
+
+**N5.10 must also never re-resolve an absent `partyId`.** A quotation may
+legitimately carry no saved customer — a walk-in or a first enquiry, quoted
+without being filed — so the party snapshot is what it has and there is
+nothing to look up.
+
 ### Owed, and recorded rather than done
 
 - **The 50-draft cap is not enforced.** `QuoteDrafts.refusalToAdd()` is called

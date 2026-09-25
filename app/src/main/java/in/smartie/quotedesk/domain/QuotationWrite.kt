@@ -27,11 +27,16 @@ sealed interface QuotationPlan {
     ) : QuotationPlan
 
     /**
-     * This draft's quotation already exists. **Nothing is written**, and
-     * [number] is the one it was issued with — the answer a retry after a lost
-     * response must give, rather than a second number.
+     * This draft's quotation already exists. **Nothing is written**, and the
+     * answer is the **whole stored record** — its number is the one a retry
+     * after a lost response must give, rather than a second — as V8C4's
+     * `fbFinaliseAtomic` returns `{no: prev.no, doc: prev, reused: true}` and
+     * its caller does `Object.assign(draft, out.doc)`.
      */
-    data class AlreadyIssued(val quotationId: String, val number: String) : QuotationPlan
+    data class AlreadyIssued(val record: QuotationRecord) : QuotationPlan {
+        val quotationId: String get() = record.id
+        val number: String get() = record.number
+    }
 
     /** The write must not be attempted; [message] is for the person. */
     data class Refused(val message: String) : QuotationPlan
@@ -152,7 +157,7 @@ object QuotationWrite {
             // quotation. Reporting its number as ours would let the caller
             // clear a draft that was never issued.
             if (existing.byUid != member.uid) return QuotationPlan.Refused(ID_TAKEN)
-            return QuotationPlan.AlreadyIssued(draft.id, existing.number)
+            return QuotationPlan.AlreadyIssued(existing)
         }
 
         if (!Permissions.canQuote(member)) return QuotationPlan.Refused(NOT_ALLOWED)
@@ -307,9 +312,10 @@ object QuotationWrite {
      * byte, which costs nothing.
      *
      * - `origRate` defaults to `rate`, as `normLine` defaults it.
-     * - `k` is **null** on a line with no product, as V8C4 stores the
-     *   Transportation line. That the same holds for every product-less line
-     *   is an inference — `normLine` builds them all — not a separate reading.
+     * - `k` is **null** on a line with no product — **read, not inferred**:
+     *   V8C4's `normLine` (2200) resolves `k: l.k||null` for every line, and
+     *   the stored mapping (6224) applies it again. (`3db056b`'s KDoc called
+     *   this an inference; the Owner's re-read of 2026-09-25 settled it.)
      * - `amt` is always written, though V8C4's `amtOf` would fall back to
      *   `qty × rate` without it.
      *

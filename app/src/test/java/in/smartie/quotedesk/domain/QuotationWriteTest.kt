@@ -224,7 +224,7 @@ class QuotationWriteTest {
     fun `an existing quotation returns its stored number and writes nothing`() {
         val issued = QuotationRecord(id = "qd_1", number = "SIE/QD/2025-26/007", byUid = manager.uid)
         assertEquals(
-            QuotationPlan.AlreadyIssued("qd_1", "SIE/QD/2025-26/007"),
+            QuotationPlan.AlreadyIssued(issued),
             plan(existing = issued)
         )
     }
@@ -237,7 +237,7 @@ class QuotationWriteTest {
         // the refusals fails this test.
         val issued = QuotationRecord(id = "qd_1", number = "SIE/QD/2025-26/007", byUid = manager.uid)
         assertEquals(
-            QuotationPlan.AlreadyIssued("qd_1", "SIE/QD/2025-26/007"),
+            QuotationPlan.AlreadyIssued(issued),
             plan(existing = issued, quoting = null, numbering = null)
         )
     }

@@ -106,6 +106,12 @@ class QuotationWriteRepositoryTest {
     private fun seeded(vararg extra: Pair<String, Map<String, Any?>>) =
         mutableMapOf(NUMBERING to counter, *extra)
 
+    private fun FinaliseOutcome.summary(): String = when (this) {
+        is FinaliseOutcome.Issued -> "Issued $quotationId $number"
+        is FinaliseOutcome.AlreadyIssued -> "AlreadyIssued $quotationId $number"
+        is FinaliseOutcome.Refused -> "Refused $message"
+    }
+
     private fun FakeStore.doc(path: String): Map<String, Any?> = docs.getValue(path)
 
     // --- issuing ------------------------------------------------------------------------
@@ -115,7 +121,7 @@ class QuotationWriteRepositoryTest {
         val store = FakeStore(seeded())
         val outcome = repository(store).finalise(manager, draft, customers = emptyList(), snap = emptyMap())
 
-        assertEquals(FinaliseOutcome.Issued("qd_1", "SIE/QD/2025-26/009"), outcome)
+        assertEquals("Issued qd_1 SIE/QD/2025-26/009", outcome.summary())
         assertEquals(listOf("quotations/qd_1"), store.quotations())
         assertEquals("SIE/QD/2025-26/009", store.doc("quotations/qd_1")["no"])
         assertEquals(10, store.doc(NUMBERING)["next"])
@@ -134,9 +140,31 @@ class QuotationWriteRepositoryTest {
         repository.finalise(manager, draft, customers = emptyList(), snap = emptyMap())
         val again = repository.finalise(manager, draft, customers = emptyList(), snap = emptyMap())
 
-        assertEquals(FinaliseOutcome.AlreadyIssued("qd_1", "SIE/QD/2025-26/009"), again)
+        assertEquals("AlreadyIssued qd_1 SIE/QD/2025-26/009", again.summary())
         assertEquals(1, store.quotations().size)
         assertEquals(10, store.doc(NUMBERING)["next"])
+    }
+
+    @Test
+    fun `both outcomes hand back the whole record, as V8C4's reused path hands back doc`() = runBlocking {
+        // `{no: prev.no, doc: prev, reused: true}` and the caller's
+        // `Object.assign(draft, out.doc)`: the stored quotation, not a number.
+        val store = FakeStore(seeded())
+        val repository = repository(store)
+
+        val issued = repository.finalise(manager, draft, customers = emptyList(), snap = emptyMap())
+        val reused = repository.finalise(manager, draft, customers = emptyList(), snap = emptyMap())
+
+        for (record in listOf(
+            (issued as FinaliseOutcome.Issued).record,
+            (reused as FinaliseOutcome.AlreadyIssued).record
+        )) {
+            assertEquals("SIE/QD/2025-26/009", record.number)
+            assertEquals("Walk-in Builders", record.party.name)
+            assertEquals(listOf("Site visit"), record.lines.map { it.title })
+            assertEquals(1_180.0, record.total, 0.0)
+            assertEquals(manager.uid, record.byUid)
+        }
     }
 
     @Test
@@ -158,7 +186,7 @@ class QuotationWriteRepositoryTest {
         }
         val retry = repository.finalise(manager, draft, customers = emptyList(), snap = emptyMap())
 
-        assertEquals(FinaliseOutcome.AlreadyIssued("qd_1", "SIE/QD/2025-26/009"), retry)
+        assertEquals("AlreadyIssued qd_1 SIE/QD/2025-26/009", retry.summary())
         assertEquals(10, store.doc(NUMBERING)["next"])
     }
 
@@ -186,7 +214,7 @@ class QuotationWriteRepositoryTest {
 
         val outcome = repository(store).finalise(manager, draft, customers = emptyList(), snap = emptyMap())
 
-        assertEquals(FinaliseOutcome.Issued("qd_1", "SIE/QD/2025-26/012"), outcome)
+        assertEquals("Issued qd_1 SIE/QD/2025-26/012", outcome.summary())
         assertEquals(13, store.doc(NUMBERING)["next"])
         assertEquals("SIE/QD/2025-26/012", store.doc("quotations/qd_1")["no"])
         // One clock read for two runs: the document is the same either way.
@@ -273,7 +301,7 @@ class QuotationWriteRepositoryTest {
 
         val outcome = repository(store).finalise(manager, picked, customers = emptyList(), snap = emptyMap())
 
-        assertEquals(FinaliseOutcome.Issued("qd_1", "SIE/QD/2025-26/009"), outcome)
+        assertEquals("Issued qd_1 SIE/QD/2025-26/009", outcome.summary())
         assertFalse(store.doc("quotations/qd_1").containsKey("partyId"))
     }
 

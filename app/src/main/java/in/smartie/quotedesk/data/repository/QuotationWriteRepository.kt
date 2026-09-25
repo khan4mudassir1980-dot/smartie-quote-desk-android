@@ -1,9 +1,11 @@
 package `in`.smartie.quotedesk.data.repository
 
+import `in`.smartie.quotedesk.data.mapping.DocData
 import `in`.smartie.quotedesk.data.mapping.toNumberingRecord
 import `in`.smartie.quotedesk.data.mapping.toQuotationRecord
 import `in`.smartie.quotedesk.data.mapping.toQuotingRecord
 import `in`.smartie.quotedesk.data.model.PartyRecord
+import `in`.smartie.quotedesk.data.model.QuotationRecord
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.domain.QuotationPlan
@@ -13,18 +15,33 @@ import `in`.smartie.quotedesk.domain.QuoteDraft
 /**
  * What finalising came to.
  *
- * [Issued] and [AlreadyIssued] both mean **the quotation exists under
- * [number]**, and the caller may clear the draft on either. They are told
- * apart only so the screen can say honestly which happened.
+ * [Issued] and [AlreadyIssued] both mean **the quotation exists**, and both
+ * hand back its **record** — not only its number — as V8C4's
+ * `fbFinaliseAtomic` hands back `doc` so its caller can adopt the stored
+ * quotation whole. The caller may remove the draft on either (never clear
+ * it: see `docs/PROJECT-STATUS.md`). They are told apart only so the screen
+ * can say honestly which happened.
  */
 sealed interface FinaliseOutcome {
-    data class Issued(val quotationId: String, val number: String) : FinaliseOutcome
+    /**
+     * Written by this call. [record] is the written document read back
+     * through the same reader every quotation in the app goes through, so
+     * the screen shows what is stored rather than what was intended.
+     */
+    data class Issued(val record: QuotationRecord) : FinaliseOutcome {
+        val quotationId: String get() = record.id
+        val number: String get() = record.number
+    }
 
     /**
      * This draft had already been issued — most often by an earlier attempt
-     * whose acknowledgement never arrived. Nothing was written this time.
+     * whose acknowledgement never arrived. Nothing was written this time, and
+     * [record] is the stored quotation.
      */
-    data class AlreadyIssued(val quotationId: String, val number: String) : FinaliseOutcome
+    data class AlreadyIssued(val record: QuotationRecord) : FinaliseOutcome {
+        val quotationId: String get() = record.id
+        val number: String get() = record.number
+    }
 
     /** Nothing was written; [message] is for the person. */
     data class Refused(val message: String) : FinaliseOutcome
@@ -115,10 +132,9 @@ class QuotationWriteRepository(
                 is QuotationPlan.Write -> {
                     transaction.writeQuotation(plan.quotationId, plan.quotation)
                     transaction.writeNumbering(plan.counter)
-                    FinaliseOutcome.Issued(plan.quotationId, plan.number)
+                    FinaliseOutcome.Issued(DocData(plan.quotationId, plan.quotation).toQuotationRecord())
                 }
-                is QuotationPlan.AlreadyIssued ->
-                    FinaliseOutcome.AlreadyIssued(plan.quotationId, plan.number)
+                is QuotationPlan.AlreadyIssued -> FinaliseOutcome.AlreadyIssued(plan.record)
                 is QuotationPlan.Refused -> FinaliseOutcome.Refused(plan.message)
             }
         }

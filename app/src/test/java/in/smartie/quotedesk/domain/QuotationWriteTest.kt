@@ -354,7 +354,7 @@ class QuotationWriteTest {
 
     @Test
     fun `typed details that match a saved customer are linked to it, as V8C4 links them`() {
-        val typed = ready.copy(party = QuotationPartySnapshot(name = "Walk-in Builders", phone = "+91 98220 01100"))
+        val typed = ready.copy(party = QuotationPartySnapshot(name = "Walk-in Builders", phone = "98220 01100"))
         assertEquals("c_2", write(plan(draft = typed, customers = listOf(sunrise, metro))).quotation["partyId"])
     }
 

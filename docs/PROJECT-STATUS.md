@@ -1749,7 +1749,10 @@ customer list the screen holds, as V8C4 uses `state.customers`. The finalise
 transaction no longer reads `/customers`; like V8C4's it reads the quotation
 and the counter, plus the discount limit V8C4 has no need of.
 
-**QUESTION FOR THE OWNER — V8C4's `sameParty` text.** It is not in this
+**QUESTION FOR THE OWNER — V8C4's `sameParty` text.** *(ANSWERED
+2026-09-25 — it is OR, not AND, and `3c`'s stand-in below was too strict;
+replaced by an exact port in N5.9a commit 3d. See "The Owner's answers of
+2026-09-25 (second re-read)".)* It is not in this
 repository, and nothing here ports it. `QuoteParty.sameParty` is a
 **stand-in**, deliberately strict — the name must match, and a GSTIN or phone
 present on both sides must agree — because too strict costs a cross-reference
@@ -1865,6 +1868,41 @@ busy and say what it is doing — taking a number** — not a dead button.
 
 **Order from here:** the `sameParty` correction first, then commit 7, then
 commit 8 (the Save defect), then 9b.
+
+### What N5.9a commit 3d did with the `sameParty` answer
+
+- **V8C4's `sameParty` and `findCustomer` are ported exactly, once**, as
+  `PartyDuplicates.sameParty` and `PartyDuplicates.findCustomer`, and
+  `QuoteParty.linkFor` calls them. Commit 8's "Save this customer" fix will
+  call the same pair. Measured: putting the AND back fails three tests,
+  among them the Owner's spelling-correction case; dropping `!archived`
+  fails the two archived tests.
+- **a. Did `PartyDuplicates.find` already contain the predicate? NO.** It is
+  N5.5's duplicate warning for the Parties screen, and it is a different
+  rule: it searches by field priority across the whole list (every GSTIN
+  match before any phone match) rather than in list order; it matches
+  phones by **suffix**, so a number pasted with its country code matches
+  one stored without it, where V8C4 matches digits **exactly**; and it
+  **includes archived parties**. Its KDoc claimed to be V8C4's
+  `findCustomer`; corrected. There was nothing to expose, so the port is new.
+- **b. Did our find exclude archived parties? NO** — and `3c`'s link used
+  it, so a quotation **could** have been linked to a party the person
+  archived. `findCustomer` skips them now, as V8C4's does.
+
+**TWO QUESTIONS FOR THE OWNER, left open:**
+
+1. **Two definitions of "same party" remain.** The Parties screen's
+   duplicate warning (`PartyDuplicates.find`) still uses N5.5's rule, which
+   the Owner's `findCustomer(p, exceptId)` — whose `exceptId` suggests it
+   serves V8C4's own party editor — would replace. Adopting V8C4's rule
+   there changes N5.5 behaviour three ways: archived parties stop being
+   warned about, a phone pasted with its country code stops matching (the
+   case N5.5's `d6bf5d5`-era suffix match exists for), and the first match
+   is taken in list order. Not changed without the Owner's word.
+2. **V8C4's `norm` is not in this repository.** The port uses trim, lower
+   case and single spaces for the GSTIN and the name alike, as V8C4 uses
+   one `norm` for both. If `norm` does more or less, the port is not yet
+   exact.
 
 ### Owed in N6: the financial-year guard, and the year-turn prompt — a REQUIREMENT
 

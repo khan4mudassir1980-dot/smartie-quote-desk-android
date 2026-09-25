@@ -140,19 +140,63 @@ class QuotePartyTest {
         assertEquals(null, QuoteParty.linkFor(form, "c_1", listOf(metro)))
     }
 
+    // --- V8C4's sameParty and findCustomer, exactly --------------------------------------
+
     @Test
-    fun `the stand-in for sameParty is strict about identity and blind to the job`() {
-        val form = QuoteParty.snapshotOf(sunrise)
-        // Case, spacing and a pasted country code are the same firm.
-        assertTrue(QuoteParty.sameParty(form.copy(name = "  sunrise  CONSTRUCTIONS "), sunrise))
-        assertTrue(QuoteParty.sameParty(form.copy(phone = "+91 98765 43210"), sunrise))
-        // A site, an address or a contact typed for this job never breaks it.
-        assertTrue(QuoteParty.sameParty(form.copy(site = "x", address = "y", contact = "z"), sunrise))
-        // A different name, GSTIN or phone does.
-        assertFalse(QuoteParty.sameParty(form.copy(name = "Sunrise Builders"), sunrise))
-        assertFalse(QuoteParty.sameParty(form.copy(gstin = "27AABCM9999K1Z2"), sunrise))
-        assertFalse(QuoteParty.sameParty(form.copy(phone = "9822001100"), sunrise))
-        // Blank on the form is silence, not disagreement.
-        assertTrue(QuoteParty.sameParty(form.copy(gstin = "", phone = ""), sunrise))
+    fun `any one of GSTIN, phone and name is enough - the spelling-correction case`() {
+        // The Owner's example: correct a spelling in the company name on a
+        // party whose GSTIN is unchanged. `3c`'s stand-in required the name
+        // and dropped this link; V8C4 keeps it on the GSTIN alone. Restoring
+        // the AND fails this test.
+        val corrected = QuotationPartySnapshot(name = "Sunrise Construction Co", gstin = sunrise.gstin)
+        assertTrue(PartyDuplicates.sameParty(corrected, sunrise))
+        assertEquals("c_1", QuoteParty.linkFor(corrected, "c_1", saved))
+    }
+
+    @Test
+    fun `each clause alone matches, in V8C4's normalisation`() {
+        assertTrue(PartyDuplicates.sameParty(QuotationPartySnapshot(gstin = " 27aaacs1234f1z5 "), sunrise))
+        assertTrue(PartyDuplicates.sameParty(QuotationPartySnapshot(phone = "98765-43210"), sunrise))
+        assertTrue(PartyDuplicates.sameParty(QuotationPartySnapshot(name = "  sunrise  CONSTRUCTIONS "), sunrise))
+        assertFalse(PartyDuplicates.sameParty(QuotationPartySnapshot(name = "Sunrise Builders"), sunrise))
+    }
+
+    @Test
+    fun `a phone needs seven digits, and matches exactly`() {
+        val shortStored = sunrise.copy(phone = "543210")
+        // Six digits on both sides: never a match, however equal.
+        assertFalse(PartyDuplicates.sameParty(QuotationPartySnapshot(phone = "543210"), shortStored))
+        // Exact on digits, as V8C4's `digits(c.phone)===ph`: a number typed
+        // with its country code is not the one stored without it. N5.5's
+        // duplicate warning (`find`) matches that by suffix; V8C4 does not.
+        assertFalse(PartyDuplicates.sameParty(QuotationPartySnapshot(phone = "+91 98765 43210"), sunrise))
+    }
+
+    @Test
+    fun `nothing on the form, or nothing matching, is not the same party`() {
+        assertFalse(PartyDuplicates.sameParty(QuotationPartySnapshot(site = "Plot 7"), sunrise))
+        assertFalse(PartyDuplicates.sameParty(QuotationPartySnapshot(name = "Metro Glass", phone = "9822001100"), sunrise))
+    }
+
+    @Test
+    fun `findCustomer skips archived parties and the one excepted, in list order`() {
+        val form = QuotationPartySnapshot(name = "Sunrise Constructions")
+        val archived = sunrise.copy(archived = true)
+        val twin = sunrise.copy(id = "c_9")
+        assertEquals(null, PartyDuplicates.findCustomer(form, listOf(archived)))
+        assertEquals("c_9", PartyDuplicates.findCustomer(form, listOf(archived, twin))?.id)
+        assertEquals("c_9", PartyDuplicates.findCustomer(form, listOf(sunrise, twin), exceptId = "c_1")?.id)
+        assertEquals("c_1", PartyDuplicates.findCustomer(form, listOf(sunrise, twin))?.id)
+    }
+
+    @Test
+    fun `a quotation never links to an archived party it merely resembles`() {
+        // Our 3c link used N5.5's `find`, which includes archived parties.
+        val archived = metro.copy(archived = true)
+        val typed = QuotationPartySnapshot(name = "Metro Glass")
+        assertEquals(null, QuoteParty.linkFor(typed, "", listOf(sunrise, archived)))
+        // A held party is looked up without regard to archiving, as V8C4
+        // looks it up, and kept while the form still describes it.
+        assertEquals("c_2", QuoteParty.linkFor(typed, "c_2", listOf(sunrise, archived)))
     }
 }

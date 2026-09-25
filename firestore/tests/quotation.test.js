@@ -347,6 +347,107 @@ test('re-writing a quotation that already exists is refused, so a retry cannot d
   assert.equal((await counter()).lastIssued.no, 'SIE/QD/2025-26/009');
 });
 
+// --- N5.9a commit 1: what the deployed rule accepts that nothing has asked it
+// --- about yet. No rule text changes in this commit.
+
+/**
+ * **Characterisation, written before anything is designed against it.**
+ *
+ * N5.7's first commit did this for `/products` and found the rule had zero
+ * positive-path coverage — `priceOk` was never evaluated, because every write
+ * in the suite ran under `withSecurityRulesDisabled`. So nothing here assumes
+ * what the rule does; each test sends a shape N5.9 intends to send and records
+ * the answer.
+ *
+ * Two of these three exist to be **flipped** in the next commit, the way N5.6
+ * flipped N5.1's `assertSucceeds` to `assertFails`. They are green now because
+ * the rule permits something it should not, and that is the finding.
+ */
+
+test('an area line carries its geometry, and the rule does not mind', async () => {
+  // The N5 plan's line table specifies w/h/dim/sqft/nos. The create rule
+  // names five keys and says nothing whatever about `lines` — no `hasOnly`,
+  // no helper — so extra keys inside a line map are accepted as deployed.
+  // This is the evidence for "the geometry needs no rule change", rather
+  // than an argument from reading the rule.
+  await givenCounter();
+  const db = as(testEnv, UIDS.staff);
+
+  await assertSucceeds(quotations(db).doc('q_area').set(quotation('q_area', UIDS.staff, {
+    lines: [{
+      t: 'Rolling shutter', s: '3000 × 3500 mm = 113.5 sq ft × 2 nos',
+      u: 'per sq ft', qty: 227, rate: 450, amt: 102150,
+      w: 3000, h: 3500, dim: 'mm', sqft: 113.5, nos: 2,
+    }],
+  })));
+});
+
+test('TODAY a Manager may write any discount at all, which is the gap', async () => {
+  // **The Owner's decision reads "a Manager is capped by an Owner-set limit
+  // enforced in the rules" (docs/N5-plan.md:89). It is not in the rules.**
+  // `/teamSettings/quoting` bounds `managerDiscountPct` when the Owner writes
+  // it; `/quotations` create checks nothing about `disc`, `discBase` or the
+  // cap. So the cap is a client-side guard only, and a Manager writing
+  // straight to Firestore is bounded by nothing.
+  //
+  // This test is green because that is true today. The next commit makes it
+  // fail and moves it to its proper name.
+  await givenCounter();
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await context.firestore().collection('teamSettings').doc('quoting')
+      .set({ managerDiscountPct: 5 });
+  });
+  const db = as(testEnv, UIDS.staff);
+
+  await assertSucceeds(quotations(db).doc('q_disc').set(quotation('q_disc', UIDS.staff, {
+    // 90% off, against a cap of 5.
+    disc: { kind: 'pct', value: 90, amt: 39960 },
+    discBase: 44400,
+    subtotal: 4440,
+    total: 5239,
+  })));
+});
+
+test('TODAY an inflated discBase is accepted too, which is the other half', async () => {
+  // A cap checked against a base the writer chooses is not a cap. `QuoteMath`
+  // keeps `discountBase == subtotal − transport + discount` exact in whole
+  // rupees precisely so a rule can bound it; nothing bounds it yet.
+  await givenCounter();
+  const db = as(testEnv, UIDS.staff);
+
+  await assertSucceeds(quotations(db).doc('q_base').set(quotation('q_base', UIDS.staff, {
+    disc: { kind: 'amt', value: 40000, amt: 40000 },
+    // The lines come to 44,400. This says they come to four million.
+    discBase: 4000000,
+    subtotal: 4440,
+    total: 5239,
+  })));
+});
+
+test('installation rides along unremarked, as the shape N5.9 will send', async () => {
+  await givenCounter();
+  const db = as(testEnv, UIDS.staff);
+
+  await assertSucceeds(quotations(db).doc('q_inst').set(quotation('q_inst', UIDS.staff, {
+    install: { mode: 'door', rate: 500, amt: 2000, basis: 4 },
+    subtotal: 46400,
+    total: 54752,
+  })));
+});
+
+test('a quotation with no saved customer is accepted, as V8C4 writes one', async () => {
+  // The person typed the client inline and never saved them. V8C4 stores
+  // `partyId: null` with a typed party object, so this is a real shape and
+  // not an edge case — and the rule requires no `partyId` at all.
+  await givenCounter();
+  const db = as(testEnv, UIDS.staff);
+
+  await assertSucceeds(quotations(db).doc('q_inline').set(quotation('q_inline', UIDS.staff, {
+    partyId: null,
+    party: { name: 'Walk-in customer', city: 'Thane' },
+  })));
+});
+
 test('a quotation is never edited or deleted by the person who wrote it', async () => {
   // The N5 position is different — the creator will be allowed to correct
   // their own — but this is what is deployed today, and the batch that changes

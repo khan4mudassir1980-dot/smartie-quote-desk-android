@@ -356,7 +356,37 @@ data class QuotationLineRecord(
     val originalRate: Double? = null,
     val key: String = "",
     val manual: Boolean = false,
-    val amount: Double = 0.0
+    val amount: Double = 0.0,
+    /** The opening an area line prices. See [QuotationLineGeometry]. */
+    val geometry: QuotationLineGeometry? = null
+)
+
+/**
+ * An area line's opening, stored as `w` / `h` / `dim` / `sqft` / `nos`.
+ *
+ * **A convenience that may be absent, never the source of truth** — the
+ * Owner's ruling for N5.9a. V8C4 rebuilds a quotation's `lines` by picking
+ * fields explicitly, and a Firestore array is replaced whole, so these five
+ * are dropped the moment anybody saves the quotation in the PWA. What
+ * survives is the line's `s` (the working, as text), its `qty` (the total
+ * chargeable area) and its `rate`, and those carry every rupee — nothing here
+ * is ever the source of an amount.
+ *
+ * So a reader treats null as ordinary: present, N5.10 reopens the area form
+ * pre-filled; absent, the line is edited as a plain line. **Never re-derived
+ * by parsing the spec string back apart.** A cutover-window limitation with
+ * an end date: once the PWA retires, nothing strips them.
+ */
+data class QuotationLineGeometry(
+    /** As typed, in [unit]. */
+    val width: Double,
+    val height: Double,
+    /** `"mm"` or `"ft"` — `DimensionUnit.wireValue`. */
+    val unit: String,
+    /** Chargeable area **per door**, after rounding up and the minimum. */
+    val sqftPerDoor: Double,
+    /** How many openings of this size. */
+    val count: Double
 )
 
 data class QuotationRecord(

@@ -157,11 +157,25 @@ class QuoteDraftRefusalTest {
     }
 
     @Test
-    fun `an unpriced line, an empty quotation and a missing customer are each refused`() {
+    fun `an unpriced line, an empty quotation and a quotation for nobody are each refused`() {
         assertEquals(QuoteDraft.NO_LINES, QuoteDraft(partyId = "c_1", gstPercent = 18.0).refusal(uncapped))
-        assertEquals(QuoteDraft.NO_PARTY, ready.copy(partyId = "").refusal(uncapped))
+        assertEquals(
+            QuoteDraft.NO_PARTY,
+            ready.copy(party = ready.party.copy(name = "   ")).refusal(uncapped)
+        )
         val unrated = ready.setRate("ln_1", null)
         assertEquals(QuoteDraft.LINE_NEEDS_RATE, unrated.refusal(uncapped))
+    }
+
+    @Test
+    fun `a walk-in with a typed name and no saved customer is not refused`() {
+        // The Owner's ruling of 2026-09-25: a party NAME is required, a saved
+        // customer is not. Before N5.9a this draft was refused for its blank
+        // `partyId`, so restoring that predicate fails this test.
+        val walkIn = ready.copy(partyId = "")
+        assertEquals("", walkIn.partyId)
+        assertEquals("Sunrise Constructions", walkIn.party.name)
+        assertNull(walkIn.refusal(uncapped))
     }
 
     // --- a damaged draft says so rather than choosing for somebody ------------------------

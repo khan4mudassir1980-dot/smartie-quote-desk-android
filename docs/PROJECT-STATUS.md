@@ -1426,6 +1426,56 @@ DESIGN** — `docs/N5-plan.md:56` explains why a rules-level version would
 refuse the PWA's own listener, and forbids describing it as rules-enforced.
 Recorded so nobody re-runs this sweep.
 
+### N5.9a questions for the Owner — V8C4 facts this repository does not hold
+
+Asked in N5.9a commit 3, and recorded before they are answered (rule 8).
+**Neither blocks 9a**, which ships no caller; both must be answered before
+9b wires the Finalise control. Each is answered by
+`tools/catalogue-import/inspect-v8c4.mjs`-style reading on the Owner's
+machine, never by guessing.
+
+1. **What does V8C4's `fbFinaliseAtomic` put in `snap{}`?** `QuotationWrite`
+   writes the map it is given exactly as given and derives nothing into it,
+   because the only example in this repository is
+   `app/src/test/resources/fixtures/quotations.json` —
+   `{gstPct: 18, validityDays: 15}` — which this project wrote itself and is
+   not evidence. The native app holds no terms, validity or bank details yet
+   (the Settings screen says so), so 9b needs to know both the keys and where
+   their values come from.
+2. **What unit does V8C4 write on the Transportation line?**
+   `docs/N5-plan.md` records a V8C4 manual line as unit `no`, so
+   `QuotationWrite.TRANSPORT_UNIT` is `"no"`; the same fixture file says
+   `lot`, invented. It moves no money — the line is one of it at its own
+   amount — but it prints.
+
+### Running the pure Kotlin tests locally — found in N5.9a, and its limits
+
+Gradle cannot build the app here, but the Kotlin compiler **inside the Gradle
+distribution** can compile and run anything that imports no Android, AndroidX
+or Firebase class — `domain/`, `data/model/`, most of `data/mapping/`, and
+their plain JUnit tests. N5.9a commit 3 was run this way before it was
+pushed: 69 tests across `QuotationWriteTest`, `QuoteDraftTest`,
+`QuoteDraftRefusalTest` and `QuoteDiscountTest`, all passing; and with the
+read-first moved below the refusals, exactly one test failed — `an issued
+quotation stays issued, whatever has changed since` — which is rule 7
+measured rather than argued.
+
+```
+L=/opt/gradle-8.14.3/lib; OUT=<scratch dir>
+KC="$L/kotlin-compiler-embeddable-2.0.21.jar:$L/kotlin-stdlib-2.0.21.jar:$L/kotlin-reflect-2.0.21.jar:$L/kotlin-script-runtime-2.0.21.jar:$L/kotlin-daemon-embeddable-2.0.21.jar:$L/trove4j-1.0.20200330.jar:$L/annotations-24.0.1.jar:$L/kotlinx-coroutines-core-jvm-1.6.4.jar"
+RT="$L/kotlin-stdlib-2.0.21.jar:$L/kotlinx-coroutines-core-jvm-1.6.4.jar"
+SRC=$(grep -L "^import android\|^import androidx\|^import com.google" app/src/main/java/in/smartie/quotedesk/{domain,data/model,data/mapping}/*.kt)
+java -cp "$KC" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect -classpath "$RT" -d $OUT/main $SRC
+java -cp "$KC" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect -classpath "$RT:$L/junit-4.13.2.jar:$OUT/main" -d $OUT/test <test files>
+java -cp "$RT:$L/junit-4.13.2.jar:$L/hamcrest-core-1.3.jar:$OUT/main:$OUT/test" org.junit.runner.JUnitCore <test classes>
+```
+
+**What it is not.** It is not the build: the compiler version, flags and
+dependency versions are the distribution's, not the app's, and any file
+importing Android is left out, so a pass here can still be red on CI. It is
+for catching a type error or a wrong figure **before** a push costs a cycle.
+The `verify` job remains the only evidence a commit is green.
+
 ### N5.10 is coupled to the finalise retry — read this before widening the rule
 
 The Owner's ruling of 2026-09-25, and the guard it costs:
@@ -2104,9 +2154,12 @@ single most dangerous operation in this repository.
    the test is decoration.
 
    That matters more here than in most projects: **CI is this repository's only
-   verification.** Gradle cannot resolve the Android plugins in the agent's
-   container, so no Kotlin runs anywhere else, and a green tick is the whole of
-   what anyone sees.
+   verification of the app as a whole.** Gradle cannot resolve the Android
+   plugins in the agent's container, so nothing touching Android, Compose,
+   Firebase or Robolectric runs anywhere else, and a green tick is the whole of
+   what anyone sees of it. *(Until N5.9a commit 3 this read "no Kotlin runs
+   anywhere else". Pure JVM Kotlin does — see "Running the pure Kotlin tests
+   locally" under N5.9a. CI stays the authority.)*
 
    One day in N5.8b produced the same finding three ways:
 

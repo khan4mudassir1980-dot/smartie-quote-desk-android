@@ -3,6 +3,7 @@ package `in`.smartie.quotedesk.domain
 import `in`.smartie.quotedesk.data.mapping.Keys
 import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.data.model.ProductRecord
+import `in`.smartie.quotedesk.data.model.QuotationLineGeometry
 import `in`.smartie.quotedesk.data.model.QuotationLineRecord
 import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.RateTierV2
@@ -108,7 +109,17 @@ data class DraftLine(
             originalRate = originalRate,
             key = key,
             manual = manual,
-            amount = QuoteMath.rupees(priced * quantity)
+            amount = QuoteMath.rupees(priced * quantity),
+            // Written for N5.10 to reopen the form with; never relied on.
+            geometry = area?.let {
+                QuotationLineGeometry(
+                    width = it.width,
+                    height = it.height,
+                    unit = it.unit.wireValue,
+                    sqftPerDoor = QuoteArea.chargeableSqft(it),
+                    count = it.count
+                )
+            }
         )
     }
 }
@@ -184,8 +195,15 @@ data class QuoteDraft(
     val id: String = "",
     val tier: RateTierV2 = RateTierV2.CLIENT,
     val lines: List<DraftLine> = emptyList(),
+    /** The saved customer, when there is one. Blank for a walk-in. */
     val partyId: String = "",
-    /** Re-resolved from the customer at finalise; held here for the screen. */
+    /**
+     * Who the quotation is for, as the screen shows it.
+     *
+     * **Re-resolved from `/customers` at finalise only when [partyId] is
+     * present** (`QuotationWrite`); otherwise this typed snapshot *is* the
+     * record, and is written as it stands.
+     */
     val party: QuotationPartySnapshot = QuotationPartySnapshot(),
     /** Carriage. Stored as a **line** at finalise, inside the subtotal. */
     val transport: Double = 0.0,
@@ -567,7 +585,11 @@ data class QuoteDraft(
         }
 
         if (gstEnabled && gstPercent == null) return GST_NOT_SET
-        if (partyId.isBlank()) return NO_PARTY
+        // A NAME, not a saved customer: the Owner's ruling of 2026-09-25. A
+        // walk-in or a first enquiry is quoted without being filed, as V8C4
+        // quotes one, and forcing every quotation through Parties first would
+        // make this app harder to use than the one it replaces.
+        if (party.name.isBlank()) return NO_PARTY
         return null
     }
 
@@ -578,7 +600,7 @@ data class QuoteDraft(
         const val NEGATIVE_TRANSPORT = "Transport cannot be negative"
         const val NEGATIVE_INSTALLATION = "An installation charge cannot be negative"
         const val GST_NOT_SET = "Set the GST rate for this quotation"
-        const val NO_PARTY = "Choose the customer this quotation is for"
+        const val NO_PARTY = "Enter who this quotation is for"
 
         /**
          * Whether this charge may be stored at all — the second of the

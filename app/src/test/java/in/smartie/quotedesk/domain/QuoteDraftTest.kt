@@ -2,6 +2,7 @@ package `in`.smartie.quotedesk.domain
 
 import `in`.smartie.quotedesk.data.mapping.Keys
 import `in`.smartie.quotedesk.data.model.ProductRecord
+import `in`.smartie.quotedesk.data.model.QuotationLineGeometry
 import `in`.smartie.quotedesk.data.model.RateTierV2
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -243,6 +244,17 @@ class QuoteDraftTest {
         // The opening travels in the spec, without the rate, so an edited rate
         // cannot leave a contradiction inside the sentence.
         assertEquals("3000 \u00d7 3500 mm = 113.5 sq ft \u00d7 2 nos", record.spec)
+        // And the opening itself, for N5.10 to reopen the form with — per
+        // door, as typed, never the source of the amount above.
+        assertEquals(
+            QuotationLineGeometry(width = 3000.0, height = 3500.0, unit = "mm", sqftPerDoor = 113.5, count = 2.0),
+            record.geometry
+        )
+    }
+
+    @Test
+    fun `a catalogue line has no opening to record`() {
+        assertNull(QuoteDraft().add(motor).lines.single().toRecord()!!.geometry)
     }
 
     @Test

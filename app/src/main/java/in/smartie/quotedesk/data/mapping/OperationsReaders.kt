@@ -4,6 +4,7 @@ import `in`.smartie.quotedesk.data.model.NumberingRecord
 import `in`.smartie.quotedesk.data.model.QuotingRecord
 import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.data.model.PurchaseRecord
+import `in`.smartie.quotedesk.data.model.QuotationLineGeometry
 import `in`.smartie.quotedesk.data.model.QuotationLineRecord
 import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.QuotationRecord
@@ -96,7 +97,32 @@ private fun Map<String, Any?>.toQuotationLine(): QuotationLineRecord {
         originalRate = line.optionalDouble("origRate"),
         key = line.string("k", "productId", "key"),
         manual = line.bool("manual"),
-        amount = line.optionalDouble("amt", "amount") ?: (quantity * rate)
+        amount = line.optionalDouble("amt", "amount") ?: (quantity * rate),
+        geometry = line.toGeometry()
+    )
+}
+
+/**
+ * An area line's opening, **all or nothing**.
+ *
+ * Absent is the ordinary case — every V8C4 line, and any native line the PWA
+ * has since re-saved, which strips these fields. A partial set is treated as
+ * absent too: an opening with a width and no door count is not one anybody
+ * could reopen honestly, and guessing the missing half would put a figure on
+ * the form that looks stored and is not. `dim` alone may be missing, and
+ * reads as millimetres, the same default `DimensionUnit.from` takes.
+ */
+private fun DocData.toGeometry(): QuotationLineGeometry? {
+    val width = optionalDouble("w") ?: return null
+    val height = optionalDouble("h") ?: return null
+    val sqft = optionalDouble("sqft") ?: return null
+    val count = optionalDouble("nos") ?: return null
+    return QuotationLineGeometry(
+        width = width,
+        height = height,
+        unit = string("dim", default = "mm"),
+        sqftPerDoor = sqft,
+        count = count
     )
 }
 

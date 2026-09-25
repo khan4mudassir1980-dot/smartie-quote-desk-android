@@ -112,6 +112,11 @@ writes one`.
   `subtotal + disc.amt` — a cap checked against a base the writer chooses is
   not a cap. Between N5.6 and N5.9a this line described an intention rather
   than a rule; the app enforced it and the server did not.
+  **Two known differences from the app, both recorded in
+  `docs/PROJECT-STATUS.md`:** the rule is **one rupee generous, never
+  strict**, at the cap boundary (the app rounds HALF_UP, the rule sees the
+  unrounded figure); and it cannot see transport, so a writer bypassing the
+  app can buy `transport × cap ÷ 100` past the cap by inflating `discBase`.
 - The refusal **names the figure the person may have** — "The most you can
   discount is 10% (₹9,483)" — rather than silently clamping what they typed. A
   quotation that went out at a discount nobody chose is worse than one that
@@ -685,8 +690,12 @@ derived from the already-rounded figures.
 | + GST 18% | + ₹15,362 |
 | **Grand total** | **₹1,00,709** |
 
-2400 × 2100 mm = 54.2501 sq ft → **54.5**. With transport zero the rules' bound
-is tight: 94,830 ≤ 85,347 + 9,483 + 1 = 94,831.
+2400 × 2100 mm = 54.2501 sq ft → **54.5**. With transport zero the rules' base
+bound is exact: 94,830 ≤ 85,347 + 9,483 = 94,830, with nothing to spare. The
+cap check is 9,483 ≤ 94,830 × 10 ÷ 100 + 1 = 9,484, the `+ 1` being the
+rule's one-rupee margin (N5.9a commit 2b). *(Until 2b this line read
+"94,830 ≤ 85,347 + 9,483 + 1": written on 23 September before the rule
+existed, it put a margin on the base bound, which the rule never had.)*
 
 ### D — the product minimum biting, with a fixed installation charge
 

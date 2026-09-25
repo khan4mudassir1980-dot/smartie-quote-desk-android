@@ -16,9 +16,16 @@ import `in`.smartie.quotedesk.data.model.QuotingRecord
  * Owner and Administrator are uncapped, which reads as [QuoteMath.NO_CAP].
  * The cap is a guardrail and not a proof: it bounds this one discount against
  * products plus installation, and it does **not** bound a hand-typed line
- * rate. **From N5.9a the rules apply the same bound server-side**, through
+ * rate. **From N5.9a the rules apply the bound server-side**, through
  * `discountOk()` in `firestore.rules`, which is what actually stops a write
  * that never came through this screen.
+ *
+ * **Not exactly the same bound, and in a known direction.** The rule sees
+ * `base × cap ÷ 100` unrounded where this file rounds HALF_UP, so it carries
+ * a one-rupee margin: it may accept one rupee this file refuses and never
+ * refuses one this file accepts. And it cannot see transport, so a writer
+ * that bypasses this file can buy `transport × cap ÷ 100` more by inflating
+ * `discBase` — recorded in `docs/PROJECT-STATUS.md` as a known bound.
  *
  * That sentence was here before the rule was, and it was false: between N5.6
  * and N5.9a the cap lived only in this file, so a Manager writing straight to

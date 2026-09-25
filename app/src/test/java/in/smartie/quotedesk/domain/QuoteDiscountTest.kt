@@ -99,6 +99,44 @@ class QuoteDiscountTest {
         )
     }
 
+    /**
+     * The app's side of the cap boundary, figure by figure.
+     *
+     * **The same five vectors are `CAP_BOUNDARY` in
+     * `firestore/tests/quotation.test.js`**, which proves the rule accepts
+     * each `allowed` and refuses `allowed + 2`. Change one list and change
+     * the other. Every base makes `base × cap ÷ 100` a fraction of a rupee,
+     * and two caps are fractional — the whole-rupee case is the one where the
+     * app and the rule cannot disagree.
+     */
+    private data class Boundary(val base: Double, val cap: Double, val allowed: Double)
+
+    private val capBoundary = listOf(
+        Boundary(44_410.0, 5.0, 2_221.0),   // 2,220.50  rounds up
+        Boundary(44_410.0, 7.5, 3_331.0),   // 3,330.75  rounds up
+        Boundary(44_403.0, 7.5, 3_330.0),   // 3,330.225 rounds down
+        Boundary(44_404.0, 12.5, 5_551.0),  // 5,550.50  rounds up
+        Boundary(44_401.0, 12.5, 5_550.0),  // 5,550.125 rounds down
+    )
+
+    @Test
+    fun `the cap rounds HALF_UP to whole rupees, and the rule accepts the same figure`() {
+        for ((base, cap, allowed) in capBoundary) {
+            val at = "$cap% of $base"
+            // Typing the cap as a percentage is what a Manager actually does,
+            // and it must come out at exactly the figure the rule is tested on.
+            assertEquals(at, allowed, Discount(DiscountKind.PERCENT, cap).amountOn(base), 0.0)
+            assertNull(at, QuoteDiscount.refusal(Discount(DiscountKind.PERCENT, cap), base, cap))
+            assertNull(at, QuoteDiscount.refusal(Discount(DiscountKind.RUPEES, allowed), base, cap))
+            // One rupee more is the app's refusal, naming the figure allowed.
+            assertEquals(
+                at,
+                QuoteMath.overTheCap(cap, allowed),
+                QuoteDiscount.refusal(Discount(DiscountKind.RUPEES, allowed + 1), base, cap)
+            )
+        }
+    }
+
     @Test
     fun `an uncapped Owner is still bounded by the quotation itself`() {
         assertEquals(

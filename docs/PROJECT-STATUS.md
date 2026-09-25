@@ -1454,7 +1454,7 @@ legitimately carry no saved customer — a walk-in or a first enquiry, quoted
 without being filed — so the party snapshot is what it has and there is
 nothing to look up.
 
-### N5.9a OPEN QUESTIONS on the discount cap rule — asked by the Owner, not yet answered
+### N5.9a questions on the discount cap rule — asked by the Owner, recorded before they were answered
 
 Both are about commit 2's `discountOk()` (`ccc08c4`). Recorded here, with the
 Owner's worked numbers intact, **before** either is answered, because a
@@ -1479,6 +1479,57 @@ tests cover those cases (add them if not), and whether the two can disagree
 at the boundary. **The Owner's ruling if they can: the rule must be one rupee
 generous, never one rupee strict** — a refusal there is invisible to the
 person, and a rupee is not.
+
+**Q2 — ANSWERED AND FIXED in N5.9a commit 2b.** They could disagree, and
+commit 2 was **one rupee strict**. 5% of 44,410 is ₹2,220.50; the app rounds
+that to ₹2,221 and lets a Manager have it, and the rule refused ₹2,221
+because `2221 > 2220.5`. Commit 2's only boundary test used 44,400 × 5%
+= ₹2,220 exactly — the one case where the two cannot differ, so it was green
+over the fault (rule 7). Reproduced before the fix: of five non-whole
+vectors, the three that round **up** (44,410 @ 5%, 44,410 @ 7.5%,
+44,404 @ 12.5%) were refused; the two that round down passed. The rule now
+reads `amount <= base × cap ÷ 100 + 1`: it accepts at most one rupee the app
+refuses (whenever the exact figure's fraction is under half a rupee) and
+never refuses one the app accepts. The five vectors are `CAP_BOUNDARY` in
+`firestore/tests/quotation.test.js` and `capBoundary` in
+`QuoteDiscountTest.kt`; each side asserts the same `allowed` figures. Rule 7,
+measured: removing the `+ 1` fails the three round-up acceptances; widening
+it to `+ 2` fails the two round-down refusals.
+
+**Q1 — ANSWERED; the residual is a known bound, and whether to add a field
+is the Owner's call.**
+
+- **The arithmetic is confirmed.** The rule accepts any `discBase` up to
+  `subtotal + disc.amt`, which for an honest quotation is the true base plus
+  the transport. Claiming the transport as base buys **`transport × cap ÷
+  100`** past the cap — ₹5,000 in the Owner's example, ₹15,000 permitted
+  against ₹10,000 intended — plus the one-rupee margin from Q2. Every figure
+  the customer sees stays honest; only `discBase` is inflated. Pinned as a
+  passing test, `KNOWN BOUND: transport buys transport × cap ÷ 100 past the
+  cap`, which flips to `assertFails` the day the bound is closed.
+- **No rule can make it exact, because every field that could tell it the
+  transport is written by the same client.** Transport is a line in `lines`,
+  and the rules language cannot sum or search a list. A top-level
+  `transport` field would let the rule check `discBase <= subtotal +
+  disc.amt - transport` exactly **against the declared figure** — but a
+  client writing straight to Firestore declares `transport: 0` beside a
+  ₹50,000 transport line and gets the same ₹5,000. The field moves the lie
+  from one number to another; it does not remove it. Unrolling a sum over a
+  fixed number of line slots is the only way a rule reads lines, and it
+  would make any quotation longer than the unroll unwritable.
+- **The cost of the field anyway:** one additive top-level key that V8C4
+  never writes and cannot strip (V8C4 cannot edit a finalised quotation, and
+  cancel touches three keys only), and one more rule change for the Owner to
+  deploy. What it would buy is a consistency check against **our own** bugs
+  — an app that computed `discBase` wrongly would be refused — not against a
+  hostile writer.
+- **How much it matters.** Reaching the slack at all needs a client that
+  bypasses the app. A Manager already has a larger route inside the app:
+  hand-typed line rates are **outside the cap by design, and the Owner
+  accepted this** (`docs/N5-plan.md:120-123`). The cap is a guardrail, not a
+  proof, and the slack does not change that.
+- **Recommendation: record the bound, do not add the field.** It closes
+  nothing against the case the cap exists for.
 
 ### Owed, and recorded rather than done
 
@@ -1891,8 +1942,20 @@ import is run.
 
 ## Deferred — known defects, recorded and not fixed
 
-These are findings from N5.6c and N5.7 that were deliberately not fixed in the
+These are findings from N5.6c, N5.7 and N5.9a that were deliberately not fixed in the
 batch that found them. A plan document gets superseded; this list does not.
+
+### The discount cap rule is slack by `transport × cap ÷ 100` — a known bound
+
+`discountOk()` bounds `discBase` by `subtotal + disc.amt`, and transport is a
+line inside the subtotal, so a client writing straight to Firestore can claim
+the transport as discount base: at a 10% cap, ₹1,00,000 of products and
+installation and ₹50,000 of transport, ₹15,000 is accepted against ₹10,000
+intended. Plus the rule's deliberate one-rupee margin at the cap boundary.
+**Not closable by any stored field**, since the client writes them all; the
+reasoning, the cost of a top-level `transport` field and the recommendation
+are under "N5.9a questions on the discount cap rule" above. Pinned by the
+emulator test `KNOWN BOUND: transport buys transport × cap ÷ 100 past the cap`.
 
 ### `priceOk` admits infinity
 

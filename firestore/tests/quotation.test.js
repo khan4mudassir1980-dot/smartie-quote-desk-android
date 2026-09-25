@@ -418,6 +418,57 @@ test('but may discount exactly up to it', async () => {
   })));
 });
 
+/**
+ * Where the app and the rule must agree on the cap, figure by figure.
+ *
+ * **The same five vectors are in `QuoteDiscountTest.kt`**, which pins the
+ * app's side: `allowed` is what `QuoteMath.discountRefusal` lets a Manager
+ * have — `base × cap ÷ 100` rounded HALF_UP to whole rupees. Change one list
+ * and change the other.
+ *
+ * Every base here is chosen so that `base × cap ÷ 100` is **not** a whole
+ * rupee, and two caps are fractional, because the whole-rupee case
+ * (44,400 at 5% = 2,220) is the one where the two sides cannot disagree and
+ * it was the only case commit 2 tested.
+ */
+const CAP_BOUNDARY = [
+  { base: 44410, cap: 5, allowed: 2221 },    // 2,220.50  rounds up
+  { base: 44410, cap: 7.5, allowed: 3331 },  // 3,330.75  rounds up
+  { base: 44403, cap: 7.5, allowed: 3330 },  // 3,330.225 rounds down
+  { base: 44404, cap: 12.5, allowed: 5551 }, // 5,550.50  rounds up
+  { base: 44401, cap: 12.5, allowed: 5550 }, // 5,550.125 rounds down
+];
+
+/** A Manager's quotation discounting [amt] off [base], nothing else on it. */
+const discounted = (id, base, amt) => quotation(id, UIDS.staff, {
+  lines: [{ t: 'Sliding gate motor', u: 'each', qty: 1, rate: base, amt: base }],
+  disc: { kind: 'amt', value: amt, amt },
+  discBase: base, subtotal: base - amt, total: Math.round((base - amt) * 1.18),
+});
+
+for (const { base, cap, allowed } of CAP_BOUNDARY) {
+  test(`at ${cap}% of ${base}, the ${allowed} the app allows is accepted`, async () => {
+    // A refusal here is invisible to the Manager — the app said yes and the
+    // server said no — so the rule must never be the stricter of the two.
+    await givenCounter();
+    await givenCap(cap);
+    const db = as(testEnv, UIDS.staff);
+
+    await assertSucceeds(quotations(db).doc('q_edge').set(discounted('q_edge', base, allowed)));
+  });
+
+  test(`at ${cap}% of ${base}, ${allowed + 2} is refused`, async () => {
+    // The rule's margin is one rupee, so two past the app's figure is past
+    // the rule's in every case: this is what keeps the margin from being a
+    // hole.
+    await givenCounter();
+    await givenCap(cap);
+    const db = as(testEnv, UIDS.staff);
+
+    await assertFails(quotations(db).doc('q_over').set(discounted('q_over', base, allowed + 2)));
+  });
+}
+
 test('an inflated discBase cannot buy a bigger discount', async () => {
   // **Flipped from commit 1's `TODAY an inflated discBase is accepted too`.**
   // A cap checked against a base the writer chooses is not a cap. The bound
@@ -437,8 +488,9 @@ test('an inflated discBase cannot buy a bigger discount', async () => {
 });
 
 test('transport inside the subtotal does not break the base bound', async () => {
-  // The bound is tight when transport is zero and slack when it is not, so a
-  // real quotation carrying carriage must still pass.
+  // The base bound is exact when transport is zero and slack by the
+  // transport when it is not — see the KNOWN BOUND test — so a real
+  // quotation carrying carriage must still pass.
   await givenCounter();
   await givenCap(10);
   const db = as(testEnv, UIDS.staff);
@@ -447,6 +499,31 @@ test('transport inside the subtotal does not break the base bound', async () => 
   await assertSucceeds(quotations(db).doc('q_tr').set(quotation('q_tr', UIDS.staff, {
     disc: { kind: 'pct', value: 5, amt: 2220 },
     discBase: 44400, subtotal: 44680, total: 52722,
+  })));
+});
+
+test('KNOWN BOUND: transport buys transport × cap ÷ 100 past the cap', async () => {
+  // **Green because the rule permits what it should not, and that is the
+  // finding** — the same shape as commit 1's two TODAY tests. The base bound
+  // is `discBase <= subtotal + disc.amt`, and transport is a line inside the
+  // subtotal, so a writer may claim the transport as part of the base.
+  //
+  // The Owner's example: a 10% cap, ₹1,00,000 of products, ₹50,000 of
+  // transport. The cap means ₹10,000; the rule accepts ₹15,000. Lines,
+  // subtotal and total are all honest — only `discBase` lies. Recorded in
+  // `docs/PROJECT-STATUS.md`; the day the bound is closed, this flips to
+  // `assertFails`.
+  await givenCounter();
+  await givenCap(10);
+  const db = as(testEnv, UIDS.staff);
+
+  await assertSucceeds(quotations(db).doc('q_slack').set(quotation('q_slack', UIDS.staff, {
+    lines: [
+      { t: 'Sliding gate motor', u: 'each', qty: 1, rate: 100000, amt: 100000 },
+      { t: 'Transport', u: 'lot', qty: 1, rate: 50000, amt: 50000 },
+    ],
+    disc: { kind: 'amt', value: 15000, amt: 15000 },
+    discBase: 150000, subtotal: 135000, total: 159300,
   })));
 });
 

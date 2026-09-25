@@ -111,9 +111,26 @@ service cloud.firestore {
      * against a base the writer chooses is not a cap.** `QuoteMath` keeps
      * `subtotal == discBase - disc.amt + transport` in exact whole rupees, and
      * transport can never be negative, so `discBase <= subtotal + disc.amt`
-     * holds for every honest quotation and is tight when transport is zero.
-     * It needs only stored fields, which matters: transport is a *line* inside
-     * the subtotal, so no rule can see it on its own.
+     * holds for every honest quotation. It needs only stored fields, which
+     * matters: transport is a *line* inside the subtotal, so no rule can see
+     * it on its own.
+     *
+     * **That bound is exact only when transport is zero, and the slack is a
+     * known figure, not a rounding.** A writer can claim a `discBase` as high
+     * as the true base plus the transport and still satisfy it, which buys
+     * `transport × cap ÷ 100` of discount past the cap: at a 10% cap on
+     * ₹1,00,000 of products with ₹50,000 of transport, ₹15,000 instead of
+     * ₹10,000. Every figure the customer sees stays honest; only `discBase`
+     * is inflated. Recorded as a known bound in `docs/PROJECT-STATUS.md`.
+     *
+     * **The cap check is one rupee generous, never strict.** The app allows
+     * `base × cap ÷ 100` rounded HALF_UP to whole rupees; this rule sees the
+     * unrounded figure. Without the margin, 5% of 44,410 — ₹2,220.50, which
+     * the app lets a Manager have as ₹2,221 — was refused here, and a refusal
+     * at finalise is one the person cannot see coming. With it the rule
+     * accepts at most one rupee the app would not, and never refuses one it
+     * would. The five vectors pinning both sides are in `quotation.test.js`
+     * and `QuoteDiscountTest.kt`.
      *
      * An absent `/teamSettings/quoting` refuses a Manager's discount rather
      * than allowing any — an unseeded project is not an uncapped one.
@@ -132,7 +149,7 @@ service cloud.firestore {
         && (
           admin()
           || (exists(/databases/$(database)/documents/teamSettings/quoting)
-              && amount <= base * discountCap() / 100)
+              && amount <= base * discountCap() / 100 + 1)
         )
       );
     }

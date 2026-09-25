@@ -99,17 +99,19 @@ object QuotationWrite {
 
     /**
      * Transport is a **line**, not a field, because V8C4 pushes it into
-     * `lines[]` under this title and counts it in the subtotal.
+     * `lines[]` under this title and counts it in the subtotal — and it is an
+     * **ordinary** line, not a manual one. See [transportLine].
      */
     const val TRANSPORT_TITLE = "Transportation"
 
     /**
-     * `docs/N5-plan.md` records a V8C4 manual line as carrying unit `no`. The
-     * `lot` on the Transportation line in `fixtures/quotations.json` is this
-     * project's own invented fixture data and is not evidence either way. It
-     * moves no money — the line is one of it at its own amount.
+     * **Empty, as V8C4 stores it.** `normLine` sets `u = l.u || ""` and the
+     * transport line passes none. The `no` a PWA page prints beside it is
+     * `qLabel`'s display fallback (`l.u || "no"`), never a stored value —
+     * which is where `3db056b`'s `"no"` came from, via the plan. The `lot`
+     * in `fixtures/quotations.json` is invented and moves with N5.12.
      */
-    const val TRANSPORT_UNIT = "no"
+    const val TRANSPORT_UNIT = ""
 
     const val NOT_ALLOWED = "This account cannot issue quotations"
     const val NO_IDENTITY =
@@ -203,7 +205,18 @@ object QuotationWrite {
     private fun isIssuable(counter: NumberingRecord): Boolean =
         counter.prefix.isNotBlank() && counter.financialYear.isNotBlank() && counter.next >= 1
 
-    /** Carriage, as V8C4 stores it: a manual line inside the subtotal. */
+    /**
+     * Carriage, exactly as V8C4 stores it — the Owner's reading of
+     * `quoteLines()` and `normLine`, 2026-09-25:
+     * `{t: "Transportation", s: <note>, u: "", qty: 1, rate: amt,
+     * origRate: amt, k: null, manual: false, amt}`.
+     *
+     * **`manual` is false.** It is not typed by hand — it comes from the
+     * transport box — and `true` would tag it "typed by hand" in V8C4 and in
+     * this app's own detail screen alike. `3db056b` wrote `true`, following a
+     * plan line that said "transport becomes a manual line"; corrected in
+     * N5.9a commit 3b.
+     */
     private fun transportLine(draft: QuoteDraft, totals: QuoteTotals): QuotationLineRecord? {
         if (totals.transport <= 0.0) return null
         return QuotationLineRecord(
@@ -213,8 +226,9 @@ object QuotationWrite {
             quantity = 1.0,
             // The rounded figure, so `qty × rate` is the stored amount.
             rate = totals.transport,
+            originalRate = totals.transport,
             key = "",
-            manual = true,
+            manual = false,
             amount = totals.transport
         )
     }
@@ -283,16 +297,31 @@ object QuotationWrite {
         "city" to party.city.trim()
     )
 
-    /** V8C4's line keys — `t`, `s`, `u`, `qty`, `rate`, `origRate`, `k`, `manual`, `amt`. */
+    /**
+     * **V8C4's nine keys, on every line, always:** `t`, `s`, `u`, `qty`,
+     * `rate`, `origRate`, `k`, `manual`, `amt` — the stored mapping at V8C4
+     * 6223-6224 picks exactly these, so every line the PWA writes carries all
+     * nine. Writing the same set makes a native line match the PWA's byte for
+     * byte, which costs nothing.
+     *
+     * - `origRate` defaults to `rate`, as `normLine` defaults it.
+     * - `k` is **null** on a line with no product, as V8C4 stores the
+     *   Transportation line. That the same holds for every product-less line
+     *   is an inference — `normLine` builds them all — not a separate reading.
+     * - `amt` is always written, though V8C4's `amtOf` would fall back to
+     *   `qty × rate` without it.
+     *
+     * The area geometry after them is this app's own and optional.
+     */
     internal fun lineData(line: QuotationLineRecord): Map<String, Any?> = buildMap {
         put("t", line.title)
-        if (line.spec.isNotBlank()) put("s", line.spec)
+        put("s", line.spec)
         put("u", line.unit)
         put("qty", line.quantity)
         put("rate", line.rate)
-        line.originalRate?.let { put("origRate", it) }
-        if (line.key.isNotBlank()) put("k", line.key)
-        if (line.manual) put("manual", true)
+        put("origRate", line.originalRate ?: line.rate)
+        put("k", line.key.ifBlank { null })
+        put("manual", line.manual)
         put("amt", line.amount)
         line.geometry?.let { opening ->
             put("w", opening.width)

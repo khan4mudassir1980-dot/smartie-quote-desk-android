@@ -132,12 +132,20 @@ so in those words.
 ## Manual lines, and where transport lives
 
 Manual lines already exist in V8C4: a title, a description, a quantity, an
-amount, unit `no`, and `manual: true` with no product key.
+amount, and `manual: true` with no product key. Their unit **prints** as `no`
+when none is stored — that is `qLabel`'s display fallback (`l.u || "no"`),
+not a stored value.
 
-**Transport is a manual line, not a field.** V8C4 pushes it into `lines[]` as
-"Transportation" and counts it in the subtotal, so that is where it appears —
-tagged as typed by hand. The read-only detail built in N5.4 shows it exactly
-that way.
+**Transport is a line, not a field — and an ordinary line, not a manual
+one.** V8C4's `quoteLines()` pushes it through `normLine`, which stores
+exactly `{t: "Transportation", s: <note>, u: "", qty: 1, rate: amt,
+origRate: amt, k: null, manual: false, amt}`, and counts it in the subtotal.
+*(Corrected 2026-09-25 from the Owner's reading of V8C4. This section said
+"a manual line … tagged as typed by hand" and gave manual lines unit `no`;
+the native writer followed it in `3db056b` and was corrected in N5.9a commit
+3b.)* The read-only detail tags a line by its stored `manual` flag, so a V8C4
+transport line shows untagged; the invented fixture's `manual: true` and
+`lot` move with the N5.12 fixture pass.
 
 ---
 

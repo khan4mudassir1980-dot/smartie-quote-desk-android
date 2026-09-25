@@ -132,7 +132,7 @@ data class QuoteTotals(
  * 4. + GST on that whole amount
  *
  * So GST falls on transport as well, which is V8C4's behaviour and is kept
- * deliberately: the finalised fixture `q_pwa_finalised` carries a manual
+ * deliberately: the finalised fixture `q_pwa_finalised` carries a
  * "Transportation" line inside its subtotal with 18% charged on the lot.
  * Discount, by contrast, stops before transport.
  *

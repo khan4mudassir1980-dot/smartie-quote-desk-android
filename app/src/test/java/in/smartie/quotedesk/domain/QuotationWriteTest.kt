@@ -333,21 +333,54 @@ class QuotationWriteTest {
     // --- the lines ------------------------------------------------------------------------------
 
     @Test
-    fun `transport is a Transportation line inside the subtotal, carrying its note`() {
+    fun `transport is stored exactly as V8C4 stores it - an ordinary line, not a manual one`() {
+        // The Owner's reading of V8C4's `quoteLines()` and `normLine`,
+        // 2026-09-25. `3db056b` wrote `u: "no"` and `manual: true`, taken from
+        // a plan line; both are wrong, and restoring either fails this test.
         val all = lines(write(plan()))
         assertEquals(3, all.size)
         assertEquals(
             mapOf(
                 "t" to "Transportation",
                 "s" to "Mumbai to Vadodara",
-                "u" to "no",
+                "u" to "",
                 "qty" to 1.0,
                 "rate" to 1_500.0,
-                "manual" to true,
+                "origRate" to 1_500.0,
+                "k" to null,
+                "manual" to false,
                 "amt" to 1_500.0
             ),
             all.last()
         )
+    }
+
+    @Test
+    fun `a transport line with no note still carries its s, as an empty string`() {
+        // V8C4: `s: t.note || ""`.
+        val noNote = lines(write(plan(draft = ready.copy(transportNote = "  ")))).last()
+        assertEquals("", noNote["s"])
+        assertTrue(noNote.containsKey("s"))
+    }
+
+    @Test
+    fun `every line carries V8C4's nine stored keys, and only area lines add to them`() {
+        val nine = setOf("t", "s", "u", "qty", "rate", "origRate", "k", "manual", "amt")
+        val geometry = setOf("w", "h", "dim", "sqft", "nos")
+        val (motor, area, transport) = lines(write(plan()))
+
+        assertEquals(nine, motor.keys)
+        assertEquals(nine + geometry, area.keys)
+        assertEquals(nine, transport.keys)
+
+        // A catalogue line keeps its product key; a line with none stores
+        // null, as V8C4 stores the Transportation line.
+        assertEquals("gateMotors|SIE1000", motor["k"])
+        assertEquals(false, motor["manual"])
+        assertNull(area["k"])
+        assertEquals(true, area["manual"])
+        // `origRate` defaults to the rate, as `normLine` defaults it.
+        assertEquals(22_200.0, motor["origRate"])
     }
 
     @Test

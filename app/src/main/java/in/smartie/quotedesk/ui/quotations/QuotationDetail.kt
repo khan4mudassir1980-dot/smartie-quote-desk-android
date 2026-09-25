@@ -46,8 +46,11 @@ import java.util.Locale
  * never stored, where `qty × rate` is the only answer available.
  *
  * **Transport is a line, not a field.** V8C4 pushes it into `lines[]` as an
- * ordinary manual entry — "Transportation", no product key — and counts it in
- * the subtotal, so that is where it appears here, tagged as typed by hand.
+ * ordinary line — "Transportation", `k: null`, `manual: false` — and counts it
+ * in the subtotal, so that is where it appears here. A line is tagged by its
+ * stored `manual` flag alone, so a V8C4 transport line shows untagged. (This
+ * said "manual entry … tagged as typed by hand" until N5.9a commit 3b; the
+ * invented fixture's `manual: true` moves with the N5.12 fixture pass.)
  * The separate `install`, `disc` and `discBase` fields N5.2 defined are not
  * shown, because nothing writes them yet: no document in either project
  * carries one, and a row that always read zero would be noise.
@@ -184,8 +187,9 @@ internal fun QuotationDetail(quotation: QuotationRecord, onBack: () -> Unit) {
 /**
  * One line: what it was, how much, at what rate, and what it came to.
  *
- * A manual line — transport, a site visit, anything typed by hand — carries no
- * product key, and is labelled so a reader can tell it from a catalogue item.
+ * A manual line — a site visit, anything typed by hand — carries no product
+ * key, and is labelled so a reader can tell it from a catalogue item.
+ * Transport is not one: V8C4 stores it with `manual: false`.
  */
 @Composable
 private fun LineRow(line: QuotationLineRecord) {

@@ -212,8 +212,9 @@ data class QuoteDraft(
      * "e.g. Mumbai to Vadodara". It reaches the printed quotation.
      *
      * A gap in N5.8a, which carried the amount and nowhere to put this. It
-     * needs no new wire field: at finalise transport becomes a manual line
-     * titled `Transportation`, and this becomes that line's `s` — the spec,
+     * needs no new wire field: at finalise transport becomes an ordinary line
+     * titled `Transportation` (not a manual one — `QuotationWrite`), and this
+     * becomes that line's `s` — the spec,
      * which V8C4 already prints and which the read side already renders as a
      * row's secondary text.
      */

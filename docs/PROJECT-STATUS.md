@@ -1374,7 +1374,8 @@ Three things are already built for it and are waiting:
 - `QuoteDraft.toRecord()` turns a draft line into a `QuotationLineRecord`. It
   has no caller today; N5.9 is the caller it was written for.
 - `Numbering` holds the formatting and the refusals from N5.6.
-- Transport becomes a manual line titled `Transportation` whose `s` is
+- Transport becomes an **ordinary** line titled `Transportation` (not a
+  manual one — corrected 2026-09-25, see the Owner's answers under N5.9a) whose `s` is
   `QuoteDraft.transportNote`, which is why the note exists.
 
 **Carry the N5.8b lesson into it:** when a plan prescribes a mechanism, check

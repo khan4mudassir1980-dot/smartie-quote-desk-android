@@ -11,6 +11,8 @@ import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.domain.QuotationPlan
 import `in`.smartie.quotedesk.domain.QuotationWrite
 import `in`.smartie.quotedesk.domain.QuoteDraft
+import kotlinx.coroutines.delay
+import kotlin.random.Random
 
 /**
  * What finalising came to.
@@ -43,8 +45,12 @@ sealed interface FinaliseOutcome {
         val number: String get() = record.number
     }
 
-    /** Nothing was written; [message] is for the person. */
-    data class Refused(val message: String) : FinaliseOutcome
+    /**
+     * Nothing was written; [message] is for the person. [cause] is the last
+     * failure when the refusal came from the server rather than from a check
+     * made here.
+     */
+    data class Refused(val message: String, val cause: Throwable? = null) : FinaliseOutcome
 }
 
 /**
@@ -63,13 +69,44 @@ sealed interface FinaliseOutcome {
  *
  * Only when there is no such document are the counter and the Owner's
  * discount limit read, and [QuotationWrite.plan] decides from those fresh
- * reads — not from what the screen was showing when it loaded. The party link
- * is the exception, and deliberately: it is derived from the customers the
- * screen holds, as V8C4 derives it from `state.customers`, because it is
- * metadata — a list a moment old costs at most a cross-reference.
- * The cap in particular is read here so that a limit the Owner lowered a
- * minute ago refuses **locally**, with the figure named, rather than reaching
- * the rule and coming back as an unexplained `permission-denied`.
+ * reads — not from what the screen was showing when it loaded. The cap in
+ * particular is read here so that a limit the Owner lowered a minute ago
+ * refuses **locally**, with the figure named, rather than reaching the rule
+ * and coming back as an unexplained `permission-denied`.
+ *
+ * The party link is the exception, and deliberately: it is derived from the
+ * customers the screen holds, as V8C4 derives it from `state.customers`,
+ * because it is metadata — a list a moment old costs at most a
+ * cross-reference.
+ *
+ * ## The bounded retry — an inference, not a discrimination
+ *
+ * N5.1 measured that a contended issue can come back as `permission-denied`:
+ * the rules check `next == resource.data.next + 1` against the stored counter,
+ * so a transaction built on a stale read is refused by the rules, and the SDK
+ * does not retry a refusal. So [finalise] re-runs the whole transaction on a
+ * refusal, up to [MAX_ATTEMPTS] times with a short jittered backoff, and on
+ * nothing else.
+ *
+ * **It cannot tell which write was refused.** A transaction surfaces one
+ * exception, and `PERMISSION_DENIED` names no document. Everything refusable
+ * locally is refused locally first — role, identity, cap, GST, lines, a
+ * party name — so what reaches the server is, as nearly as this app can
+ * arrange, only the race for the counter. That a refusal *is* the counter is
+ * therefore **an inference, not a discrimination**, and nothing here claims
+ * more. A refusal that is not contention — a role changed on the server, a
+ * rule this app does not know about — is retried to the bound and then
+ * reported, which costs a second or so and issues nothing.
+ *
+ * Each retry re-reads everything, so it takes whatever number is free *now*,
+ * and a discount limit lowered between the screen and the commit is caught
+ * locally on the retry. The read-first still leads every attempt, so a retry
+ * can never issue a second number for one draft.
+ *
+ * **[MAX_ATTEMPTS] is a starting point, not a finding.** N5.1 showed one try
+ * is too few; three is not yet evidence. N5.9a commit 6 measures what error
+ * contention actually produces under the shipped rules, and how many attempts
+ * contenders need, and moves this number if it must.
  *
  * ## Refused before a transaction opens
  *
@@ -87,7 +124,9 @@ sealed interface FinaliseOutcome {
  */
 class QuotationWriteRepository(
     private val store: QuotationStore,
-    private val now: () -> Long = System::currentTimeMillis
+    private val now: () -> Long = System::currentTimeMillis,
+    private val pause: suspend (Long) -> Unit = { delay(it) },
+    private val jitter: () -> Double = { Random.nextDouble() }
 ) {
 
     /**
@@ -109,7 +148,30 @@ class QuotationWriteRepository(
         if (draft.id.isBlank()) return FinaliseOutcome.Refused(QuotationWrite.NO_IDENTITY)
 
         val at = now()
-        return store.transaction { transaction ->
+        var attempt = 1
+        while (true) {
+            try {
+                return runOnce(member, draft, customers, snap, at)
+            } catch (refused: Throwable) {
+                if (!store.isRefusal(refused)) throw refused
+                if (attempt >= MAX_ATTEMPTS) {
+                    return FinaliseOutcome.Refused(COUNTER_REFUSED, cause = refused)
+                }
+                pause(backoffFor(attempt, jitter()))
+                attempt++
+            }
+        }
+    }
+
+    /** One whole transaction: read first, then the counter, then both writes. */
+    private suspend fun runOnce(
+        member: Member,
+        draft: QuoteDraft,
+        customers: List<PartyRecord>,
+        snap: Map<String, Any?>,
+        at: Long
+    ): FinaliseOutcome =
+        store.transaction { transaction ->
             val existing = transaction.readQuotation(draft.id)?.toQuotationRecord()
             val fresh = existing == null
             val counter = if (fresh) transaction.readNumbering()?.toNumberingRecord() else null
@@ -138,5 +200,30 @@ class QuotationWriteRepository(
                 is QuotationPlan.Refused -> FinaliseOutcome.Refused(plan.message)
             }
         }
+
+    companion object {
+        /**
+         * Tries at one number before [finalise] gives up and says so. A
+         * starting point, not a finding — see the class KDoc.
+         */
+        const val MAX_ATTEMPTS = 3
+
+        /** The first pause; each later one grows by the same step. */
+        const val BACKOFF_STEP_MS = 150L
+
+        /** Up to this much more, at random, so racing devices spread out. */
+        const val BACKOFF_JITTER_MS = 150L
+
+        /**
+         * Every attempt was refused. Worded as the inference it is: most
+         * likely the counter was busy, but a refusal names no cause.
+         */
+        const val COUNTER_REFUSED =
+            "The server refused the number each time it was tried - most likely somebody " +
+                "else was issuing at the same moment. Nothing was issued"
+
+        /** How long to wait after failed attempt [attempt], with [jitter] in `0.0..1.0`. */
+        fun backoffFor(attempt: Int, jitter: Double): Long =
+            BACKOFF_STEP_MS * attempt + (BACKOFF_JITTER_MS * jitter.coerceIn(0.0, 1.0)).toLong()
     }
 }

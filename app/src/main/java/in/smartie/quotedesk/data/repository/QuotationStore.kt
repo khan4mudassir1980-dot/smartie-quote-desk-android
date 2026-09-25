@@ -30,6 +30,15 @@ interface QuotationStore {
      * stay the same across runs — the clock, an id — is generated inside it.
      */
     suspend fun <T> transaction(body: (QuotationTransaction) -> T): T
+
+    /**
+     * Whether [error] is the security rules refusing — `PERMISSION_DENIED`.
+     *
+     * Asked of the store because the store is the only layer that knows what
+     * a Firestore exception is; `QuotationWriteRepository` stays free of
+     * Firebase types, which keeps it in the local JVM sweep.
+     */
+    fun isRefusal(error: Throwable): Boolean
 }
 
 /**

@@ -45,8 +45,24 @@ class QuotationWriteRepositoryTest {
         /** Commit the next transaction, then throw as though its response was lost. */
         var loseNextResponse = false
 
+        /**
+         * Refuse this many transactions outright, committing nothing — what
+         * the rules do to a transaction built on a stale counter read.
+         */
+        var refuseNext = 0
+
+        /** Called before a refused transaction throws — to move the counter on, say. */
+        var onRefuse: () -> Unit = {}
+
+        override fun isRefusal(error: Throwable): Boolean = error is Refusal
+
         override suspend fun <T> transaction(body: (QuotationTransaction) -> T): T {
             transactions++
+            if (refuseNext > 0) {
+                refuseNext--
+                onRefuse()
+                throw Refusal()
+            }
             var result: T? = null
             val staged = mutableListOf<Pair<String, Map<String, Any?>>>()
             repeat(attempts) { run ->
@@ -86,6 +102,9 @@ class QuotationWriteRepositoryTest {
         fun quotations(): List<String> = docs.keys.filter { it.startsWith("quotations/") }
     }
 
+    /** Stands in for `PERMISSION_DENIED`, which names no document. */
+    private class Refusal : RuntimeException("PERMISSION_DENIED")
+
     private val manager = Member(uid = "u_m", name = "Manager Person", role = Role.STAFF)
     private val staff = Member(uid = "u_w", name = "Staff Person", role = Role.WORKER)
 
@@ -98,10 +117,16 @@ class QuotationWriteRepositoryTest {
     ).addManual(id = "ln_1", title = "Site visit", rate = 1_000.0)
 
     private var clockReads = 0
-    private fun repository(store: FakeStore) = QuotationWriteRepository(store) {
-        clockReads++
-        1_760_000_000_000L
-    }
+    private val pauses = mutableListOf<Long>()
+    private fun repository(store: FakeStore, jitter: Double = 0.5) = QuotationWriteRepository(
+        store,
+        now = {
+            clockReads++
+            1_760_000_000_000L
+        },
+        pause = { pauses += it },
+        jitter = { jitter }
+    )
 
     private fun seeded(vararg extra: Pair<String, Map<String, Any?>>) =
         mutableMapOf(NUMBERING to counter, *extra)
@@ -220,6 +245,82 @@ class QuotationWriteRepositoryTest {
         // One clock read for two runs: the document is the same either way.
         assertEquals(1, clockReads)
         assertEquals(2, store.bodyRuns)
+    }
+
+    // --- the bounded retry -----------------------------------------------------------------
+
+    @Test
+    fun `a refusal is retried, and the retry takes the number that is free now`() = runBlocking {
+        // Somebody else took 009 while this attempt was in flight; the rules
+        // refused ours. The retry re-reads and issues 010.
+        val docs = seeded()
+        val store = FakeStore(docs)
+        store.refuseNext = 1
+        store.onRefuse = { docs[NUMBERING] = counter + ("next" to 10) }
+
+        val outcome = repository(store).finalise(manager, draft, customers = emptyList(), snap = emptyMap())
+
+        assertEquals("Issued qd_1 SIE/QD/2025-26/010", outcome.summary())
+        assertEquals(2, store.transactions)
+        assertEquals(11, store.doc(NUMBERING)["next"])
+        assertEquals(1, pauses.size)
+    }
+
+    @Test
+    fun `refused at every attempt, it stops at the bound and says so`() = runBlocking {
+        val store = FakeStore(seeded())
+        store.refuseNext = 99
+
+        val outcome = repository(store).finalise(manager, draft, customers = emptyList(), snap = emptyMap())
+
+        assertTrue(outcome is FinaliseOutcome.Refused)
+        assertEquals(QuotationWriteRepository.COUNTER_REFUSED, (outcome as FinaliseOutcome.Refused).message)
+        assertTrue(outcome.cause is Refusal)
+        assertEquals(QuotationWriteRepository.MAX_ATTEMPTS, store.transactions)
+        // A pause between attempts, none after the last.
+        assertEquals(QuotationWriteRepository.MAX_ATTEMPTS - 1, pauses.size)
+        assertTrue(store.quotations().isEmpty())
+        assertEquals(9, store.doc(NUMBERING)["next"])
+    }
+
+    @Test
+    fun `any other failure is not retried`() = runBlocking {
+        // A lost response, an offline device, a quota: none of them is the
+        // race for the counter, and a retry would only hide it.
+        val store = FakeStore(seeded())
+        store.loseNextResponse = true
+        try {
+            repository(store).finalise(manager, draft, customers = emptyList(), snap = emptyMap())
+            fail("a failure that is not a refusal must surface")
+        } catch (expected: IllegalStateException) {
+        }
+        assertEquals(1, store.transactions)
+        assertTrue(pauses.isEmpty())
+    }
+
+    @Test
+    fun `a retry after a refusal still leads with the read-first`() = runBlocking {
+        // Whatever the first attempt did, the second cannot issue a second
+        // number for this draft: here the quotation turns up between them.
+        val docs = seeded()
+        val store = FakeStore(docs)
+        store.refuseNext = 1
+        store.onRefuse = {
+            docs["quotations/qd_1"] = mapOf("id" to "qd_1", "no" to "SIE/QD/2025-26/009", "byUid" to manager.uid)
+        }
+
+        val outcome = repository(store).finalise(manager, draft, customers = emptyList(), snap = emptyMap())
+
+        assertEquals("AlreadyIssued qd_1 SIE/QD/2025-26/009", outcome.summary())
+        assertEquals(9, store.doc(NUMBERING)["next"])
+    }
+
+    @Test
+    fun `the pause grows with each attempt and carries jitter`() {
+        assertEquals(150L, QuotationWriteRepository.backoffFor(1, 0.0))
+        assertEquals(300L, QuotationWriteRepository.backoffFor(1, 1.0))
+        assertEquals(300L, QuotationWriteRepository.backoffFor(2, 0.0))
+        assertEquals(375L, QuotationWriteRepository.backoffFor(2, 0.5))
     }
 
     // --- refusing -----------------------------------------------------------------------

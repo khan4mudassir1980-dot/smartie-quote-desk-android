@@ -39,6 +39,8 @@ class FirestoreQuotationStore(private val firestore: FirebaseFirestore) : Quotat
             )
         }.await()
 
+    override fun isRefusal(error: Throwable): Boolean = FirestoreFailures.isRefused(error)
+
     private val numbering: DocumentReference
         get() = firestore.collection(TEAM_SETTINGS).document(NUMBERING)
 

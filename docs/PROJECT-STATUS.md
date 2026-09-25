@@ -1416,9 +1416,17 @@ Emulator: **246** at `5955e04`. Emulator: **243** at `ead0a52`
 (`npx firebase emulators:exec --only firestore "node --test
 --test-concurrency=1 tests/*.test.js"`, run from `firestore/`).
 
-Still to build: 8 (the "Save this customer" defect, per the Owner's second
-re-read). Commit 7 — the N5-plan line table and the note on the N5.9 rule
-sketch — is done.
+Commits 7 (the N5-plan line table and the rule-sketch note) and 8 ("Save
+this customer" re-finds from the form) are done; 9a's list is complete.
+
+**Open after commit 8 — a Manager renaming through "Save this customer".**
+`PartyWrite.mergeInto` takes a differing name as a correction, and the
+`/customers` rule refuses a Manager any rename. So when the form matches a
+saved customer on GSTIN or phone but spells the name differently — the
+Owner's own spelling-correction case — a Manager's Save is refused by the
+rules and the failure is reported generically. This was as true of the held-id
+path before commit 8; it is recorded, not changed. Whether V8C4's
+`saveParty` renames at all is not in this repository.
 
 ### N5.9a decisions, taken in chat and recorded here because chat is not memory
 
@@ -1560,10 +1568,17 @@ RT="$L/kotlin-stdlib-2.0.21.jar:$L/kotlinx-coroutines-core-jvm-1.6.4.jar:$L/gson
 SRC=$(grep -L -e '^import android' -e '^import androidx' -e '^import com.google' app/src/main/java/in/smartie/quotedesk/{domain,data/model,data/mapping}/*.kt)
 TESTS=$(grep -L -e '^import android' -e '^import androidx' -e '^import com.google.firebase' -e '^import org.robolectric' -e '^import io.mockk' -e '^import kotlinx.coroutines.test' -e '^import app.cash' -e 'quotedesk.ui\.' -e 'quotedesk.data.repository' -e 'quotedesk.core' app/src/test/java/in/smartie/quotedesk/{domain,data/mapping}/*.kt)
 java -cp "$KC" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect -classpath "$RT" -d $OUT/main $SRC
-java -cp "$KC" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect -classpath "$RT:$L/junit-4.13.2.jar:$OUT/main" -d $OUT/test $TESTS
+java -cp "$KC" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect -Xfriend-paths=$OUT/main -classpath "$RT:$L/junit-4.13.2.jar:$OUT/main" -d $OUT/test $TESTS
 CLASSES=$(cd $OUT/test && find . -name '*Test.class' | grep -v '\$' | sed 's|^\./||; s|\.class$||; s|/|.|g')
 java -ea -cp "$RT:$L/junit-4.13.2.jar:$L/hamcrest-core-1.3.jar:$OUT/main:$OUT/test:app/src/test/resources" org.junit.runner.JUnitCore $CLASSES
 ```
+
+**Reaching a repository whose store imports Firebase** (N5.9a commit 8):
+copy the store's two interfaces verbatim into a scratch file, add a scratch
+`kotlinx.coroutines.test.runTest` that delegates to `runBlocking`, and pass
+both with the repository and its test. `-Xfriend-paths` lets the tests see
+`internal` members, as Gradle's single module does. The stubs live in the
+scratch directory and are **never committed**; CI compiles the real files.
 
 **`-ea` is not optional.** Kotlin's `assert(...)` does nothing unless the JVM
 enables assertions; Gradle's test task does by default, a bare `java` does
@@ -1783,7 +1798,9 @@ that `findCustomer` may restore, while too loose files one firm's quotation
 under another. Its KDoc says it is a stand-in. The real text lets it become
 a port. Blocks nothing in 9a; wanted before 9b ships finalise.
 
-**FINDING, not fixed — "Save this customer" has the same typed-over shape.**
+**FINDING — FIXED in N5.9a commit 8, at the Owner's instruction** (see "The
+Owner's answers of 2026-09-25 (second re-read)"). **"Save this customer" had
+the same typed-over shape.**
 `ProductsViewModel.saveCustomer` passes the draft's **held** `partyId` with
 the **form's** details to `PartyWriteRepository.saveFromQuotation`, which
 merges them into that record. Pick Sunrise, type Metro Glass's details over

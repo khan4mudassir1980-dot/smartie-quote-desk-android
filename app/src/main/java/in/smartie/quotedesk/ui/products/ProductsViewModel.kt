@@ -276,12 +276,18 @@ class ProductsViewModel(
     fun mintPartyId(): String = Keys.generateId(PartyWrite.ID_PREFIX)
 
     /**
-     * "Save this customer": merge into the chosen one, or create a new one.
+     * "Save this customer": merge into the saved customer **the form's own
+     * details** describe, or create a new one — V8C4's `saveParty`. The
+     * customer picked earlier is not consulted: a form typed over it describes
+     * somebody else, and writing into the picked record is how one firm's
+     * details ended up on another (fixed in N5.9a commit 8).
      *
-     * On a create, the draft **adopts** the new id, so saving twice corrects
-     * the same customer instead of making a second.
+     * [customers] is the list the screen holds, which is what V8C4's
+     * `findCustomer` searches. Afterwards the draft **adopts** whichever
+     * customer the form was saved as, found or created, so the screen shows
+     * the link; finalise re-derives it from the form regardless.
      */
-    fun saveCustomer(newId: String) {
+    fun saveCustomer(newId: String, customers: List<PartyRecord>) {
         val draft = _draft.value
         val party = QuoteParty.draftOf(draft.party)
         party.refusal()?.let {
@@ -294,14 +300,16 @@ class ProductsViewModel(
             runCatching {
                 container.partyWriteRepository.saveFromQuotation(
                     member = member,
-                    partyId = draft.partyId,
                     draft = party,
+                    customers = customers,
                     newId = newId
                 )
-            }.onSuccess { result ->
-                if (draft.partyId.isBlank()) persist(_draft.value.copy(partyId = newId))
+            }.onSuccess { saved ->
+                saved.id?.takeIf { it != _draft.value.partyId }?.let { id ->
+                    persist(_draft.value.copy(partyId = id))
+                }
                 emit(
-                    if (result == PartyWriteResult.WRITTEN) CUSTOMER_SAVED
+                    if (saved.result == PartyWriteResult.WRITTEN) CUSTOMER_SAVED
                     else CUSTOMER_UNCHANGED
                 )
             }.onFailure { failure ->

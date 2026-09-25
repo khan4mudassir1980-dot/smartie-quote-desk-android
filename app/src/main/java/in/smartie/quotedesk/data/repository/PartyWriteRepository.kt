@@ -3,15 +3,24 @@ package `in`.smartie.quotedesk.data.repository
 import `in`.smartie.quotedesk.data.mapping.Keys
 import `in`.smartie.quotedesk.data.mapping.toPartyRecord
 import `in`.smartie.quotedesk.data.model.PartyRecord
+import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.PartyAuthor
 import `in`.smartie.quotedesk.domain.PartyDraft
+import `in`.smartie.quotedesk.domain.PartyDuplicates
 import `in`.smartie.quotedesk.domain.PartyPlan
 import `in`.smartie.quotedesk.domain.PartyWrite
 import `in`.smartie.quotedesk.domain.Permissions
 
 /** Whether a call actually put anything on the wire. */
 enum class PartyWriteResult { WRITTEN, NO_CHANGE }
+
+/**
+ * What "Save this customer" came to: the customer the form now names — found
+ * or created — or null when the one found had been deleted and nothing was
+ * written.
+ */
+data class SavedParty(val id: String?, val result: PartyWriteResult)
 
 /**
  * Creating and correcting a customer.
@@ -108,44 +117,60 @@ class PartyWriteRepository(
     }
 
     /**
-     * "Save this customer", from the quotation side (N5.8b).
+     * "Save this customer", from the quotation side — **V8C4's `saveParty`
+     * (6404): the customer is re-found from the form's own details, and the
+     * customer the person picked earlier is not consulted at all.**
      *
-     * **Two genuinely different writes, decided by whether a customer was
-     * chosen.**
+     * `saveParty` opens `if(!p || !p.name) return null; ... let
+     * c=findCustomer(p);`. So in V8C4, picking Sunrise, typing Metro Glass's
+     * details over the form and pressing Save creates or updates **Metro
+     * Glass**, and Sunrise is untouched. Until N5.9a commit 8 this function
+     * took the held `partyId` and merged whatever was on the form into that
+     * record — a native-only defect that silently wrote one firm's phone and
+     * GSTIN onto another's. **There is no held id to pass any more**, so the
+     * defect cannot come back through a caller.
      *
-     * A customer chosen from the picker is *merged* into, through
-     * `PartyWrite.mergeInto`: gaps are filled, real corrections are taken and
-     * **nothing already stored is blanked**. The person was quoting, not
-     * editing a customer, so a box they left empty is silence rather than an
-     * instruction to forget. That is the opposite of [edit], where an empty
-     * box *is* the instruction — and it is why the quotation side must never
-     * be routed through [edit].
+     * - The target is [PartyDuplicates.findCustomer] over [customers] — the
+     *   list the screen already holds, as V8C4 uses `state.customers`: the
+     *   first unarchived saved customer the form is
+     *   [PartyDuplicates.sameParty] as. The same predicate the quotation's
+     *   party link uses; one definition, not two.
+     * - **Found:** merged into through `PartyWrite.mergeInto`, re-read inside
+     *   the transaction — gaps filled, real corrections taken, **nothing
+     *   already stored blanked**. The person was quoting, not editing a
+     *   customer, so an empty box is silence. That is why the quotation side
+     *   must never be routed through [edit], where an empty box is the
+     *   instruction.
+     * - **Not found:** created under [newId], which the screen holds for as
+     *   long as one quotation is being filled in, so a retry after an
+     *   ambiguous failure lands on the same document and is refused honestly
+     *   rather than writing a twin (N4.4's B2).
+     * - Found in the list but deleted since: nothing is written and
+     *   [SavedParty.id] is null, as [update] says nothing in the same case.
      *
-     * A customer typed from scratch is *created*, under [newId], which the
-     * screen holds for as long as the person is filling one quotation in. A
-     * retry after an ambiguous failure therefore lands on the same document
-     * and is refused honestly rather than writing a twin — N4.4's B2 lesson,
-     * the same one [create] already carries.
-     *
-     * A [partyId] naming a customer that has since been deleted writes
-     * nothing and says nothing, exactly as [update] does: it is not this
-     * person's mistake and there is nothing for them to do about it.
+     * Archived customers are never found, as V8C4's `findCustomer` skips
+     * them: a form resembling one creates a new customer rather than writing
+     * into one somebody archived.
      */
     suspend fun saveFromQuotation(
         member: Member,
-        partyId: String,
         draft: PartyDraft,
+        customers: List<PartyRecord>,
         newId: String
-    ): PartyWriteResult {
+    ): SavedParty {
         require(Permissions.canUseParties(member)) { NOT_ALLOWED }
-        if (partyId.isBlank()) return create(member, draft, newId)
-
         draft.refusal()?.let { throw IllegalStateException(it) }
+
+        val form = QuotationPartySnapshot(name = draft.name, gstin = draft.gstin, phone = draft.phone)
+        val found = PartyDuplicates.findCustomer(form, customers)
+            ?: return SavedParty(newId, create(member, draft, newId))
+
         val author = authorOf(member)
         val at = now()
         return store.transaction { transaction ->
-            val doc = transaction.read(partyId) ?: return@transaction PartyWriteResult.NO_CHANGE
-            commit(transaction, PartyWrite.mergeInto(doc.toPartyRecord(), draft, author, at))
+            val doc = transaction.read(found.id)
+                ?: return@transaction SavedParty(null, PartyWriteResult.NO_CHANGE)
+            SavedParty(found.id, commit(transaction, PartyWrite.mergeInto(doc.toPartyRecord(), draft, author, at)))
         }
     }
 

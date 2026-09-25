@@ -242,7 +242,7 @@ fun ProductsScreen(
             onClearDraft = viewModel::clearDraft,
             onPartyChange = viewModel::setPartyDetails,
             onChooseParty = viewModel::chooseParty,
-            onSaveCustomer = viewModel::saveCustomer,
+            onSaveCustomer = { id -> viewModel.saveCustomer(id, parties) },
             onSaveProduct = viewModel::saveProduct,
         ),
     )

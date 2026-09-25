@@ -1,5 +1,6 @@
 package `in`.smartie.quotedesk.domain
 
+import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -112,8 +113,14 @@ class QuoteGstTest {
 
     @Test
     fun `switched off, a quotation finalises with no GST at all`() {
-        val draft = QuoteDraft(id = "qd_1", partyId = "c_1", gstEnabled = false)
-            .addManual("ln_1", "Site visit", rate = 1000.0)
+        // Named, because from N5.9a a quotation needs a party NAME to issue;
+        // a saved customer's id alone no longer satisfies that gate.
+        val draft = QuoteDraft(
+            id = "qd_1",
+            partyId = "c_1",
+            party = QuotationPartySnapshot(name = "Sunrise Constructions"),
+            gstEnabled = false
+        ).addManual("ln_1", "Site visit", rate = 1000.0)
 
         assertNull(draft.refusal(QuoteMath.NO_CAP))
         assertEquals(0.0, draft.totals().gst, 0.0)

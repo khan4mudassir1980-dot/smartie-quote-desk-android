@@ -1453,27 +1453,34 @@ machine, never by guessing.
 Gradle cannot build the app here, but the Kotlin compiler **inside the Gradle
 distribution** can compile and run anything that imports no Android, AndroidX
 or Firebase class — `domain/`, `data/model/`, most of `data/mapping/`, and
-their plain JUnit tests. N5.9a commit 3 was run this way before it was
-pushed: 69 tests across `QuotationWriteTest`, `QuoteDraftTest`,
-`QuoteDraftRefusalTest` and `QuoteDiscountTest`, all passing; and with the
-read-first moved below the refusals, exactly one test failed — `an issued
-quotation stays issued, whatever has changed since` — which is rule 7
-measured rather than argued.
+the plain JUnit tests over them.
+
+**Run every pure test class, never only the ones a change touched.** N5.9a
+commit 3 (`3db056b`) ran just its four touched classes locally — 69 tests,
+all green — and CI run #172 then failed a fifth: `QuoteGstTest > switched
+off, a quotation finalises with no GST at all`, whose draft named a saved
+customer with no party name and had relied on the old `partyId` gate. The
+full local sweep, below, reproduces that failure against `3db056b`'s test
+and passes with the fix: **662 tests across 44 classes**.
 
 ```
 L=/opt/gradle-8.14.3/lib; OUT=<scratch dir>
 KC="$L/kotlin-compiler-embeddable-2.0.21.jar:$L/kotlin-stdlib-2.0.21.jar:$L/kotlin-reflect-2.0.21.jar:$L/kotlin-script-runtime-2.0.21.jar:$L/kotlin-daemon-embeddable-2.0.21.jar:$L/trove4j-1.0.20200330.jar:$L/annotations-24.0.1.jar:$L/kotlinx-coroutines-core-jvm-1.6.4.jar"
-RT="$L/kotlin-stdlib-2.0.21.jar:$L/kotlinx-coroutines-core-jvm-1.6.4.jar"
-SRC=$(grep -L "^import android\|^import androidx\|^import com.google" app/src/main/java/in/smartie/quotedesk/{domain,data/model,data/mapping}/*.kt)
+RT="$L/kotlin-stdlib-2.0.21.jar:$L/kotlinx-coroutines-core-jvm-1.6.4.jar:$L/gson-2.10.jar"
+SRC=$(grep -L -e '^import android' -e '^import androidx' -e '^import com.google' app/src/main/java/in/smartie/quotedesk/{domain,data/model,data/mapping}/*.kt)
+TESTS=$(grep -L -e '^import android' -e '^import androidx' -e '^import com.google.firebase' -e '^import org.robolectric' -e '^import io.mockk' -e '^import kotlinx.coroutines.test' -e '^import app.cash' -e 'quotedesk.ui\.' -e 'quotedesk.data.repository' -e 'quotedesk.core' app/src/test/java/in/smartie/quotedesk/{domain,data/mapping}/*.kt)
 java -cp "$KC" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect -classpath "$RT" -d $OUT/main $SRC
-java -cp "$KC" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect -classpath "$RT:$L/junit-4.13.2.jar:$OUT/main" -d $OUT/test <test files>
-java -cp "$RT:$L/junit-4.13.2.jar:$L/hamcrest-core-1.3.jar:$OUT/main:$OUT/test" org.junit.runner.JUnitCore <test classes>
+java -cp "$KC" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect -classpath "$RT:$L/junit-4.13.2.jar:$OUT/main" -d $OUT/test $TESTS
+CLASSES=$(cd $OUT/test && find . -name '*Test.class' | grep -v '\$' | sed 's|^\./||; s|\.class$||; s|/|.|g')
+java -cp "$RT:$L/junit-4.13.2.jar:$L/hamcrest-core-1.3.jar:$OUT/main:$OUT/test:app/src/test/resources" org.junit.runner.JUnitCore $CLASSES
 ```
 
 **What it is not.** It is not the build: the compiler version, flags and
-dependency versions are the distribution's, not the app's, and any file
-importing Android is left out, so a pass here can still be red on CI. It is
-for catching a type error or a wrong figure **before** a push costs a cycle.
+dependency versions are the distribution's, not the app's, and every file
+touching Android, the UI, a repository or `core` is left out — the sweep
+covers 44 of the suite's 124 test classes (`grep -rl "@Test" app/src/test |
+wc -l`). A pass here can still be red on CI. It is for catching a type error
+or a wrong figure **before** a push costs a cycle.
 The `verify` job remains the only evidence a commit is green.
 
 ### N5.10 is coupled to the finalise retry — read this before widening the rule

@@ -8,7 +8,8 @@ anything.** Last updated 2026-09-24.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `c60705d` — [run #160](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36027462955), fully green (unit tests, lint, Firestore rules emulator, APK build). Its `smartie-native-apks` artifact is the APK to install. Later commits may sit above it. |
+| **Last CI-verified head** | `a13af08` — [run #165](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36030249050), fully green (unit tests, lint, Firestore rules emulator, APK build). Later commits may sit above it. |
+| **APK to install** | The `smartie-native-apks` artifact **from the run that verified the head you intend to install** — never from whichever run this table happens to name. A build contains the commit it ran on and nothing above it, so a head hash and an APK go out of step the moment anything lands. Each run's job summary reports its head and the signing certificate; the app must show **Staging**. |
 | **Ruleset anchor** | `a794d64` — the **last commit that changed `firestore.rules`**. This moves only when a rule changes, which is why it is recorded separately from the head. |
 | **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **five rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c). |
 | **To deploy next** | The **latest CI-verified head**, not a hash copied into this file. Check it before deploying: `git diff --quiet <head> a794d64 -- firestore/firestore.rules` — silence means that head carries the current ruleset. No index deploy: `firestore.indexes.json` is unchanged since `69d0fce`. |
@@ -1179,7 +1180,9 @@ emulator tests, 58 catalogue-tool tests.** N5.8a added 47 Kotlin tests
 rule and no import tooling, and those suites were re-run green on every commit
 regardless.
 
-### N5.8b, the builder — 12 code commits, plus this one for the record
+### N5.8b, the builder — 13 code commits
+
+`git log --oneline --no-decorate 8784f90..a13af08 -- app/src | wc -l` → 13. The documentation commits are `663ba2e`, `dbea7d6` and this one, and are not counted here.
 
 | | Commit | CI |
 |---|---|---|
@@ -1193,8 +1196,9 @@ regardless.
 | 8 | `4221ed1` GST, transport and what it all comes to | **#158 red — a compile error** |
 | 9 | `f3cd3ea` installation and the discount, and the three faults in 8b-1 | **#159 green** |
 | 10 | `c60705d` clear the rate box before typing a negative into it | **#160 green** |
-| 11 | `e97e846` prove `alignLinesToTier` leaves a hand-typed catalogue rate alone | #161 |
-| 12 | `aa58bc7` four findings from the reachability sweep | #162 |
+| 11 | `e97e846` prove `alignLinesToTier` leaves a hand-typed catalogue rate alone | **#161 green** |
+| 12 | `aa58bc7` four findings from the reachability sweep | *(covered by #162)* |
+| 13 | `a13af08` delete `canEditSettings`; maintenance rules 5, 6 and 7 | **#165 green** |
 
 **Two runs went red and both were faults in what the batch itself wrote**, not
 in the app: two top-level constants colliding with `ProductEditor.kt`
@@ -1204,11 +1208,25 @@ check whose witness sat at the opposite end of the `LazyColumn` from where it
 scrolled. The last is trap 2, got wrong in the file whose own KDoc explains
 trap 2.
 
-**Test counts at `e97e846`: 1459 Kotlin test methods across 123 classes**, 223
-emulator tests, 58 catalogue-tool tests. N5.8b added **106** Kotlin tests
-(1353 before). The emulator and tool figures are unchanged, and this time that
-is checked rather than assumed: `git diff --stat 8784f90..e97e846` touches 20
-files and **none** under `firestore/` or `tools/`.
+**Counts at `a13af08`, each with the command that produced it** (rule 5):
+
+| Count | Command | |
+|---|---|---|
+| Kotlin test methods | `grep -rho "@Test" app/src/test \| wc -l` | **1459** |
+| Kotlin test classes | `grep -rl "@Test" app/src/test \| wc -l` | **123** |
+| Code commits in N5.8b | `git log --oneline 8784f90..a13af08 -- app/src \| wc -l` | **13** |
+| Files changed | `git diff --stat 8784f90..a13af08 \| tail -1` | **25 files, +4459 −129** |
+| Rules and tooling touched | `git diff --stat 8784f90..a13af08 -- firestore tools \| wc -l` | **0** |
+
+**The grep is calibrated, not assumed.** Gradle prints a test total only when
+something fails, so a green run's console carries no number. Run #157 failed at
+`25fd6c5` and printed `1399 tests completed, 3 failed`; `grep -rho "@Test"` at
+that same commit returns **1399** exactly. The proxy and the runner agree on
+the one commit where both are known, which is what makes the 1459 usable.
+
+Emulator (223) and catalogue-tool (58) figures are unchanged, and that is
+checked rather than asserted: the diff touches nothing under `firestore/` or
+`tools/`.
 
 **No rule changed, nothing was written to `/quotations`, and no number was
 allocated.** The single Firestore write in the whole of N5.8 is "Save this
@@ -1913,3 +1931,26 @@ single most dangerous operation in this repository.
    deploy the rules from" and was correct the day it was written, when the
    verified head and the last rules change were the same commit. Two rules
    commits landed hours later and it became wrong with no signal.
+7. **A green test is evidence that the test passed — not that the behaviour
+   exists, and not that it is right.** When a test is the only evidence for a
+   behaviour, say what change would make it fail. If nothing plausible would,
+   the test is decoration.
+
+   That matters more here than in most projects: **CI is this repository's only
+   verification.** Gradle cannot resolve the Android plugins in the agent's
+   container, so no Kotlin runs anywhere else, and a green tick is the whole of
+   what anyone sees.
+
+   One day in N5.8b produced the same finding three ways:
+
+   - `PartyWrite.mergeInto` — built and tested in N5.5, called by **nothing**
+     until N5.8b. Its tests were green over a feature no user could reach.
+   - `alignLinesToTier` — its test used `addManual` lines, which set `manual`
+     **and** `rateEdited`, so it could not distinguish the predicate it claimed
+     to test. It would have stayed green while a hand-typed rate was silently
+     overwritten.
+   - `canEditSettings` — its test pinned `isAdmin`, contradicting the `isOwner`
+     policy the Settings screen shipped and the deployed rule enforces. Green
+     over a trap.
+
+   Same spirit as Rule 5: an unchecked claim may not be written down.

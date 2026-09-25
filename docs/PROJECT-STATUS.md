@@ -1454,6 +1454,32 @@ legitimately carry no saved customer — a walk-in or a first enquiry, quoted
 without being filed — so the party snapshot is what it has and there is
 nothing to look up.
 
+### N5.9a OPEN QUESTIONS on the discount cap rule — asked by the Owner, not yet answered
+
+Both are about commit 2's `discountOk()` (`ccc08c4`). Recorded here, with the
+Owner's worked numbers intact, **before** either is answered, because a
+question that exists only in chat does not survive a compaction. Each is
+closed by editing this section to say what was found and which commit
+settled it — not by deleting it.
+
+**Q1. The transport slack.** Cap 10%, products and installation ₹1,00,000,
+transport ₹50,000. The intended discount is ₹10,000; the rule permits up to
+₹15,000, because its base bound is `discBase <= subtotal + disc.amt` and
+transport sits inside the subtotal as a line. **Owed:** whether the rule can
+see transport at all — for instance by storing the transport amount as a
+top-level field — and what making it exact would cost; if it cannot be made
+exact, why not, and the residual recorded here as a **known bound** rather
+than left implied by the word "tight".
+
+**Q2. The boundary.** The app computes the cap in whole rupees, HALF_UP
+(`QuoteMath.discountRefusal`: `rupees(base × cap ÷ 100)`); the rule computes
+`base × cap ÷ 100` in doubles. Fractional caps like 7.5% and 12.5%, and
+bases where that figure is not a whole rupee. **Owed:** whether commit 2's
+tests cover those cases (add them if not), and whether the two can disagree
+at the boundary. **The Owner's ruling if they can: the rule must be one rupee
+generous, never one rupee strict** — a refusal there is invisible to the
+person, and a rupee is not.
+
 ### Owed, and recorded rather than done
 
 - **The 50-draft cap is not enforced.** `QuoteDrafts.refusalToAdd()` is called
@@ -2032,3 +2058,13 @@ single most dangerous operation in this repository.
      over a trap.
 
    Same spirit as Rule 5: an unchecked claim may not be written down.
+
+8. **Anything the Owner sends that is not yet in the repository is at risk.**
+   A ruling, a decision or a question that arrives in chat is written into this
+   file (or the plan it belongs to), committed and pushed **before it is acted
+   on** whenever the session's context is near compaction — without waiting to
+   be asked. Chat is not memory; a compaction keeps a summary, and a summary
+   loses the worked numbers.
+
+   The Owner's standing instruction of 2026-09-25, given with the two N5.9a
+   open questions above, which were recorded here before either was answered.

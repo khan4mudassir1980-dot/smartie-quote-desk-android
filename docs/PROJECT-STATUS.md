@@ -8,11 +8,11 @@ anything.** Last updated 2026-09-24.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `a13af08` — [run #165](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36030249050), fully green (unit tests, lint, Firestore rules emulator, APK build). Later commits may sit above it. |
+| **Last CI-verified head** | `ca33f8c` — [run #173](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36116440515), fully green (unit tests, lint, Firestore rules emulator, APK build). Later commits may sit above it. |
 | **APK to install** | The `smartie-native-apks` artifact **from the run that verified the head you intend to install** — never from whichever run this table happens to name. A build contains the commit it ran on and nothing above it, so a head hash and an APK go out of step the moment anything lands. Each run's job summary reports its head and the signing certificate; the app must show **Staging**. |
-| **Ruleset anchor** | `a794d64` — the **last commit that changed `firestore.rules`**. This moves only when a rule changes, which is why it is recorded separately from the head. |
-| **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **five rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c). |
-| **To deploy next** | The **latest CI-verified head**, not a hash copied into this file. Check it before deploying: `git diff --quiet <head> a794d64 -- firestore/firestore.rules` — silence means that head carries the current ruleset. No index deploy: `firestore.indexes.json` is unchanged since `69d0fce`. |
+| **Ruleset anchor** | `ead0a52` — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
+| **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **seven rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
+| **To deploy next** | The **latest CI-verified head**, not a hash copied into this file. Check it before deploying: `git diff --quiet <head> ead0a52 -- firestore/firestore.rules` — silence means that head carries the current ruleset. No index deploy: `firestore.indexes.json` is unchanged since `69d0fce`. |
 
 > **Three fields, three meanings — they were one field until 2026-09-24 and it
 > had gone wrong.** The table said `a849650` was "the commit to deploy the rules
@@ -1375,6 +1375,31 @@ the mechanism actually fires. `withTier(resolved.tier, priceOf)` was the plan's
 fix for the tier half of the `resume` defect and it is a **no-op**, because it
 returns early when the tier is not changing — which is exactly the state
 `resume` leaves. A test now pins the no-op.
+
+### N5.9a so far — every commit CI-verified
+
+From `git log --oneline e9690a1..ca33f8c`, each with the run that verified it:
+
+| Commit | What | Run |
+|---|---|---|
+| `f22a39c` | 1 — characterise what `/quotations` accepts; no rule change | #167 green |
+| `ccc08c4` | 2 — the Manager's discount cap, in the rules | #168 green |
+| `4cfcb43` | docs — the rulings that existed only in chat | #169 green |
+| `612514c` | docs — the Owner's two cap questions, recorded before answering | #170 green |
+| `ead0a52` | 2b — the cap check was one rupee strict; now one rupee generous | #171 green |
+| `3db056b` | 3 — `QuotationWrite`, the pure plan for finalise | **#172 red**: one test |
+| `ca33f8c` | fix — `QuoteGstTest` relied on the old party gate | #173 green |
+
+Kotlin tests: **1488** at `ca33f8c` — the runner printed `1488 tests
+completed, 1 failed` on #172, and `git grep -h -o '@Test' ca33f8c --
+app/src/test | wc -l` agrees. Emulator: **243** at `ead0a52`
+(`npx firebase emulators:exec --only firestore "node --test
+--test-concurrency=1 tests/*.test.js"`, run from `firestore/`).
+
+Still to build: 4 (`QuotationStore` + repository, read-first), 5 (the bounded
+retry), 6 (the contended emulator test, reporting attempts per contender), 7
+(the N5-plan line table, and the N5.9 rule sketch that now differs from what
+shipped).
 
 ### N5.9a decisions, taken in chat and recorded here because chat is not memory
 

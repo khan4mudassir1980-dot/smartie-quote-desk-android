@@ -29,6 +29,15 @@ const { createTestEnvironment, seed, as, UIDS } = require('./helpers');
  * (The Kotlin reads `/teamSettings/quoting` too, only when a discount is
  * taken. No quotation here carries one, so neither side reads it.)
  *
+ * **Why the bound works at all.** With no retry, one contender per round wins;
+ * retrying immediately, the losers stay bunched and it is one winner per wave,
+ * so the worst case at ten is about ten attempts. The jittered backoff spreads
+ * them out so several get through per wave, and the worst case at ten falls
+ * to four or five. **The bound rests on that dispersion, not on a guarantee**
+ * — and exhausting it is safe: nothing is written, and the next press starts
+ * again from the read-first. The scenario "for comparison only" below
+ * measures the difference.
+ *
  * **The emulator is one process, and its contention is an indication, not a
  * production measurement.** Nothing measured here may be quoted as measured
  * against real Firestore: how the production backend orders its own
@@ -110,7 +119,7 @@ function runOnce(db, person, draftId, log) {
  * `QuotationWriteRepository.finalise`: retry the whole transaction on a
  * refusal, and on nothing else. [log] records every attempt's outcome code.
  */
-async function finalise(db, person, draftId, maxAttempts, log) {
+async function finalise(db, person, draftId, maxAttempts, log, backoff = true) {
   for (let attempt = 1; ; attempt += 1) {
     try {
       const out = await runOnce(db, person, draftId, log);
@@ -120,7 +129,7 @@ async function finalise(db, person, draftId, maxAttempts, log) {
       log.codes.push(error.code ?? String(error));
       if (error.code !== 'permission-denied') throw error;
       if (attempt >= maxAttempts) return { refused: true, attempts: attempt };
-      await new Promise((resolve) => setTimeout(resolve, backoffFor(attempt, Math.random())));
+      if (backoff) await new Promise((resolve) => setTimeout(resolve, backoffFor(attempt, Math.random())));
     }
   }
 }
@@ -141,7 +150,7 @@ const PEOPLE = [
  * separate client app — a separate phone — with its own draft. Returns every
  * outcome and every attempt's code.
  */
-async function race(tag, contenders, rounds, maxAttempts) {
+async function race(tag, contenders, rounds, maxAttempts, backoff = true) {
   await givenCounter();
   const outcomes = [];
   const log = { codes: [], bodyRuns: 0 };
@@ -151,7 +160,7 @@ async function race(tag, contenders, rounds, maxAttempts) {
       return { db: as(testEnv, person.uid), person, draftId: `qd_${tag}_r${round}_c${i}` };
     });
     const settled = await Promise.allSettled(
-      racers.map((r) => finalise(r.db, r.person, r.draftId, maxAttempts, log)),
+      racers.map((r) => finalise(r.db, r.person, r.draftId, maxAttempts, log, backoff)),
     );
     for (const s of settled) {
       outcomes.push(s.status === 'fulfilled' ? s.value : { thrown: s.reason?.code ?? String(s.reason) });
@@ -214,6 +223,23 @@ test('with the self-retry unbounded, every contender ends with exactly one numbe
     report(t, `unbounded, ${label}`, run);
     assert.ok(run.outcomes.every((o) => o.no && !o.reused), `a contender ended without a number: ${JSON.stringify(run.outcomes.filter((o) => !o.no))}`);
     assert.equal(run.outcomes.length, contenders * rounds);
+    await assertEveryNumberOnceAndNoneSkipped(run.outcomes);
+  }
+});
+
+// --- what the backoff is for -------------------------------------------------------------
+
+test('for comparison only: retrying immediately, with no backoff', async (t) => {
+  // **The app always backs off; this scenario exists to show why.** With no
+  // retry, one contender per round wins — yet with the retry the worst case
+  // at ten is a handful of attempts, not ten. The losers' retries arrive
+  // spread out, so several get through per round. This measures how much of
+  // that spread the jittered backoff creates on purpose, against the spread
+  // that timing alone produces. Reported, not asserted, beyond the property.
+  for (const [label, contenders, rounds] of [['realistic 3', 3, 20], ['pessimistic 10', 10, 10]]) {
+    const run = await race(`now${contenders}`, contenders, rounds, 50, false);
+    report(t, `unbounded, no backoff, ${label}`, run);
+    assert.ok(run.outcomes.every((o) => o.no && !o.reused));
     await assertEveryNumberOnceAndNoneSkipped(run.outcomes);
   }
 });

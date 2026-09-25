@@ -1737,6 +1737,28 @@ cd firestore && npx firebase emulators:exec --project smartie-rules-test --only 
   production measurement.** None of these numbers may later be quoted as
   measured against real Firestore.
 
+**Commit 6b — the Owner's reconciliation, confirmed by measurement.** The
+two numbers above are in tension — one winner per round with no retry, yet a
+worst case of 5 at ten contenders with it — and the difference is **timing
+dispersion**. Asked whether the retry waits at all: **yes**, 150 ms × attempt
+plus up to 150 ms at random, in the Kotlin and its Node mirror alike, from
+commit 5. Five more runs of the same command, adding a comparison-only
+scenario that retries **immediately**:
+
+| At 10 contenders, unbounded | Worst case per run | Would exhaust 6 |
+|---|---|---|
+| Retry immediately | 10, 10, 9, 9, 10 | 136 of 500 (27%) |
+| Jittered backoff (ships) | 4, 3, 4, 4, 3 | 0 of 500 |
+
+At 3 contenders the worst case was 3 either way. So the backoff is what
+creates the dispersion the bound depends on; **the bound rests on it, not on
+any guarantee**, and the KDoc says so. Across all fifteen runs with the
+backoff, the worst case at ten was 5, once; none of 1,600 finalises at the
+bound of 6, over ten runs of the bound scenario, exhausted it. **Exhausting the bound is safe** — nothing written,
+"Not finalised — … Your quotation is untouched", the draft and its id intact,
+the next press starting again from the read-first — so the bound need only
+make exhaustion rare. Stated in the KDoc so nobody over-engineers it.
+
 ### After the re-read: what N5.9a commit 3c did, and what it left open
 
 **Done in 3c.** `CUSTOMER_GONE` is gone: a saved customer that cannot be

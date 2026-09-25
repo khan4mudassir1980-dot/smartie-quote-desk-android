@@ -111,24 +111,40 @@ sealed interface FinaliseOutcome {
  *
  * ## [MAX_ATTEMPTS] is 6, and here is the measurement
  *
- * N5.9a commit 6, in that Node test, against the shipped rules, ten runs of
- * `npx firebase emulators:exec --project smartie-rules-test --only firestore
- * "node --test --test-concurrency=1 tests/finalise-contention.test.js"`:
+ * N5.9a commits 6 and 6b, in that Node test, against the shipped rules,
+ * fifteen runs of `npx firebase emulators:exec --project smartie-rules-test
+ * --only firestore "node --test --test-concurrency=1
+ * tests/finalise-contention.test.js"`:
  *
  * - **Contention surfaces as `permission-denied`, never `aborted`, and the SDK
  *   re-runs nothing** — every transaction body ran once per attempt. With no
  *   self-retry, which is V8C4's behaviour, one contender per round won: 20 of
- *   60 issued at 3 simultaneous finalises, 10 or 11 of 100 at 10. So this loop
- *   is not redundant; it is the only thing that issues the other numbers.
- * - Retry unbounded: at 3 contenders never more than 3 attempts; at 10 the
- *   worst case was **5**, seen once, and 37 of 1,000 (3.7%) needed more than 3.
- * - At 6: **none of 800** exhausted it.
+ *   60 issued at 3 simultaneous finalises, 10 or 11 of 100 at 10.
+ * - **Retrying immediately, the herd stays together:** at 10 contenders the
+ *   worst case was 9 or 10 attempts in every run — one winner per wave, as
+ *   "one winner per round" predicts — and 136 of 500 (27%) would have
+ *   exhausted a bound of 6.
+ * - **With the jittered backoff this class ships:** at 10 the worst case was
+ *   3 or 4, and **5 once**, in fifteen runs; at 3, never more than 3. None of
+ *   1,600 finalises at the bound of 6, in ten runs, exhausted it.
  *
- * So the bound is the pessimistic worst case plus one. **The emulator is one
- * process, and this is an indication, not a production measurement** — never
- * to be quoted as measured against real Firestore. The cost of the headroom
- * falls only on a refusal that is not contention: five pauses, 2.25 to 3.0
- * seconds, before it is reported.
+ * **So the bound rests on timing dispersion, not on any guarantee.** The
+ * backoff — 150 ms × attempt plus up to 150 ms at random, the same shape as
+ * the SDK's own retry — is what spreads the losers' retries out so that
+ * several get through per wave; without it the worst case at ten is about
+ * ten. 6 is the dispersed worst case plus one. **The emulator is one process,
+ * and all of this is an indication, not a production measurement** — never to
+ * be quoted as measured against real Firestore.
+ *
+ * **Exhausting the bound is safe, and that is why it need not be provably
+ * sufficient.** Nothing is written; [finalise] returns [COUNTER_REFUSED]; the
+ * screen says "Not finalised — … Your quotation is untouched"; the draft and
+ * its id survive, and the next press picks up exactly where this one left
+ * off, the read-first answering it if an earlier attempt did land. The bound
+ * has one job — to make that outcome rare. Do not over-engineer it. The
+ * headroom costs only a refusal that is not contention: five pauses, 2.25 to
+ * 3.0 seconds, before it is reported — which is why 9b's control must be
+ * visibly busy, saying it is taking a number, for that long.
  *
  * ## Refused before a transaction opens
  *

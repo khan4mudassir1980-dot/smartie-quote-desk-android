@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-24.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `64e2abf` — [run #177](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36119346286), fully green (unit tests, lint, Firestore rules emulator, APK build). Later commits may sit above it. |
+| **Last CI-verified head** | `5955e04` — [run #183](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36130213379), fully green (unit tests, lint, Firestore rules emulator, APK build). Later commits may sit above it. |
 | **APK to install** | The `smartie-native-apks` artifact **from the run that verified the head you intend to install** — never from whichever run this table happens to name. A build contains the commit it ran on and nothing above it, so a head hash and an APK go out of step the moment anything lands. Each run's job summary reports its head and the signing certificate; the app must show **Staging**. |
 | **Ruleset anchor** | `ead0a52` — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
 | **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **seven rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
@@ -1386,7 +1386,7 @@ returns early when the tier is not changing — which is exactly the state
 
 ### N5.9a so far — every commit CI-verified
 
-From `git log --oneline e9690a1..64e2abf`, each with the run that verified it:
+From `git log --oneline e9690a1..5955e04`, each with the run that verified it:
 
 | Commit | What | Run |
 |---|---|---|
@@ -1401,11 +1401,18 @@ From `git log --oneline e9690a1..64e2abf`, each with the run that verified it:
 | `7964aa6` | docs — the Owner's answers on `snap{}` and the Transportation line | #175 green |
 | `f14d0df` | 3b — the Transportation line exactly as V8C4 stores it; nine keys on every line | #176 green |
 | `64e2abf` | 4 — `QuotationStore` + `QuotationWriteRepository`: read first, then the counter | #177 green |
+| `89468aa` | docs — `64e2abf` verified | #178 green |
+| `e73c028` | docs — the Owner's re-read of `fbFinaliseAtomic`, recorded before any code | #179 green |
+| `ba895fd` | 3c — a missing customer never refuses finalise; the link derived from the form | #180 green |
+| `53d4ee3` | 4b — finalise hands back the record | #181 green |
+| `d02873b` | 5 — the bounded self-retry, on a refusal and nothing else | #182 green |
+| `5955e04` | 6 — contention measured: `permission-denied`; the bound moves to 6 | #183 green |
 
-Kotlin tests: **1500** at `64e2abf` (`git grep -h -o '@Test' 64e2abf --
+Kotlin tests: **1513** at `5955e04` (`git grep -h -o '@Test' 5955e04 --
 app/src/test | wc -l`); the proxy was last calibrated on #172, whose runner
 printed `1488 tests completed, 1 failed` against a grep of 1488. Local JVM
-sweep at `64e2abf`: 674 tests across 45 classes, all passing. Emulator: **243** at `ead0a52`
+sweep at `5955e04`: 687 tests across 45 classes, all passing, with `-ea`.
+Emulator: **246** at `5955e04`. Emulator: **243** at `ead0a52`
 (`npx firebase emulators:exec --only firestore "node --test
 --test-concurrency=1 tests/*.test.js"`, run from `firestore/`).
 

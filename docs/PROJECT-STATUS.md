@@ -8,7 +8,7 @@ anything.** Last updated 2026-09-24.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `5955e04` — [run #183](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36130213379), fully green (unit tests, lint, Firestore rules emulator, APK build). Later commits may sit above it. |
+| **Last CI-verified head** | `1c6826f` — [run #189](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36141623578), fully green (unit tests, lint, Firestore rules emulator, APK build). Later commits may sit above it. |
 | **APK to install** | The `smartie-native-apks` artifact **from the run that verified the head you intend to install** — never from whichever run this table happens to name. A build contains the commit it ran on and nothing above it, so a head hash and an APK go out of step the moment anything lands. Each run's job summary reports its head and the signing certificate; the app must show **Staging**. |
 | **Ruleset anchor** | `ead0a52` — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
 | **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **seven rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
@@ -1361,32 +1361,35 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**Build N5.9 — finalise: write the quotation and take its number.**
+**Plan N5.9b — the Finalise control. Plan only; no code until the Owner
+approves it.**
 
-N5.8b is complete and CI-verified, so the builder holds everything a
-quotation needs and nothing issues one. N5.9 is the transaction that writes
-`/quotations` and takes the next number from `/teamSettings/numbering` — the
-counter's *issue* branch, which N5.6 deliberately left untouched while it
-narrowed the *configure* branch to the Owner.
+N5.9a is complete and CI-verified at `1c6826f` (run #189): finalise works as
+a repository call — `QuotationWriteRepository.finalise` — and nothing in the
+app calls it yet. 9b is the control that does, and its plan must carry what
+N5.9a left for it, all recorded in this file:
 
-Three things are already built for it and are waiting:
+- **V8C4's messaging and success order** — "V8C4's `fbFinaliseAtomic`,
+  re-read 2026-09-25", item 4: the offline check before anything is built,
+  "Not finalised — … Your quotation is untouched", and number → clear the
+  draft id → upsert → clear the draft → "Finalised as …", tolerant of the
+  listener having got there first.
+- **Remove the finalised draft; never `clearDraft()` it** — the id survives
+  a clear, and the next quotation would be answered with the previous
+  number. Remove only on `Issued` or `AlreadyIssued`.
+- **The control disables on the first press and is visibly busy**, saying it
+  is taking a number, for up to the 2.25-3.0 s a non-contention refusal takes
+  — not a dead button.
+- **`snap{}`** stays the caller's to supply; until N6 there is nothing to put
+  in it, and 9b must say what it passes meanwhile.
+- **Phone row T-Q1** is the only exercise the real Firestore store gets.
 
-- `QuoteDraft.toRecord()` turns a draft line into a `QuotationLineRecord`. It
-  has no caller today; N5.9 is the caller it was written for.
-- `Numbering` holds the formatting and the refusals from N5.6.
-- Transport becomes an **ordinary** line titled `Transportation` (not a
-  manual one — corrected 2026-09-25, see the Owner's answers under N5.9a) whose `s` is
-  `QuoteDraft.transportNote`, which is why the note exists.
-
-**Carry the N5.8b lesson into it:** when a plan prescribes a mechanism, check
-the mechanism actually fires. `withTier(resolved.tier, priceOf)` was the plan's
-fix for the tier half of the `resume` defect and it is a **no-op**, because it
-returns early when the tier is not changing — which is exactly the state
-`resume` leaves. A test now pins the no-op.
+The saved-customer recovery message the Owner once asked for is
+**withdrawn** — a missing customer no longer refuses finalise.
 
 ### N5.9a so far — every commit CI-verified
 
-From `git log --oneline e9690a1..5955e04`, each with the run that verified it:
+From `git log --oneline e9690a1..1c6826f`, each with the run that verified it:
 
 | Commit | What | Run |
 |---|---|---|
@@ -1407,12 +1410,19 @@ From `git log --oneline e9690a1..5955e04`, each with the run that verified it:
 | `53d4ee3` | 4b — finalise hands back the record | #181 green |
 | `d02873b` | 5 — the bounded self-retry, on a refusal and nothing else | #182 green |
 | `5955e04` | 6 — contention measured: `permission-denied`; the bound moves to 6 | #183 green |
+| `53cdf39` | docs — `5955e04` verified | #184 green |
+| `2836e80` | docs — the Owner's second re-read, recorded before any code | #185 green |
+| `397ecd9` | 3d — `sameParty` is V8C4's OR, ported once; archived parties never linked | #186 green |
+| `23da750` | 6b — the bound rests on the dispersion the backoff creates, measured both ways | #187 green |
+| `5a5cfd6` | 7 — the plan's line table and the rule-sketch note | #188 green |
+| `1c6826f` | 8 — "Save this customer" re-finds from the form (behaviour change to N5.8b) | #189 green |
 
-Kotlin tests: **1513** at `5955e04` (`git grep -h -o '@Test' 5955e04 --
+Kotlin tests: **1520** at `1c6826f` (`git grep -h -o '@Test' 1c6826f --
 app/src/test | wc -l`); the proxy was last calibrated on #172, whose runner
 printed `1488 tests completed, 1 failed` against a grep of 1488. Local JVM
-sweep at `5955e04`: 687 tests across 45 classes, all passing, with `-ea`.
-Emulator: **246** at `5955e04`. Emulator: **243** at `ead0a52`
+sweep at `1c6826f`: 710 tests across 46 classes, all passing, with `-ea`
+(the party repository's tests through scratch stubs). Emulator: **247** at
+`1c6826f`. Emulator: **243** at `ead0a52`
 (`npx firebase emulators:exec --only firestore "node --test
 --test-concurrency=1 tests/*.test.js"`, run from `firestore/`).
 

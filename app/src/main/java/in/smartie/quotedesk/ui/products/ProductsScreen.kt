@@ -62,6 +62,7 @@ import `in`.smartie.quotedesk.domain.CatalogueView
 import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.domain.ProductDraft
 import `in`.smartie.quotedesk.domain.ProductUnit
+import `in`.smartie.quotedesk.domain.QuoteParty
 import `in`.smartie.quotedesk.domain.RoleTitles
 
 import `in`.smartie.quotedesk.domain.PinDrag
@@ -145,6 +146,8 @@ data class ProductsActions(
     val onChooseParty: (PartyRecord) -> Unit = {},
     /** "Save this customer", under the id the panel is holding. */
     val onSaveCustomer: (String) -> Unit = {},
+    /** The answer to "already saved — update that party?": true to update. */
+    val onAnswerMerge: (Boolean) -> Unit = {},
     /** Save one product's corrections. The draft is what the sheet showed. */
     val onSaveProduct: (ProductRecord, ProductDraft) -> Unit = { _, _ -> },
 )
@@ -167,6 +170,7 @@ fun ProductsScreen(
     val productFailure by viewModel.productFailure.collectAsStateWithLifecycle()
     val savingCustomer by viewModel.savingParty.collectAsStateWithLifecycle()
     val customerFailure by viewModel.partyFailure.collectAsStateWithLifecycle()
+    val mergeQuestion by viewModel.mergeQuestion.collectAsStateWithLifecycle()
     val quoting by viewModel.quoting.collectAsStateWithLifecycle()
     // Null while the settings document has not arrived OR does not exist.
     // Indistinguishable from here, which is the safe way round: a cap that
@@ -214,6 +218,7 @@ fun ProductsScreen(
         parties = parties,
         savingCustomer = savingCustomer,
         customerFailure = customerFailure,
+        mergeQuestion = mergeQuestion,
         newPartyId = viewModel::mintPartyId,
         newLineId = viewModel::mintLineId,
         gstOf = { key -> productsByKey[key]?.gst },
@@ -243,6 +248,7 @@ fun ProductsScreen(
             onPartyChange = viewModel::setPartyDetails,
             onChooseParty = viewModel::chooseParty,
             onSaveCustomer = { id -> viewModel.saveCustomer(id, parties) },
+            onAnswerMerge = viewModel::answerMerge,
             onSaveProduct = viewModel::saveProduct,
         ),
     )
@@ -270,6 +276,8 @@ fun ProductsCatalogue(
     parties: List<PartyRecord> = emptyList(),
     savingCustomer: Boolean = false,
     customerFailure: String? = null,
+    /** V8C4's question before "Save this customer" updates a saved party. */
+    mergeQuestion: QuoteParty.MergeQuestion? = null,
     /** Minted once per quotation. See `ProductsViewModel.mintPartyId`. */
     newPartyId: () -> String = { "" },
     /** Minted once per line being typed. See `ProductsViewModel.mintLineId`. */
@@ -337,6 +345,8 @@ fun ProductsCatalogue(
             onSaveCustomer = actions.onSaveCustomer,
             savingCustomer = savingCustomer,
             customerFailure = customerFailure,
+            mergeQuestion = mergeQuestion,
+            onAnswerMerge = actions.onAnswerMerge,
             newPartyId = newPartyId,
             // Clearing empties the LINES and stays put: the party, the
             // transport and the GST rate on this quotation are not lines and

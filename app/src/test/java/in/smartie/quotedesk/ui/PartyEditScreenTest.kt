@@ -225,7 +225,8 @@ class PartyEditScreenTest {
         assertNull("nothing was written", created)
         scrollTo(PARTY_EDITOR_TAG, DUPLICATE_KEY)
         assertTrue("and it says which party, and why", shows("Harbour Interiors"))
-        assertTrue(shows("the same name"))
+        // V8C4's `matchReason` wording since N5.9a commit 8b.
+        assertTrue(shows("the same company name"))
     }
 
     @Test

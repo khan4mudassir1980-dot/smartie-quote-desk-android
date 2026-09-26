@@ -242,13 +242,32 @@ object PartyWrite {
     // --- the other semantics, for N5.8 -----------------------------------------------
 
     /**
-     * V8C4's `saveParty`: **fill the gaps, take the genuine changes, never
-     * blank anything already held.**
+     * **V8C4's `saveParty` update branch** (the Owner's reading, 2026-09-26):
+     * fill the gaps, take the genuine changes, never blank anything already
+     * held — and **never rename**.
      *
-     * The quotation side's "Save this customer" uses this. The person was
-     * quoting, not editing a customer, so a box they left empty is silence
-     * rather than an instruction to forget what is stored. A box they filled
-     * in differently is a correction and is taken.
+     * ```
+     * if(p.site) c.city=p.site;
+     * ["gstin","contact","phone","email","address"].forEach(k=>{ if(p[k]) c[k]=p[k]; });
+     * if(p.type) c.type=p.type;
+     * ```
+     *
+     * **`name` is not in that list.** V8C4 writes a name only when it creates
+     * a record, so the quotation's Save never renames a saved customer — and a
+     * Manager, whom the `/customers` rule forbids to rename, is never refused
+     * for correcting a spelling. Until N5.9a commit 8b this wrote the name, and
+     * `notes`, which V8C4's list does not include either.
+     *
+     * Only values actually given are copied, so a box left empty is silence
+     * rather than an instruction to forget. The form's site arrives here as
+     * [PartyDraft.city] (`QuoteParty.draftOf`), as `saveParty` maps it.
+     *
+     * **One deliberate difference, awaiting the Owner:** V8C4's caller passes
+     * `type: state.tier`, so its update always sets the type to the
+     * quotation's tier. This app cannot quote at the contractor tier, so doing
+     * the same would turn every contractor saved from a native quotation into
+     * a dealer or a client. So a type is written here only when one is stated,
+     * and the quotation path states none; see `docs/PROJECT-STATUS.md`.
      *
      * Contrast [edit], where an empty box **is** the instruction.
      */
@@ -259,7 +278,6 @@ object PartyWrite {
         at: Long
     ): PartyPlan {
         val incoming = mapOf(
-            "name" to draft.name.trim(),
             // Normalised only when the person actually stated one, so an
             // untouched selector stays empty and is filtered out below rather
             // than becoming a `client` that overwrites a stored `contractor`.
@@ -269,8 +287,7 @@ object PartyWrite {
             "contact" to draft.contact.trim(),
             "phone" to draft.phone.trim(),
             "email" to draft.email.trim(),
-            "address" to draft.address.trim(),
-            "notes" to draft.notes.trim()
+            "address" to draft.address.trim()
         )
         // A blank is not a change. That single line is the whole difference
         // between this and `edit`.

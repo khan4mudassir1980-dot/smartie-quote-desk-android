@@ -11,10 +11,12 @@ import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
  * makes both directions unit tests rather than assertions about a form.
  *
  * **The site is the asymmetry.** `QuotationPartySnapshot` carries a `site` and
- * `PartyRecord` has no such field, because they are different facts: the
- * customer's `address` is where the firm is, and the site is where *this job*
- * is. A shutter fitted at a godown in Bhiwandi is quoted to an office in
- * Mumbai. So the site never comes off a customer and never goes back onto one.
+ * `PartyRecord` has no such field. Picking a customer leaves the site alone
+ * ([snapshotOf]); **saving one from the quotation writes the site into the
+ * customer's `city`**, as V8C4's `saveParty` does — `if(p.site) c.city=p.site`
+ * (the Owner's reading, 2026-09-26). Until N5.9a commit 8b this file said the
+ * site "never goes back onto" a customer; V8C4 says otherwise, and V8C4 is the
+ * authority.
  */
 object QuoteParty {
 
@@ -35,18 +37,23 @@ object QuoteParty {
     )
 
     /**
-     * The other way, for "Save this customer".
+     * The other way, for "Save this customer" — V8C4's `partyFromForm` as
+     * `saveParty` reads it.
      *
-     * **`site`, `type` and `notes` are left blank on purpose, and that is safe
-     * only because of which write this feeds.** `PartyWrite.mergeInto` treats
-     * a blank as silence — nothing stored is forgotten — while `PartyWrite.edit`
+     * **The form's site becomes the customer's `city`**, as `saveParty` maps
+     * it. The `city` a picked customer brought onto the snapshot is not shown
+     * on the form and is not carried back.
+     *
+     * **`type` and `notes` are left blank on purpose, and that is safe only
+     * because of which write this feeds.** `PartyWrite.mergeInto` treats a
+     * blank as silence — nothing stored is forgotten — while `PartyWrite.edit`
      * treats a blank as the instruction to clear the field. Handing this to
      * `edit` would wipe a customer's type and notes off them, so it must not
      * be: the quotation side merges, it never edits.
      */
     fun draftOf(party: QuotationPartySnapshot): PartyDraft = PartyDraft(
         name = party.name.trim(),
-        city = party.city.trim(),
+        city = party.site.trim(),
         gstin = party.gstin.trim(),
         contact = party.contact.trim(),
         phone = party.phone.trim(),
@@ -93,4 +100,23 @@ object QuoteParty {
         if (held != null && PartyDuplicates.sameParty(form, held)) return held.id
         return PartyDuplicates.findCustomer(form, customers)?.id
     }
+
+    // --- asking before "Save this customer" writes into a saved party --------------------
+
+    /**
+     * V8C4's question before it updates a party that is already saved
+     * (`#qSaveParty`, 8011-8022): it names the party and the reason, and the
+     * person decides. Without it, a form typed over a picked customer would
+     * silently update whichever **other** saved party it matches.
+     */
+    data class MergeQuestion(val partyName: String, val reason: PartyMatcher) {
+        /** "“Sunrise Constructions” is already saved with the same GSTIN." */
+        val message: String get() = "\u201C$partyName\u201D is already saved with ${reason.label}."
+    }
+
+    /** V8C4's OK line: "OK — update that party with these details." */
+    const val UPDATE_THAT_PARTY = "Update that party with these details"
+
+    /** V8C4's Cancel line: "Cancel — leave it alone." */
+    const val LEAVE_IT_ALONE = "Leave it alone"
 }

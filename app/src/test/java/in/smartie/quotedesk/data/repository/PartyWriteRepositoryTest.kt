@@ -2,9 +2,13 @@ package `in`.smartie.quotedesk.data.repository
 
 import `in`.smartie.quotedesk.data.mapping.DocData
 import `in`.smartie.quotedesk.data.model.PartyRecord
+import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
+import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.PartyDraft
+import `in`.smartie.quotedesk.domain.PartyMatcher
 import `in`.smartie.quotedesk.domain.PartyWrite
+import `in`.smartie.quotedesk.domain.QuoteParty
 import `in`.smartie.quotedesk.domain.Role
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -214,7 +218,27 @@ class PartyWriteRepositoryTest {
         assertNull(failureOf { writes.edit(owner, sunrise, PartyDraft(name = "Gone")) })
     }
 
-    // --- "Save this customer", from the quotation side (N5.8b; re-found in N5.9a) --
+    // --- "Save this customer", from the quotation side ----------------------------------
+    //
+    // V8C4's `#qSaveParty` and `saveParty`: a name first; the saved customer the
+    // FORM describes is found; the person is asked before it is updated; a new
+    // one is created at the quotation's tier. N5.9a commits 8 and 8b.
+
+    private val sunriseWithGstin = sunriseDoc + ("gstin" to "27AAACS1234F1Z5")
+
+    /** Answers the question "yes" and remembers what was asked. */
+    private val asked = mutableListOf<QuoteParty.MergeQuestion>()
+    private val yes: suspend (QuoteParty.MergeQuestion) -> Boolean = { asked += it; true }
+    private val no: suspend (QuoteParty.MergeQuestion) -> Boolean = { asked += it; false }
+
+    private suspend fun PartyWriteRepository.save(
+        member: Member,
+        form: QuotationPartySnapshot,
+        customers: List<PartyRecord>,
+        newId: String = "c_new",
+        tier: RateTierV2 = RateTierV2.CLIENT,
+        confirm: suspend (QuoteParty.MergeQuestion) -> Boolean = yes
+    ) = saveFromQuotation(member, form, tier, customers, newId, confirm)
 
     @Test
     fun `the customer the form describes is merged into, so an empty box forgets nothing`() = runTest {
@@ -224,11 +248,10 @@ class PartyWriteRepositoryTest {
         // The quotation form has no Type box and no Notes box at all, so both
         // arrive blank. Through `edit` that would wipe the stored
         // `contractor`; through `mergeInto` it is silence.
-        val saved = writes.saveFromQuotation(
+        val saved = writes.save(
             manager,
-            draft = PartyDraft(name = "Sunrise Constructions", phone = "9820011223"),
-            customers = listOf(sunrise),
-            newId = "c_unused"
+            QuotationPartySnapshot(name = "Sunrise Constructions", phone = "9820011223"),
+            customers = listOf(sunrise)
         )
         assertEquals(SavedParty("c_1", PartyWriteResult.WRITTEN), saved)
 
@@ -237,25 +260,80 @@ class PartyWriteRepositoryTest {
         assertTrue("merged, never overwritten whole", written.merge)
         assertEquals("9820011223", written.data["phone"])
         assertNull("the stored type is left alone", written.data["type"])
-        assertNull("and so is the city nobody retyped", written.data["city"])
+        assertNull("and so is the city, with no site typed", written.data["city"])
     }
 
     @Test
-    fun `a customer typed onto the quotation is created under the given id`() = runTest {
+    fun `declining the question writes nothing - V8C4's Cancel, leave it alone`() = runTest {
+        // Rule 7 for commit 8b: take away the question — write on a match
+        // without asking — and this fails.
+        val store = FakeStore(mutableMapOf("c_1" to sunriseDoc))
+        val writes = PartyWriteRepository(store, now = { 1_000L })
+
+        val saved = writes.save(
+            manager,
+            QuotationPartySnapshot(name = "Sunrise Constructions", phone = "9820011223"),
+            customers = listOf(sunrise),
+            confirm = no
+        )
+
+        assertEquals(SavedParty(null, PartyWriteResult.NO_CHANGE, declined = true), saved)
+        assertTrue("nothing on the wire", store.writes.isEmpty())
+        // And the person was asked, with the party and the reason named.
+        assertEquals(
+            "\u201CSunrise Constructions\u201D is already saved with the same company name.",
+            asked.single().message
+        )
+    }
+
+    @Test
+    fun `the question names matchReason's reason, GSTIN first`() = runTest {
+        val store = FakeStore(mutableMapOf("c_1" to sunriseWithGstin))
+        PartyWriteRepository(store, now = { 1_000L }).save(
+            manager,
+            QuotationPartySnapshot(name = "Sunrise Constructions", gstin = "27 AAACS 1234 F1Z5"),
+            customers = listOf(sunrise.copy(gstin = "27AAACS1234F1Z5"))
+        )
+        assertEquals(PartyMatcher.GSTIN, asked.single().reason)
+    }
+
+    @Test
+    fun `an update never renames, so a Manager's spelling correction goes through`() = runTest {
+        // V8C4's `saveParty` writes the name only on create. The `/customers`
+        // rule forbids a Manager to rename; with no rename attempted, nothing
+        // is refused. Matched here on the GSTIN alone.
+        val store = FakeStore(mutableMapOf("c_1" to sunriseWithGstin))
+        val saved = PartyWriteRepository(store, now = { 1_000L }).save(
+            manager,
+            QuotationPartySnapshot(name = "Sunrise Construction Co", gstin = "27AAACS1234F1Z5", phone = "9820011223"),
+            customers = listOf(sunrise.copy(gstin = "27AAACS1234F1Z5"))
+        )
+        assertEquals(SavedParty("c_1", PartyWriteResult.WRITTEN), saved)
+        val written = store.writes.single().data
+        assertEquals("9820011223", written["phone"])
+        assertTrue("the name is never written on an update", !written.containsKey("name"))
+    }
+
+    @Test
+    fun `a customer typed onto the quotation is created at the quotation's tier, the site as its city`() = runTest {
         val store = FakeStore()
         val writes = PartyWriteRepository(store, now = { 1_000L })
 
-        val saved = writes.saveFromQuotation(
+        val saved = writes.save(
             owner,
-            draft = PartyDraft(name = "Metro Glass", city = "Mumbai"),
+            QuotationPartySnapshot(name = "Metro Glass", site = "Mumbai"),
             customers = listOf(sunrise),
-            newId = "c_new"
+            tier = RateTierV2.DEALER
         )
         assertEquals(SavedParty("c_new", PartyWriteResult.WRITTEN), saved)
+        assertTrue("nothing to ask about a new customer", asked.isEmpty())
 
         val written = store.writes.single()
         assertEquals("c_new", written.docId)
         assertEquals("Metro Glass", written.data["name"])
+        assertEquals("Mumbai", written.data["city"])
+        // V8C4: `type: p.type || state.tier || "client"`, with `type: state.tier`.
+        assertEquals("dealer", written.data["type"])
         // A new customer has nothing underneath it, so it is written whole.
         assertEquals(false, written.merge)
     }
@@ -264,59 +342,51 @@ class PartyWriteRepositoryTest {
     fun `pressing Save twice on a new customer does not make two`() = runTest {
         val store = FakeStore()
         val writes = PartyWriteRepository(store, now = { 1_000L })
+        val form = QuotationPartySnapshot(name = "Metro Glass", site = "Mumbai")
 
-        writes.saveFromQuotation(owner, draft = draft, customers = emptyList(), newId = "c_new")
+        writes.save(owner, form, customers = emptyList())
         store.commit()
 
         // The panel holds one id for as long as one quotation is being filled
         // in, so the second press arrives with the same one and is refused
         // honestly rather than writing a twin.
-        val failure = failureOf {
-            writes.saveFromQuotation(owner, draft = draft, customers = emptyList(), newId = "c_new")
-        }
+        val failure = failureOf { writes.save(owner, form, customers = emptyList()) }
         assertEquals(PartyWrite.ALREADY_EXISTS, failure?.message)
     }
 
     @Test
     fun `a customer deleted since the list saw it writes nothing`() = runTest {
         val store = FakeStore()
-        val writes = PartyWriteRepository(store, now = { 1_000L })
-
-        val result = writes.saveFromQuotation(
+        val result = PartyWriteRepository(store, now = { 1_000L }).save(
             manager,
-            draft = PartyDraft(name = "Sunrise Constructions"),
-            customers = listOf(sunrise.copy(id = "c_gone")),
-            newId = "c_new"
+            QuotationPartySnapshot(name = "Sunrise Constructions"),
+            customers = listOf(sunrise.copy(id = "c_gone"))
         )
-
         assertEquals(SavedParty(null, PartyWriteResult.NO_CHANGE), result)
         assertTrue("nothing on the wire", store.writes.isEmpty())
     }
 
     @Test
-    fun `a customer with no name is refused before anything is written`() = runTest {
+    fun `a customer with no name is refused before anything is found, asked or written`() = runTest {
         val store = FakeStore(mutableMapOf("c_1" to sunriseDoc))
-        val writes = PartyWriteRepository(store, now = { 1_000L })
-
         val failure = failureOf {
-            writes.saveFromQuotation(
+            PartyWriteRepository(store, now = { 1_000L }).save(
                 manager,
-                draft = PartyDraft(name = "   ", phone = "9820011223"),
-                customers = listOf(sunrise),
-                newId = "c_new"
+                QuotationPartySnapshot(name = "   ", phone = "9876543210"),
+                customers = listOf(sunrise.copy(phone = "9876543210"))
             )
         }
         assertEquals(PartyWrite.NAME_REQUIRED, failure?.message)
+        assertTrue("nobody was asked", asked.isEmpty())
         assertTrue("nothing on the wire", store.writes.isEmpty())
     }
 
     @Test
     fun `a Staff account cannot save a customer from a quotation either`() = runTest {
         val store = FakeStore(mutableMapOf("c_1" to sunriseDoc))
-        val writes = PartyWriteRepository(store, now = { 1_000L })
-
         val failure = failureOf {
-            writes.saveFromQuotation(staff, draft = draft, customers = listOf(sunrise), newId = "c_new")
+            PartyWriteRepository(store, now = { 1_000L })
+                .save(staff, QuotationPartySnapshot(name = "Metro Glass"), customers = listOf(sunrise))
         }
         assertEquals(PartyWriteRepository.NOT_ALLOWED, failure?.message)
         assertTrue("nothing on the wire", store.writes.isEmpty())
@@ -325,15 +395,11 @@ class PartyWriteRepositoryTest {
     @Test
     fun `a quotation that changes nothing writes nothing`() = runTest {
         val store = FakeStore(mutableMapOf("c_1" to sunriseDoc))
-        val writes = PartyWriteRepository(store, now = { 1_000L })
-
-        val result = writes.saveFromQuotation(
+        val result = PartyWriteRepository(store, now = { 1_000L }).save(
             manager,
-            draft = PartyDraft(name = "Sunrise Constructions", city = "Mumbai"),
-            customers = listOf(sunrise),
-            newId = "c_new"
+            QuotationPartySnapshot(name = "Sunrise Constructions", site = "Mumbai"),
+            customers = listOf(sunrise)
         )
-
         assertEquals(SavedParty("c_1", PartyWriteResult.NO_CHANGE), result)
         assertTrue("nothing on the wire", store.writes.isEmpty())
     }
@@ -343,23 +409,24 @@ class PartyWriteRepositoryTest {
         // Pick Sunrise, type Metro Glass's details over the form, press Save.
         // V8C4's `saveParty` re-finds from the form and never consults the
         // held id; until N5.9a commit 8 this merged Metro Glass's phone into
-        // Sunrise. There is no held id to pass any more: Sunrise can only be
-        // written if the form itself describes Sunrise.
+        // Sunrise. There is no held id to pass any more.
         val metroDoc = mapOf("id" to "c_2", "name" to "Metro Glass", "phone" to "9822001100")
         val metro = PartyRecord(id = "c_2", name = "Metro Glass", phone = "9822001100")
-        val typedOver = PartyDraft(name = "Metro Glass", phone = "9822001100", city = "Pune")
+        val typedOver = QuotationPartySnapshot(name = "Metro Glass", phone = "9822001100", site = "Pune")
 
-        // Metro Glass is saved: it is updated, and Sunrise is untouched.
+        // Metro Glass is saved: it is updated once the person agrees, and
+        // Sunrise is untouched.
         val both = FakeStore(mutableMapOf("c_1" to sunriseDoc, "c_2" to metroDoc))
         val saved = PartyWriteRepository(both, now = { 1_000L })
-            .saveFromQuotation(manager, draft = typedOver, customers = listOf(sunrise, metro), newId = "c_new")
+            .save(manager, typedOver, customers = listOf(sunrise, metro))
         assertEquals(SavedParty("c_2", PartyWriteResult.WRITTEN), saved)
         assertEquals(listOf("c_2"), both.writes.map { it.docId })
+        assertEquals("Metro Glass", asked.single().partyName)
 
         // Metro Glass is not saved: a new customer, and Sunrise still untouched.
         val sunriseOnly = FakeStore(mutableMapOf("c_1" to sunriseDoc))
         val created = PartyWriteRepository(sunriseOnly, now = { 1_000L })
-            .saveFromQuotation(manager, draft = typedOver, customers = listOf(sunrise), newId = "c_new")
+            .save(manager, typedOver, customers = listOf(sunrise))
         assertEquals(SavedParty("c_new", PartyWriteResult.WRITTEN), created)
         assertEquals(listOf("c_new"), sunriseOnly.writes.map { it.docId })
     }
@@ -369,13 +436,13 @@ class PartyWriteRepositoryTest {
         // V8C4's `findCustomer` skips archived parties, so the form makes a
         // new customer rather than editing one somebody archived.
         val store = FakeStore(mutableMapOf("c_1" to sunriseDoc + ("archived" to true)))
-        val saved = PartyWriteRepository(store, now = { 1_000L }).saveFromQuotation(
+        val saved = PartyWriteRepository(store, now = { 1_000L }).save(
             manager,
-            draft = PartyDraft(name = "Sunrise Constructions", phone = "9820011223"),
-            customers = listOf(sunrise.copy(archived = true)),
-            newId = "c_new"
+            QuotationPartySnapshot(name = "Sunrise Constructions", phone = "9820011223"),
+            customers = listOf(sunrise.copy(archived = true))
         )
         assertEquals(SavedParty("c_new", PartyWriteResult.WRITTEN), saved)
         assertEquals(listOf("c_new"), store.writes.map { it.docId })
+        assertTrue("nothing to ask about", asked.isEmpty())
     }
 }

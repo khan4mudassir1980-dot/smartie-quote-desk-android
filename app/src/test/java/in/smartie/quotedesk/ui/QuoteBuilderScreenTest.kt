@@ -21,19 +21,21 @@ import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.RateTierV2
-import `in`.smartie.quotedesk.domain.Catalogue
-import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.AreaEntry
 import `in`.smartie.quotedesk.domain.AreaLine
-import `in`.smartie.quotedesk.domain.ManualEntry
+import `in`.smartie.quotedesk.domain.Catalogue
 import `in`.smartie.quotedesk.domain.Discount
 import `in`.smartie.quotedesk.domain.DiscountKind
 import `in`.smartie.quotedesk.domain.Installation
 import `in`.smartie.quotedesk.domain.InstallationMode
+import `in`.smartie.quotedesk.domain.ManualEntry
+import `in`.smartie.quotedesk.domain.PartyMatcher
 import `in`.smartie.quotedesk.domain.QuoteDiscount
+import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.QuoteGst
-import `in`.smartie.quotedesk.domain.QuoteMath
 import `in`.smartie.quotedesk.domain.QuoteLineEntry
+import `in`.smartie.quotedesk.domain.QuoteMath
+import `in`.smartie.quotedesk.domain.QuoteParty
 import `in`.smartie.quotedesk.domain.QuoteTier
 import `in`.smartie.quotedesk.ui.products.BACK_TO_PRODUCTS
 import `in`.smartie.quotedesk.ui.products.BUILDER_CLEAR_KEY
@@ -72,6 +74,9 @@ import `in`.smartie.quotedesk.ui.products.TOTAL_UNSET
 import `in`.smartie.quotedesk.ui.products.TRANSPORT_LABEL
 import `in`.smartie.quotedesk.ui.products.TRANSPORT_NOTE_LABEL
 import `in`.smartie.quotedesk.ui.products.BUILDER_MANUAL_ADD_KEY
+import `in`.smartie.quotedesk.ui.products.BUILDER_MERGE_LEAVE_KEY
+import `in`.smartie.quotedesk.ui.products.BUILDER_MERGE_QUESTION_KEY
+import `in`.smartie.quotedesk.ui.products.BUILDER_MERGE_UPDATE_KEY
 import `in`.smartie.quotedesk.ui.products.BUILDER_SAVE_CUSTOMER_KEY
 import `in`.smartie.quotedesk.ui.products.DESCRIPTION_LABEL
 import `in`.smartie.quotedesk.ui.products.HEIGHT_LABEL
@@ -170,6 +175,7 @@ class QuoteBuilderScreenTest {
     private val harbour = PartyRecord(id = "c_2", name = "Harbour Interiors", city = "Thane")
     private val retired = PartyRecord(id = "c_3", name = "Old Steel Works", archived = true)
     private var cleared = 0
+    private val answers = mutableListOf<Boolean>()
 
     /** A draft holding one priced line, the way a catalogue tap leaves it. */
     private fun oneLine() = QuoteDraft(id = "qd_1").add(motor, quantity = 2.0, id = "ln_1")
@@ -179,7 +185,8 @@ class QuoteBuilderScreenTest {
         open: Boolean = true,
         parties: List<PartyRecord> = listOf(sunrise, harbour, retired),
         customerFailure: String? = null,
-        discountCap: Double? = QuoteMath.NO_CAP
+        discountCap: Double? = QuoteMath.NO_CAP,
+        mergeQuestion: QuoteParty.MergeQuestion? = null
     ) {
         val view = Catalogue.build(listOf(motor, unpriced), emptyList(), emptyList(), "")
         compose.setContent {
@@ -190,6 +197,7 @@ class QuoteBuilderScreenTest {
                     draft = draft,
                     parties = parties,
                     customerFailure = customerFailure,
+                    mergeQuestion = mergeQuestion,
                     gstOf = { key -> mapOf("gate|SIE1000" to 18.0)[key] },
                     discountCap = discountCap,
                     // A different id on every call, so a test can prove the
@@ -201,6 +209,7 @@ class QuoteBuilderScreenTest {
                         onPartyChange = { typedParty = it },
                         onChooseParty = { chosen = it },
                         onSaveCustomer = { savedWith += it },
+                        onAnswerMerge = { answers += it },
                         onChangeLineQuantity = { id, delta -> changed = id to delta },
                         onRemoveLine = { removed = it },
                         onAddManual = { id, entry -> addedManual = id to entry },
@@ -483,6 +492,38 @@ class QuoteBuilderScreenTest {
         compose.onNodeWithContentDescription(SAVE_CUSTOMER).performClick()
 
         assertEquals(listOf("c_new_1", "c_new_1"), savedWith)
+    }
+
+    @Test
+    fun `before updating a saved party the builder asks, naming it and why`() {
+        // V8C4's `#qSaveParty` confirmation, in its words. The answer goes
+        // back to the view model, which holds the save until it arrives.
+        render(oneLine(), mergeQuestion = QuoteParty.MergeQuestion("Sunrise Constructions", PartyMatcher.GSTIN))
+
+        scrollTo(BUILDER_MERGE_QUESTION_KEY)
+        compose.onNodeWithText("\u201CSunrise Constructions\u201D is already saved with the same GSTIN.")
+            .assertExists()
+
+        scrollTo(BUILDER_MERGE_LEAVE_KEY)
+        compose.onNodeWithContentDescription(QuoteParty.LEAVE_IT_ALONE).performClick()
+        scrollTo(BUILDER_MERGE_UPDATE_KEY)
+        compose.onNodeWithContentDescription(QuoteParty.UPDATE_THAT_PARTY).performClick()
+
+        assertEquals(listOf(false, true), answers)
+    }
+
+    @Test
+    fun `with no question pending, nothing is asked`() {
+        render(oneLine())
+        // The witness is the Save control itself, the item the question
+        // would sit directly under, so it is composed where the question
+        // would be.
+        scrollTo(BUILDER_SAVE_CUSTOMER_KEY)
+        compose.onNodeWithContentDescription(SAVE_CUSTOMER).assertExists()
+        assertEquals(
+            0,
+            compose.onAllNodesWithContentDescription(QuoteParty.LEAVE_IT_ALONE).fetchSemanticsNodes().size
+        )
     }
 
     @Test

@@ -2,19 +2,18 @@ package `in`.smartie.quotedesk.domain
 
 import `in`.smartie.quotedesk.data.model.PartyRecord
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Catching the customer somebody is about to enter for a second time.
+ * The one rule for "the same party" — V8C4's `sameParty`, `findCustomer` and
+ * `matchReason`, as the Owner read them (2026-09-26).
  *
- * V8C4 tries three things **in this order** and the order carries meaning: a
- * GSTIN is a registration and identifies a firm outright; a phone is nearly as
- * good; a name is the weakest, because two genuinely different firms can share
- * one. Reporting *which* test fired is what lets the warning justify itself,
- * and a warning that cannot justify itself gets dismissed.
+ * **Until N5.9a commit 8b this file pinned N5.5's own rule** — field priority
+ * across the list, phones matched by suffix, archived parties flagged. Each of
+ * those was stricter or different from the PWA, and the Owner ruled that the
+ * Parties screen follows V8C4: so the tests that pinned them now pin the
+ * opposite, and say so.
  */
 class PartyDuplicatesTest {
 
@@ -28,62 +27,61 @@ class PartyDuplicatesTest {
     private val harbour = party("c_2", name = "Harbour Interiors", phone = "9820011223")
     private val parties = listOf(sunrise, harbour)
 
-    @Test
-    fun `a GSTIN is the strongest match, and is tried first`() {
-        // Everything else differs; the registration is the same firm.
-        val draft = PartyDraft(name = "Totally Different Ltd", gstin = "27AAACS1234F1Z5")
-        val match = PartyDuplicates.find(parties, draft)
+    // --- norm and digits, exactly ------------------------------------------------------
 
+    @Test
+    fun `norm strips every character that is not a letter or a digit`() {
+        // The Owner's three examples. `3d`'s port — trim, lower case, single
+        // spaces — kept all of this and matched strictly fewer pairs.
+        assertEquals(PartyDuplicates.norm("M s Sunrise Ent"), PartyDuplicates.norm("M/s Sunrise Ent."))
+        assertEquals(PartyDuplicates.norm("Sunrise Enterprises"), PartyDuplicates.norm("Sunrise Enterprises."))
+        assertEquals(PartyDuplicates.norm("27AABCU9603R1ZM"), PartyDuplicates.norm("27 AABCU 9603 R1ZM"))
+        assertEquals("abc123", PartyDuplicates.norm(" A-b&C / 1.2_3 "))
+    }
+
+    @Test
+    fun `digits keeps ASCII digits only, compared whole`() {
+        assertEquals("919876543210", PartyDuplicates.digits("+91 98765-43210"))
+        assertEquals("", PartyDuplicates.digits("n/a"))
+    }
+
+    @Test
+    fun `a GSTIN typed with spaces is the same registration`() {
+        val draft = PartyDraft(name = "Totally Different Ltd", gstin = "27 aaacs 1234 f1z5")
+        val match = PartyDuplicates.find(parties, draft)
         assertEquals("c_1", match?.party?.id)
         assertEquals(PartyMatcher.GSTIN, match?.on)
     }
 
     @Test
-    fun `and it is matched past the case and spacing people type`() {
-        val draft = PartyDraft(name = "X", gstin = " 27aaacs1234f1z5 ")
-        assertEquals(PartyMatcher.GSTIN, PartyDuplicates.find(parties, draft)?.on)
+    fun `a company name matches past its punctuation`() {
+        val ms = party("c_3", name = "M/s Sunrise Ent.")
+        val match = PartyDuplicates.find(listOf(ms), PartyDraft(name = "M s Sunrise Ent"))
+        assertEquals("c_3", match?.party?.id)
+        assertEquals(PartyMatcher.NAME, match?.on)
     }
 
-    @Test
-    fun `a phone is next, on its digits alone`() {
-        val draft = PartyDraft(name = "Totally Different Ltd", phone = "+91 98765 43210")
-        val match = PartyDuplicates.find(parties, draft)
+    // --- the phone ---------------------------------------------------------------------
 
+    @Test
+    fun `a phone matches on its full digits`() {
+        val draft = PartyDraft(name = "Totally Different Ltd", phone = "98765 43210")
+        val match = PartyDuplicates.find(parties, draft)
         assertEquals("c_1", match?.party?.id)
         assertEquals(PartyMatcher.PHONE, match?.on)
     }
 
     @Test
-    fun `a country code in front of a number is the same line, not a second customer`() {
-        // The N5.3 search bug in its second home, and it reached CI because
-        // this file tested the *matcher order* and left the comparison itself
-        // to an `==` between digit strings. A number pasted out of a phone's
-        // contacts carries its country code; the same number typed by hand
-        // does not.
-        assertTrue(PartyDuplicates.sameLine("919876543210", "9876543210"))
-        assertTrue(
-            "and the same either way round",
-            PartyDuplicates.sameLine("9876543210", "919876543210")
-        )
-        assertTrue(PartyDuplicates.sameLine("2266554", "2266554"))
-
-        // Below the floor on either side identifies nobody.
-        assertFalse(PartyDuplicates.sameLine("543210", "9876543210"))
-        assertFalse(PartyDuplicates.sameLine("9876543210", "543210"))
-
-        // And two unrelated numbers stay unrelated.
-        assertFalse(PartyDuplicates.sameLine("9820011223", "9876543210"))
+    fun `a country code in front of a number is NOT the same line - as in V8C4`() {
+        // N5.5 matched this by suffix; V8C4 compares the full digit strings
+        // and accepted the miss. The Owner ruled the Parties screen follows
+        // V8C4, so this pins the opposite of what it used to.
+        assertNull(PartyDuplicates.find(parties, PartyDraft(name = "X", phone = "+91 98765 43210")))
     }
 
     @Test
-    fun `but a fragment of a number identifies nobody`() {
-        // Six digits is an extension or a typo. Offering to open an unrelated
-        // customer on that basis is worse than saying nothing.
-        val draft = PartyDraft(name = "Totally Different Ltd", phone = "543210")
-        assertNull(PartyDuplicates.find(parties, draft))
-
-        // Seven is the floor, and a party whose whole number is seven digits
-        // is matched by it.
+    fun `a fragment of a number identifies nobody, and seven digits is the floor`() {
+        assertNull(PartyDuplicates.find(parties, PartyDraft(name = "X", phone = "543210")))
         val short = party("c_3", name = "Local Shop", phone = "2266554")
         assertEquals(
             PartyMatcher.PHONE,
@@ -91,62 +89,57 @@ class PartyDuplicatesTest {
         )
     }
 
-    @Test
-    fun `a name is the last thing tried, and the weakest`() {
-        val draft = PartyDraft(name = "  harbour   interiors  ")
-        val match = PartyDuplicates.find(parties, draft)
-
-        assertEquals("c_2", match?.party?.id)
-        assertEquals(PartyMatcher.NAME, match?.on)
-    }
+    // --- which match, and why ----------------------------------------------------------
 
     @Test
-    fun `the strongest match that fires is the one reported`() {
-        // The draft matches Harbour by name and Sunrise by GSTIN. GSTIN wins,
-        // because that is the order, and the reported party changes with it.
+    fun `the first match in list order wins - not the strongest field`() {
+        // The draft is Harbour by name and Sunrise by GSTIN. V8C4's
+        // `findCustomer` is a plain `.find()`, so the first party in the list
+        // that is the same party at all is the one — and `matchReason` then
+        // says why for that party. N5.5 took the GSTIN match wherever it was.
         val draft = PartyDraft(name = "Harbour Interiors", gstin = "27AAACS1234F1Z5")
-        val match = PartyDuplicates.find(parties, draft)
 
-        assertEquals("c_1", match?.party?.id)
-        assertEquals(PartyMatcher.GSTIN, match?.on)
+        val harbourFirst = PartyDuplicates.find(listOf(harbour, sunrise), draft)
+        assertEquals("c_2", harbourFirst?.party?.id)
+        assertEquals(PartyMatcher.NAME, harbourFirst?.on)
+
+        val sunriseFirst = PartyDuplicates.find(listOf(sunrise, harbour), draft)
+        assertEquals("c_1", sunriseFirst?.party?.id)
+        assertEquals(PartyMatcher.GSTIN, sunriseFirst?.on)
     }
 
     @Test
-    fun `a genuinely new party matches nothing`() {
-        val draft = PartyDraft(
-            name = "Metro Glass", gstin = "27AAACM9999F1Z9", phone = "9000000000"
+    fun `the reason is matchReason's, in its order and its words`() {
+        // Sunrise matches on all three; the GSTIN is named.
+        assertEquals(PartyMatcher.GSTIN, PartyDuplicates.find(parties, PartyWrite.draftOf(sunrise))?.on)
+        assertEquals("the same GSTIN", PartyMatcher.GSTIN.label)
+        assertEquals("the same phone number", PartyMatcher.PHONE.label)
+        assertEquals("the same company name", PartyMatcher.NAME.label)
+    }
+
+    @Test
+    fun `a genuinely new party matches nothing, and empty fields are never a match`() {
+        assertNull(
+            PartyDuplicates.find(parties, PartyDraft(name = "Metro Glass", gstin = "27AAACM9999F1Z9", phone = "9000000000"))
         )
-        assertNull(PartyDuplicates.find(parties, draft))
-    }
-
-    @Test
-    fun `an empty field is not a match, however many parties have one`() {
-        // Two parties with no GSTIN must not be duplicates of each other.
         val blanks = listOf(party("c_a", name = "Alpha"), party("c_b", name = "Beta"))
         assertNull(PartyDuplicates.find(blanks, PartyDraft(name = "Gamma")))
-        assertNull(PartyDuplicates.find(blanks, PartyDraft(name = "Gamma", gstin = "  ")))
+        assertNull(PartyDuplicates.find(blanks, PartyDraft(name = "Gamma", gstin = " - ")))
         assertNull(PartyDuplicates.find(blanks, PartyDraft(name = "Gamma", phone = "   ")))
     }
 
     @Test
-    fun `an archived party still counts as a duplicate`() {
-        // Re-entering a customer archived last year is exactly the mistake
-        // this exists to catch, and silence would let it through.
+    fun `an archived party is NOT flagged - as in V8C4`() {
+        // N5.5 flagged it; V8C4's `findCustomer` skips archived parties.
         val old = party("c_old", name = "Old Client Pvt Ltd", archived = true)
-        val match = PartyDuplicates.find(listOf(old), PartyDraft(name = "Old Client Pvt Ltd"))
-
-        assertEquals("c_old", match?.party?.id)
+        assertNull(PartyDuplicates.find(listOf(old), PartyDraft(name = "Old Client Pvt Ltd")))
     }
 
     @Test
-    fun `a party being edited never matches itself`() {
-        // Without this, saving a party unchanged would warn that it duplicates
-        // itself, every single time.
-        assertNull(
-            PartyDuplicates.find(parties, PartyWrite.draftOf(sunrise), ignoring = sunrise.id)
-        )
-        // And it still catches a genuine clash with somebody else.
-        val clash = PartyWrite.draftOf(sunrise).copy(phone = harbour.phone, gstin = "")
+    fun `a party being edited never matches itself - which is what exceptId is for`() {
+        // V8C4's Edit party calls `findCustomer(v, c.id)`.
+        assertNull(PartyDuplicates.find(parties, PartyWrite.draftOf(sunrise), ignoring = sunrise.id))
+        val clash = PartyWrite.draftOf(sunrise).copy(name = "Renamed", phone = harbour.phone, gstin = "")
         assertEquals("c_2", PartyDuplicates.find(parties, clash, ignoring = sunrise.id)?.party?.id)
     }
 }

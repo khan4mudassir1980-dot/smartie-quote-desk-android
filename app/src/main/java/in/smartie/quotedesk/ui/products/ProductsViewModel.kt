@@ -276,16 +276,19 @@ class ProductsViewModel(
     fun mintPartyId(): String = Keys.generateId(PartyWrite.ID_PREFIX)
 
     /**
-     * "Save this customer": merge into the saved customer **the form's own
-     * details** describe, or create a new one — V8C4's `saveParty`. The
-     * customer picked earlier is not consulted: a form typed over it describes
-     * somebody else, and writing into the picked record is how one firm's
-     * details ended up on another (fixed in N5.9a commit 8).
+     * "Save this customer" — V8C4's `#qSaveParty`: a name first, then the
+     * saved customer **the form's own details** describe is found, and if
+     * there is one **the person is asked** before it is updated
+     * ([mergeQuestion], answered through [answerMerge]); otherwise a new one is
+     * created at the quotation's tier. The customer picked earlier is not
+     * consulted — a form typed over it describes somebody else.
      *
      * [customers] is the list the screen holds, which is what V8C4's
      * `findCustomer` searches. Afterwards the draft **adopts** whichever
-     * customer the form was saved as, found or created, so the screen shows
-     * the link; finalise re-derives it from the form regardless.
+     * customer the form was saved as, found or created — V8C4's
+     * `state.partyId = c.id; saveDraft()`; finalise re-derives the link from
+     * the form regardless. Declined, nothing is written and nothing is said,
+     * as V8C4's Cancel returns.
      */
     fun saveCustomer(newId: String, customers: List<PartyRecord>) {
         val draft = _draft.value
@@ -300,18 +303,22 @@ class ProductsViewModel(
             runCatching {
                 container.partyWriteRepository.saveFromQuotation(
                     member = member,
-                    draft = party,
+                    form = draft.party,
+                    tier = draft.tier,
                     customers = customers,
-                    newId = newId
+                    newId = newId,
+                    confirmUpdate = ::askMerge
                 )
             }.onSuccess { saved ->
-                saved.id?.takeIf { it != _draft.value.partyId }?.let { id ->
-                    persist(_draft.value.copy(partyId = id))
+                if (!saved.declined) {
+                    saved.id?.takeIf { it != _draft.value.partyId }?.let { id ->
+                        persist(_draft.value.copy(partyId = id))
+                    }
+                    emit(
+                        if (saved.result == PartyWriteResult.WRITTEN) CUSTOMER_SAVED
+                        else CUSTOMER_UNCHANGED
+                    )
                 }
-                emit(
-                    if (saved.result == PartyWriteResult.WRITTEN) CUSTOMER_SAVED
-                    else CUSTOMER_UNCHANGED
-                )
             }.onFailure { failure ->
                 val refusal = (failure as? IllegalStateException)?.message
                 if (refusal != null) _partyFailure.value = refusal else report(failure)
@@ -319,6 +326,32 @@ class ProductsViewModel(
             _savingParty.value = false
         }
     }
+
+    /**
+     * V8C4's `confirmAction` before updating a saved party: the question is
+     * published and the save waits — with the Save control still busy — until
+     * [answerMerge] is called.
+     */
+    private suspend fun askMerge(question: QuoteParty.MergeQuestion): Boolean {
+        val answer = CompletableDeferred<Boolean>()
+        mergeAnswer = answer
+        _mergeQuestion.value = question
+        return try {
+            answer.await()
+        } finally {
+            _mergeQuestion.value = null
+            mergeAnswer = null
+        }
+    }
+
+    /** The person's answer to [mergeQuestion]: update that party, or leave it alone. */
+    fun answerMerge(update: Boolean) {
+        mergeAnswer?.complete(update)
+    }
+
+    private var mergeAnswer: CompletableDeferred<Boolean>? = null
+    private val _mergeQuestion = MutableStateFlow<QuoteParty.MergeQuestion?>(null)
+    val mergeQuestion: StateFlow<QuoteParty.MergeQuestion?> = _mergeQuestion.asStateFlow()
 
     // --- GST and transport (N5.8b) ------------------------------------------
 

@@ -44,6 +44,7 @@ import `in`.smartie.quotedesk.domain.QuoteDiscount
 import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.QuoteGst
 import `in`.smartie.quotedesk.domain.QuoteLineEntry
+import `in`.smartie.quotedesk.domain.QuoteParty
 import `in`.smartie.quotedesk.domain.QuoteTier
 import `in`.smartie.quotedesk.ui.components.CompactStepper
 import `in`.smartie.quotedesk.ui.components.EmptyState
@@ -101,6 +102,10 @@ internal fun QuoteBuilderPanel(
     onSaveCustomer: (String) -> Unit = {},
     savingCustomer: Boolean = false,
     customerFailure: String? = null,
+    /** V8C4's question before "Save this customer" updates a saved party. */
+    mergeQuestion: QuoteParty.MergeQuestion? = null,
+    /** The answer to [mergeQuestion]: true to update that party. */
+    onAnswerMerge: (Boolean) -> Unit = {},
     /** Minted once, and reused on a retry. See `ProductsViewModel.mintPartyId`. */
     newPartyId: () -> String = { "" },
     onAddManual: (String, ManualEntry) -> Unit = { _, _ -> },
@@ -293,6 +298,33 @@ internal fun QuoteBuilderPanel(
                     .semantics { contentDescription = SAVE_CUSTOMER }
                     .fillMaxWidth()
             )
+        }
+
+        // V8C4 asks before it updates a party that is already saved, naming
+        // the party and why it matched. The save waits here, with the control
+        // above still busy, until one of these is pressed.
+        if (mergeQuestion != null) {
+            item(key = BUILDER_MERGE_QUESTION_KEY) {
+                Text(mergeQuestion.message, style = MaterialTheme.typography.bodyMedium)
+            }
+            item(key = BUILDER_MERGE_UPDATE_KEY) {
+                SmartieGhostButton(
+                    text = QuoteParty.UPDATE_THAT_PARTY,
+                    onClick = { onAnswerMerge(true) },
+                    modifier = Modifier
+                        .semantics { contentDescription = QuoteParty.UPDATE_THAT_PARTY }
+                        .fillMaxWidth()
+                )
+            }
+            item(key = BUILDER_MERGE_LEAVE_KEY) {
+                SmartieGhostButton(
+                    text = QuoteParty.LEAVE_IT_ALONE,
+                    onClick = { onAnswerMerge(false) },
+                    modifier = Modifier
+                        .semantics { contentDescription = QuoteParty.LEAVE_IT_ALONE }
+                        .fillMaxWidth()
+                )
+            }
         }
 
         if (draft.isEmpty) {
@@ -1218,6 +1250,9 @@ internal const val BUILDER_TIER_KEY = "builder-tier"
 internal const val BUILDER_PICK_PARTY_KEY = "builder-pick-party"
 internal const val BUILDER_PARTY_SEARCH_KEY = "builder-party-search"
 internal const val BUILDER_NO_PARTIES_KEY = "builder-no-parties"
+internal const val BUILDER_MERGE_QUESTION_KEY = "builder-merge-question"
+internal const val BUILDER_MERGE_UPDATE_KEY = "builder-merge-update"
+internal const val BUILDER_MERGE_LEAVE_KEY = "builder-merge-leave"
 internal const val BUILDER_SAVE_CUSTOMER_KEY = "builder-save-customer"
 internal const val BUILDER_CUSTOMER_FAILURE_KEY = "builder-customer-failure"
 internal const val BUILDER_ADD_MANUAL_KEY = "builder-add-manual"

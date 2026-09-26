@@ -2045,6 +2045,59 @@ order, removing the finalised draft rather than clearing it, the visibly
 busy "taking a number" control, what to pass for `snap` until N6, and a
 vanished customer losing only its link.
 
+### What N5.9a commit 8b did with those answers
+
+- **One rule.** `PartyDuplicates` holds V8C4's `norm`, `digits`, `sameParty`,
+  `findCustomer` and `matchReason`, and nothing else decides "the same
+  party": the quotation's link, "Save this customer" and the Parties
+  screen's duplicate warning all come through it. N5.5's rule — field
+  priority, suffix phones, archived parties flagged — is gone, and its tests
+  now pin V8C4's behaviour instead, each saying which way it changed.
+- **`norm` exact** — every non-alphanumeric stripped, so "M/s Sunrise Ent."
+  is "M s Sunrise Ent" and a GSTIN typed with spaces matches. **`digits`
+  confirmed full-string equality**, ASCII digits only, never a suffix.
+- **No rename on update.** `PartyWrite.mergeInto` is V8C4's update branch:
+  site → city, then GSTIN, contact, phone, email and address when given;
+  never the name, no longer the notes. The recorded Manager-rename exposure
+  is **closed**: no rename is attempted, so none is refused.
+- **The confirmation.** `saveFromQuotation` asks before writing into a found
+  party — "“X” is already saved with the same GSTIN / phone number / company
+  name." — with V8C4's two answers, "Update that party with these details"
+  and "Leave it alone"; the builder shows it while Save stays busy. **Rule 7,
+  measured:** with the question removed, three tests fail, first among them
+  `declining the question writes nothing`.
+- **New customers take the quotation's tier as their type**, as V8C4's
+  caller passes `type: state.tier`.
+
+**4b, the validation order — answered NO in part.** Ours checks the name
+first and then finds, as V8C4 does; but **there is no GSTIN, phone or email
+validation anywhere in this app**, so V8C4's middle step — `gstinProblem`,
+`phoneProblem`, `emailProblem` — has no counterpart. Their text is not in
+this repository; porting them needs it.
+
+**THREE THINGS LEFT OPEN FOR THE OWNER:**
+
+1. **The type on update.** V8C4's update branch sets `c.type = p.type`, and
+   its caller passes the quotation's tier, so saving always sets the type to
+   the tier. This app **cannot quote at the contractor tier**, so doing the
+   same would turn every contractor saved from a native quotation into a
+   dealer or a client — which is why N5.8b made `mergeInto` never demote
+   one. 8b keeps the type untouched on an update, and says so in the KDoc.
+   Match V8C4 regardless, or keep the difference?
+2. **The Parties screen's own flows are not V8C4's.** 8b switched the rule
+   only. V8C4's Add party confirms and on OK overwrites the duplicate whole,
+   name included (`Object.assign(dup, v, …)`); ours warns once, offers to
+   open the existing party, and creates a second on the next press. V8C4's
+   Edit party checks `findCustomer(v, c.id)`; ours does not check on edit at
+   all. Per the Owner, each path is to match its own V8C4 counterpart, not
+   be harmonised — that is a change to N5.5's screen, not made unasked.
+3. **The validators** named above.
+
+**A consequence to know:** the builder's **Site** box now also becomes the
+customer's city when "Save this customer" is pressed with a site typed, as
+V8C4's `if(p.site) c.city=p.site`. Picking a customer does not fill the site
+from the city.
+
 ### Owed in N6: the financial-year guard, and the year-turn prompt — a REQUIREMENT
 
 Recorded 2026-09-25 at the Owner's instruction, as a requirement and not a

@@ -67,14 +67,39 @@ class QuotePartyTest {
     }
 
     @Test
-    fun `the site never goes back onto the customer`() {
-        val onScreen = QuoteParty.snapshotOf(sunrise).copy(site = "Bhiwandi godown")
+    fun `the form's site becomes the customer's city, as V8C4's saveParty maps it`() {
+        // `if(p.site) c.city=p.site` (the Owner's reading, 2026-09-26). Until
+        // N5.9a commit 8b this test pinned the opposite — that the site never
+        // went back onto a customer — and V8C4 is the authority.
+        val onScreen = QuoteParty.snapshotOf(sunrise).copy(site = "Bhiwandi")
         val back = QuoteParty.draftOf(onScreen)
 
         assertEquals("Sunrise Constructions", back.name)
         assertEquals("14 Marine Lines", back.address)
-        // There is nowhere for it to go, and `PartyDraft` has no such field.
-        assertEquals("Mumbai", back.city)
+        assertEquals("Bhiwandi", back.city)
+
+        // An empty site is silence: the stored city is left as it is.
+        val silent = QuoteParty.draftOf(QuoteParty.snapshotOf(sunrise))
+        assertEquals("", silent.city)
+        assertEquals(PartyPlan.NoChange, PartyWrite.mergeInto(sunrise, silent, PartyAuthor("Owner", "u_1"), 100L))
+    }
+
+    @Test
+    fun `saving from a quotation never renames a saved customer`() {
+        // V8C4's `saveParty` update branch copies gstin, contact, phone,
+        // email and address — never the name, which is written only when a
+        // record is created. So a Manager correcting a spelling is never
+        // refused for a rename, because none is attempted.
+        val corrected = QuoteParty.snapshotOf(sunrise).copy(name = "Sunrise Construction Co", phone = "9820011223")
+        val write = PartyWrite.mergeInto(
+            sunrise,
+            QuoteParty.draftOf(corrected),
+            PartyAuthor(name = "Manager", uid = "u_m"),
+            at = 100L
+        ) as PartyPlan.Write
+        assertEquals("9820011223", write.data["phone"])
+        assertFalse(write.data.containsKey("name"))
+        assertFalse(write.data.containsKey("notes"))
     }
 
     @Test

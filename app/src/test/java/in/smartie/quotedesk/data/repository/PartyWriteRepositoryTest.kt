@@ -6,6 +6,7 @@ import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.PartyDraft
+import `in`.smartie.quotedesk.domain.PartyFormat
 import `in`.smartie.quotedesk.domain.PartyMatcher
 import `in`.smartie.quotedesk.domain.PartyWrite
 import `in`.smartie.quotedesk.domain.QuoteParty
@@ -291,11 +292,63 @@ class PartyWriteRepositoryTest {
         val store = FakeStore(mutableMapOf("c_1" to sunriseWithGstin))
         PartyWriteRepository(store, now = { 1_000L }).save(
             manager,
-            QuotationPartySnapshot(name = "Sunrise Constructions", gstin = "27 AAACS 1234 F1Z5"),
+            // Lower case, which `norm` forgives and the validator upper-cases.
+            // Until N5.9b commit 4c this was typed with spaces inside; V8C4's
+            // `gstinProblem` refuses that by length before the find, and so
+            // does this app now — see the test below.
+            QuotationPartySnapshot(name = "Sunrise Constructions", gstin = "27aaacs1234f1z5"),
             customers = listOf(sunrise.copy(gstin = "27AAACS1234F1Z5"))
         )
         assertEquals(PartyMatcher.GSTIN, asked.single().reason)
     }
+
+    // --- the formats, between the name and the find (N5.9b commit 4c) --------------------
+
+    @Test
+    fun `a malformed GSTIN, phone or email is refused bare, before anything is found, asked or written`() =
+        runTest {
+            val cases = listOf(
+                QuotationPartySnapshot(name = "Sunrise Constructions", gstin = "27 AAACS 1234 F1Z5") to
+                    PartyFormat.GSTIN_LENGTH,
+                QuotationPartySnapshot(name = "Sunrise Constructions", phone = "98200") to
+                    PartyFormat.PHONE_TOO_SHORT,
+                QuotationPartySnapshot(name = "Sunrise Constructions", email = "sales@sunrise") to
+                    PartyFormat.EMAIL_SHAPE
+            )
+            for ((form, problem) in cases) {
+                val store = FakeStore(mutableMapOf("c_1" to sunriseWithGstin))
+                val failure = failureOf {
+                    // The name matches Sunrise, so without the check the
+                    // question would be asked and a write would follow.
+                    PartyWriteRepository(store, now = { 1_000L })
+                        .save(manager, form, customers = listOf(sunrise.copy(gstin = "27AAACS1234F1Z5")))
+                }
+                // Bare, as V8C4's toast(bad): no "Client GSTIN: " prefix here.
+                assertEquals(problem, failure?.message)
+                assertTrue("nobody was asked about ${form}", asked.isEmpty())
+                assertTrue("nothing on the wire for ${form}", store.writes.isEmpty())
+            }
+        }
+
+    @Test
+    fun `the GSTIN is checked before the phone, the phone before the email, and the name before all three`() =
+        runTest {
+            val store = FakeStore(mutableMapOf("c_1" to sunriseDoc))
+            val allWrong = QuotationPartySnapshot(
+                name = "Sunrise Constructions", gstin = "27ABC", phone = "98200", email = "x"
+            )
+            val writes = PartyWriteRepository(store, now = { 1_000L })
+
+            assertEquals(PartyFormat.GSTIN_LENGTH, failureOf { writes.save(manager, allWrong, listOf(sunrise)) }?.message)
+            assertEquals(
+                PartyFormat.PHONE_TOO_SHORT,
+                failureOf { writes.save(manager, allWrong.copy(gstin = ""), listOf(sunrise)) }?.message
+            )
+            assertEquals(
+                PartyWrite.NAME_REQUIRED,
+                failureOf { writes.save(manager, allWrong.copy(name = ""), listOf(sunrise)) }?.message
+            )
+        }
 
     @Test
     fun `an update never renames, so a Manager's spelling correction goes through`() = runTest {

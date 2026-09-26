@@ -9,6 +9,7 @@ import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.PartyAuthor
 import `in`.smartie.quotedesk.domain.PartyDraft
 import `in`.smartie.quotedesk.domain.PartyDuplicates
+import `in`.smartie.quotedesk.domain.PartyFormat
 import `in`.smartie.quotedesk.domain.PartyPlan
 import `in`.smartie.quotedesk.domain.PartyWrite
 import `in`.smartie.quotedesk.domain.Permissions
@@ -123,10 +124,15 @@ class PartyWriteRepository(
      * (8011-8022) and `saveParty` (6404), as the Owner read them.
      *
      * 1. **A name first** — nothing is found or written without one.
-     * 2. *(V8C4 then validates the GSTIN, phone and email —
-     *    `gstinProblem`, `phoneProblem`, `emailProblem`. This app has no
-     *    such validators yet and their text is not in this repository;
-     *    recorded in `docs/PROJECT-STATUS.md`.)*
+     * 2. **Then the formats** — V8C4's `gstinProblem(p.gstin) ||
+     *    phoneProblem(p.phone) || emailProblem(p.email)`, `PartyFormat` here,
+     *    the first problem shown **bare**, as `#qSaveParty`'s `toast(bad)`
+     *    shows it (the finalise gate prefixes "Client GSTIN: "; this does
+     *    not). Blank passes all three. Since N5.9b commit 4c; until then
+     *    this step was empty because the text was not in the repository.
+     *    A GSTIN typed with spaces inside is refused here by length, as in
+     *    V8C4 — `norm` forgives the spaces when matching, the validator does
+     *    not when saving.
      * 3. **The customer is re-found from the form's own details** —
      *    [PartyDuplicates.matchFor] over the list the screen holds, V8C4's
      *    `findCustomer` with its `matchReason`. The customer picked earlier is
@@ -161,6 +167,10 @@ class PartyWriteRepository(
         require(Permissions.canUseParties(member)) { NOT_ALLOWED }
         val draft = QuoteParty.draftOf(form)
         draft.refusal()?.let { throw IllegalStateException(it) }
+        val badFormat = PartyFormat.gstinProblem(form.gstin)
+            ?: PartyFormat.phoneProblem(form.phone)
+            ?: PartyFormat.emailProblem(form.email)
+        badFormat?.let { throw IllegalStateException(it) }
 
         val match = PartyDuplicates.matchFor(form, customers)
             ?: return SavedParty(newId, create(member, draft.copy(type = tier.wireValue), newId))

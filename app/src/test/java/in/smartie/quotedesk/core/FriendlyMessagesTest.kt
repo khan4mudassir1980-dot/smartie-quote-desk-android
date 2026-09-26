@@ -28,6 +28,16 @@ class FriendlyMessagesTest {
     }
 
     @Test
+    fun `the finalise gate's timeout says what a timed-out transaction says`() {
+        // `QuoteFinaliser` keeps its own copy because it must stay pure; this
+        // keeps the two equal.
+        assertEquals(
+            FriendlyMessages.forCode("deadline-exceeded"),
+            `in`.smartie.quotedesk.ui.products.QuoteFinaliser.TIMED_OUT
+        )
+    }
+
+    @Test
     fun `a collision explains how to link the two sign-in methods`() {
         val message = FriendlyMessages.forCode("auth/account-exists-with-different-credential")
         assertTrue(message.contains("password"))

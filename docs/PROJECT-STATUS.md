@@ -1361,31 +1361,54 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**Plan N5.9b — the Finalise control. Plan only; no code until the Owner
-approves it.**
+**Build N5.9b, the Finalise gate and its first caller, as the Owner approved
+it on 2026-09-26 — in order, CI green at each head before the next. Next:
+commit 1.**
 
-N5.9a is complete and CI-verified at `369c68d` (run #192), commit 8b
-included: finalise works as a repository call —
-`QuotationWriteRepository.finalise` — and nothing in the app calls it yet. 9b is the control that does, and its plan must carry what
-N5.9a left for it, all recorded in this file:
+Every ruling the plan rests on is in "The Owner's answers on the 9b plan,
+2026-09-26" below. The commits:
 
-- **V8C4's messaging and success order** — "V8C4's `fbFinaliseAtomic`,
-  re-read 2026-09-25", item 4: the offline check before anything is built,
-  "Not finalised — … Your quotation is untouched", and number → clear the
-  draft id → upsert → clear the draft → "Finalised as …", tolerant of the
-  listener having got there first.
-- **Remove the finalised draft; never `clearDraft()` it** — the id survives
-  a clear, and the next quotation would be answered with the previous
-  number. Remove only on `Issued` or `AlreadyIssued`.
-- **The control disables on the first press and is visibly busy**, saying it
-  is taking a number, for up to the 2.25-3.0 s a non-contention refusal takes
-  — not a dead button.
-- **`snap{}`** stays the caller's to supply; until N6 there is nothing to put
-  in it, and 9b must say what it passes meanwhile.
-- **Phone row T-Q1** is the only exercise the real Firestore store gets.
+0. These docs — done when this lands.
+1. **`snap` absent until N6** — `QuotationWrite.plan` takes a nullable
+   `snap` and writes no key for null; 9b passes null. The Node mirror stops
+   writing `snap: {}`; an emulator case pins that the rule accepts a
+   quotation without it.
+2. **`QuoteDrafts.retire(finalisedId, freshId)`**, pure, and
+   `AccountPreferences.retireDraft` in one `store.edit` — never
+   `clearDraft()`, whose kept id would answer the next quotation with the
+   previous number. A test pins the difference.
+3. **`DraftWrites`** — the id the view model saves under, behind one lock,
+   able to move when a draft is retired; `persist` moved onto it with no
+   behaviour change. Without it every save after a retire lands on the
+   finalised id (`draftId` is a `CompletableDeferred`, completed once), and a
+   save in flight can write the finalised draft back.
+4a. **Domain** — `refusal(cap: Double?)` owning the unconfigured cap (`plan`'s
+   pre-check removed, pinned by the one-transaction test); a line rate below
+   zero or not finite refused; `NO_LINES` in V8C4's words; `PartyFormat`
+   (the three validators).
+4b. **The gate** — `QuoteFinaliser.ensureFinalised`: `refusal()` → the ₹0
+   question → client GSTIN → client phone → offline (a courtesy) → finalise
+   capped at 30 s → retire → "Finalised as X". Failures read "Not finalised —
+   … Your quotation is untouched.", with "Press Finalise again — if a number
+   was taken, the same one comes back." only where a number may have been
+   taken. Through the real repository: finalise, retire, next quotation,
+   finalise — the second takes the next number.
+4c. **"Save this customer" gets its validators**, shown bare, between the
+   name and the find — a change to shipped behaviour, in its own commit.
+5. **Wiring** — `AppContainer.quotationWriteRepository`; the view model's
+   gate state, failure, the ₹0 question, eager `online`, retire through
+   `DraftWrites`, edits refused while the gate is open.
+6. **The button** — "Finalise", `canQuote` only, busy with "Taking a
+   number…"; the question below it; "Save this customer" and Finalise
+   exclusive; `key(draft.id)` so each quotation starts with fresh panel state
+   (a reused minted party id would be refused as `ALREADY_EXISTS`); the tail
+   line becomes "Finalising takes the next number from the shared counter,
+   and needs an internet connection."
+7. **Docs** — phone rows beside T-Q1, `N5-plan.md`, and this file after CI.
 
-The saved-customer recovery message the Owner once asked for is
-**withdrawn** — a missing customer no longer refuses finalise.
+**Rule 7, by ablation, each tied to its commit:** retire → `clear()`; the
+in-flight guard; the offline check; `DraftWrites` bypassed; `key(draft.id)`;
+the ₹0 question; the 30 s cap; the cap case removed from `refusal()`.
 
 ### N5.9a so far — every commit CI-verified
 
@@ -2101,12 +2124,242 @@ this repository; porting them needs it.
    Edit party checks `findCustomer(v, c.id)`; ours does not check on edit at
    all. Per the Owner, each path is to match its own V8C4 counterpart, not
    be harmonised — that is a change to N5.5's screen, not made unasked.
-3. **The validators** named above.
+3. **The validators** named above. **ANSWERED 2026-09-26:** the Owner sent
+   V8C4's `gstinProblem`, `phoneProblem` and `emailProblem` verbatim — see
+   "The Owner's answers on the 9b plan", item 4. They go into "Save this
+   customer" in 9b commit 4c. Questions 1 and 2 remain open.
 
 **A consequence to know:** the builder's **Site** box now also becomes the
 customer's city when "Save this customer" is pressed with a site typed, as
 V8C4's `if(p.site) c.city=p.site`. Picking a customer does not fill the site
 from the city.
+
+### The Owner's answers on the 9b plan, 2026-09-26 — recorded before any code
+
+The 9b plan went to the Owner in plan mode and came back approved over **four
+rounds of amendments**. Everything below arrived in chat and is written here
+before any code acts on it (rule 8). V8C4 excerpts are **advisor-read
+evidence, not authority**, checked against the repository wherever it can
+check them. The plan of record is summarised under "Current next action".
+
+**1. V8C4 has no Finalise button. It has one gate.** `finaliseQuote` has
+exactly one caller in the file, at 8418, inside:
+
+```
+/** One gate in front of every action that issues a quotation. */
+async function ensureFinalised(){
+  if(!quoteLines().length){ toast("Add a line to the quotation first"); return false; }
+  if(isFinalised()) return true;            // same quotation keeps its number
+  const blank=state.lines.filter(l=>!(l.rate>0));
+  if(blank.length && !confirmAction(
+      `${blank.length} line${blank.length>1?"s have":" has"} no rate:\n\n• ${blank.slice(0,4).map(l=>l.t).join("\n• ")}`+
+      `${blank.length>4?"\n• …":""}\n\nContinue anyway?`)) return false;
+  const P0 = partyFromForm();
+  const g0 = gstinProblem(P0.gstin); if(g0){ toast("Client GSTIN: "+g0); return false; }
+  const h0 = phoneProblem(P0.phone); if(h0){ toast("Client phone: "+h0); return false; }
+  return !!(await finaliseQuote());
+}
+```
+
+Its three callers are `#btnPdf`, `#btnPrint` and `#btnWa`, and nothing else —
+so the builder's tail line, "A number is issued when this is downloaded,
+printed or shared", was telling the truth. **9b builds the gate, not a
+button:** `QuoteFinaliser.ensureFinalised` carries every pre-check, and a
+stand-alone **Finalise** button is its **first** caller, because N5.11 is
+not built and nothing could issue otherwise. N5.11 adds three callers and
+changes nothing else. **Whether the button stays after N5.11 is the Owner's
+call then, not now.**
+
+`if(isFinalised()) return true` — V8C4 never attempts a second time — has no
+counterpart here: this app **retires** a finalised draft, so there is never
+an already-finalised draft to short-circuit. Stated in the KDoc and the
+commit rather than left unexplained.
+
+**2. The gate calls `refusal()`; it never rebuilds it.** A second definition
+of a rule is the defect commit 3d removed. So the gate's first step is
+`QuoteDraft.refusal()`, and the gate adds only what that does not cover. What
+`refusal()` covers today, in order (reported, not assumed): a field that
+could not be read (`DraftFault` — tier, installation, discount); tier not
+offered; no lines; an unpriced line (`LINE_NEEDS_RATE`); negative transport;
+negative installation; the discount against the cap; GST rate not set; no
+party name. **It covered less than the gate needs in one place** — the
+unconfigured Manager cap (`CAP_NOT_SET`) was a pre-check in
+`QuotationWrite.plan`, outside it. So `refusal` is **extended** to take
+`cap: Double?` and own that case with `plan`'s exact semantics (a null cap
+refuses only a discount worth more than zero), and `plan`'s pre-check goes.
+
+- **The cap check survives the move — confirmed and pinned.**
+  `QuotationWriteRepository.runOnce` reads `/teamSettings/quoting` **inside
+  the transaction** whenever the draft is fresh and carries a discount, and
+  `plan` takes the cap from that read. Losing it would send a Manager's
+  uncapped discount to the rules, whose `permission-denied` the retry reads
+  as contention: six attempts, about three seconds, and a reason that has
+  nothing to do with the cap. A test through the repository directly —
+  Manager, discount above zero, no `/teamSettings/quoting` — must answer
+  `CAP_NOT_SET` in **exactly one transaction**; the attempt count is the
+  point.
+- **A negative line rate can reach a line, so `refusal` refuses it.** The
+  Owner asked whether a negative rate could reach the ₹0 question. It can:
+  manual and area entry refuse one (`QuoteLineEntry`), but a catalogue line
+  takes the product's price as read, and `asDoubleOrNull` drops NaN and
+  infinity but not negatives. `priceOk` refuses a negative price only on a
+  write made under this repository's rules. `refusal` gains "Every rate must
+  be zero or more before this can be issued" for a rate below zero or not
+  finite.
+- **`NO_LINES` takes V8C4's words:** "Add a line to the quotation first".
+
+**3. The ₹0 question — B, and its text must change.** V8C4 asks about
+`!(l.rate > 0)`; this app's `needsRate` is `rate == null`, and `refusal()`
+already **refuses** such a line (N5.8a, `62af89d`), while a typed rate of 0
+was issued with no question at all. The Owner chose **B**: unpriced lines
+stay refused; the question names the lines priced at zero. On record:
+
+- A line with **no** rate is a mistake — somebody forgot to price it — and
+  issuing it at ₹0 under a number that cannot be recalled is the worse
+  outcome. Choosing V8C4's way would reverse a shipped decision to become
+  **more** permissive, with no business reason.
+- A line priced at **₹0** can be deliberate in this trade — "Installation —
+  included", "no charge for delivery". That earns a confirmation, not a
+  refusal.
+
+**V8C4's sentence is false for B's population** — those lines have a rate,
+and it is ₹0 — so this is the one place in 9b where V8C4's exact text is
+**not** used. V8C4's structure stays (the count, up to four titles as
+`• title`, then `• …`, the closing question); the sentence is "1 line is
+priced at ₹0:" / "N lines are priced at ₹0:". **The answers are a choice,
+not a port:** V8C4's `confirmAction` is `window.confirm(msg)`, so the PWA
+shows the browser's OK / Cancel and there is no label to port. "Continue
+anyway" / "Cancel" is chosen; nobody should "correct" it to match V8C4.
+
+**4. The validators, verbatim** (V8C4 6341-6360):
+
+```
+const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+
+/** "" is fine. Anything else must look like a real GSTIN. */
+function gstinProblem(v){
+  const s = String(v||"").trim().toUpperCase();
+  if(!s) return null;
+  if(s.length !== 15) return "A GSTIN is 15 characters, for example 27FXJPK9635L1ZM";
+  if(!GSTIN_RE.test(s)) return "That GSTIN does not look right — check it against the certificate";
+  return null;
+}
+
+/** "" is fine. Otherwise 10 digits, optionally with a country code. */
+function phoneProblem(v){
+  const s = String(v||"").trim();
+  if(!s) return null;
+  const d = digits(s);              // digits = replace(/\D/g,"")
+  if(d.length < 10) return "A phone number needs at least 10 digits";
+  if(d.length > 13) return "That phone number has too many digits";
+  return null;
+}
+
+const emailProblem = v =>
+  (!String(v||"").trim() || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(v).trim()))
+    ? null : "That does not look like an email address";
+```
+
+- **Blank is valid in all three** — format checks, not required fields.
+  GSTIN trimmed and upper-cased; phone and email trimmed only.
+- **Upper-case with Kotlin's `String.uppercase()`,** which is
+  locale-invariant as JS `toUpperCase()` is. A default-locale call turns "i"
+  into "İ" on a Turkish-locale phone and fails a correctly typed GSTIN.
+- **JavaScript's whitespace, spelled out** for `trim()` and inside the email
+  pattern, because Kotlin's `trim()` and Java's `\s` use different sets.
+- **In the gate** they are prefixed "Client GSTIN: " / "Client phone: ".
+  **In "Save this customer"** V8C4 runs `gstinProblem || phoneProblem ||
+  emailProblem` after the name and before the find, and shows the problem
+  **bare** (`toast(bad)`, recorded above under `#qSaveParty`) — commit 4c,
+  its own commit, because it changes shipped behaviour. **This answers 8b's
+  open question 3.**
+- **For N6, not built here:** V8C4 runs the same three on the fields as the
+  person types (8027 — `#qGst`, `#qPhone`, `#qEmail`), and `stSave` runs the
+  GSTIN and phone checks on the company's own details (7296-7298), splitting
+  the first phone off a list with `.split(/[·,/]/)[0]`.
+
+**5. A deliberate divergence: the client name.** `ensureFinalised` — the
+whole function, read by the Owner — does not require a client name; this
+app's `refusal()` does (`NO_PARTY`). A numbered quotation addressed to nobody
+is not a document anyone can send, so the tightening is kept, **as a
+divergence, not a port**. Provenance at its strength: `finaliseQuote` has not
+been read in full, so a name check further down is not excluded.
+
+**6. `snap` — absent, and the real consequence is worse than the plan said.**
+V8C4's reader:
+
+```
+const sn = x.snap || {};
+state.company = Object.assign({}, state.company, {
+  name:sn.name, tagline:sn.tag, address:sn.addr, phone:sn.phones,
+  email:sn.email, web:sn.web, gstin:sn.gstin, pan:sn.pan,
+  bankName:sn.bank&&sn.bank.name, ... });
+```
+
+The identity fields are assigned **directly**, with no fallback, and
+`Object.assign` with `undefined` overwrites — so an absent `snap` and `{}`
+behave **identically**, and both reprint with **no company name, no address,
+no GSTIN, no bank details**. Only five fields fall back: validity days,
+payment terms, warranty, the PDF footer and the GST rate (through `x.gstPct`,
+then `sn.gstPct`, then current). The plan's reason for "absent" — that V8C4
+would fall back on it — was **wrong**. Absent is still chosen, because it
+states that nothing was frozen and is no worse than `{}`. Two things follow,
+each recorded in its own section below: an **N8 blocker** and an **N5.11
+requirement**.
+
+**7. Decisions 3, 4 and 5 — approved as written.** `AlreadyIssued` says
+"Finalised as X", as V8C4's `reused` path continues into the same success
+order. Edits are refused while a number is being taken — stricter than V8C4,
+which loses them silently, the worse failure. No local upsert: the Quotations
+tab reads only the listener, keyed by document id, so V8C4's "the listener
+may have beaten us to it" tolerance holds by construction.
+
+**8. Three more amendments.**
+
+- **A. The whole attempt is capped at 30 seconds of wall-clock.** Six
+  attempts are bounded in pauses, not in round trips: on a network the OS
+  calls connected but that carries nothing (a captive portal, dead Wi-Fi),
+  each attempt can hang as long as the SDK allows, with the button busy and
+  edits refused. After the cap the normal failure is reported and the gate
+  reopens. `withTimeoutOrNull`, never a throwing timeout: that is a
+  `CancellationException`, which the friendly mapper would report as
+  "Sign-in was cancelled".
+- **B. The failure message says what to do next.** V8C4's "Not finalised — …
+  Your quotation is untouched." stays; where the number **may have been
+  taken** — a thrown failure or the cap — it adds "Press Finalise again — if
+  a number was taken, the same one comes back." On a lost acknowledgement
+  that turns the hole (press Clear, leave an orphan numbered quotation) into
+  a self-healing path. Not added to a refusal decided locally or by the
+  rules.
+- **C. The offline check is a courtesy, and the code says so.** It removes
+  the common case; the OS reports a connection it cannot prove carries
+  anything, and the transaction failing is the real protection.
+
+**9. Commit 4 is split in three** — 4a the domain (`refusal(cap: Double?)`,
+the negative-rate step, `NO_LINES`, `PartyFormat`, the one-transaction cap
+test), 4b the gate, 4c the validators in "Save this customer" — so each
+ablation is tied to one commit and a bisect lands on the right change.
+
+**10. Advisor errors 8 and 9, numbered by the Owner for the pattern list:**
+
+- **Error 8:** "the same validators commit 8b just wired into Save this
+  customer". They did not exist: 8b touched the validation *order* and
+  recorded, as its open question 3, that the validators were missing. Same
+  shape as error 6 (`assertUnclipped`): a name carried over from V8C4 and
+  assumed to be in the repository.
+- **Error 9:** "you already have `needsRate`, so the data is there". The
+  predicate differs — `needsRate` is `rate == null`, V8C4 asks about
+  `!(rate > 0)` — and `refusal()` already refused the null case. The two apps
+  already diverged in both directions.
+
+### Owed in N6: the validators on the fields and on the company's own details
+
+Recorded 2026-09-26. V8C4 runs `gstinProblem`, `phoneProblem` and
+`emailProblem` on the quotation's own fields as the person types (8027 —
+`#qGst`, `#qPhone`, `#qEmail`), and `stSave` runs the GSTIN and phone checks
+on the **company's** details (7296-7298), taking the first of several phones
+with `.split(/[·,/]/)[0]`. The functions themselves arrive in 9b commit 4a
+(`PartyFormat`); these two uses are N6's.
 
 ### Owed in N6: the financial-year guard, and the year-turn prompt — a REQUIREMENT
 
@@ -2310,6 +2563,15 @@ another Administrator, which is N5.0b and intended.
 automated test passing is not a pass in that file.
 
 ## Decisions that bind future work
+
+**A name carried over from V8C4 is not evidence that it exists here.**
+Recorded 2026-09-26 at the Owner's instruction, from the advisor's own
+errors 6, 8 and 9: `assertUnclipped` (the N4.4 helpers are named otherwise),
+"the validators 8b wired" (8b recorded that none existed), and "`needsRate`
+is the data" (it is `rate == null`; V8C4 asks about `!(rate > 0)`). Before a
+plan or a message relies on a function, a constant or a predicate by its
+V8C4 name, find it in this repository — `grep` — and read what it actually
+tests.
 
 **When in doubt this codebase tightens, and V8C4 usually did not — so check
 a port against V8C4 before calling it faithful.** Recorded at the Owner's
@@ -2748,6 +3010,29 @@ closed the catch-all that used to let them. Any fix must therefore tell a
 permanent permission denial from a transient failure and retry only the
 second. The swallow also means a genuine breakage never reaches the log,
 which is why the phone pass carries a *negative* check for it.
+
+### BLOCKER for the N8 cutover: finalise writes no `snap` until N6
+
+Recorded 2026-09-26 at the Owner's instruction, **as a blocker, not a note.**
+From N5.9b until N6 builds company settings, a native finalise writes **no
+`snap` key**. V8C4 re-prints a quotation through `const sn = x.snap || {}`
+and assigns the company's name, address, GSTIN, PAN, phones, email, web and
+bank block **directly** from it, with no fallback — so a native pre-N6
+quotation re-printed from V8C4 comes out on a **blank letterhead**. (An
+empty `{}` would do exactly the same; see "The Owner's answers on the 9b
+plan", item 6.)
+
+**No production cutover while finalise passes no `snap`. N6 lands first.**
+Staging is safe today because **no PWA build points at staging**, so no
+V8C4 ever reads a native quotation there.
+
+### Owed in N5.11: the PDF falls back to the LIVE company settings when `snap` is absent
+
+Recorded 2026-09-26 at the Owner's instruction, as a **requirement**. This
+app's own PDF must fall back to the **live** company settings for any field
+`snap` does not carry — and must **not** copy V8C4's blank assignment.
+Otherwise every quotation issued between 9b and N6 prints blank from this
+app too.
 
 ### Owed before the N8 cutover: counter contention in the live PWA
 

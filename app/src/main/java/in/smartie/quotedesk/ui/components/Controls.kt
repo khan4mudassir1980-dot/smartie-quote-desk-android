@@ -29,21 +29,31 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
 import `in`.smartie.quotedesk.ui.theme.SmartieColors
 
-/** Primary button at the PWA's 42-44dp height, not Material's 40dp default. */
+/**
+ * Primary button at the PWA's 42-44dp height, not Material's 40dp default.
+ *
+ * [busyText] is what a busy button **says** it is doing, beside its spinner —
+ * for a wait long enough that a spinner alone reads as a dead button (N5.9b's
+ * "Taking a number…", which can last seconds). Null, the default, keeps the
+ * spinner alone, so every other caller is unchanged.
+ */
 @Composable
 fun SmartiePrimaryButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    busy: Boolean = false
+    busy: Boolean = false,
+    busyText: String? = null
 ) {
     val dimens = LocalSmartieDimens.current
     Button(
@@ -59,6 +69,16 @@ fun SmartiePrimaryButton(
                 color = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.size(18.dp)
             )
+            if (busyText != null) {
+                Text(
+                    busyText,
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .padding(start = dimens.gapS)
+                        .semantics { liveRegion = LiveRegionMode.Polite }
+                )
+            }
         } else {
             Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1)
         }

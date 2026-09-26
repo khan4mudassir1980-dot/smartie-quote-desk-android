@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
@@ -148,6 +149,10 @@ data class ProductsActions(
     val onSaveCustomer: (String) -> Unit = {},
     /** The answer to "already saved — update that party?": true to update. */
     val onAnswerMerge: (Boolean) -> Unit = {},
+    /** The Finalise control: the finalise gate's first caller (N5.9b). */
+    val onFinalise: () -> Unit = {},
+    /** The answer to the ₹0 question: true for "Continue anyway". */
+    val onAnswerZeroRates: (Boolean) -> Unit = {},
     /** Save one product's corrections. The draft is what the sheet showed. */
     val onSaveProduct: (ProductRecord, ProductDraft) -> Unit = { _, _ -> },
 )
@@ -171,6 +176,9 @@ fun ProductsScreen(
     val savingCustomer by viewModel.savingParty.collectAsStateWithLifecycle()
     val customerFailure by viewModel.partyFailure.collectAsStateWithLifecycle()
     val mergeQuestion by viewModel.mergeQuestion.collectAsStateWithLifecycle()
+    val gatePhase by viewModel.gatePhase.collectAsStateWithLifecycle()
+    val finaliseFailure by viewModel.finaliseFailure.collectAsStateWithLifecycle()
+    val zeroRateQuestion by viewModel.zeroRateQuestion.collectAsStateWithLifecycle()
     val quoting by viewModel.quoting.collectAsStateWithLifecycle()
     // Null while the settings document has not arrived OR does not exist.
     // Indistinguishable from here, which is the safe way round: a cap that
@@ -219,6 +227,10 @@ fun ProductsScreen(
         savingCustomer = savingCustomer,
         customerFailure = customerFailure,
         mergeQuestion = mergeQuestion,
+        canFinalise = Permissions.canQuote(data.member),
+        gatePhase = gatePhase,
+        finaliseFailure = finaliseFailure,
+        zeroRateQuestion = zeroRateQuestion,
         newPartyId = viewModel::mintPartyId,
         newLineId = viewModel::mintLineId,
         gstOf = { key -> productsByKey[key]?.gst },
@@ -249,6 +261,10 @@ fun ProductsScreen(
             onChooseParty = viewModel::chooseParty,
             onSaveCustomer = { id -> viewModel.saveCustomer(id, parties) },
             onAnswerMerge = viewModel::answerMerge,
+            // The customers and the cap as the screen holds them; the
+            // transaction re-reads the cap before anything is written.
+            onFinalise = { viewModel.finalise(parties, discountCap) },
+            onAnswerZeroRates = viewModel::answerZeroRates,
             onSaveProduct = viewModel::saveProduct,
         ),
     )
@@ -278,6 +294,12 @@ fun ProductsCatalogue(
     customerFailure: String? = null,
     /** V8C4's question before "Save this customer" updates a saved party. */
     mergeQuestion: QuoteParty.MergeQuestion? = null,
+    /** Whether this account may issue — `Permissions.canQuote`. */
+    canFinalise: Boolean = false,
+    /** Where the finalise gate is. See `QuoteFinaliser`. */
+    gatePhase: GatePhase = GatePhase.IDLE,
+    finaliseFailure: String? = null,
+    zeroRateQuestion: String? = null,
     /** Minted once per quotation. See `ProductsViewModel.mintPartyId`. */
     newPartyId: () -> String = { "" },
     /** Minted once per line being typed. See `ProductsViewModel.mintLineId`. */
@@ -321,38 +343,53 @@ fun ProductsCatalogue(
     // far below what this form needs, and a sheet is a dialog, whose own
     // recomposer Robolectric's clock does not drive.
     if (showDraft) {
-        QuoteBuilderPanel(
-            draft = draft,
-            onBack = { showDraft = false },
-            onTierChange = actions.onTierChange,
-            onChangeLineQuantity = actions.onChangeLineQuantity,
-            onRemoveLine = actions.onRemoveLine,
-            onAddManual = actions.onAddManual,
-            onAddArea = actions.onAddArea,
-            onEditArea = actions.onEditArea,
-            newLineId = newLineId,
-            gstOf = gstOf,
-            onGstEnabledChange = actions.onGstEnabledChange,
-            onGstPercentChange = actions.onGstPercentChange,
-            onTransportChange = actions.onTransportChange,
-            onTransportNoteChange = actions.onTransportNoteChange,
-            onInstallationChange = actions.onInstallationChange,
-            onDiscountChange = actions.onDiscountChange,
-            discountCap = discountCap,
-            parties = parties,
-            onPartyChange = actions.onPartyChange,
-            onChooseParty = actions.onChooseParty,
-            onSaveCustomer = actions.onSaveCustomer,
-            savingCustomer = savingCustomer,
-            customerFailure = customerFailure,
-            mergeQuestion = mergeQuestion,
-            onAnswerMerge = actions.onAnswerMerge,
-            newPartyId = newPartyId,
-            // Clearing empties the LINES and stays put: the party, the
-            // transport and the GST rate on this quotation are not lines and
-            // are not thrown away with them.
-            onClear = actions.onClearDraft,
-        )
+        // Keyed on the quotation, so everything the panel remembers about ONE
+        // quotation — the party id it minted, the line id, the open forms and
+        // the typed money boxes — starts again for the next. Without it a
+        // finalised quotation's minted party id would be reused, and refused
+        // as `ALREADY_EXISTS` on the next "Save this customer". The one other
+        // time the id changes is when the stored draft first answers at
+        // start-up, which resets only half-typed forms.
+        key(draft.id) {
+            QuoteBuilderPanel(
+                draft = draft,
+                onBack = { showDraft = false },
+                onTierChange = actions.onTierChange,
+                onChangeLineQuantity = actions.onChangeLineQuantity,
+                onRemoveLine = actions.onRemoveLine,
+                onAddManual = actions.onAddManual,
+                onAddArea = actions.onAddArea,
+                onEditArea = actions.onEditArea,
+                newLineId = newLineId,
+                gstOf = gstOf,
+                onGstEnabledChange = actions.onGstEnabledChange,
+                onGstPercentChange = actions.onGstPercentChange,
+                onTransportChange = actions.onTransportChange,
+                onTransportNoteChange = actions.onTransportNoteChange,
+                onInstallationChange = actions.onInstallationChange,
+                onDiscountChange = actions.onDiscountChange,
+                discountCap = discountCap,
+                parties = parties,
+                onPartyChange = actions.onPartyChange,
+                onChooseParty = actions.onChooseParty,
+                onSaveCustomer = actions.onSaveCustomer,
+                savingCustomer = savingCustomer,
+                customerFailure = customerFailure,
+                mergeQuestion = mergeQuestion,
+                onAnswerMerge = actions.onAnswerMerge,
+                newPartyId = newPartyId,
+                // Clearing empties the LINES and stays put: the party, the
+                // transport and the GST rate on this quotation are not lines and
+                // are not thrown away with them.
+                onClear = actions.onClearDraft,
+                canFinalise = canFinalise,
+                gatePhase = gatePhase,
+                finaliseFailure = finaliseFailure,
+                zeroRateQuestion = zeroRateQuestion,
+                onFinalise = actions.onFinalise,
+                onAnswerZeroRates = actions.onAnswerZeroRates,
+            )
+        }
         BackHandler { showDraft = false }
         return
     }

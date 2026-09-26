@@ -1,6 +1,11 @@
 package `in`.smartie.quotedesk.ui
 
 import android.app.Application
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -89,7 +94,16 @@ import `in`.smartie.quotedesk.ui.products.chooseLabel
 import `in`.smartie.quotedesk.ui.products.noSavedParty
 import `in`.smartie.quotedesk.ui.products.BUILDER_EMPTY_KEY
 import `in`.smartie.quotedesk.ui.products.CLEAR_LINES
-import `in`.smartie.quotedesk.ui.products.ISSUING_LATER
+import `in`.smartie.quotedesk.ui.products.ISSUING_NOTE
+import `in`.smartie.quotedesk.ui.products.BUILDER_FINALISE_FAILURE_KEY
+import `in`.smartie.quotedesk.ui.products.BUILDER_FINALISE_KEY
+import `in`.smartie.quotedesk.ui.products.BUILDER_LOCK_TAG
+import `in`.smartie.quotedesk.ui.products.BUILDER_ZERO_RATE_TAG
+import `in`.smartie.quotedesk.ui.products.CANCEL_FINALISE
+import `in`.smartie.quotedesk.ui.products.CONTINUE_ANYWAY
+import `in`.smartie.quotedesk.ui.products.FINALISE
+import `in`.smartie.quotedesk.ui.products.GatePhase
+import `in`.smartie.quotedesk.ui.products.TAKING_A_NUMBER
 import `in`.smartie.quotedesk.ui.products.moreOf
 import `in`.smartie.quotedesk.ui.products.NOTHING_ON_IT
 import `in`.smartie.quotedesk.ui.products.ProductsActions
@@ -176,6 +190,8 @@ class QuoteBuilderScreenTest {
     private val retired = PartyRecord(id = "c_3", name = "Old Steel Works", archived = true)
     private var cleared = 0
     private val answers = mutableListOf<Boolean>()
+    private var finalised = 0
+    private val zeroAnswers = mutableListOf<Boolean>()
 
     /** A draft holding one priced line, the way a catalogue tap leaves it. */
     private fun oneLine() = QuoteDraft(id = "qd_1").add(motor, quantity = 2.0, id = "ln_1")
@@ -186,7 +202,12 @@ class QuoteBuilderScreenTest {
         parties: List<PartyRecord> = listOf(sunrise, harbour, retired),
         customerFailure: String? = null,
         discountCap: Double? = QuoteMath.NO_CAP,
-        mergeQuestion: QuoteParty.MergeQuestion? = null
+        mergeQuestion: QuoteParty.MergeQuestion? = null,
+        canFinalise: Boolean = true,
+        gatePhase: GatePhase = GatePhase.IDLE,
+        finaliseFailure: String? = null,
+        zeroRateQuestion: String? = null,
+        savingCustomer: Boolean = false
     ) {
         val view = Catalogue.build(listOf(motor, unpriced), emptyList(), emptyList(), "")
         compose.setContent {
@@ -198,6 +219,11 @@ class QuoteBuilderScreenTest {
                     parties = parties,
                     customerFailure = customerFailure,
                     mergeQuestion = mergeQuestion,
+                    canFinalise = canFinalise,
+                    gatePhase = gatePhase,
+                    finaliseFailure = finaliseFailure,
+                    zeroRateQuestion = zeroRateQuestion,
+                    savingCustomer = savingCustomer,
                     gstOf = { key -> mapOf("gate|SIE1000" to 18.0)[key] },
                     discountCap = discountCap,
                     // A different id on every call, so a test can prove the
@@ -221,12 +247,163 @@ class QuoteBuilderScreenTest {
                         onTransportNoteChange = { transportNote = it },
                         onInstallationChange = { installation = it to true },
                         onDiscountChange = { discount = it to true },
-                        onClearDraft = { cleared++ }
+                        onClearDraft = { cleared++ },
+                        onFinalise = { finalised++ },
+                        onAnswerZeroRates = { zeroAnswers += it }
                     )
                 )
             }
         }
         if (open) compose.onNodeWithText("View quote").performClick()
+    }
+
+    // --- the Finalise control (N5.9b) --------------------------------------------
+
+    @Test
+    fun `a quoting account is offered Finalise on a quotation with lines, and pressing it asks the gate`() {
+        render(oneLine())
+        scrollTo(BUILDER_FINALISE_KEY)
+        compose.onNodeWithContentDescription(FINALISE).assertIsEnabled().performClick()
+
+        assertEquals(1, finalised)
+    }
+
+    @Test
+    fun `Staff are offered no Finalise - and Clear, right below it, proves the reach`() {
+        render(oneLine(), canFinalise = false)
+        scrollTo(BUILDER_CLEAR_KEY)
+
+        compose.onNodeWithContentDescription(CLEAR_LINES).assertExists()
+        assertEquals(0, compose.onAllNodesWithContentDescription(FINALISE).fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun `an empty quotation offers no Finalise - the tail proves the reach`() {
+        compose.setContent {
+            SmartieTheme {
+                QuoteBuilderPanel(
+                    draft = QuoteDraft(id = "qd_1"),
+                    onBack = {},
+                    onTierChange = {},
+                    onChangeLineQuantity = { _, _ -> },
+                    onRemoveLine = {},
+                    onClear = {},
+                    canFinalise = true
+                )
+            }
+        }
+        scrollTo(BUILDER_TAIL_KEY)
+
+        compose.onNodeWithText(ISSUING_NOTE).assertExists()
+        assertEquals(0, compose.onAllNodesWithContentDescription(FINALISE).fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun `taking a number, the control says so and is disabled, and a press does nothing`() {
+        render(oneLine(), gatePhase = GatePhase.TAKING_NUMBER)
+        scrollTo(BUILDER_FINALISE_KEY)
+
+        compose.onNodeWithContentDescription(TAKING_A_NUMBER).assertIsNotEnabled().performClick()
+        assertEquals(0, finalised)
+        assertEquals(0, compose.onAllNodesWithContentDescription(FINALISE).fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun `while the gate is open the panel under it takes no touch at all`() {
+        render(oneLine(), gatePhase = GatePhase.TAKING_NUMBER)
+        compose.onNodeWithTag(BUILDER_LOCK_TAG).assertExists()
+        scrollTo(BUILDER_CLEAR_KEY)
+        compose.onNodeWithContentDescription(CLEAR_LINES).performClick()
+
+        // Clear is enabled in itself; the layer above it took the touch.
+        assertEquals(0, cleared)
+    }
+
+    @Test
+    fun `with the gate idle there is no layer, and Clear clears`() {
+        // The witness for the test above: the same click, without the gate.
+        render(oneLine())
+        assertEquals(0, compose.onAllNodesWithTag(BUILDER_LOCK_TAG).fetchSemanticsNodes().size)
+        scrollTo(BUILDER_CLEAR_KEY)
+        compose.onNodeWithContentDescription(CLEAR_LINES).performClick()
+        assertEquals(1, cleared)
+    }
+
+    @Test
+    fun `the zero-rate question sits above the layer, and its two answers are pressed through it`() {
+        render(
+            oneLine(),
+            gatePhase = GatePhase.CHECKING,
+            zeroRateQuestion = "1 line is priced at ₹0:\n\n• Site visit\n\nContinue anyway?"
+        )
+        compose.onNodeWithTag(BUILDER_ZERO_RATE_TAG).assertExists()
+        compose.onNodeWithContentDescription(CONTINUE_ANYWAY).performClick()
+        compose.onNodeWithContentDescription(CANCEL_FINALISE).performClick()
+
+        assertEquals(listOf(true, false), zeroAnswers)
+    }
+
+    @Test
+    fun `no question, no card`() {
+        render(oneLine(), gatePhase = GatePhase.CHECKING)
+        compose.onNodeWithTag(BUILDER_LOCK_TAG).assertExists()
+        assertEquals(0, compose.onAllNodesWithTag(BUILDER_ZERO_RATE_TAG).fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun `a failure stays on the panel under the control`() {
+        val failure = "Not finalised — The connection timed out. Please try again. Your quotation is untouched."
+        render(oneLine(), finaliseFailure = failure)
+        scrollTo(BUILDER_FINALISE_FAILURE_KEY)
+
+        compose.onNodeWithText(failure).assertExists()
+    }
+
+    @Test
+    fun `Save this customer and Finalise exclude each other`() {
+        render(oneLine(), gatePhase = GatePhase.CHECKING)
+        scrollTo(BUILDER_SAVE_CUSTOMER_KEY)
+        compose.onNodeWithContentDescription(SAVE_CUSTOMER).assertIsNotEnabled()
+    }
+
+    @Test
+    fun `and Finalise waits while a customer is being saved`() {
+        render(oneLine(), savingCustomer = true)
+        scrollTo(BUILDER_FINALISE_KEY)
+        compose.onNodeWithContentDescription(FINALISE).assertIsNotEnabled()
+    }
+
+    @Test
+    fun `the next quotation starts with a fresh party id - the panel is keyed on the draft`() {
+        // Without `key(draft.id)` the id minted for the finalised quotation's
+        // customer is reused, and the next quotation's Save is refused as
+        // ALREADY_EXISTS.
+        var current by mutableStateOf(oneLine())
+        val view = Catalogue.build(listOf(motor, unpriced), emptyList(), emptyList(), "")
+        compose.setContent {
+            SmartieTheme {
+                ProductsCatalogue(
+                    canViewProducts = true,
+                    view = view,
+                    draft = current,
+                    newPartyId = { "c_new_${minted++}" },
+                    actions = ProductsActions(onSaveCustomer = { savedWith += it })
+                )
+            }
+        }
+        compose.onNodeWithText("View quote").performClick()
+        scrollTo(BUILDER_SAVE_CUSTOMER_KEY)
+        compose.onNodeWithContentDescription(SAVE_CUSTOMER).performClick()
+        compose.onNodeWithContentDescription(SAVE_CUSTOMER).performClick()
+        // One quotation, one id however often it is pressed.
+        assertEquals(listOf("c_new_1", "c_new_1"), savedWith)
+
+        current = QuoteDraft(id = "qd_2").add(motor, quantity = 1.0, id = "ln_9")
+        compose.waitForIdle()
+        scrollTo(BUILDER_SAVE_CUSTOMER_KEY)
+        compose.onNodeWithContentDescription(SAVE_CUSTOMER).performClick()
+
+        assertEquals(listOf("c_new_1", "c_new_1", "c_new_2"), savedWith)
     }
 
     private fun scrollTo(key: String) =
@@ -324,7 +501,7 @@ class QuoteBuilderScreenTest {
         // `LazyColumn` has recycled the header by the time the tail is on
         // screen, so the back button is legitimately gone too. The last item
         // is the right witness, and Clear sits immediately above it.
-        compose.onNodeWithText(ISSUING_LATER).assertExists()
+        compose.onNodeWithText(ISSUING_NOTE).assertExists()
         assertEquals(
             0,
             compose.onAllNodesWithContentDescription(CLEAR_LINES).fetchSemanticsNodes().size

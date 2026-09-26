@@ -405,6 +405,39 @@ class QuoteFinaliserTest {
         }
 
     @Test
+    fun `a customer that has vanished from the list costs only the link, never the number`() = runBlocking {
+        // The plan asked for this at the screen; the view model takes an
+        // AppContainer and cannot be built in a test, so it is pinned here, at
+        // the gate, with the real repository and the customer list the screen
+        // passes. V8C4's resolvePartyId: a held id no longer found is dropped
+        // and the quotation issued; the typed snapshot is kept whole.
+        val store = FakeQuotationStore(mutableMapOf(NUMBERING to counter))
+        val repository = QuotationWriteRepository(store, now = { 1_760_000_000_000L }, pause = {})
+        val gate = QuoteFinaliser(
+            online = { true },
+            finalise = { draft -> repository.finalise(manager, draft, customers = emptyList(), snap = null) },
+            retire = { retired += it },
+            confirmZeroRates = { true },
+            describe = { it.message.orEmpty() }
+        )
+        val held = ready.copy(
+            partyId = "c_gone",
+            party = QuotationPartySnapshot(name = "Walk-in Builders", phone = "9876543210", city = "Thane")
+        )
+
+        val outcome = gate.ensureFinalised(held, capPercent = null)
+
+        assertEquals("Finalised as SIE/QD/2025-26/009", (outcome as GateOutcome.Finalised).message)
+        val stored = store.docs.getValue("quotations/qd_1")
+        assertTrue("the link is gone", !stored.containsKey("partyId"))
+        @Suppress("UNCHECKED_CAST")
+        val party = stored["party"] as Map<String, Any?>
+        assertEquals("Walk-in Builders", party["name"])
+        assertEquals("9876543210", party["phone"])
+        assertEquals("Thane", party["city"])
+    }
+
+    @Test
     fun `a press after a lost acknowledgement is answered with the same number`() = runBlocking {
         // The path the press-again line exists for.
         val store = FakeQuotationStore(mutableMapOf(NUMBERING to counter)).apply { loseNextResponse = true }

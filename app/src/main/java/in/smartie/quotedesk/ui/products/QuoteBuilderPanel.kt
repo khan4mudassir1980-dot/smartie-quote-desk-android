@@ -1,12 +1,14 @@
 package `in`.smartie.quotedesk.ui.products
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -21,6 +23,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -122,7 +126,18 @@ internal fun QuoteBuilderPanel(
     onInstallationChange: (Installation?) -> Unit = {},
     onDiscountChange: (Discount?) -> Unit = {},
     /** Null when the Owner has not configured one. See `QuoteDiscount`. */
-    discountCap: Double? = null
+    discountCap: Double? = null,
+    /** Whether this account may issue at all — `Permissions.canQuote`. */
+    canFinalise: Boolean = false,
+    /** Where the finalise gate is. See `QuoteFinaliser`. */
+    gatePhase: GatePhase = GatePhase.IDLE,
+    /** Why the last press did not finalise, kept on the panel until the next. */
+    finaliseFailure: String? = null,
+    /** The ₹0 question while it waits for an answer. */
+    zeroRateQuestion: String? = null,
+    onFinalise: () -> Unit = {},
+    /** The answer to [zeroRateQuestion]: true for "Continue anyway". */
+    onAnswerZeroRates: (Boolean) -> Unit = {}
 ) {
     // Which saved customer the picker is showing, and what is typed into its
     // search box. The panel's own state: nothing about it belongs on a draft
@@ -219,354 +234,454 @@ internal fun QuoteBuilderPanel(
         manualOpen = false
     }
     val dimens = LocalSmartieDimens.current
-    LazyColumn(
-        modifier = modifier.fillMaxSize().testTag(QUOTE_BUILDER_TAG),
-        contentPadding = PaddingValues(
-            start = dimens.screenPadding,
-            end = dimens.screenPadding,
-            top = dimens.gapM,
-            bottom = dimens.listBottomInset
-        ),
-        verticalArrangement = Arrangement.spacedBy(dimens.gapS)
-    ) {
-        item(key = BUILDER_HEADER_KEY) { BuilderHeader(draft, onBack) }
+    Box(modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().testTag(QUOTE_BUILDER_TAG),
+            contentPadding = PaddingValues(
+                start = dimens.screenPadding,
+                end = dimens.screenPadding,
+                top = dimens.gapM,
+                bottom = dimens.listBottomInset
+            ),
+            verticalArrangement = Arrangement.spacedBy(dimens.gapS)
+        ) {
+            item(key = BUILDER_HEADER_KEY) { BuilderHeader(draft, onBack) }
 
-        // Above the lines, and not by habit: changing it reprices every line
-        // nobody typed a rate into, so it is a decision taken before the
-        // quotation is built rather than after.
-        item(key = BUILDER_TIER_KEY) { TierPicker(draft.tier, onTierChange) }
+            // Above the lines, and not by habit: changing it reprices every line
+            // nobody typed a rate into, so it is a decision taken before the
+            // quotation is built rather than after.
+            item(key = BUILDER_TIER_KEY) { TierPicker(draft.tier, onTierChange) }
 
-        item(key = BUILDER_PICK_PARTY_KEY) {
-            SmartieGhostButton(
-                text = if (picking) CLOSE_PARTY_PICKER else CHOOSE_PARTY,
-                onClick = { picking = !picking },
-                modifier = Modifier
-                    .semantics {
-                        contentDescription = if (picking) CLOSE_PARTY_PICKER else CHOOSE_PARTY
+            item(key = BUILDER_PICK_PARTY_KEY) {
+                SmartieGhostButton(
+                    text = if (picking) CLOSE_PARTY_PICKER else CHOOSE_PARTY,
+                    onClick = { picking = !picking },
+                    modifier = Modifier
+                        .semantics {
+                            contentDescription = if (picking) CLOSE_PARTY_PICKER else CHOOSE_PARTY
+                        }
+                        .fillMaxWidth()
+                )
+            }
+
+            if (picking) {
+                item(key = BUILDER_PARTY_SEARCH_KEY) {
+                    SmartieField(
+                        label = PARTY_SEARCH_LABEL,
+                        value = partyQuery,
+                        onValueChange = { partyQuery = it },
+                        placeholder = PARTY_SEARCH_HINT,
+                        modifier = Modifier.semantics { contentDescription = PARTY_SEARCH_LABEL }
+                    )
+                }
+                // Archived parties are not offered. A quotation raised today
+                // against a customer somebody retired is a mistake nobody would
+                // make on purpose, and `PartyBook` already separates the two.
+                val book = Parties.build(parties, partyQuery)
+                if (book.active.isEmpty()) {
+                    item(key = BUILDER_NO_PARTIES_KEY) { EmptyState(noSavedParty(partyQuery)) }
+                }
+                items(book.active, key = { party -> "party-${party.id}" }) { party ->
+                    PartyChoice(party) {
+                        onChooseParty(party)
+                        picking = false
+                        partyQuery = ""
                     }
-                    .fillMaxWidth()
-            )
-        }
-
-        if (picking) {
-            item(key = BUILDER_PARTY_SEARCH_KEY) {
-                SmartieField(
-                    label = PARTY_SEARCH_LABEL,
-                    value = partyQuery,
-                    onValueChange = { partyQuery = it },
-                    placeholder = PARTY_SEARCH_HINT,
-                    modifier = Modifier.semantics { contentDescription = PARTY_SEARCH_LABEL }
-                )
-            }
-            // Archived parties are not offered. A quotation raised today
-            // against a customer somebody retired is a mistake nobody would
-            // make on purpose, and `PartyBook` already separates the two.
-            val book = Parties.build(parties, partyQuery)
-            if (book.active.isEmpty()) {
-                item(key = BUILDER_NO_PARTIES_KEY) { EmptyState(noSavedParty(partyQuery)) }
-            }
-            items(book.active, key = { party -> "party-${party.id}" }) { party ->
-                PartyChoice(party) {
-                    onChooseParty(party)
-                    picking = false
-                    partyQuery = ""
                 }
             }
-        }
 
-        partyFields(draft.party, onPartyChange)
+            partyFields(draft.party, onPartyChange)
 
-        if (customerFailure != null) {
-            item(key = BUILDER_CUSTOMER_FAILURE_KEY) {
-                Text(
-                    customerFailure,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = SmartieColors.Danger
-                )
-            }
-        }
-
-        item(key = BUILDER_SAVE_CUSTOMER_KEY) {
-            SmartieGhostButton(
-                text = SAVE_CUSTOMER,
-                onClick = {
-                    val id = mintedPartyId.ifBlank { newPartyId().also { mintedPartyId = it } }
-                    onSaveCustomer(id)
-                },
-                enabled = !savingCustomer,
-                modifier = Modifier
-                    .semantics { contentDescription = SAVE_CUSTOMER }
-                    .fillMaxWidth()
-            )
-        }
-
-        // V8C4 asks before it updates a party that is already saved, naming
-        // the party and why it matched. The save waits here, with the control
-        // above still busy, until one of these is pressed.
-        if (mergeQuestion != null) {
-            item(key = BUILDER_MERGE_QUESTION_KEY) {
-                Text(mergeQuestion.message, style = MaterialTheme.typography.bodyMedium)
-            }
-            item(key = BUILDER_MERGE_UPDATE_KEY) {
-                SmartieGhostButton(
-                    text = QuoteParty.UPDATE_THAT_PARTY,
-                    onClick = { onAnswerMerge(true) },
-                    modifier = Modifier
-                        .semantics { contentDescription = QuoteParty.UPDATE_THAT_PARTY }
-                        .fillMaxWidth()
-                )
-            }
-            item(key = BUILDER_MERGE_LEAVE_KEY) {
-                SmartieGhostButton(
-                    text = QuoteParty.LEAVE_IT_ALONE,
-                    onClick = { onAnswerMerge(false) },
-                    modifier = Modifier
-                        .semantics { contentDescription = QuoteParty.LEAVE_IT_ALONE }
-                        .fillMaxWidth()
-                )
-            }
-        }
-
-        if (draft.isEmpty) {
-            item(key = BUILDER_EMPTY_KEY) { EmptyState(NOTHING_ON_IT) }
-        }
-
-        items(draft.lines, key = { line -> line.id }) { line ->
-            BuilderLine(line, onChangeLineQuantity, onRemoveLine) { id ->
-                draft.line(id)?.let { existing ->
-                    openArea(AreaEntry.of(existing))
-                    editingAreaId = id
-                }
-            }
-        }
-
-        item(key = BUILDER_ADD_MANUAL_KEY) {
-            SmartieGhostButton(
-                text = ADD_MANUAL,
-                onClick = {
-                    val opening = !manualOpen
-                    closeForms()
-                    manualOpen = opening
-                },
-                modifier = Modifier
-                    .semantics { contentDescription = ADD_MANUAL }
-                    .fillMaxWidth()
-            )
-        }
-
-        if (manualOpen) {
-            entryField(DESCRIPTION_LABEL, manualTitle) { manualTitle = it }
-            entryField(QUANTITY_LABEL, manualQuantity, numeric = true) { manualQuantity = it }
-            entryField(LINE_UNIT_LABEL, manualUnit, hint = UNIT_HINT) { manualUnit = it }
-            entryField(RATE_LABEL, manualRate, numeric = true, hint = RATE_HINT) {
-                manualRate = it
-            }
-            entryField(SPEC_LABEL, manualSpec) { manualSpec = it }
-            formFooter(
-                key = BUILDER_MANUAL_ADD_KEY,
-                addLabel = ADD_MANUAL_LINE,
-                refusal = manualEntry.refusal(),
-                onCancel = { closeForms() },
-                onAdd = {
-                    val id = mintedLineId.ifBlank { newLineId().also { mintedLineId = it } }
-                    onAddManual(id, manualEntry)
-                    closeForms()
-                }
-            )
-        }
-
-        item(key = BUILDER_ADD_AREA_KEY) {
-            SmartieGhostButton(
-                text = ADD_AREA,
-                onClick = {
-                    val opening = !areaOpen
-                    closeForms()
-                    areaOpen = opening
-                },
-                modifier = Modifier
-                    .semantics { contentDescription = ADD_AREA }
-                    .fillMaxWidth()
-            )
-        }
-
-        if (areaOpen) {
-            val editing = draft.line(editingAreaId)
-            entryField(DESCRIPTION_LABEL, areaTitle) { areaTitle = it }
-            entryField(WIDTH_LABEL, areaWidth, numeric = true) { areaWidth = it }
-            entryField(HEIGHT_LABEL, areaHeight, numeric = true) { areaHeight = it }
-            item(key = MEASURED_IN_LABEL) {
-                Column(verticalArrangement = Arrangement.spacedBy(dimens.gapXs)) {
+            if (customerFailure != null) {
+                item(key = BUILDER_CUSTOMER_FAILURE_KEY) {
                     Text(
-                        MEASURED_IN_LABEL,
+                        customerFailure,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SmartieColors.Danger
+                    )
+                }
+            }
+
+            item(key = BUILDER_SAVE_CUSTOMER_KEY) {
+                SmartieGhostButton(
+                    text = SAVE_CUSTOMER,
+                    onClick = {
+                        val id = mintedPartyId.ifBlank { newPartyId().also { mintedPartyId = it } }
+                        onSaveCustomer(id)
+                    },
+                    // Finalise and this exclude each other: a link adopted into a
+                    // draft that is being retired would go with it.
+                    enabled = !savingCustomer && gatePhase == GatePhase.IDLE,
+                    modifier = Modifier
+                        .semantics { contentDescription = SAVE_CUSTOMER }
+                        .fillMaxWidth()
+                )
+            }
+
+            // V8C4 asks before it updates a party that is already saved, naming
+            // the party and why it matched. The save waits here, with the control
+            // above still busy, until one of these is pressed.
+            if (mergeQuestion != null) {
+                item(key = BUILDER_MERGE_QUESTION_KEY) {
+                    Text(mergeQuestion.message, style = MaterialTheme.typography.bodyMedium)
+                }
+                item(key = BUILDER_MERGE_UPDATE_KEY) {
+                    SmartieGhostButton(
+                        text = QuoteParty.UPDATE_THAT_PARTY,
+                        onClick = { onAnswerMerge(true) },
+                        modifier = Modifier
+                            .semantics { contentDescription = QuoteParty.UPDATE_THAT_PARTY }
+                            .fillMaxWidth()
+                    )
+                }
+                item(key = BUILDER_MERGE_LEAVE_KEY) {
+                    SmartieGhostButton(
+                        text = QuoteParty.LEAVE_IT_ALONE,
+                        onClick = { onAnswerMerge(false) },
+                        modifier = Modifier
+                            .semantics { contentDescription = QuoteParty.LEAVE_IT_ALONE }
+                            .fillMaxWidth()
+                    )
+                }
+            }
+
+            if (draft.isEmpty) {
+                item(key = BUILDER_EMPTY_KEY) { EmptyState(NOTHING_ON_IT) }
+            }
+
+            items(draft.lines, key = { line -> line.id }) { line ->
+                BuilderLine(line, onChangeLineQuantity, onRemoveLine) { id ->
+                    draft.line(id)?.let { existing ->
+                        openArea(AreaEntry.of(existing))
+                        editingAreaId = id
+                    }
+                }
+            }
+
+            item(key = BUILDER_ADD_MANUAL_KEY) {
+                SmartieGhostButton(
+                    text = ADD_MANUAL,
+                    onClick = {
+                        val opening = !manualOpen
+                        closeForms()
+                        manualOpen = opening
+                    },
+                    modifier = Modifier
+                        .semantics { contentDescription = ADD_MANUAL }
+                        .fillMaxWidth()
+                )
+            }
+
+            if (manualOpen) {
+                entryField(DESCRIPTION_LABEL, manualTitle) { manualTitle = it }
+                entryField(QUANTITY_LABEL, manualQuantity, numeric = true) { manualQuantity = it }
+                entryField(LINE_UNIT_LABEL, manualUnit, hint = UNIT_HINT) { manualUnit = it }
+                entryField(RATE_LABEL, manualRate, numeric = true, hint = RATE_HINT) {
+                    manualRate = it
+                }
+                entryField(SPEC_LABEL, manualSpec) { manualSpec = it }
+                formFooter(
+                    key = BUILDER_MANUAL_ADD_KEY,
+                    addLabel = ADD_MANUAL_LINE,
+                    refusal = manualEntry.refusal(),
+                    onCancel = { closeForms() },
+                    onAdd = {
+                        val id = mintedLineId.ifBlank { newLineId().also { mintedLineId = it } }
+                        onAddManual(id, manualEntry)
+                        closeForms()
+                    }
+                )
+            }
+
+            item(key = BUILDER_ADD_AREA_KEY) {
+                SmartieGhostButton(
+                    text = ADD_AREA,
+                    onClick = {
+                        val opening = !areaOpen
+                        closeForms()
+                        areaOpen = opening
+                    },
+                    modifier = Modifier
+                        .semantics { contentDescription = ADD_AREA }
+                        .fillMaxWidth()
+                )
+            }
+
+            if (areaOpen) {
+                val editing = draft.line(editingAreaId)
+                entryField(DESCRIPTION_LABEL, areaTitle) { areaTitle = it }
+                entryField(WIDTH_LABEL, areaWidth, numeric = true) { areaWidth = it }
+                entryField(HEIGHT_LABEL, areaHeight, numeric = true) { areaHeight = it }
+                item(key = MEASURED_IN_LABEL) {
+                    Column(verticalArrangement = Arrangement.spacedBy(dimens.gapXs)) {
+                        Text(
+                            MEASURED_IN_LABEL,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = SmartieColors.Steel
+                        )
+                        SegmentedChoice(
+                            options = DimensionUnit.entries.toList(),
+                            selected = DimensionUnit.from(areaUnitWire),
+                            label = { it.label },
+                            onSelect = { areaUnitWire = it.wireValue }
+                        )
+                    }
+                }
+                entryField(OPENINGS_LABEL, areaCount, numeric = true) { areaCount = it }
+                entryField(RATE_LABEL, areaRate, numeric = true, hint = PER_SQFT_HINT) {
+                    areaRate = it
+                }
+                entryField(MINIMUM_LABEL, areaMinimum, numeric = true, hint = MINIMUM_HINT) {
+                    areaMinimum = it
+                }
+                item(key = BUILDER_AREA_WORKING_KEY) {
+                    Text(
+                        areaWorking(areaEntry),
                         style = MaterialTheme.typography.labelMedium,
                         color = SmartieColors.Steel
                     )
-                    SegmentedChoice(
-                        options = DimensionUnit.entries.toList(),
-                        selected = DimensionUnit.from(areaUnitWire),
-                        label = { it.label },
-                        onSelect = { areaUnitWire = it.wireValue }
+                }
+                formFooter(
+                    key = BUILDER_AREA_ADD_KEY,
+                    addLabel = if (editing != null) SAVE_OPENING else ADD_AREA_LINE,
+                    refusal = areaEntry.refusal(),
+                    onCancel = { closeForms() },
+                    onAdd = {
+                        if (editing != null) {
+                            onEditArea(editing, areaEntry)
+                        } else {
+                            val id = mintedLineId.ifBlank { newLineId().also { mintedLineId = it } }
+                            onAddArea(id, areaEntry)
+                        }
+                        closeForms()
+                    }
+                )
+            }
+
+            item(key = BUILDER_INSTALLATION_KEY) {
+                InstallationBlock(
+                    draft = draft,
+                    rateTyped = installTyped,
+                    basisTyped = basisTyped,
+                    onRateTyped = { installTyped = it },
+                    onBasisTyped = { basisTyped = it },
+                    onChange = onInstallationChange
+                )
+            }
+
+            item(key = BUILDER_DISCOUNT_KEY) {
+                DiscountBlock(
+                    draft = draft,
+                    typed = discountTyped,
+                    cap = discountCap,
+                    onTyped = { discountTyped = it },
+                    onChange = onDiscountChange
+                )
+            }
+
+            item(key = BUILDER_TRANSPORT_KEY) {
+                SmartieField(
+                    label = TRANSPORT_LABEL,
+                    value = transportTyped,
+                    onValueChange = {
+                        transportTyped = it
+                        // An emptied box is no carriage, which is zero. An
+                        // unreadable one changes nothing at all rather than
+                        // quietly zeroing a figure somebody entered.
+                        if (it.isBlank()) onTransportChange(0.0)
+                        else QuoteLineEntry.number(it)?.let(onTransportChange)
+                    },
+                    isError = transportRefusal(transportTyped) != null,
+                    supportingText = transportRefusal(transportTyped),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.semantics { contentDescription = TRANSPORT_LABEL }
+                )
+            }
+
+            item(key = TRANSPORT_NOTE_LABEL) {
+                SmartieField(
+                    label = TRANSPORT_NOTE_LABEL,
+                    value = draft.transportNote,
+                    onValueChange = onTransportNoteChange,
+                    placeholder = TRANSPORT_NOTE_HINT,
+                    modifier = Modifier.semantics { contentDescription = TRANSPORT_NOTE_LABEL }
+                )
+            }
+
+            item(key = BUILDER_GST_KEY) {
+                val rates = draft.gstRates(gstOf)
+                Column(verticalArrangement = Arrangement.spacedBy(dimens.gapXs)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(dimens.gapS)
+                    ) {
+                        Text(
+                            GST_SWITCH_LABEL,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = SmartieColors.Steel,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(
+                            checked = draft.gstEnabled,
+                            onCheckedChange = onGstEnabledChange,
+                            modifier = Modifier.semantics { contentDescription = GST_SWITCH_LABEL }
+                        )
+                    }
+                    if (draft.gstEnabled) {
+                        SmartieField(
+                            label = GST_PERCENT_LABEL,
+                            value = gstTyped,
+                            onValueChange = {
+                                gstTyped = it
+                                onGstPercentChange(QuoteLineEntry.number(it))
+                            },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.semantics { contentDescription = GST_PERCENT_LABEL }
+                        )
+                    }
+                    Text(
+                        QuoteGst.note(draft.gstEnabled, draft.gstPercent, rates),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (draft.gstEnabled && draft.gstPercent == null) {
+                            SmartieColors.Warn
+                        } else {
+                            SmartieColors.Steel
+                        }
                     )
                 }
             }
-            entryField(OPENINGS_LABEL, areaCount, numeric = true) { areaCount = it }
-            entryField(RATE_LABEL, areaRate, numeric = true, hint = PER_SQFT_HINT) {
-                areaRate = it
+
+            item(key = BUILDER_TOTALS_KEY) { Totals(draft) }
+
+            if (draft.needsRateCount > 0) {
+                item(key = BUILDER_NEEDS_RATE_KEY) {
+                    Text(
+                        needsRateNote(draft.needsRateCount),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SmartieColors.Warn
+                    )
+                }
             }
-            entryField(MINIMUM_LABEL, areaMinimum, numeric = true, hint = MINIMUM_HINT) {
-                areaMinimum = it
+
+            // The finalise gate's first caller. N5.11's PDF, Print and WhatsApp
+            // become the others (V8C4 has no Finalise button, only the gate).
+            if (canFinalise && !draft.isEmpty) {
+                item(key = BUILDER_FINALISE_KEY) {
+                    val taking = gatePhase == GatePhase.TAKING_NUMBER
+                    SmartiePrimaryButton(
+                        text = FINALISE,
+                        onClick = onFinalise,
+                        // Out of IDLE from the first press, synchronously — the
+                        // view model moves the gate before it launches anything.
+                        enabled = gatePhase == GatePhase.IDLE && !savingCustomer && mergeQuestion == null,
+                        // Visibly busy, and saying why, for as long as the number
+                        // takes: up to seconds when every attempt is refused.
+                        busy = taking,
+                        busyText = TAKING_A_NUMBER,
+                        modifier = Modifier
+                            .semantics { contentDescription = if (taking) TAKING_A_NUMBER else FINALISE }
+                            .fillMaxWidth()
+                    )
+                }
+                if (finaliseFailure != null) {
+                    item(key = BUILDER_FINALISE_FAILURE_KEY) {
+                        Text(
+                            finaliseFailure,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = SmartieColors.Danger
+                        )
+                    }
+                }
             }
-            item(key = BUILDER_AREA_WORKING_KEY) {
+
+            if (!draft.isEmpty) {
+                item(key = BUILDER_CLEAR_KEY) {
+                    SmartieGhostButton(
+                        text = CLEAR_LINES,
+                        onClick = onClear,
+                        danger = true,
+                        modifier = Modifier
+                            .semantics { contentDescription = CLEAR_LINES }
+                            .fillMaxWidth()
+                    )
+                }
+            }
+
+            // The end of the list, and nothing else. An absence assertion scrolls
+            // here first, so "the control is not on the screen" cannot quietly
+            // mean "the list stopped composing at the fold".
+            item(key = BUILDER_TAIL_KEY) {
                 Text(
-                    areaWorking(areaEntry),
-                    style = MaterialTheme.typography.labelMedium,
+                    ISSUING_NOTE,
+                    style = MaterialTheme.typography.bodySmall,
                     color = SmartieColors.Steel
                 )
             }
-            formFooter(
-                key = BUILDER_AREA_ADD_KEY,
-                addLabel = if (editing != null) SAVE_OPENING else ADD_AREA_LINE,
-                refusal = areaEntry.refusal(),
-                onCancel = { closeForms() },
-                onAdd = {
-                    if (editing != null) {
-                        onEditArea(editing, areaEntry)
-                    } else {
-                        val id = mintedLineId.ifBlank { newLineId().also { mintedLineId = it } }
-                        onAddArea(id, areaEntry)
+        }
+
+        // While the gate is open every control on the panel is disabled at
+        // once: this layer takes every touch before anything under it sees
+        // one. The view model refuses an edit as well — that is the floor,
+        // and this is what the person sees. System Back still leaves.
+        if (gatePhase != GatePhase.IDLE) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .testTag(BUILDER_LOCK_TAG)
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+                            }
+                        }
                     }
-                    closeForms()
-                }
             )
         }
 
-        item(key = BUILDER_INSTALLATION_KEY) {
-            InstallationBlock(
-                draft = draft,
-                rateTyped = installTyped,
-                basisTyped = basisTyped,
-                onRateTyped = { installTyped = it },
-                onBasisTyped = { basisTyped = it },
-                onChange = onInstallationChange
+        // Above the layer, so its two answers are the only thing that can
+        // be pressed while it waits.
+        if (zeroRateQuestion != null) {
+            ZeroRateQuestion(
+                question = zeroRateQuestion,
+                onAnswer = onAnswerZeroRates,
+                modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
+    }
+}
 
-        item(key = BUILDER_DISCOUNT_KEY) {
-            DiscountBlock(
-                draft = draft,
-                typed = discountTyped,
-                cap = discountCap,
-                onTyped = { discountTyped = it },
-                onChange = onDiscountChange
+/**
+ * The finalise gate's ₹0 question, with its two answers.
+ *
+ * "Continue anyway" and "Cancel" are **a choice, not a port**: V8C4 asks
+ * through `window.confirm`, whose OK / Cancel are the browser's, so there was
+ * no label to copy. Do not "correct" them to match V8C4.
+ */
+@Composable
+private fun ZeroRateQuestion(question: String, onAnswer: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    val dimens = LocalSmartieDimens.current
+    SmartieCard(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(dimens.screenPadding)
+            .testTag(BUILDER_ZERO_RATE_TAG)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(dimens.gapS)) {
+            Text(question, style = MaterialTheme.typography.bodyMedium, color = SmartieColors.Ink)
+            SmartiePrimaryButton(
+                text = CONTINUE_ANYWAY,
+                onClick = { onAnswer(true) },
+                modifier = Modifier
+                    .semantics { contentDescription = CONTINUE_ANYWAY }
+                    .fillMaxWidth()
             )
-        }
-
-        item(key = BUILDER_TRANSPORT_KEY) {
-            SmartieField(
-                label = TRANSPORT_LABEL,
-                value = transportTyped,
-                onValueChange = {
-                    transportTyped = it
-                    // An emptied box is no carriage, which is zero. An
-                    // unreadable one changes nothing at all rather than
-                    // quietly zeroing a figure somebody entered.
-                    if (it.isBlank()) onTransportChange(0.0)
-                    else QuoteLineEntry.number(it)?.let(onTransportChange)
-                },
-                isError = transportRefusal(transportTyped) != null,
-                supportingText = transportRefusal(transportTyped),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.semantics { contentDescription = TRANSPORT_LABEL }
-            )
-        }
-
-        item(key = TRANSPORT_NOTE_LABEL) {
-            SmartieField(
-                label = TRANSPORT_NOTE_LABEL,
-                value = draft.transportNote,
-                onValueChange = onTransportNoteChange,
-                placeholder = TRANSPORT_NOTE_HINT,
-                modifier = Modifier.semantics { contentDescription = TRANSPORT_NOTE_LABEL }
-            )
-        }
-
-        item(key = BUILDER_GST_KEY) {
-            val rates = draft.gstRates(gstOf)
-            Column(verticalArrangement = Arrangement.spacedBy(dimens.gapXs)) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(dimens.gapS)
-                ) {
-                    Text(
-                        GST_SWITCH_LABEL,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = SmartieColors.Steel,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Switch(
-                        checked = draft.gstEnabled,
-                        onCheckedChange = onGstEnabledChange,
-                        modifier = Modifier.semantics { contentDescription = GST_SWITCH_LABEL }
-                    )
-                }
-                if (draft.gstEnabled) {
-                    SmartieField(
-                        label = GST_PERCENT_LABEL,
-                        value = gstTyped,
-                        onValueChange = {
-                            gstTyped = it
-                            onGstPercentChange(QuoteLineEntry.number(it))
-                        },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.semantics { contentDescription = GST_PERCENT_LABEL }
-                    )
-                }
-                Text(
-                    QuoteGst.note(draft.gstEnabled, draft.gstPercent, rates),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (draft.gstEnabled && draft.gstPercent == null) {
-                        SmartieColors.Warn
-                    } else {
-                        SmartieColors.Steel
-                    }
-                )
-            }
-        }
-
-        item(key = BUILDER_TOTALS_KEY) { Totals(draft) }
-
-        if (draft.needsRateCount > 0) {
-            item(key = BUILDER_NEEDS_RATE_KEY) {
-                Text(
-                    needsRateNote(draft.needsRateCount),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = SmartieColors.Warn
-                )
-            }
-        }
-
-        if (!draft.isEmpty) {
-            item(key = BUILDER_CLEAR_KEY) {
-                SmartieGhostButton(
-                    text = CLEAR_LINES,
-                    onClick = onClear,
-                    danger = true,
-                    modifier = Modifier
-                        .semantics { contentDescription = CLEAR_LINES }
-                        .fillMaxWidth()
-                )
-            }
-        }
-
-        // The end of the list, and nothing else. An absence assertion scrolls
-        // here first, so "the control is not on the screen" cannot quietly
-        // mean "the list stopped composing at the fold".
-        item(key = BUILDER_TAIL_KEY) {
-            Text(
-                ISSUING_LATER,
-                style = MaterialTheme.typography.bodySmall,
-                color = SmartieColors.Steel
+            SmartieGhostButton(
+                text = CANCEL_FINALISE,
+                onClick = { onAnswer(false) },
+                modifier = Modifier
+                    .semantics { contentDescription = CANCEL_FINALISE }
+                    .fillMaxWidth()
             )
         }
     }
@@ -1268,6 +1383,14 @@ internal const val BUILDER_TOTALS_KEY = "builder-totals"
 internal const val BUILDER_EMPTY_KEY = "builder-empty"
 internal const val BUILDER_NEEDS_RATE_KEY = "builder-needs-rate"
 internal const val BUILDER_CLEAR_KEY = "builder-clear"
+internal const val BUILDER_FINALISE_KEY = "builder-finalise"
+internal const val BUILDER_FINALISE_FAILURE_KEY = "builder-finalise-failure"
+
+/** The layer that takes every touch while the finalise gate is open. */
+internal const val BUILDER_LOCK_TAG = "builder-lock"
+
+/** The ₹0 question's card, drawn above that layer. */
+internal const val BUILDER_ZERO_RATE_TAG = "builder-zero-rate"
 
 /** A scroll target and nothing more. See the panel's KDoc. */
 internal const val BUILDER_TAIL_KEY = "builder-end"
@@ -1340,5 +1463,15 @@ internal const val TOTAL_ROW = "Grand total"
 internal const val GST_UNSET = "rate not set"
 internal const val TOTAL_UNSET = "set the GST rate"
 internal const val NOTHING_ON_IT = "Nothing on this quotation yet. Go back and add a product."
-internal const val ISSUING_LATER =
-    "A number is issued when this is downloaded, printed or shared."
+/**
+ * True since N5.9b: the stand-alone Finalise control takes the number. When
+ * N5.11 makes PDF, Print and WhatsApp the gate's callers, this goes back to
+ * saying so — it read "A number is issued when this is downloaded, printed or
+ * shared", which was V8C4's truth before there was anything to press.
+ */
+internal const val ISSUING_NOTE =
+    "Finalising takes the next number from the shared counter, and needs an internet connection."
+internal const val FINALISE = "Finalise"
+internal const val TAKING_A_NUMBER = "Taking a number…"
+internal const val CONTINUE_ANYWAY = "Continue anyway"
+internal const val CANCEL_FINALISE = "Cancel"

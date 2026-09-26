@@ -61,6 +61,36 @@ data class QuoteDrafts(
     fun select(id: String): QuoteDrafts = copy(currentId = id)
 
     /**
+     * A draft that has been **finalised**, taken out of the collection so the
+     * next quotation starts under a **new id**.
+     *
+     * **Never `QuoteDraft.clear()` for this.** A cleared draft keeps its id,
+     * and finalise's read-first looks the id up: the next quotation built on
+     * it would be answered with the previous one's number and never issued.
+     * V8C4 gets the same result by clearing `state.draftId` on success
+     * ("this record is closed") before it clears the draft; here the id and
+     * the draft go together, in one call, so there is no moment when one has
+     * gone and the other has not.
+     *
+     * If another draft remains, the builder moves to it by the same fallback
+     * [current] already uses; otherwise an empty draft under [freshId] becomes
+     * current. [freshId] is the caller's, minted before any store transform
+     * that runs this — the rule `currentDraftId` states — and is unused when
+     * a draft remains. So retiring the same id twice mints nothing the second
+     * time: a finalise that is answered `AlreadyIssued` after a crash cannot
+     * pile up empty drafts.
+     */
+    fun retire(finalisedId: String, freshId: String): QuoteDrafts {
+        require(freshId.isNotBlank() && freshId != finalisedId) {
+            "A retired draft's successor needs an id of its own"
+        }
+        val without = remove(finalisedId)
+        val remaining = without.current
+        return if (remaining != null) without.select(remaining.id)
+        else without.save(QuoteDraft(id = freshId))
+    }
+
+    /**
      * Why another draft cannot be started, or null when one can.
      *
      * **NOT CALLED BY ANYTHING, so the cap is not enforced at runtime today.**

@@ -258,6 +258,71 @@ class QuoteDraftsTest {
         assertEquals("qd_1", drafts.currentId)
     }
 
+    // --- retiring a finalised draft (N5.9b) ----------------------------------------
+
+    @Test
+    fun `a finalised draft is retired, and the next quotation starts under a new id`() {
+        val drafts = QuoteDrafts().save(draft("qd_1", at = 5L))
+
+        val after = drafts.retire(finalisedId = "qd_1", freshId = "qd_2")
+
+        assertEquals(listOf("qd_2"), after.drafts.map { it.id })
+        assertEquals("qd_2", after.currentId)
+        assertEquals("qd_2", after.current!!.id)
+        assertTrue(after.current!!.isEmpty)
+        assertNull(after["qd_1"])
+    }
+
+    @Test
+    fun `clear keeps the id, retire never does - which is why finalise retires`() {
+        // The whole reason `retire` exists. Finalise's read-first looks the
+        // draft's id up; a cleared draft keeps it, so the next quotation built
+        // on it would be answered with the previous one's number and never
+        // issued. The Owner's warning, pinned as the difference between the
+        // two calls.
+        val finalised = draft("qd_1", at = 5L)
+        assertEquals("qd_1", finalised.clear().id)
+        assertEquals("qd_1", QuoteDrafts().save(finalised.clear()).current!!.id)
+
+        val retired = QuoteDrafts().save(finalised).retire("qd_1", "qd_2")
+        assertNotEquals("qd_1", retired.current!!.id)
+        assertTrue(retired.drafts.none { it.id == "qd_1" })
+    }
+
+    @Test
+    fun `retiring the same draft twice mints nothing the second time`() {
+        // An `AlreadyIssued` after a crash retires again. It must not leave a
+        // trail of empty drafts behind it.
+        val once = QuoteDrafts().save(draft("qd_1")).retire("qd_1", "qd_2")
+        val twice = once.retire("qd_1", "qd_3")
+
+        assertEquals(listOf("qd_2"), twice.drafts.map { it.id })
+        assertEquals("qd_2", twice.currentId)
+    }
+
+    @Test
+    fun `another draft in progress becomes current rather than a fresh one`() {
+        // Not reachable while there is one draft per account, and decided now
+        // so the drafts list that makes it reachable inherits a rule.
+        val drafts = QuoteDrafts()
+            .save(draft("qd_other", at = 3L))
+            .save(draft("qd_1", at = 9L))
+
+        val after = drafts.retire("qd_1", "qd_fresh")
+
+        assertEquals(listOf("qd_other"), after.drafts.map { it.id })
+        assertEquals("qd_other", after.currentId)
+    }
+
+    @Test
+    fun `a successor can never share the finalised id`() {
+        val drafts = QuoteDrafts().save(draft("qd_1"))
+        listOf("qd_1", "").forEach { bad ->
+            val refused = runCatching { drafts.retire("qd_1", bad) }.exceptionOrNull()
+            assertTrue("$bad was accepted", refused is IllegalArgumentException)
+        }
+    }
+
     @Test
     fun `selecting pins the fallback, so the same id comes back twice running`() {
         // Without this, a collection whose named draft had been finalised

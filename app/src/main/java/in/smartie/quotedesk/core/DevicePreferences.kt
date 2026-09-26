@@ -143,6 +143,25 @@ class AccountPreferences internal constructor(
     }
 
     /**
+     * Takes a **finalised** draft out and answers the id the builder moves
+     * to — `QuoteDrafts.retire`, in one edit.
+     *
+     * The draft and its id go together here, never one after the other: a
+     * store that held the finalised id for a moment longer than its draft is
+     * exactly what would answer the next quotation with the last number. The
+     * successor's id is minted **before** the transform, for the reason
+     * [currentDraftId] gives, and is unused when a draft remains.
+     */
+    suspend fun retireDraft(finalisedId: String): String {
+        val candidate = Keys.generateId(QuoteDrafts.DRAFT_PREFIX)
+        val after = store.edit { stored ->
+            val drafts = QuoteDraftsCodec.decode(stored[draftsKey])
+            stored[draftsKey] = QuoteDraftsCodec.encode(drafts.retire(finalisedId, candidate))
+        }
+        return QuoteDraftsCodec.decode(after[draftsKey]).currentId
+    }
+
+    /**
      * Moves what the ownerless keys held into this account, once.
      *
      * The old draft was a single one, so it is adopted as this account's first

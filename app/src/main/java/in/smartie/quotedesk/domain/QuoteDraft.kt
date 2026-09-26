@@ -571,12 +571,30 @@ data class QuoteDraft(
      * **This is the single gate.** Every money field that can go negative is
      * bounded here, and the non-negative invariant `QuoteMath` documents
      * depends on this having been called — the arithmetic itself has no floor.
+     *
+     * **One rule, one place.** `QuotationWrite.plan` calls it inside the
+     * finalise transaction, and N5.9b's finalise gate calls it first, before
+     * anything is built; neither re-checks anything this decides.
+     *
+     * [capPercent] is the Manager's limit as `QuoteDiscount.capFor` resolves
+     * it, and **null when the Owner has not configured one** — which this
+     * answers itself with `QuoteDiscount.CAP_NOT_SET`, rather than leaving
+     * each caller to remember a pre-check. Until N5.9b that case lived in
+     * `plan`, outside this function, and the gate would have had to copy it.
      */
-    fun refusal(capPercent: Double): String? {
+    fun refusal(capPercent: Double?): String? {
         faults.firstOrNull()?.let { return it.message }
         if (!QuoteTier.offers(tier)) return TIER_NOT_OFFERED
         if (isEmpty) return NO_LINES
         if (lines.any { it.needsRate }) return LINE_NEEDS_RATE
+        // A rate typed by hand cannot be negative (`QuoteLineEntry`), but a
+        // catalogue line takes the product's price as read, and the reader
+        // drops NaN and infinity but not a negative. So after this line every
+        // rate is zero or more, which is what makes the finalise gate's
+        // "priced at ₹0" question true of every line it can name.
+        if (lines.any { line -> line.rate?.let { !it.isFinite() || it < 0.0 } == true }) {
+            return LINE_RATE_BELOW_ZERO
+        }
 
         if (!transport.isFinite() || transport < 0.0) return NEGATIVE_TRANSPORT
         installation?.let { charge ->
@@ -584,7 +602,13 @@ data class QuoteDraft(
             if (!charge.basis.isFinite() || charge.basis < 0.0) return NEGATIVE_INSTALLATION
         }
         discount?.let { taken ->
-            QuoteMath.discountRefusal(taken, discountBase, capPercent)?.let { return it }
+            // "Not configured" and "configured at zero" are different
+            // sentences, and `discountRefusal` takes a number. A zero or
+            // negative discount falls through to the ordinary gates either way.
+            if (capPercent == null && taken.amountOn(discountBase) > 0.0) {
+                return QuoteDiscount.CAP_NOT_SET
+            }
+            QuoteMath.discountRefusal(taken, discountBase, capPercent ?: 0.0)?.let { return it }
         }
 
         if (gstEnabled && gstPercent == null) return GST_NOT_SET
@@ -598,8 +622,10 @@ data class QuoteDraft(
 
     companion object {
         const val TIER_NOT_OFFERED = "A new quotation is priced at Dealer or Client rates"
-        const val NO_LINES = "Add something to the quotation first"
+        /** V8C4's own words (`ensureFinalised`), adopted in N5.9b. */
+        const val NO_LINES = "Add a line to the quotation first"
         const val LINE_NEEDS_RATE = "Every line needs a rate before this can be issued"
+        const val LINE_RATE_BELOW_ZERO = "Every rate must be zero or more before this can be issued"
         const val NEGATIVE_TRANSPORT = "Transport cannot be negative"
         const val NEGATIVE_INSTALLATION = "An installation charge cannot be negative"
         const val GST_NOT_SET = "Set the GST rate for this quotation"

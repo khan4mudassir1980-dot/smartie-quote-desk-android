@@ -178,17 +178,15 @@ object QuotationWrite {
             partyId = QuoteParty.linkFor(draft.party, draft.partyId, customers).orEmpty()
         )
 
-        val cap = QuoteDiscount.capFor(member, quoting)
-        resolved.discount?.let { taken ->
-            // "Not configured" and "configured at zero" are different
-            // sentences; `refusal` below cannot tell them apart, so the
-            // unconfigured case is answered first. A zero or negative
-            // discount falls through to the ordinary gates.
-            if (cap == null && taken.amountOn(resolved.discountBase) > 0.0) {
-                return QuotationPlan.Refused(QuoteDiscount.CAP_NOT_SET)
-            }
+        // [quoting] is what the transaction has just read, so the cap here is
+        // the Owner's limit as it stands at the commit, not as the screen last
+        // saw it — and an unconfigured one is refused by `refusal` itself.
+        // Losing this check would send a Manager's uncapped discount to the
+        // rules, whose refusal the retry reads as contention: six attempts
+        // and a reason that has nothing to do with the cap.
+        resolved.refusal(QuoteDiscount.capFor(member, quoting))?.let {
+            return QuotationPlan.Refused(it)
         }
-        resolved.refusal(cap ?: 0.0)?.let { return QuotationPlan.Refused(it) }
 
         val totals = resolved.totals()
         val lines = resolved.lines.map { line ->

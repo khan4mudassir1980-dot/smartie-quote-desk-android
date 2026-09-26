@@ -1,6 +1,5 @@
 package `in`.smartie.quotedesk.data.repository
 
-import `in`.smartie.quotedesk.data.mapping.DocData
 import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.domain.Discount
@@ -30,81 +29,6 @@ import org.junit.Test
  */
 class QuotationWriteRepositoryTest {
 
-    /** Documents by path, e.g. `quotations/qd_1` or `teamSettings/numbering`. */
-    private class FakeStore(
-        val docs: MutableMap<String, Map<String, Any?>> = mutableMapOf(),
-        /** How many times Firestore runs the body before committing. */
-        private val attempts: Int = 1,
-        /** Called before each run, with its index — to change a document between runs. */
-        private val beforeRun: (Int) -> Unit = {}
-    ) : QuotationStore {
-        var transactions = 0
-        var bodyRuns = 0
-        val reads = mutableListOf<String>()
-
-        /** Commit the next transaction, then throw as though its response was lost. */
-        var loseNextResponse = false
-
-        /**
-         * Refuse this many transactions outright, committing nothing — what
-         * the rules do to a transaction built on a stale counter read.
-         */
-        var refuseNext = 0
-
-        /** Called before a refused transaction throws — to move the counter on, say. */
-        var onRefuse: () -> Unit = {}
-
-        override fun isRefusal(error: Throwable): Boolean = error is Refusal
-
-        override suspend fun <T> transaction(body: (QuotationTransaction) -> T): T {
-            transactions++
-            if (refuseNext > 0) {
-                refuseNext--
-                onRefuse()
-                throw Refusal()
-            }
-            var result: T? = null
-            val staged = mutableListOf<Pair<String, Map<String, Any?>>>()
-            repeat(attempts) { run ->
-                beforeRun(run)
-                bodyRuns++
-                // Firestore discards what an abandoned run recorded.
-                staged.clear()
-                result = body(object : QuotationTransaction {
-                    override fun readQuotation(id: String) = read("quotations/$id")
-                    override fun readNumbering() = read(NUMBERING)
-                    override fun readQuoting() = read("teamSettings/quoting")
-
-                    override fun writeQuotation(id: String, data: Map<String, Any?>) {
-                        staged += "quotations/$id" to data
-                    }
-
-                    override fun writeNumbering(fields: Map<String, Any?>) {
-                        // An update: named fields replaced whole, the rest kept.
-                        staged += NUMBERING to (docs.getValue(NUMBERING) + fields)
-                    }
-                })
-            }
-            staged.forEach { (path, data) -> docs[path] = data }
-            if (loseNextResponse) {
-                loseNextResponse = false
-                throw IllegalStateException("the commit landed; its acknowledgement did not")
-            }
-            @Suppress("UNCHECKED_CAST")
-            return result as T
-        }
-
-        private fun read(path: String): DocData? {
-            reads += path
-            return docs[path]?.let { DocData(path.substringAfterLast('/'), it) }
-        }
-
-        fun quotations(): List<String> = docs.keys.filter { it.startsWith("quotations/") }
-    }
-
-    /** Stands in for `PERMISSION_DENIED`, which names no document. */
-    private class Refusal : RuntimeException("PERMISSION_DENIED")
-
     private val manager = Member(uid = "u_m", name = "Manager Person", role = Role.STAFF)
     private val staff = Member(uid = "u_w", name = "Staff Person", role = Role.WORKER)
 
@@ -118,7 +42,7 @@ class QuotationWriteRepositoryTest {
 
     private var clockReads = 0
     private val pauses = mutableListOf<Long>()
-    private fun repository(store: FakeStore, jitter: Double = 0.5) = QuotationWriteRepository(
+    private fun repository(store: FakeQuotationStore, jitter: Double = 0.5) = QuotationWriteRepository(
         store,
         now = {
             clockReads++
@@ -137,13 +61,13 @@ class QuotationWriteRepositoryTest {
         is FinaliseOutcome.Refused -> "Refused $message"
     }
 
-    private fun FakeStore.doc(path: String): Map<String, Any?> = docs.getValue(path)
+    private fun FakeQuotationStore.doc(path: String): Map<String, Any?> = docs.getValue(path)
 
     // --- issuing ------------------------------------------------------------------------
 
     @Test
     fun `a first finalise writes the quotation and moves the counter on by one`() = runBlocking {
-        val store = FakeStore(seeded())
+        val store = FakeQuotationStore(seeded())
         val outcome = repository(store).finalise(manager, draft, customers = emptyList(), snap = emptyMap())
 
         assertEquals("Issued qd_1 SIE/QD/2025-26/009", outcome.summary())
@@ -159,7 +83,7 @@ class QuotationWriteRepositoryTest {
 
     @Test
     fun `until N6 the caller passes no snap, and the stored quotation has no snap key`() = runBlocking {
-        val store = FakeStore(seeded())
+        val store = FakeQuotationStore(seeded())
         repository(store).finalise(manager, draft, customers = emptyList(), snap = null)
 
         assertFalse(store.doc("quotations/qd_1").containsKey("snap"))
@@ -167,7 +91,7 @@ class QuotationWriteRepositoryTest {
 
     @Test
     fun `a second call for the same draft returns the same number and writes nothing`() = runBlocking {
-        val store = FakeStore(seeded())
+        val store = FakeQuotationStore(seeded())
         val repository = repository(store)
 
         repository.finalise(manager, draft, customers = emptyList(), snap = emptyMap())
@@ -182,7 +106,7 @@ class QuotationWriteRepositoryTest {
     fun `both outcomes hand back the whole record, as V8C4's reused path hands back doc`() = runBlocking {
         // `{no: prev.no, doc: prev, reused: true}` and the caller's
         // `Object.assign(draft, out.doc)`: the stored quotation, not a number.
-        val store = FakeStore(seeded())
+        val store = FakeQuotationStore(seeded())
         val repository = repository(store)
 
         val issued = repository.finalise(manager, draft, customers = emptyList(), snap = emptyMap())
@@ -207,7 +131,7 @@ class QuotationWriteRepositoryTest {
         // again. Were the read-first removed — the plan built as though no
         // quotation existed — the second call would take number 010 for the
         // same job, and this test would fail on both assertions below.
-        val store = FakeStore(seeded())
+        val store = FakeQuotationStore(seeded())
         val repository = repository(store)
         store.loseNextResponse = true
 
@@ -225,7 +149,7 @@ class QuotationWriteRepositoryTest {
 
     @Test
     fun `an issued quotation is answered without reading the counter`() = runBlocking {
-        val store = FakeStore(seeded())
+        val store = FakeQuotationStore(seeded())
         val repository = repository(store)
         repository.finalise(manager, draft, customers = emptyList(), snap = emptyMap())
         store.reads.clear()
@@ -241,7 +165,7 @@ class QuotationWriteRepositoryTest {
     fun `when Firestore re-runs the body, the plan is rebuilt from the fresh reads`() = runBlocking {
         // Somebody else issued 009, 010 and 011 between the two runs.
         val docs = seeded()
-        val store = FakeStore(docs, attempts = 2) { run ->
+        val store = FakeQuotationStore(docs, attempts = 2) { run ->
             if (run == 1) docs[NUMBERING] = counter + ("next" to 12)
         }
 
@@ -262,7 +186,7 @@ class QuotationWriteRepositoryTest {
         // Somebody else took 009 while this attempt was in flight; the rules
         // refused ours. The retry re-reads and issues 010.
         val docs = seeded()
-        val store = FakeStore(docs)
+        val store = FakeQuotationStore(docs)
         store.refuseNext = 1
         store.onRefuse = { docs[NUMBERING] = counter + ("next" to 10) }
 
@@ -276,7 +200,7 @@ class QuotationWriteRepositoryTest {
 
     @Test
     fun `refused at every attempt, it stops at the bound and says so`() = runBlocking {
-        val store = FakeStore(seeded())
+        val store = FakeQuotationStore(seeded())
         store.refuseNext = 99
 
         val outcome = repository(store).finalise(manager, draft, customers = emptyList(), snap = emptyMap())
@@ -295,7 +219,7 @@ class QuotationWriteRepositoryTest {
     fun `any other failure is not retried`() = runBlocking {
         // A lost response, an offline device, a quota: none of them is the
         // race for the counter, and a retry would only hide it.
-        val store = FakeStore(seeded())
+        val store = FakeQuotationStore(seeded())
         store.loseNextResponse = true
         try {
             repository(store).finalise(manager, draft, customers = emptyList(), snap = emptyMap())
@@ -311,7 +235,7 @@ class QuotationWriteRepositoryTest {
         // Whatever the first attempt did, the second cannot issue a second
         // number for this draft: here the quotation turns up between them.
         val docs = seeded()
-        val store = FakeStore(docs)
+        val store = FakeQuotationStore(docs)
         store.refuseNext = 1
         store.onRefuse = {
             docs["quotations/qd_1"] = mapOf("id" to "qd_1", "no" to "SIE/QD/2025-26/009", "byUid" to manager.uid)
@@ -335,7 +259,7 @@ class QuotationWriteRepositoryTest {
 
     @Test
     fun `a refusal writes nothing`() = runBlocking {
-        val store = FakeStore()
+        val store = FakeQuotationStore()
         val outcome = repository(store).finalise(manager, draft, customers = emptyList(), snap = emptyMap())
 
         assertEquals(FinaliseOutcome.Refused(QuotationWrite.NUMBERING_NOT_SET), outcome)
@@ -346,7 +270,7 @@ class QuotationWriteRepositoryTest {
     fun `Staff and a draft with no identity are refused before any transaction opens`() = runBlocking {
         // Staff cannot read /quotations, so the first read would be denied —
         // and a denial is what the retry must read as contention.
-        val store = FakeStore(seeded())
+        val store = FakeQuotationStore(seeded())
         val repository = repository(store)
 
         assertEquals(
@@ -365,7 +289,7 @@ class QuotationWriteRepositoryTest {
         runBlocking {
             val discounted = draft.copy(discount = Discount(DiscountKind.PERCENT, 5.0))
 
-            val lowered = FakeStore(seeded("teamSettings/quoting" to mapOf("managerDiscountPct" to 2)))
+            val lowered = FakeQuotationStore(seeded("teamSettings/quoting" to mapOf("managerDiscountPct" to 2)))
             assertEquals(
                 // 2% of 1,000 is 20; 5% asks for 50.
                 FinaliseOutcome.Refused(QuoteMath.overTheCap(2.0, 20.0)),
@@ -373,11 +297,42 @@ class QuotationWriteRepositoryTest {
             )
             assertTrue(lowered.quotations().isEmpty())
 
-            val unset = FakeStore(seeded())
+            val unset = FakeQuotationStore(seeded())
             assertEquals(
                 FinaliseOutcome.Refused(QuoteDiscount.CAP_NOT_SET),
                 repository(unset).finalise(manager, discounted, customers = emptyList(), snap = emptyMap())
             )
+        }
+
+    @Test
+    fun `an unconfigured cap is refused locally in ONE transaction - never retried as contention`() =
+        runBlocking {
+            // The 9b plan's amendment A, through the repository directly and
+            // bypassing any gate. The unconfigured-cap check moved into
+            // `QuoteDraft.refusal` in N5.9b; `plan` calls it with the cap the
+            // transaction has just read. Were it lost, the discount would reach
+            // the rules, whose PERMISSION_DENIED the retry reads as contention:
+            // six attempts, about three seconds, and a reason about the counter.
+            val store = FakeQuotationStore(seeded()).apply {
+                // The deployed rule, modelled: with no /teamSettings/quoting a
+                // Manager's discount is refused at commit (N5.9a commit 2,
+                // `ccc08c4` — "an absent document refuses a Manager's
+                // discount rather than allowing any").
+                refuseCommitWhen = { staged ->
+                    "teamSettings/quoting" !in docs && staged.values.any { it["disc"] != null }
+                }
+            }
+            val discounted = draft.copy(discount = Discount(DiscountKind.PERCENT, 5.0))
+
+            val outcome = repository(store).finalise(manager, discounted, customers = emptyList(), snap = null)
+
+            assertEquals(FinaliseOutcome.Refused(QuoteDiscount.CAP_NOT_SET), outcome)
+            // The attempt count is the point.
+            assertEquals(1, store.transactions)
+            assertTrue(pauses.isEmpty())
+            // And the cap it refused on was read inside the transaction.
+            assertTrue(store.reads.contains("teamSettings/quoting"))
+            assertTrue(store.quotations().isEmpty())
         }
 
     // --- who it is for ------------------------------------------------------------------
@@ -392,7 +347,7 @@ class QuotationWriteRepositoryTest {
                 partyId = "c_1",
                 party = QuotationPartySnapshot(name = "Sunrise Constructions", site = "Plot 7")
             )
-            val store = FakeStore(seeded())
+            val store = FakeQuotationStore(seeded())
 
             repository(store).finalise(manager, picked, customers = listOf(sunrise), snap = emptyMap())
 
@@ -406,15 +361,11 @@ class QuotationWriteRepositoryTest {
     @Test
     fun `a saved customer missing from the list costs the link, never the quotation`() = runBlocking {
         val picked = draft.copy(partyId = "c_gone", party = QuotationPartySnapshot(name = "Sunrise Constructions"))
-        val store = FakeStore(seeded())
+        val store = FakeQuotationStore(seeded())
 
         val outcome = repository(store).finalise(manager, picked, customers = emptyList(), snap = emptyMap())
 
         assertEquals("Issued qd_1 SIE/QD/2025-26/009", outcome.summary())
         assertFalse(store.doc("quotations/qd_1").containsKey("partyId"))
-    }
-
-    private companion object {
-        const val NUMBERING = "teamSettings/numbering"
     }
 }

@@ -1,5 +1,6 @@
 package `in`.smartie.quotedesk.domain
 
+import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.RateTierV2
 import org.junit.Assert.assertEquals
@@ -165,6 +166,69 @@ class QuoteDraftRefusalTest {
         )
         val unrated = ready.setRate("ln_1", null)
         assertEquals(QuoteDraft.LINE_NEEDS_RATE, unrated.refusal(uncapped))
+    }
+
+    @Test
+    fun `no lines is refused in V8C4's own words`() {
+        // `ensureFinalised`: toast("Add a line to the quotation first").
+        assertEquals("Add a line to the quotation first", QuoteDraft.NO_LINES)
+    }
+
+    // --- a rate below zero, which the catalogue can deliver (N5.9b) -----------------------
+
+    @Test
+    fun `a catalogue line priced below zero is refused - the reader lets a negative through`() {
+        // Typed rates cannot be negative (`QuoteLineEntry`), but a catalogue
+        // line takes the product's price as read, and `asDoubleOrNull` drops
+        // NaN and infinity, not a negative. Without this the finalise gate's
+        // "priced at ₹0" question would name a line priced at −₹500.
+        val product = ProductRecord(
+            documentId = "gate__SIE1000",
+            key = "gate|SIE1000",
+            group = "gate",
+            seedModel = "SIE1000",
+            model = "SIE1000",
+            client = -500.0
+        )
+        val negative = ready.add(product)
+        assertEquals(-500.0, negative.lines.last().rate!!, 0.0)
+        assertEquals(QuoteDraft.LINE_RATE_BELOW_ZERO, negative.refusal(uncapped))
+    }
+
+    @Test
+    fun `an unreadable rate is refused, and a rate of exactly zero is not`() {
+        assertEquals(QuoteDraft.LINE_RATE_BELOW_ZERO, ready.setRate("ln_1", Double.NaN).refusal(uncapped))
+        assertEquals(
+            QuoteDraft.LINE_RATE_BELOW_ZERO,
+            ready.setRate("ln_1", Double.POSITIVE_INFINITY).refusal(uncapped)
+        )
+        // Zero is a price — "Installation — included" — and is the finalise
+        // gate's question to ask, not a refusal.
+        assertNull(ready.setRate("ln_1", 0.0).refusal(uncapped))
+        assertNull(ready.setRate("ln_1", -0.0).refusal(uncapped))
+    }
+
+    @Test
+    fun `an unpriced line is still refused first - it never reaches the rate check`() {
+        val both = ready.setRate("ln_1", null)
+            .addManual(id = "ln_2", title = "Delivery", rate = -1.0)
+        assertEquals(QuoteDraft.LINE_NEEDS_RATE, both.refusal(uncapped))
+    }
+
+    // --- the unconfigured cap, owned here since N5.9b -------------------------------------
+
+    @Test
+    fun `with no cap configured a discount worth anything is refused, and nothing else is`() {
+        val discounted = ready.copy(discount = Discount(DiscountKind.PERCENT, 5.0))
+        assertEquals(QuoteDiscount.CAP_NOT_SET, discounted.refusal(capPercent = null))
+        // No discount, or one worth nothing, is nobody's business.
+        assertNull(ready.refusal(capPercent = null))
+        assertNull(ready.copy(discount = Discount(DiscountKind.PERCENT, 0.0)).refusal(capPercent = null))
+        // And "configured at zero" is a different sentence from "not configured".
+        assertEquals(
+            QuoteMath.overTheCap(0.0, 0.0),
+            discounted.refusal(capPercent = 0.0)
+        )
     }
 
     @Test

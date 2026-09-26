@@ -86,6 +86,48 @@ class ProductsViewModel(
      */
     private val draftWrites = DraftWrites()
 
+    // --- finalising (N5.9b), declared ahead of anything that can edit ----------
+
+    /**
+     * Whether the system reports a connection — collected **eagerly**, as
+     * `PurchaseViewModel.online` is and for the same reason: it is read as a
+     * guard, and under `WhileSubscribed` it would read `true` until something
+     * subscribed. What the check is worth is `QuoteFinaliser`'s KDoc.
+     */
+    private val online: StateFlow<Boolean> = container.connectivity.online
+        .catch { emit(true) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    /** The saved customers the screen held at the press. See [finalise]. */
+    private var pressCustomers: List<PartyRecord> = emptyList()
+
+    /**
+     * V8C4's `ensureFinalised`. Everything it decides is in `QuoteFinaliser`
+     * and tested there; this view model only supplies what touches Android
+     * and Firebase.
+     */
+    private val finaliser = QuoteFinaliser(
+        online = { online.value },
+        finalise = { draft ->
+            container.quotationWriteRepository.finalise(
+                member = member,
+                draft = draft,
+                customers = pressCustomers,
+                // Nothing is frozen until N6 builds company settings, so no
+                // `snap` key at all. The N8 blocker and the N5.11 fallback in
+                // `docs/PROJECT-STATUS.md` are the price of that.
+                snap = null
+            )
+        },
+        retire = ::retire,
+        confirmZeroRates = ::askZeroRates,
+        describe = { it.toAppError().message },
+        log = { container.errorReporter.report(it) }
+    )
+
+    /** IDLE, or CHECKING (the question included), or TAKING_NUMBER. */
+    val gatePhase: StateFlow<GatePhase> = finaliser.phase
+
     init {
         // The stored draft is read once. After that this view model owns it,
         // so an edit is never overwritten by the store catching up.
@@ -292,6 +334,9 @@ class ProductsViewModel(
      * as V8C4's Cancel returns.
      */
     fun saveCustomer(newId: String, customers: List<PartyRecord>) {
+        // Finalise and "Save this customer" exclude each other: a party link
+        // adopted into a draft that is being retired would be lost with it.
+        if (finaliser.phase.value != GatePhase.IDLE) return
         val draft = _draft.value
         val party = QuoteParty.draftOf(draft.party)
         party.refusal()?.let {
@@ -353,6 +398,85 @@ class ProductsViewModel(
     private var mergeAnswer: CompletableDeferred<Boolean>? = null
     private val _mergeQuestion = MutableStateFlow<QuoteParty.MergeQuestion?>(null)
     val mergeQuestion: StateFlow<QuoteParty.MergeQuestion?> = _mergeQuestion.asStateFlow()
+
+    // --- the Finalise control (N5.9b) ---------------------------------------
+
+    private val _finaliseFailure = MutableStateFlow<String?>(null)
+
+    /**
+     * Why the last press did not finalise, kept on the panel until the next
+     * press — as "Save this customer" keeps its refusal — because it can
+     * carry an instruction ("Press Finalise again …") a passing message would
+     * take away before it is read.
+     */
+    val finaliseFailure: StateFlow<String?> = _finaliseFailure.asStateFlow()
+
+    private var zeroRateAnswer: CompletableDeferred<Boolean>? = null
+    private val _zeroRateQuestion = MutableStateFlow<String?>(null)
+
+    /** The ₹0 question while it waits for an answer. See `QuoteFinaliser`. */
+    val zeroRateQuestion: StateFlow<String?> = _zeroRateQuestion.asStateFlow()
+
+    /**
+     * The Finalise control — the gate's **first** caller. N5.11's PDF, Print
+     * and WhatsApp become the others, and change nothing here.
+     *
+     * [customers] is the saved-customer list the screen holds, which the
+     * party link is derived against; [capPercent] is the Manager's limit as
+     * the screen holds it (`QuoteDiscount.capFor`), which the transaction
+     * re-reads before anything is written.
+     */
+    fun finalise(customers: List<PartyRecord>, capPercent: Double?) {
+        // The gate refuses a second press too; this only keeps one from
+        // replacing [pressCustomers] under the first.
+        if (finaliser.phase.value != GatePhase.IDLE) return
+        if (_savingParty.value || _mergeQuestion.value != null) return
+        _finaliseFailure.value = null
+        pressCustomers = customers
+        viewModelScope.launch {
+            when (val outcome = finaliser.ensureFinalised(_draft.value, capPercent)) {
+                is GateOutcome.Finalised -> emit(outcome.message)
+                is GateOutcome.NotFinalised -> _finaliseFailure.value = outcome.message
+                GateOutcome.Cancelled, GateOutcome.AlreadyRunning -> Unit
+            }
+        }
+    }
+
+    /** The answer to [zeroRateQuestion]: true for "Continue anyway". */
+    fun answerZeroRates(continueAnyway: Boolean) {
+        zeroRateAnswer?.complete(continueAnyway)
+    }
+
+    /** The `askMerge` shape: publish the question and wait for [answerZeroRates]. */
+    private suspend fun askZeroRates(question: String): Boolean {
+        val answer = CompletableDeferred<Boolean>()
+        zeroRateAnswer = answer
+        _zeroRateQuestion.value = question
+        return try {
+            answer.await()
+        } finally {
+            _zeroRateQuestion.value = null
+            zeroRateAnswer = null
+        }
+    }
+
+    /**
+     * The finalised draft taken out and the builder moved to a fresh one —
+     * **never** [clearDraft], whose kept id would answer the next quotation
+     * with the previous number.
+     *
+     * Under [DraftWrites]' lock, so no save can interleave: a save already in
+     * flight finishes first and is removed with the draft, and every save
+     * after this writes the new id. The store's edit removes the draft and
+     * makes its successor current in one step (`QuoteDrafts.retire`).
+     */
+    private suspend fun retire(finalisedId: String) {
+        draftWrites.replace { _ ->
+            val next = account.retireDraft(finalisedId)
+            _draft.value = account.drafts.first()[next] ?: QuoteDraft(id = next)
+            next
+        }
+    }
 
     // --- GST and transport (N5.8b) ------------------------------------------
 
@@ -532,6 +656,14 @@ class ProductsViewModel(
     // --- plumbing ----------------------------------------------------------
 
     private fun persist(draft: QuoteDraft) {
+        // Refused while the gate is open. An edit made now would be saved to
+        // the draft, missing from the quotation being issued, and removed with
+        // the draft when it is retired — V8C4 loses such an edit silently;
+        // this says so instead, on purpose.
+        if (finaliser.phase.value != GatePhase.IDLE) {
+            emit(TAKING_A_NUMBER)
+            return
+        }
         // Shown immediately; stored once the id is known. The person never
         // waits on a disk read to see their own tap.
         _draft.value = draft.copy(updatedAt = System.currentTimeMillis())
@@ -578,5 +710,6 @@ class ProductsViewModel(
         // Not a failure. Everything on the quotation already matches what is
         // stored, so there was nothing to write.
         const val CUSTOMER_UNCHANGED = "Nothing to save — this customer is already up to date"
+        const val TAKING_A_NUMBER = "A number is being taken for this quotation — wait a moment"
     }
 }

@@ -15,10 +15,12 @@ import `in`.smartie.quotedesk.data.repository.FirestorePurchaseStore
 import `in`.smartie.quotedesk.data.repository.ProductPinsRepository
 import `in`.smartie.quotedesk.data.repository.FirestorePartyStore
 import `in`.smartie.quotedesk.data.repository.FirestoreProductStore
+import `in`.smartie.quotedesk.data.repository.FirestoreQuotationStore
 import `in`.smartie.quotedesk.data.repository.PartyWriteRepository
 import `in`.smartie.quotedesk.data.repository.ProductEditRepository
 import `in`.smartie.quotedesk.data.repository.SettingsRepository
 import `in`.smartie.quotedesk.data.repository.PurchaseWriteRepository
+import `in`.smartie.quotedesk.data.repository.QuotationWriteRepository
 import `in`.smartie.quotedesk.data.repository.StockPhotoRepository
 import `in`.smartie.quotedesk.data.repository.StockWriteRepository
 import `in`.smartie.quotedesk.data.repository.StoppedStockRepository
@@ -51,6 +53,13 @@ class AppContainer(
 
     /** N5.7's writer for `/products`. The read side stays `catalogueRepository`. */
     val productEditRepository = ProductEditRepository(FirestoreProductStore(firestore))
+
+    /**
+     * N5.9's finalise: one transaction that writes `/quotations` and takes a
+     * number from `/teamSettings/numbering`. The read side stays
+     * `operationsRepository`.
+     */
+    val quotationWriteRepository = QuotationWriteRepository(FirestoreQuotationStore(firestore))
 
     /**
      * N5.6's reader and writer for the two settings documents the quotation

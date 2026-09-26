@@ -74,7 +74,8 @@ class ProductsViewModel(
     private val account = container.devicePreferences.forAccount(member.uid)
 
     /**
-     * The draft's id, once the store has answered.
+     * The draft's id, once the store has answered — and the one lock every
+     * save goes through, so that finalising can move it (see [DraftWrites]).
      *
      * **This view model cannot mint one**, and that is deliberate. Minting
      * here was the third appearance of one shape in a single batch: a view
@@ -83,7 +84,7 @@ class ProductsViewModel(
      * creation now, and every save waits for its answer rather than
      * inventing one to get on with.
      */
-    private val draftId = CompletableDeferred<String>()
+    private val draftWrites = DraftWrites()
 
     init {
         // The stored draft is read once. After that this view model owns it,
@@ -106,13 +107,13 @@ class ProductsViewModel(
                 // next save. `resume` is where both are decided, and it is
                 // unit-tested — this view model cannot be.
                 _draft.value = QuoteDrafts.resume(_draft.value, stored, id)
-                draftId.complete(id)
+                draftWrites.resolve(id)
             }.onFailure { failure ->
                 report(failure)
                 // The store is unreadable. The screen still works and the
                 // draft simply is not persisted — it is never given an
                 // invented id to carry on with.
-                draftId.complete("")
+                draftWrites.resolve("")
             }
         }
     }
@@ -536,11 +537,14 @@ class ProductsViewModel(
         _draft.value = draft.copy(updatedAt = System.currentTimeMillis())
         viewModelScope.launch {
             runCatching {
-                val id = draftId.await()
-                if (id.isNotBlank()) {
-                    val latest = _draft.value.copy(id = id)
-                    _draft.value = latest
-                    account.setDrafts(account.drafts.first().save(latest))
+                // The id is read under the lock, never before it: a save must
+                // not hold an id that finalising has since retired.
+                draftWrites.withCurrent { id ->
+                    if (id.isNotBlank()) {
+                        val latest = _draft.value.copy(id = id)
+                        _draft.value = latest
+                        account.setDrafts(account.drafts.first().save(latest))
+                    }
                 }
             }.onFailure { report(it) }
         }

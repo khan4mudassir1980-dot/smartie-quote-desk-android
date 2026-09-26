@@ -1954,6 +1954,97 @@ commit 8 (the Save defect), then 9b.
    one `norm` for both. If `norm` does more or less, the port is not yet
    exact.
 
+### The Owner's answers of 2026-09-26 — one rule, `norm`, `saveParty`, and the confirmation
+
+Advisor-read evidence from V8C4; checked against the repository where it can
+be. Recorded before acting (rule 8). Two correct what shipped.
+
+**Q1 — one rule, used in five places.** V8C4 has exactly one definition of
+"same party" and every path calls it: `saveParty` (6407) `findCustomer(p)`;
+`resolvePartyId` (6384) `findCustomer(onForm)`; Add party (6573)
+`findCustomer(v)`; **Edit party (6644) `findCustomer(v, c.id)` — which is
+what `exceptId` is for**, since without it editing a party matches it
+against itself; Save from quotation (8016) `findCustomer(p)`. **Switch the
+Parties screen's warning to V8C4's rule.** The three behaviour changes N5.9a
+predicted are V8C4's actual behaviour, so accepting them matches the PWA
+rather than regressing it: archived parties are not flagged; a phone typed
+with its country code does not match one stored without (V8C4 compares the
+full digit strings); the first match in list order wins (`.find()`).
+**Caveat:** on OK, V8C4's two Parties-screen paths do
+`Object.assign(dup, v, {...})` — a full overwrite **including the name**,
+unlike `saveParty`. **Do not harmonise them; match each path to its own V8C4
+counterpart.**
+
+**Q2 — `norm` strips every non-alphanumeric; the port was too strict.**
+Lines 5681 and 6335:
+
+```
+const norm   = s => String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"");
+const digits = s => String(s||"").replace(/\D/g,"");
+```
+
+`norm` removes spaces, dots, slashes, hyphens, ampersands — so
+`"M/s Sunrise Ent."` matches `"M s Sunrise Ent"`, `"Sunrise Enterprises."`
+matches `"Sunrise Enterprises"`, and `"27AABCU9603R1ZM"` matches
+`"27 AABCU 9603 R1ZM"` — people type GSTINs with spaces. `3d`'s port (trim,
+lower case, single spaces) matched strictly fewer pairs. Fix `norm` to
+exactly that line; confirm `digits` is full-string equality, not a suffix
+comparison. See the pattern under "Decisions that bind future work".
+
+**Q3 — `saveParty` never renames.** Its update branch, in full:
+
+```
+if(c){
+  // fill gaps and take genuine changes — never blank a detail already held
+  if(p.site) c.city=p.site;
+  ["gstin","contact","phone","email","address"].forEach(k=>{ if(p[k]) c[k]=p[k]; });
+  if(p.type) c.type=p.type;
+  c.updated=now; c.upBy=who; c.upUid=currentUserId();
+}
+```
+
+`name` is not in the list: it is written only when a record is created, so
+the quotation's Save never renames an existing customer, and a Manager
+saving a spelling correction is never refused. **Match it: on an update, do
+not write `name`.** Only truthy values are copied — a blank never wipes a
+held detail — and `site` maps to `city`. New records take
+`type: p.type || state.tier || "client"`.
+
+**4 — V8C4 asks before merging.** `#qSaveParty` (8011-8022), the path
+commit 8 rewrote:
+
+```
+const p = partyFromForm();
+if(!p.name) return toast("Enter the company or party name first");
+const bad = gstinProblem(p.gstin) || phoneProblem(p.phone) || emailProblem(p.email);
+if(bad) return toast(bad);
+const existing = findCustomer(p);
+if(existing && !confirmAction(
+    `“${existing.name}” is already saved with ${matchReason(p, existing)}.\n\n` +
+    `OK — update that party with these details.\nCancel — leave it alone.`)) return;
+const c = saveParty(Object.assign({}, p, {type: state.tier}));
+if(c){ state.partyId = c.id; saveDraft(); toast(`${c.name} saved to Parties`); }
+```
+
+- **a. It confirms before updating an existing party**, naming it and the
+  reason — `matchReason` (6389-6393), checked in this order: "the same
+  GSTIN" / "the same phone number" / "the same company name". Commit 8
+  re-found and wrote silently: a person who typed over a picked party would
+  silently update a third company's record. Add the confirmation.
+- **b. Validation order:** name first, then GSTIN, phone and email
+  validated, and only then the find. To be confirmed.
+- **c.** `state.partyId = c.id` then save the draft — commit 8's "the draft
+  adopts whichever customer the form was saved as" is right.
+
+**What to do:** one commit, **8b** — `norm` corrected, no rename on update,
+the confirmation before merging, the validation order checked, and the
+Parties screen switched to the one rule — with a Rule 7 test that Save into
+a matched party **does not write when the confirmation is declined**. Then
+**plan 9b in plan mode, plan only**, including V8C4's messages and success
+order, removing the finalised draft rather than clearing it, the visibly
+busy "taking a number" control, what to pass for `snap` until N6, and a
+vanished customer losing only its link.
+
 ### Owed in N6: the financial-year guard, and the year-turn prompt — a REQUIREMENT
 
 Recorded 2026-09-25 at the Owner's instruction, as a requirement and not a
@@ -2156,6 +2247,17 @@ another Administrator, which is N5.0b and intended.
 automated test passing is not a pass in that file.
 
 ## Decisions that bind future work
+
+**When in doubt this codebase tightens, and V8C4 usually did not — so check
+a port against V8C4 before calling it faithful.** Recorded at the Owner's
+instruction on 2026-09-26, after N5.9a produced **three** ports stricter
+than the PWA in one batch: `sameParty` as AND where V8C4 has OR (`3c`), a
+`norm` that kept punctuation V8C4 strips (`3d`), and a duplicate search that
+matched suffixes and archived parties where V8C4 does neither. A port that
+matches strictly fewer cases than V8C4 is not the safe direction by default:
+it drops links, refuses saves and duplicates records the PWA would have
+handled. Where V8C4's own text is not in this repository, say the port is
+unverified rather than tighten to be careful.
 
 **Finalise retries itself; the Firestore SDK will not do it.** A transaction
 retries automatically when the *server* aborts it for contention. The

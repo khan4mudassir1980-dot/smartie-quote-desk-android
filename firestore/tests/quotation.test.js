@@ -580,6 +580,19 @@ test('a quotation with no saved customer is accepted, as V8C4 writes one', async
   })));
 });
 
+test('a quotation with no snap at all is accepted - what N5.9b writes until N6', async () => {
+  // `QuotationWrite.plan` writes no `snap` key when its caller passes null,
+  // and 9b's caller does until N6 builds company settings. The create rule
+  // checks five fields and `snap` is not one of them; this pins that, so a
+  // rule that started requiring it would fail here rather than on a phone.
+  await givenCounter();
+  const db = as(testEnv, UIDS.staff);
+  const { snap, ...unfrozen } = quotation('q_nosnap', UIDS.staff);
+  assert.ok(snap, 'the base shape carries a snap, so removing it is a real difference');
+
+  await assertSucceeds(quotations(db).doc('q_nosnap').set(unfrozen));
+});
+
 test('a quotation is never edited or deleted by the person who wrote it', async () => {
   // The N5 position is different — the creator will be allowed to correct
   // their own — but this is what is deployed today, and the batch that changes

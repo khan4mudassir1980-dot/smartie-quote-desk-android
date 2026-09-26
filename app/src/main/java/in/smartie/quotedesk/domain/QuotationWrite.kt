@@ -87,6 +87,15 @@ sealed interface QuotationPlan {
  * in `docs/PROJECT-STATUS.md` as **N6's target**: none of that data exists
  * natively until N6 builds company settings.
  *
+ * **A null `snap` writes no `snap` key at all**, and that is what N5.9b's
+ * caller passes until N6: nothing was frozen, and an absent key says so.
+ * It is **not** safer for V8C4 than `{}` — V8C4 re-prints through
+ * `x.snap || {}` and assigns the company's name, address, GSTIN and bank
+ * block from it with no fallback, so both come out on a blank letterhead.
+ * That is why `docs/PROJECT-STATUS.md` holds an **N8 blocker** (no
+ * production cutover while finalise passes no `snap`) and an **N5.11
+ * requirement** (this app's PDF falls back to the live company settings).
+ *
  * ## What is written that V8C4 does not write
  *
  * `install`, `disc` and `discBase` (`docs/N5-plan.md`, the data shape), and an
@@ -146,7 +155,7 @@ object QuotationWrite {
         counter: NumberingRecord?,
         existing: QuotationRecord?,
         customers: List<PartyRecord>,
-        snap: Map<String, Any?>,
+        snap: Map<String, Any?>?,
         at: Long
     ): QuotationPlan {
         if (draft.id.isBlank()) return QuotationPlan.Refused(NO_IDENTITY)
@@ -246,7 +255,7 @@ object QuotationWrite {
         totals: QuoteTotals,
         lines: List<QuotationLineRecord>,
         number: String,
-        snap: Map<String, Any?>,
+        snap: Map<String, Any?>?,
         at: Long
     ): Map<String, Any?> = buildMap {
         // The five the create rule checks: `id == id`, `no is string`,
@@ -266,7 +275,8 @@ object QuotationWrite {
         put("subtotal", totals.subtotal)
         put("total", totals.total)
         put("status", STATUS_FINALISED)
-        put("snap", snap)
+        // Absent, never an empty map standing in for one: see the class KDoc.
+        snap?.let { put("snap", it) }
         draft.installation?.let { charge ->
             put(
                 "install",

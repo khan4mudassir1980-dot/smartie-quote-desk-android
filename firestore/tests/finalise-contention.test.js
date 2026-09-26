@@ -105,7 +105,9 @@ function runOnce(db, person, draftId, log) {
       tier: 'client', tierName: 'Client',
       party: { name: 'Walk-in Builders' },
       lines: [{ t: 'Site visit', s: '', u: 'each', qty: 1, rate: 1000, origRate: 1000, k: null, manual: true, amt: 1000 }],
-      gst: true, gstPct: 18, subtotal: 1000, total: 1180, status: 'Finalised', snap: {},
+      // No `snap`: N5.9b's caller passes null until N6, and `QuotationWrite`
+      // then writes no key at all.
+      gst: true, gstPct: 18, subtotal: 1000, total: 1180, status: 'Finalised',
     });
     tx.update(numbering(db), {
       next: counter.next + 1,

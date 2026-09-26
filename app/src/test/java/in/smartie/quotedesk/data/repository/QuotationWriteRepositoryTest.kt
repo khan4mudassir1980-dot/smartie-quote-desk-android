@@ -158,6 +158,14 @@ class QuotationWriteRepositoryTest {
     }
 
     @Test
+    fun `until N6 the caller passes no snap, and the stored quotation has no snap key`() = runBlocking {
+        val store = FakeStore(seeded())
+        repository(store).finalise(manager, draft, customers = emptyList(), snap = null)
+
+        assertFalse(store.doc("quotations/qd_1").containsKey("snap"))
+    }
+
+    @Test
     fun `a second call for the same draft returns the same number and writes nothing`() = runBlocking {
         val store = FakeStore(seeded())
         val repository = repository(store)

@@ -163,6 +163,25 @@ class QuotationWriteTest {
     }
 
     @Test
+    fun `a null snap writes no snap key at all - what N5_9b passes until N6`() {
+        val nothingFrozen = write(
+            QuotationWrite.plan(ready, manager, capOfFive, counter, null, emptyList(), snap = null, at = at)
+        )
+        assertFalse(nothingFrozen.quotation.containsKey("snap"))
+        // And not an empty map standing in for one: absent is what the caller
+        // meant. `{}` would claim a snapshot that held nothing.
+        assertNull(nothingFrozen.quotation["snap"])
+    }
+
+    @Test
+    fun `an empty snap is still written as given - null is the only absence`() {
+        val empty = write(
+            QuotationWrite.plan(ready, manager, capOfFive, counter, null, emptyList(), snap = emptyMap(), at = at)
+        )
+        assertEquals(emptyMap<String, Any?>(), empty.quotation["snap"])
+    }
+
+    @Test
     fun `no discount taken writes neither disc nor discBase`() {
         for (draft in listOf(ready.copy(discount = null), ready.copy(discount = Discount(DiscountKind.PERCENT, 0.0)))) {
             val q = write(plan(draft = draft)).quotation

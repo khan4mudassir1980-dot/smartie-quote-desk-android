@@ -174,13 +174,14 @@ class QuotationWriteRepository(
      * [customers] is the saved-customer list the screen holds; the party
      * link is derived against it (`QuoteParty.linkFor`). [snap] is frozen
      * into the quotation exactly as given — see `QuotationWrite`. Until N6
-     * builds company settings the caller has nothing to put in it.
+     * builds company settings the caller has nothing to put in it, and
+     * passes null, which writes no `snap` key at all.
      */
     suspend fun finalise(
         member: Member,
         draft: QuoteDraft,
         customers: List<PartyRecord>,
-        snap: Map<String, Any?>
+        snap: Map<String, Any?>?
     ): FinaliseOutcome {
         if (!Permissions.canQuote(member)) return FinaliseOutcome.Refused(QuotationWrite.NOT_ALLOWED)
         if (draft.id.isBlank()) return FinaliseOutcome.Refused(QuotationWrite.NO_IDENTITY)
@@ -206,7 +207,7 @@ class QuotationWriteRepository(
         member: Member,
         draft: QuoteDraft,
         customers: List<PartyRecord>,
-        snap: Map<String, Any?>,
+        snap: Map<String, Any?>?,
         at: Long
     ): FinaliseOutcome =
         store.transaction { transaction ->

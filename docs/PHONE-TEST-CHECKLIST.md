@@ -8,7 +8,7 @@ run once, at the end, against one staging APK and one staging rules
 deployment. That is why this file exists: nothing else carries the memory of
 what is owed.
 
-Last updated for **N5.9a**.
+Last updated for **N5.9b**.
 
 ## How to use it
 
@@ -29,11 +29,20 @@ Last updated for **N5.9a**.
 2026-09-25** — an exception to maintaining-rule 1, because this row is the
 only thing that ever exercises the real Kotlin-to-Firestore store (see "N5.9a's
 recorded bounds" in `PROJECT-STATUS.md`). Without it that bound is never
-closed. 9b adds the rest of the finalise rows when it lands.
+closed. N5.9b added the rest (T-Q2 to T-Q10) when the Finalise control landed.
 
 | Row | Check |
 |---|---|
 | T-Q1 | **A real Finalise against staging** that writes a quotation and takes a number. In the Firebase console, check **both**: the `/quotations/{id}` document exists with that number in `no`, and `/teamSettings/numbering` has `next` moved on by exactly one with `lastIssued.no` equal to it and `lastIssued.src` reading `android` |
+| T-Q2 | **Offline.** With flight mode on, press **Finalise**: the panel says "Finalising needs an internet connection — the number is shared with the team", and in the console `/teamSettings/numbering` has not moved |
+| T-Q3 | **Two quotations, two numbers.** Finalise one: "Finalised as …" appears and the builder is empty. Build another and finalise it: its number is the **next** one, not the first one again. Both are in the Quotations tab, and `next` moved by exactly two |
+| T-Q4 | **The control is visibly busy.** While a number is being taken the button reads **"Taking a number…"** with a spinner, a second press does nothing, and nothing else on the panel responds; the phone's Back still leaves |
+| T-Q5 | **The ₹0 question.** Add a hand-typed line at rate 0 and press Finalise: the question names it — "1 line is priced at ₹0:" — with **Continue anyway** and **Cancel**. Cancel writes nothing; Continue anyway issues it with that line at ₹0 |
+| T-Q6 | **A malformed client GSTIN.** Type a GSTIN of fewer than 15 characters and press Finalise: "Client GSTIN: A GSTIN is 15 characters, for example 27FXJPK9635L1ZM", and nothing written. The same GSTIN on **Save this customer** is refused with the bare sentence, no prefix |
+| T-Q7 | **The lost acknowledgement.** Press Finalise and switch flight mode on at once. If the panel says "Not finalised — …", it ends "Press Finalise again — if a number was taken, the same one comes back." Switch flight mode off and press again: "Finalised as …" with the **same** number if the first had landed. In the console there is **one** quotation and `next` moved **once** |
+| T-Q8 | **A fresh panel after issuing.** After a finalise, fill in a new customer on the next quotation and press **Save this customer**: it is created, not refused as already existing, and the transport, installation and discount boxes start empty |
+| T-Q9 | **Staff see no Finalise.** Signed in as Staff, the builder offers no Finalise control |
+| T-Q10 | **No `snap` until N6.** In the console the finalised quotation has **no** `snap` field at all — not an empty one. Expected until N6, and the reason N8 is blocked on it (`PROJECT-STATUS.md`) |
 
 ### N5.7 — the product editor
 

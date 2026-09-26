@@ -807,9 +807,9 @@ of 0.5 must not be lifted to 80.5.
 | **N5.6** | Settings, Owner-only: numbering and the discount cap | **Yes** | **Done**, `f61eebc` + `74ff81e` + `a849650`, CI #137 |
 | **N5.7** | Minimal product edit — `unit`, dealer/client rate, `minSqft` | **No** | Done |
 | **N5.8** | The quotation builder, draft only | No | To do |
-| **N5.9** | Finalise — one transaction, idempotent retry, `src`, `snap`, party snapshot | **Yes** | To do |
+| **N5.9** | Finalise — one transaction, idempotent retry, `src`, `snap`, party snapshot; **9b:** the finalise gate (V8C4's `ensureFinalised`) and a stand-alone Finalise as its first caller | **Yes** | 9a done and CI-verified; 9b code complete — its CI state is `PROJECT-STATUS.md`'s |
 | **N5.10** | Edit and cancel, with the last-edited stamp | **Yes** | To do |
-| **N5.11** | PDF, WhatsApp and Print in the printed order above | No | To do |
+| **N5.11** | PDF, WhatsApp and Print in the printed order above — each **calls the finalise gate first**, as V8C4's do; the PDF falls back to the **live** company settings when `snap` is absent | No | To do |
 | **N5.12** | `docs/N5-cutover.md`, and **only here** does the banner come out | No | To do |
 
 Rules deploy **once**, at the final staging pass, with one APK — not per batch.

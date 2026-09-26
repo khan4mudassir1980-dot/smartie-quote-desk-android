@@ -41,9 +41,9 @@ object PartyFormat {
 
     /** JavaScript's `WhiteSpace` and `LineTerminator`: what `trim()` removes and `\s` matches. */
     val JS_WHITESPACE: Set<Char> = buildSet {
-        addAll(listOf('\t', '\n', '\u000B', '\u000C', '\r', ' ', ' ', ' '))
-        addAll(' '..' ')
-        addAll(listOf(' ', ' ', ' ', ' ', '　', '﻿'))
+        addAll(listOf('\t', '\n', '\u000B', '\u000C', '\r', ' ', '\u00A0', '\u1680'))
+        addAll('\u2000'..'\u200A')
+        addAll(listOf('\u2028', '\u2029', '\u202F', '\u205F', '\u3000', '\uFEFF'))
     }
 
     /** The same set as a regex character-class body, for the email pattern. */

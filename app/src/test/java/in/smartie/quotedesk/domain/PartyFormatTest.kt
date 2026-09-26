@@ -20,7 +20,7 @@ class PartyFormatTest {
 
     @Test
     fun `blank is valid in all three`() {
-        listOf("", "   ", "\t\n", " ").forEach { blank ->
+        listOf("", "   ", "\t\n", "\u00A0").forEach { blank ->
             assertNull(PartyFormat.gstinProblem(blank))
             assertNull(PartyFormat.phoneProblem(blank))
             assertNull(PartyFormat.emailProblem(blank))
@@ -75,12 +75,12 @@ class PartyFormatTest {
     fun `JavaScript's whitespace is trimmed, and only JavaScript's`() {
         // U+00A0 and U+FEFF: JavaScript trims both. Kotlin's trim() does not
         // trim U+FEFF.
-        assertNull(PartyFormat.gstinProblem(" $valid "))
-        assertNull(PartyFormat.gstinProblem("﻿$valid"))
+        assertNull(PartyFormat.gstinProblem("\u00A0$valid\u00A0"))
+        assertNull(PartyFormat.gstinProblem("\uFEFF$valid"))
         // U+001C: Kotlin's trim() removes it, JavaScript's does not — so in
         // V8C4 it is a sixteenth character.
         assertEquals(PartyFormat.GSTIN_LENGTH, PartyFormat.gstinProblem("$valid\u001C"))
-        assertEquals("x", PartyFormat.jsTrim(" 　x "))
+        assertEquals("x", PartyFormat.jsTrim("\u2003\u3000x\u2028"))
     }
 
     // --- phone ----------------------------------------------------------------------------
@@ -118,7 +118,7 @@ class PartyFormatTest {
         assertEquals(PartyFormat.EMAIL_SHAPE, PartyFormat.emailProblem("sa les@sunrise.in"))
         // Java's \s does not match U+00A0 or U+3000; JavaScript's does, so
         // V8C4 refuses both.
-        assertEquals(PartyFormat.EMAIL_SHAPE, PartyFormat.emailProblem("sa les@sunrise.in"))
-        assertEquals(PartyFormat.EMAIL_SHAPE, PartyFormat.emailProblem("sales@sun　rise.in"))
+        assertEquals(PartyFormat.EMAIL_SHAPE, PartyFormat.emailProblem("sa\u00A0les@sunrise.in"))
+        assertEquals(PartyFormat.EMAIL_SHAPE, PartyFormat.emailProblem("sales@sun\u3000rise.in"))
     }
 }

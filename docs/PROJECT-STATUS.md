@@ -1,14 +1,14 @@
 # Project status
 
 **The single current-status record. Read this before planning or changing
-anything.** Last updated 2026-09-24.
+anything.** Last updated 2026-09-26.
 
 ## Where the work is
 
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `1c6826f` — [run #189](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36141623578), fully green (unit tests, lint, Firestore rules emulator, APK build). Later commits may sit above it. |
+| **Last CI-verified head** | `369c68d` — [run #192](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36223949977), fully green (unit tests, lint, Firestore rules emulator, APK build). Later commits may sit above it. |
 | **APK to install** | The `smartie-native-apks` artifact **from the run that verified the head you intend to install** — never from whichever run this table happens to name. A build contains the commit it ran on and nothing above it, so a head hash and an APK go out of step the moment anything lands. Each run's job summary reports its head and the signing certificate; the app must show **Staging**. |
 | **Ruleset anchor** | `ead0a52` — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
 | **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **seven rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
@@ -1364,9 +1364,9 @@ refuses a runaway rather than pruning one.
 **Plan N5.9b — the Finalise control. Plan only; no code until the Owner
 approves it.**
 
-N5.9a is complete and CI-verified at `1c6826f` (run #189): finalise works as
-a repository call — `QuotationWriteRepository.finalise` — and nothing in the
-app calls it yet. 9b is the control that does, and its plan must carry what
+N5.9a is complete and CI-verified at `369c68d` (run #192), commit 8b
+included: finalise works as a repository call —
+`QuotationWriteRepository.finalise` — and nothing in the app calls it yet. 9b is the control that does, and its plan must carry what
 N5.9a left for it, all recorded in this file:
 
 - **V8C4's messaging and success order** — "V8C4's `fbFinaliseAtomic`,
@@ -1389,7 +1389,7 @@ The saved-customer recovery message the Owner once asked for is
 
 ### N5.9a so far — every commit CI-verified
 
-From `git log --oneline e9690a1..1c6826f`, each with the run that verified it:
+From `git log --oneline e9690a1..369c68d`, each with the run that verified it:
 
 | Commit | What | Run |
 |---|---|---|
@@ -1416,27 +1416,37 @@ From `git log --oneline e9690a1..1c6826f`, each with the run that verified it:
 | `23da750` | 6b — the bound rests on the dispersion the backoff creates, measured both ways | #187 green |
 | `5a5cfd6` | 7 — the plan's line table and the rule-sketch note | #188 green |
 | `1c6826f` | 8 — "Save this customer" re-finds from the form (behaviour change to N5.8b) | #189 green |
+| `e633eb2` | docs — `1c6826f` verified; next is 9b's plan | #190 green |
+| `52bfac7` | docs — the Owner's answers on one rule, `norm`, `saveParty` and the confirmation, before acting | #191 green |
+| `369c68d` | 8b — one party rule, V8C4's `norm`, no rename on update, the question before merging | #192 green |
 
-Kotlin tests: **1520** at `1c6826f` (`git grep -h -o '@Test' 1c6826f --
+Kotlin tests: **1527** at `369c68d` (`git grep -h -o '@Test' 369c68d --
 app/src/test | wc -l`); the proxy was last calibrated on #172, whose runner
 printed `1488 tests completed, 1 failed` against a grep of 1488. Local JVM
-sweep at `1c6826f`: 710 tests across 46 classes, all passing, with `-ea`
+sweep at `369c68d`: 715 tests across 46 classes, all passing, with `-ea`
 (the party repository's tests through scratch stubs). Emulator: **247** at
-`1c6826f`. Emulator: **243** at `ead0a52`
+`369c68d`, the same as at `1c6826f` — 8b changed no rule
+(`git diff --quiet 369c68d ead0a52 -- firestore/firestore.rules` is
+silent). Emulator: **243** at `ead0a52`
 (`npx firebase emulators:exec --only firestore "node --test
 --test-concurrency=1 tests/*.test.js"`, run from `firestore/`).
 
-Commits 7 (the N5-plan line table and the rule-sketch note) and 8 ("Save
-this customer" re-finds from the form) are done; 9a's list is complete.
+Commits 7 (the N5-plan line table and the rule-sketch note), 8 ("Save
+this customer" re-finds from the form) and 8b (one party rule, and the
+question before merging) are done; 9a's list is complete.
 
-**Open after commit 8 — a Manager renaming through "Save this customer".**
-`PartyWrite.mergeInto` takes a differing name as a correction, and the
+**CLOSED by commit 8b — a Manager renaming through "Save this customer".**
+Kept for the record: `mergeInto` no longer writes the name at all, as V8C4's
+`saveParty` update branch never does, so no rename is attempted and none is
+refused. What was recorded after commit 8, now history:
+"`PartyWrite.mergeInto` takes a differing name as a correction, and the
 `/customers` rule refuses a Manager any rename. So when the form matches a
 saved customer on GSTIN or phone but spells the name differently — the
 Owner's own spelling-correction case — a Manager's Save is refused by the
 rules and the failure is reported generically. This was as true of the held-id
 path before commit 8; it is recorded, not changed. Whether V8C4's
-`saveParty` renames at all is not in this repository.
+`saveParty` renames at all is not in this repository." — the Owner answered
+that on 2026-09-26: it never does.
 
 ### N5.9a decisions, taken in chat and recorded here because chat is not memory
 

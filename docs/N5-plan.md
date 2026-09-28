@@ -243,9 +243,17 @@ integer arithmetic rather than something that drifts by a rupee.
 - Every edit carries a stamp, and the PDF prints **"Last edited by &lt;name&gt;,
   &lt;date time&gt;"**.
 - **`snap{}` is never re-frozen.** It records what the terms, validity and bank
-  block were *at issue*, and the number is not reissued. An edit moves `lines`,
-  `install`, `disc`, `discBase`, `subtotal`, `total` and the stamp, and nothing
-  else.
+  block were *at issue*, and the number is not reissued.
+- **What an edit may change — the Owner's answer of 2026-09-28 (Q3),
+  replacing this plan's older, narrower list** ("`lines`, `install`, `disc`,
+  `discBase`, `subtotal`, `total` and the stamp, and nothing else"): exactly
+  `lines`, `party`, `partyId`, `tier`, `tierName`, `gst`, `gstPct`,
+  `subtotal`, `total`, `install`, `disc`, `discBase`, the stamp
+  (`lastEditedBy`, `lastEditedByUid`, `lastEditedAt`) and `rev`. **Nothing
+  else**, enforced in the rules as a `hasOnly` list.
+- **The cap on an edit applies only when the discount goes up** (the Owner,
+  2026-09-28): compared against the stored document, the amount or the
+  effective rate rises by more than 9a's rupee, or a discount is added.
 
 **Drafts are device-local.** V8C4 lists `Draft` as a status, but the deployed
 create rule requires `no is string` and `total is number`, so a numberless
@@ -539,10 +547,14 @@ is refused: safe by default.
 > - **Edit** — the creator, and an Owner or Administrator on anyone's. This is
 >   a **new capability**: V8C4 cannot edit a finalised quotation at all, so
 >   N5.10 writes a **new update branch** for it.
-> - **Cancel** — Owner and Administrator only, as V8C4 has it and as the
->   deployed rule already says. A Manager cannot cancel, including their own.
->   The deployed rule was stricter than this plan's old row, in the safe
->   direction, and there is no deploy-day break.
+>   **SUPERSEDED on 2026-09-28 — cancel.** The next bullet was the ruling of
+>   2026-09-25. **The Owner's decision of 2026-09-28 replaced it: the creator
+>   (a Manager on their own quotation) and Owner/Administrator on anyone's may
+>   cancel.** V8C4's own button stays admin-only and its three-field payload
+>   is still accepted.
+> - ~~**Cancel** — Owner and Administrator only, as V8C4 has it and as the
+>   deployed rule already says. A Manager cannot cancel, including their own.~~
+>   (2026-09-25; replaced 2026-09-28.)
 >
 > **And widening for edit removes a guard.** Today a retry that blindly
 > re-writes a quotation is evaluated as an *update*, fails
@@ -589,6 +601,17 @@ allow update: if member() && !worker()
 **V8C4 verdict — compatible.** Every clause is a *widening*: today the rule is
 `admin() && hasOnly([cancel keys])`, and `admin() && qnCancelKeys()` is the
 same set, so a PWA cancel passes through untouched.
+
+> **This sketch is kept as the plan it was; N5.10's approved plan
+> (2026-09-28) changes it, and the rule file will be the authority.** The
+> stamp is `lastEditedBy` / `lastEditedByUid` / `lastEditedAt` (Q2), with a
+> `rev` that must be the stored one plus one; an edit may touch only the Q3
+> list (`hasOnly`), not "any document with its identity pinned" — which is
+> what keeps a finalise retry refused three ways (the key list, the stamp,
+> `rev`), so the second defence survives the widening; the cap applies to an
+> edit only when the discount goes up; the creator may cancel as well (the
+> 28 Sept decision); a second cancel is refused; and the cancel values must
+> be V8C4's shapes, a name string and a millisecond number.
 
 ### `/customers` — no rules change at all
 
@@ -652,7 +675,8 @@ Existing keys unchanged. New:
 | `install` | map, optional | `{mode, rate, amt, basis}` — mode ∈ `fixed`/`door`/`sqft`/`pct` |
 | `disc` | map, optional | `{kind, value, amt}` — kind ∈ `pct`/`amt` |
 | `discBase` | number, optional | Products + installation, the figure `disc.amt` was taken against. **Exists so the rules can check the cap**, and is bounded there |
-| `editedBy` / `editedByUid` / `editedAt` | string / string / number | The "Last edited by …" stamp |
+| `lastEditedBy` / `lastEditedByUid` / `lastEditedAt` | string / string / number | The "Last edited by …" stamp. **Named 2026-09-28** (Q2); this table read `editedBy` / `editedByUid` / `editedAt` until then, and nothing had written either |
+| `rev` | number | Bumped by exactly one on every edit; the rule requires `stored + 1`, so a save from a stale opening is refused |
 | `lastIssued.src` | string, ≤16 chars | Inside the counter document: `"android"` or `"pwa"` |
 
 ### A quotation line
@@ -808,8 +832,8 @@ of 0.5 must not be lifted to 80.5.
 | **N5.7** | Minimal product edit — `unit`, dealer/client rate, `minSqft` | **No** | Done |
 | **N5.8** | The quotation builder, draft only | No | To do |
 | **N5.9** | Finalise — one transaction, idempotent retry, `src`, `snap`, party snapshot; **9b:** the finalise gate (V8C4's `ensureFinalised`) and a stand-alone Finalise as its first caller | **Yes** | 9a done and CI-verified; 9b code complete — its CI state is `PROJECT-STATUS.md`'s |
-| **N5.10** | Edit and cancel, with the last-edited stamp | **Yes** | To do |
-| **N5.11** | PDF, WhatsApp and Print in the printed order above — each **calls the finalise gate first**, as V8C4's do; the PDF falls back to the **live** company settings when `snap` is absent | No | To do |
+| **N5.10** | Edit and cancel, with the last-edited stamp; **Duplicate**; **the party type** (pick sets the rate on an empty quotation, a new customer's type always chosen, the Parties screen's checks) — all approved 2026-09-28 | **Yes** | In progress |
+| **N5.11** | PDF, WhatsApp and Print in the printed order above — each **calls the finalise gate first**, as V8C4's do; the PDF falls back to the **live** company settings when `snap` is absent; prints **"Last edited by"** right after the date, its time **from the server's clock**, checked by the rule against the request time; Duplicate's message returns to **V8C4's exact words** | Yes (the edit time) | To do |
 | **N5.12** | `docs/N5-cutover.md`, and **only here** does the banner come out | No | To do |
 
 Rules deploy **once**, at the final staging pass, with one APK — not per batch.

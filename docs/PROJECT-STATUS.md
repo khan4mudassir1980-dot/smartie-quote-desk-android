@@ -1361,12 +1361,12 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**Re-present the N5.10 plan with the Owner's answers and amendments A–E
-folded in — no N5.10 code until it is approved.** The answers are in "The
-Owner's answers on the N5.10 plan, 2026-09-28", below; the plan answers the
-six hazards of the brief above them, and now carries Duplicate and the party
-type as well. Part A of the 9b review is done and CI-verified at `2848bb9`
-(run #208); what it found is recorded there.
+**Build N5.10 as approved on 2026-09-28 — commits 1 to 11, in order**, each
+pushed alone with CI green before the next, each ablation reported with the
+test it made fail. The approved plan is recorded in "The Owner's approval of
+the N5.10 plan, 2026-09-28", below; its answers in "The Owner's answers on
+the N5.10 plan, 2026-09-28". Commit 0 (this record) is the first of the
+twelve.
 
 What N5.10's plan must also carry, already recorded in this file:
 
@@ -2650,10 +2650,58 @@ authority.
 fixing the reader (C6) first; C7 to C9; the edit as its own draft; `rev`;
 the transaction cancel; ablations R1 to R15.
 
-**Raised back with the revised plan, not yet answered:** Duplicate's toast
-names download, print and share, which do not exist here until N5.11 — the
-plan recommends "…when it is finalised" until then; and whether a copy
-carries the stored GST, which V8C4's copy list does not include.
+**Raised back with the revised plan, and answered in the approval below:**
+Duplicate's message before N5.11, and GST on a copy.
+
+### The Owner's approval of the N5.10 plan, 2026-09-28 — recorded before acting
+
+Rule 8. **"APPROVED. Build N5.10 as in your revised plan of 28 Sept."** Plan
+mode kept closing, so the Owner's message is the approval. The plan is
+recorded in outline here; its commits and ablations are what each commit
+message cites.
+
+**The two questions:**
+
+1. **Duplicate's message:** "Copied into a new draft — it takes a new number
+   when it is finalised" until N5.11. **V8C4's exact words** ("…when you
+   download, print or share") are an **N5.11 requirement**.
+2. **GST on a copy: not carried.** The copy starts at the builder's default.
+   V8C4's Duplicate does not copy GST either, and the rate should be today's.
+
+**Two additions, neither changing the design:**
+
+- **A. Commit 11's phone rows also cover:** a Manager cancels their own
+  quotation; a Manager cannot cancel another's (the button is not offered,
+  and the rules refuse it if forced); an Owner cancels a Manager's quotation.
+- **B. An N5.11 requirement, not built now:** the "Last edited" time printed
+  on the PDF comes from the **server's clock**, as finalise's `serverAt` does,
+  and the rule checks it against the request time — otherwise a phone with a
+  wrong clock prints a wrong edit time on a customer document.
+
+**How to build:** in order, 0 to 11; each commit pushed alone, CI green
+before the next; **each ablation reported with the test that failed**; no
+deploy, no `main`, no PR, no force-push, no amending. **If a tool failure
+stops the build** (as the review agent and Bash did while planning), **stop
+and report** — never work around it in a way that skips CI or the local test
+runs.
+
+**The approved plan, in outline** — the full text, exactly as the Owner read
+it, is `docs/N5.10-plan.md`:
+
+| # | Commit | Ablations |
+|---|---|---|
+| 0 | docs — this record; `N5-plan.md` in line (Q1 superseded, Q2 names, Q3 list, N5.11 row) | — |
+| 1 | read side — install, disc, `discBase`, stamp, `rev`; what was stored and readable; the detail's rows and "Last edited" | R1 |
+| 2 | rules and emulator tests — the edit branch, the cap only when raised, a second cancel refused, V8C4's cancel shapes, the creator's cancel; new anchor | R2-R7, R16-R20, R22-R23 |
+| 3 | domain — `QuotationEdit`, `QuoteDiscount.raised`, `EditOrigin` / `copiedFrom` in the codec, `Permissions` for cancel | R8-R10, R21 |
+| 4 | store and repository — `updateQuotation`, `edit`, `cancel` | R11-R13 |
+| 5 | the gate — `saveEdit`; `ensureFinalised` refuses an edit draft | R14 |
+| 6 | wiring — edit and copy requests, the view models | — |
+| 7 | screens — edit mode, Edit / Cancel / "Last edited", the list tag | (CI only) |
+| 8 | Duplicate | R15, R24-R26 |
+| 9 | the party type on the quotation | R27-R30 |
+| 10 | the Parties screen — Dealer / Client only, no default, the three checks | R31-R32 |
+| 11 | docs — phone rows (with addition A), `N5-plan.md`, this file after CI | — |
 
 ### Owed in N6: the validators on the fields and on the company's own details
 
@@ -3335,6 +3383,22 @@ V8C4 ever reads a native quotation there.
 Recorded 2026-09-28 at the Owner's instruction, as a **requirement**. N5.10
 puts the stamp on the quotation card; the printed page must carry it too,
 immediately after the date, in the printed order `docs/N5-plan.md` sets out.
+
+### Owed in N5.11: the "Last edited" time from the server's clock
+
+Recorded 2026-09-28 at the Owner's instruction, as a **requirement**, not
+built in N5.10. The edit time printed on the PDF must come from the
+**server's clock**, as finalise's `serverAt` does, and the rule must check it
+against the request time. N5.10 stamps `lastEditedAt` from the device, as
+`at` is today; a phone with a wrong clock would print a wrong edit time on a
+customer document.
+
+### Owed in N5.11: Duplicate's message in V8C4's exact words
+
+Recorded 2026-09-28 at the Owner's instruction. Until the PDF, Print and
+WhatsApp callers exist, a copy says "Copied into a new draft — it takes a new
+number when it is finalised". N5.11 restores V8C4's words: "Copied into a new
+draft — it takes a new number when you download, print or share".
 
 ### Owed in N5.11: the PDF falls back to the LIVE company settings when `snap` is absent
 

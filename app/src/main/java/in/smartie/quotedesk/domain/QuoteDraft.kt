@@ -161,6 +161,29 @@ enum class DraftFault(val message: String) {
     DISCOUNT("The discount could not be read - enter it again")
 }
 
+/**
+ * Which finalised quotation an edit draft edits, and what it held when it was
+ * opened.
+ *
+ * [revision] is the stored `rev` at opening: the save writes one more, and the
+ * rule requires the stored one plus one, so a save from a stale opening is
+ * refused. [discountAmount] and [discountBase] are the opened discount, for
+ * the builder's courtesy check only — the save decides against the document
+ * it reads inside its transaction, never against these. [tier] is the tier the
+ * quotation was issued at, null when that could not be read.
+ */
+data class EditOrigin(
+    val quotationId: String,
+    val number: String,
+    val revision: Int = 0,
+    val tier: RateTierV2? = null,
+    val discountAmount: Double? = null,
+    val discountBase: Double? = null
+)
+
+/** The quotation a Duplicate was copied from, for "Rates as quoted on X". */
+data class CopyOrigin(val number: String, val at: Long = 0L)
+
 /** The tiers a new quotation may be built at. */
 object QuoteTier {
     /**
@@ -235,8 +258,20 @@ data class QuoteDraft(
     val gstPercent: Double? = null,
     val updatedAt: Long = 0L,
     /** What could not be read back off the device. Never silently resolved. */
-    val faults: Set<DraftFault> = emptySet()
+    val faults: Set<DraftFault> = emptySet(),
+    /**
+     * **Set on an edit of a finalised quotation, and on nothing else** (N5.10).
+     * Such a draft is saved with `QuotationEdit`, never finalised: finalise's
+     * read-first would find the quotation, answer "already issued" and throw
+     * the edits away. See `EditOrigin`.
+     */
+    val editOf: EditOrigin? = null,
+    /** Set on a Duplicate: whose rates these are, for the note the builder shows. */
+    val copiedFrom: CopyOrigin? = null
 ) {
+    /** True when this draft edits a quotation already issued. */
+    val isEdit: Boolean get() = editOf != null
+
     val lineCount: Int get() = lines.size
 
     /** Lines with no rate contribute nothing; they are counted separately. */
@@ -584,7 +619,10 @@ data class QuoteDraft(
      */
     fun refusal(capPercent: Double?): String? {
         faults.firstOrNull()?.let { return it.message }
-        if (!QuoteTier.offers(tier)) return TIER_NOT_OFFERED
+        // An edit keeps the tier it was issued at even when the builder no
+        // longer offers it (the Owner's Q6): it corrects a quotation, it does
+        // not reissue it at today's tiers.
+        if (!QuoteTier.offers(tier) && tier != editOf?.tier) return TIER_NOT_OFFERED
         if (isEmpty) return NO_LINES
         if (lines.any { it.needsRate }) return LINE_NEEDS_RATE
         // A rate typed by hand cannot be negative (`QuoteLineEntry`), but a

@@ -1,5 +1,7 @@
 package `in`.smartie.quotedesk.domain
 
+import `in`.smartie.quotedesk.data.model.QuotationRecord
+
 /**
  * Every capability in the parity audit's role matrix (section 7), in one
  * place, so no screen re-derives a rule and no rule drifts between screens.
@@ -41,7 +43,26 @@ object Permissions {
 
     fun canViewQuotationHistory(member: Member): Boolean = canQuote(member)
 
-    fun canCancelQuotation(member: Member): Boolean = isAdmin(member)
+    /**
+     * Cancel a finalised quotation: **its creator, and an Owner or
+     * Administrator on anyone's.** The Owner's decision of 2026-09-28, which
+     * REPLACED the ruling of 2026-09-25 that read "Owner and Administrator
+     * only … a Manager cannot cancel, including their own" (V8C4's
+     * `if(!admin)`). Until N5.10 this took no record and answered
+     * `isAdmin(member)`; it had no caller. The rules say the same
+     * (`firestore.rules`, `qnCancel`).
+     */
+    fun canCancelQuotation(member: Member, record: QuotationRecord): Boolean =
+        canQuote(member) && (isAdmin(member) || QuotationHistory.isCreator(member, record))
+
+    /**
+     * Edit a finalised quotation — new behaviour, not a port: V8C4 cannot.
+     * The creator, and an Owner or Administrator on anyone's; the rules'
+     * `qnEdit` says the same. Whether it is still editable (not cancelled) is
+     * the record's question, not the role's.
+     */
+    fun canEditQuotation(member: Member, record: QuotationRecord): Boolean =
+        canQuote(member) && (isAdmin(member) || QuotationHistory.isCreator(member, record))
 
     fun canUseParties(member: Member): Boolean = canQuote(member)
 

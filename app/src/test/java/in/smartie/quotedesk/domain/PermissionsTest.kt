@@ -1,5 +1,6 @@
 package `in`.smartie.quotedesk.domain
 
+import `in`.smartie.quotedesk.data.model.QuotationRecord
 import `in`.smartie.quotedesk.data.model.TeamAccess
 import `in`.smartie.quotedesk.data.model.TeamMember
 import org.junit.Assert.assertEquals
@@ -47,10 +48,34 @@ class PermissionsTest {
     }
 
     @Test
-    fun `staff may quote but not cancel a quotation`() {
+    fun `a Manager cancels their own quotation and nobody else's - the 28 Sept decision`() {
+        // Turned round in N5.10. This test read "staff may quote but not
+        // cancel a quotation", the ruling of 2026-09-25; the Owner's decision
+        // of 2026-09-28 replaced it: the creator may cancel, and an Owner or
+        // Administrator may cancel anyone's.
+        val theirs = QuotationRecord(id = "q_1", byUid = staff.uid)
+        val someoneElses = QuotationRecord(id = "q_2", byUid = "uid_somebody_else")
+        val nobodys = QuotationRecord(id = "q_3", byUid = "")
+
         assertTrue(Permissions.canQuote(staff))
-        assertFalse(Permissions.canCancelQuotation(staff))
-        assertTrue(Permissions.canCancelQuotation(admin))
+        assertTrue(Permissions.canCancelQuotation(staff, theirs))
+        assertFalse(Permissions.canCancelQuotation(staff, someoneElses))
+        assertFalse(Permissions.canCancelQuotation(staff, nobodys))
+        assertTrue(Permissions.canCancelQuotation(admin, someoneElses))
+        assertTrue(Permissions.canCancelQuotation(admin, nobodys))
+    }
+
+    @Test
+    fun `editing follows the same people - the creator, and an Owner or Administrator`() {
+        val theirs = QuotationRecord(id = "q_1", byUid = staff.uid)
+        val someoneElses = QuotationRecord(id = "q_2", byUid = "uid_somebody_else")
+
+        assertTrue(Permissions.canEditQuotation(staff, theirs))
+        assertFalse(Permissions.canEditQuotation(staff, someoneElses))
+        assertTrue(Permissions.canEditQuotation(admin, someoneElses))
+        // Staff (stored `worker`) have no quotations at all.
+        assertFalse(Permissions.canEditQuotation(worker, theirs.copy(byUid = worker.uid)))
+        assertFalse(Permissions.canCancelQuotation(worker, theirs.copy(byUid = worker.uid)))
     }
 
     @Test

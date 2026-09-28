@@ -54,6 +54,47 @@ class QuoteDraftCodecTest {
     }
 
     @Test
+    fun `an edit's origin and a copy's survive a round trip - N5_10`() {
+        // Kept on the device so an edit survives the app being killed, and so
+        // a reopened edit still knows which quotation and which revision it
+        // was opened at.
+        val edit = draft.copy(
+            id = "qd_issued",
+            editOf = EditOrigin(
+                quotationId = "qd_issued",
+                number = "SIE/QD/2025-26/009",
+                revision = 3,
+                tier = RateTierV2.CONTRACTOR,
+                discountAmount = 4_440.0,
+                discountBase = 44_400.0
+            ),
+            copiedFrom = CopyOrigin("SIE/QD/2025-26/007", 1_712_000_000_000L)
+        )
+        assertEquals(edit, roundTrip(edit))
+    }
+
+    @Test
+    fun `a draft stored before N5_10 reads back as no edit and no copy`() {
+        // The head of a draft written by 9b stops at the transport note, its
+        // 22nd field; the eight N5.10 appends are simply absent.
+        val records = QuoteDraftCodec.encode(draft).split('\u001E')
+        val head = records.first().split('\u001F')
+        assertEquals("today's head is 22 fields and eight more", 30, head.size)
+        val before = (listOf(head.take(22).joinToString("\u001F")) + records.drop(1)).joinToString("\u001E")
+        val restored = QuoteDraftCodec.decode(before)
+        assertNull(restored.editOf)
+        assertNull(restored.copiedFrom)
+        assertEquals(draft, restored)
+    }
+
+    @Test
+    fun `an edit's unreadable tier comes back as none to keep, never Dealer`() {
+        val edit = draft.copy(editOf = EditOrigin("qd_1", "SIE/QD/2025-26/009", tier = RateTierV2.CLIENT))
+        val damaged = QuoteDraftCodec.encode(edit).replace("\u001Fclient\u001F", "\u001Fwholesale\u001F")
+        assertNull(QuoteDraftCodec.decode(damaged).editOf?.tier)
+    }
+
+    @Test
     fun `an unset rate comes back unset, never zero`() {
         val restored = roundTrip(draft)
         val unpriced = restored.lines.first { it.key == "gate|SIE600" }

@@ -101,6 +101,25 @@ object QuoteParty {
         return PartyDuplicates.findCustomer(form, customers)?.id
     }
 
+    /**
+     * The link an **edit** keeps — never one it finds (N5.10).
+     *
+     * `PROJECT-STATUS` records it as a rule: **an absent `partyId` is never
+     * re-resolved.** A walk-in quoted without being filed has no saved
+     * customer, and matching one up on an edit would file somebody's
+     * quotation under a party nobody chose. So this is [linkFor] without its
+     * step 3: the customer held — the stored link, or one the person picked
+     * while editing — survives while the form is still that party; nothing is
+     * searched for. A held customer the screen's list does not hold (not
+     * loaded, or gone) is kept as it was: there is nothing to judge it by.
+     */
+    fun keptLink(form: QuotationPartySnapshot, heldId: String, customers: List<PartyRecord>): String {
+        if (heldId.isBlank()) return ""
+        if (form.name.isBlank() && form.gstin.isBlank() && form.phone.isBlank()) return ""
+        val held = customers.firstOrNull { it.id == heldId } ?: return heldId
+        return if (PartyDuplicates.sameParty(form, held)) heldId else ""
+    }
+
     // --- asking before "Save this customer" writes into a saved party --------------------
 
     /**

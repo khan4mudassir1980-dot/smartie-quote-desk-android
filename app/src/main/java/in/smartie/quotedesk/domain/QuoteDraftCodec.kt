@@ -72,6 +72,15 @@ object QuoteDraftCodec {
             escape(draft.party.city),
             // --- appended after v2 shipped; an older head simply stops above -
             escape(draft.transportNote),
+            // --- appended in N5.10: an edit's origin, then a copy's ---------
+            escape(draft.editOf?.quotationId.orEmpty()),
+            escape(draft.editOf?.number.orEmpty()),
+            draft.editOf?.revision?.toString().orEmpty(),
+            draft.editOf?.tier?.wireValue.orEmpty(),
+            draft.editOf?.discountAmount?.toString().orEmpty(),
+            draft.editOf?.discountBase?.toString().orEmpty(),
+            escape(draft.copiedFrom?.number.orEmpty()),
+            draft.copiedFrom?.at?.toString().orEmpty(),
         ).joinToString(FIELD.toString())
         val lines = draft.lines.map { line ->
             listOf(
@@ -182,8 +191,34 @@ object QuoteDraftCodec {
             gstPercent = head.getOrNull(11)?.takeIf { it.isNotEmpty() }?.toDoubleOrNull(),
             updatedAt = head.getOrNull(12)?.toLongOrNull() ?: 0L,
             transportNote = head.getOrNull(21)?.let(::unescape).orEmpty(),
-            faults = faults
+            faults = faults,
+            editOf = editOf(head),
+            copiedFrom = copiedFrom(head)
         )
+    }
+
+    /**
+     * An edit's origin, present only when a quotation id was stored — so every
+     * draft written before N5.10, and every draft that is not an edit, reads
+     * back as no edit at all.
+     */
+    private fun editOf(head: List<String>): EditOrigin? {
+        val quotationId = head.getOrNull(22)?.let(::unescape)?.takeIf { it.isNotBlank() } ?: return null
+        return EditOrigin(
+            quotationId = quotationId,
+            number = head.getOrNull(23)?.let(::unescape).orEmpty(),
+            revision = head.getOrNull(24)?.toIntOrNull() ?: 0,
+            // Strict: an unreadable tier is no tier to keep, never Dealer.
+            tier = RateTierV2.entries
+                .firstOrNull { it.wireValue.equals(head.getOrNull(25)?.trim(), ignoreCase = true) },
+            discountAmount = head.getOrNull(26)?.takeIf { it.isNotEmpty() }?.toDoubleOrNull(),
+            discountBase = head.getOrNull(27)?.takeIf { it.isNotEmpty() }?.toDoubleOrNull()
+        )
+    }
+
+    private fun copiedFrom(head: List<String>): CopyOrigin? {
+        val number = head.getOrNull(28)?.let(::unescape)?.takeIf { it.isNotBlank() } ?: return null
+        return CopyOrigin(number, head.getOrNull(29)?.toLongOrNull() ?: 0L)
     }
 
     private fun partyOf(head: List<String>): QuotationPartySnapshot = QuotationPartySnapshot(

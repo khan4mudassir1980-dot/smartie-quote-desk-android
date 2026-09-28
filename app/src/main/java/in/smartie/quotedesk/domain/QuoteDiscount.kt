@@ -60,6 +60,30 @@ object QuoteDiscount {
         return QuoteMath.discountRefusal(discount, base, cap)
     }
 
+    /**
+     * Whether an edit puts the discount **up** — the Owner's rule for the cap
+     * on an edit (2026-09-28): the cap stops an edit only then.
+     *
+     * The same arithmetic as `qnDiscountRaised()` in `firestore.rules`, and
+     * **both compare with the stored document**: [beforeAmount] and
+     * [beforeBase] come from the quotation read inside the edit's transaction,
+     * never from anything the screen held. Up means a discount added where
+     * there was none, the amount up by more than a rupee, or the rate up — the
+     * new amount past the old rate on the new base by more than a rupee (9a's
+     * margin), cross-multiplied so there is no division. Anything unreadable
+     * before counts as up: it fails closed, as the rule does.
+     *
+     * Change one side, change the other; the emulator tests (i)–(v) in
+     * `quotation.test.js` and `QuoteDiscountRaisedTest` pin the same figures.
+     */
+    fun raised(beforeAmount: Double?, beforeBase: Double?, afterAmount: Double, afterBase: Double): Boolean {
+        if (afterAmount <= 0.0) return false
+        if (beforeAmount == null || beforeAmount <= 0.0) return true
+        if (afterAmount > beforeAmount + 1.0) return true
+        if (beforeBase == null) return true
+        return afterAmount * beforeBase > beforeAmount * afterBase + beforeBase
+    }
+
     const val CAP_NOT_SET =
         "The discount limit has not been set. Ask the Owner to set it in Settings."
 }

@@ -231,7 +231,7 @@ object QuotationWrite {
      * plan line that said "transport becomes a manual line"; corrected in
      * N5.9a commit 3b.
      */
-    private fun transportLine(draft: QuoteDraft, totals: QuoteTotals): QuotationLineRecord? {
+    internal fun transportLine(draft: QuoteDraft, totals: QuoteTotals): QuotationLineRecord? {
         if (totals.transport <= 0.0) return null
         return QuotationLineRecord(
             title = TRANSPORT_TITLE,
@@ -275,33 +275,37 @@ object QuotationWrite {
         put("status", STATUS_FINALISED)
         // Absent, never an empty map standing in for one: see the class KDoc.
         snap?.let { put("snap", it) }
-        draft.installation?.let { charge ->
-            put(
-                "install",
-                mapOf(
-                    "mode" to charge.mode.wireValue,
-                    "rate" to charge.rate,
-                    "amt" to totals.installation,
-                    "basis" to charge.basis
-                )
-            )
-        }
+        installationData(draft, totals)?.let { put("install", it) }
         // Only a discount actually taken. `discBase` exists so the rule can
         // check the cap, and is bounded there by `subtotal + disc.amt`.
-        draft.discount?.takeIf { totals.discount > 0.0 }?.let { taken ->
-            put(
-                "disc",
-                mapOf(
-                    "kind" to taken.kind.wireValue,
-                    "value" to taken.value,
-                    "amt" to totals.discount
-                )
-            )
+        discountData(draft, totals)?.let {
+            put("disc", it)
             put("discBase", totals.discountBase)
         }
     }
 
-    private fun partyData(party: QuotationPartySnapshot): Map<String, Any?> = mapOf(
+    /** `install` as stored — `{mode, rate, amt, basis}` — or null for none. */
+    internal fun installationData(draft: QuoteDraft, totals: QuoteTotals): Map<String, Any?>? =
+        draft.installation?.let { charge ->
+            mapOf(
+                "mode" to charge.mode.wireValue,
+                "rate" to charge.rate,
+                "amt" to totals.installation,
+                "basis" to charge.basis
+            )
+        }
+
+    /** `disc` as stored — `{kind, value, amt}` — or null unless one is taken. */
+    internal fun discountData(draft: QuoteDraft, totals: QuoteTotals): Map<String, Any?>? =
+        draft.discount?.takeIf { totals.discount > 0.0 }?.let { taken ->
+            mapOf(
+                "kind" to taken.kind.wireValue,
+                "value" to taken.value,
+                "amt" to totals.discount
+            )
+        }
+
+    internal fun partyData(party: QuotationPartySnapshot): Map<String, Any?> = mapOf(
         "name" to party.name.trim(),
         "site" to party.site.trim(),
         "gstin" to party.gstin.trim(),

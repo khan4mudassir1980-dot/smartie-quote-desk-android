@@ -832,7 +832,7 @@ of 0.5 must not be lifted to 80.5.
 | **N5.7** | Minimal product edit — `unit`, dealer/client rate, `minSqft` | **No** | Done |
 | **N5.8** | The quotation builder, draft only | No | To do |
 | **N5.9** | Finalise — one transaction, idempotent retry, `src`, `snap`, party snapshot; **9b:** the finalise gate (V8C4's `ensureFinalised`) and a stand-alone Finalise as its first caller | **Yes** | 9a done and CI-verified; 9b code complete — its CI state is `PROJECT-STATUS.md`'s |
-| **N5.10** | Edit and cancel, with the last-edited stamp; **Duplicate**; **the party type** (pick sets the rate on an empty quotation, a new customer's type always chosen, the Parties screen's checks) — all approved 2026-09-28 | **Yes** | In progress |
+| **N5.10** | Edit and cancel, with the last-edited stamp; **Duplicate**; **the party type** (pick sets the rate on an empty quotation, a new customer's type always chosen, the Parties screen's checks) — all approved 2026-09-28 | **Yes** | **Done**, `0e9d0b8`..`4283ef2`, CI #211-#222; ruleset anchor `ff20dd4` |
 | **N5.11** | PDF, WhatsApp and Print in the printed order above — each **calls the finalise gate first**, as V8C4's do; the PDF falls back to the **live** company settings when `snap` is absent; prints **"Last edited by"** right after the date, its time **from the server's clock**, checked by the rule against the request time; Duplicate's message returns to **V8C4's exact words** | Yes (the edit time) | To do |
 | **N5.12** | `docs/N5-cutover.md`, and **only here** does the banner come out | No | To do |
 

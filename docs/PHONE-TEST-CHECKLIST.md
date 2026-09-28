@@ -8,7 +8,7 @@ run once, at the end, against one staging APK and one staging rules
 deployment. That is why this file exists: nothing else carries the memory of
 what is owed.
 
-Last updated for **N5.9b**.
+Last updated for **N5.10**.
 
 ## How to use it
 
@@ -22,6 +22,27 @@ Last updated for **N5.9b**.
 ---
 
 ## Owed now
+
+### N5.10 — edit, cancel, Duplicate and the party type
+
+Against the rules at `ff20dd4` or later. Role mapping as above: **Manager** is
+stored `staff`. V8C4's own cancel payload is emulator-only — no PWA build
+points at staging — so no row here sends it.
+
+| Row | Check |
+|---|---|
+| T-Q11 | **An edit keeps its number and leaves the counter alone.** As a Manager, open one of your quotations, press **Edit**, change a quantity and press **Save changes**: "Saved changes to X". In the console the **same** document holds the new quantity, `no` is unchanged, `rev` is 1, and `lastEditedBy`, `lastEditedByUid` and `lastEditedAt` are yours; `/teamSettings/numbering` has **not** moved. The detail shows **Last edited** — "<your name>, <date, time>" — directly after **Issued**, and the list tags the row **Edited** |
+| T-Q12 | **Two phones editing one quotation — the second is told.** Open the same quotation for editing on two phones. Save on the first. Save on the second: "Not saved — X was changed by <first person> at <time> after you opened it. Your changes are still here: discard them and edit again." Nothing of the second's is stored; **Discard changes** there shows the first's |
+| T-Q13 | **A Manager cancels their own quotation, online.** **Cancel this quotation** asks, in V8C4's words, "Cancel X? The record is kept and marked cancelled. The number is never released or re-used." — answered **Cancel quotation**: "X cancelled", and the row turns Cancelled. In the console `status` is `Cancelled`, `cancelledBy` is your **name** and `cancelledAt` a **number** — and nothing else changed |
+| T-Q14 | **Cancel offline.** With flight mode on, **Cancel quotation** says "Cancelling needs an internet connection — the quotation is shared with the team" and the row is unchanged, here and in the console |
+| T-Q15 | **A Manager cannot cancel another's.** Signed in as a second Manager, the first Manager's quotation is not in the list at all, so nothing offers to cancel it. **Forced, the rules refuse it** — that half is the emulator's ("but never another's, and Staff cancel nothing"), not a phone check |
+| T-Q16 | **An Owner cancels a Manager's quotation.** Signed in as the Owner, open a Manager's quotation: **Cancel this quotation** is offered and cancels it, `cancelledBy` the Owner's name |
+| T-Q17 | **A second cancel is not offered.** A cancelled quotation offers neither Edit nor Cancel — only **Duplicate** |
+| T-Q18 | **The cap on an edit asks only when the discount goes up — (i) and (iii) on a Manager's phone.** As the Owner, lower the Manager's cap below a discount a Manager's quotation already carries. As that Manager, edit only its phone number and save: **saved** — (i). Edit it again and add a line, so the discount amount rises: the builder shows the cap sentence under the discount and Save changes refuses it — (iii) |
+| T-Q19 | **Duplicate a cancelled quotation.** With a quotation in progress that has lines, **Duplicate** asks "Replace the quotation you are working on with a copy of this one?"; **Replace it** opens the builder: "Copied into a new draft — it takes a new number when it is finalised", and under the Dealer / Client switch "Rates as quoted on X, <date>. Switching Dealer / Client reprices at today's rates." The copy has the lines at their quoted rates, the party, the transport in the transport box, **no** installation, **no** discount, and Include GST on with the rate unset or resolved from the products. Switch the tier once: the lines are repriced and the "Rates as quoted" note is gone. Finalise takes a **new** number |
+| T-Q20 | **Picking a Dealer.** On an **empty** quotation, choose a saved Dealer: the switch moves to Dealer. On a quotation **with lines** at Client, choose a saved Dealer: the rate stays Client and a note says "<name> is saved as a Dealer — this quotation stays at Client rates. Switch above to reprice." |
+| T-Q21 | **"Save this customer" asks Dealer or Client.** With a new name typed, it asks "Save <name> as a Dealer or a Client?"; **Cancel** saves nobody; **Dealer** saves them as a Dealer, and the quotation's rate does not move |
+| T-Q22 | **The Parties screen.** **Add** offers Dealer and Client only, neither chosen, and Save says "Choose Dealer or Client" until one is. A malformed phone, GSTIN or email is refused with its sentence before anything is sent. Open a legacy **contractor** party's editor: neither is chosen, and it is asked for one before it saves |
 
 ### N5.9 — finalise
 

@@ -8,11 +8,11 @@ anything.** Last updated 2026-09-28.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `2848bb9` — [run #208](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36385798160), fully green (unit tests, lint, Firestore rules emulator, APK build). Later commits may sit above it. |
+| **Last CI-verified head** | `4283ef2` — [run #222](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36412046793), fully green (unit tests, lint, Firestore rules emulator, APK build). Later commits may sit above it. |
 | **APK to install** | The `smartie-native-apks` artifact **from the run that verified the head you intend to install** — never from whichever run this table happens to name. A build contains the commit it ran on and nothing above it, so a head hash and an APK go out of step the moment anything lands. Each run's job summary reports its head and the signing certificate; the app must show **Staging**. |
-| **Ruleset anchor** | `ead0a52` — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
-| **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **seven rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
-| **To deploy next** | The **latest CI-verified head**, not a hash copied into this file. Check it before deploying: `git diff --quiet <head> ead0a52 -- firestore/firestore.rules` — silence means that head carries the current ruleset. No index deploy: `firestore.indexes.json` is unchanged since `69d0fce`. |
+| **Ruleset anchor** | `ff20dd4` (N5.10 commit 2) — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
+| **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **eight rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap), `ff20dd4` (N5.10 — edit, the creator's cancel, the cap only when raised); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
+| **To deploy next** | The **latest CI-verified head**, not a hash copied into this file. Check it before deploying: `git diff --quiet <head> ff20dd4 -- firestore/firestore.rules` — silence means that head carries the current ruleset. No index deploy: `firestore.indexes.json` is unchanged since `69d0fce`. |
 
 > **Three fields, three meanings — they were one field until 2026-09-24 and it
 > had gone wrong.** The table said `a849650` was "the commit to deploy the rules
@@ -50,7 +50,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
 | N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2, N4.3 and N4.4 are all code complete and CI-verified**, and both are waiting on the same Owner-run staging rules deployment paired with the APK rollout — they were never deployed separately and must not be. Purchase History is built and open to every role, so what was Batch 5 is done; the tab badge is Batch 6 |
-| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.9 are complete and CI-verified** — N5.9 (finalise) at `57d607a`, run #204, and Part A of the Owner's review of it at `2848bb9`, run #208. The builder now **issues quotations**: its Finalise control runs V8C4's finalise gate (`QuoteFinaliser`) and takes the next number from `/teamSettings/numbering` in one transaction, against staging only. The finalised draft is retired and the builder moves to a fresh quotation. **Not yet run on a phone** — T-Q1 to T-Q10 are owed. Rules deploy once, at the final staging pass, from the head named above; the ruleset anchor is still `ead0a52`. The Quotation tab keeps its "Keep using the PWA to issue quotations" banner until N5.12. Next is N5.10, edit and cancel |
+| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.10 are complete and CI-verified** — N5.9 (finalise) at `57d607a`, run #204, Part A of the Owner's review of it at `2848bb9`, run #208, and **N5.10** (edit, cancel, Duplicate, the party type) at `4283ef2`, run #222. The builder **issues quotations** and now **edits** them — the same number, saved over, stamped "Last edited" — while the creator, or an Owner or Administrator, may **cancel** one and anyone who quotes may **duplicate** one. **Not yet run on a phone** — T-Q1 to T-Q22 are owed. Rules deploy once, at the final staging pass, from the head named above; the ruleset anchor is now `ff20dd4`. The Quotation tab keeps its "Keep using the PWA to issue quotations" banner until N5.12. Next is planning N5.11, the PDF, Print and WhatsApp |
 | N6 Products & Categories | Not started. The Products & Categories editing screen, which T-P7 is blocked on. **Also owed here: read the company GST from `teamSettings/company.defaultGst`.** V8C4's `stSave` writes it there and the native app is already permitted to read that document. N5.8a resolves a quotation's GST from the rate its catalogue lines agree on, which is an honest stopgap and not the final answer — a quotation whose lines disagree, or which has only hand-typed lines, has nothing to agree on and currently refuses to finalise until somebody sets the rate |
 | N7 Calculators | Not started. Port the four V8C4 calculators — rolling shutter, high-speed door, garage door, glass door — whose output becomes ordinary quotation lines carrying the opening size in the line's spec text |
 | N8 Migration & cutover | Not started. **The production migration and cutover.** `docs/N2-delivery.md:40` calls N8 "the catalogue migration"; that line is the stale one and `docs/N3-plan.md:585` is right. **Read the blocking warning about `import-staging.mjs` under "Decisions that bind future work" before planning any part of this** — the importer carries seed rates in every payload and would destroy live pricing if pointed at production |
@@ -1361,25 +1361,108 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**Build N5.10 as approved on 2026-09-28 — commits 1 to 11, in order**, each
-pushed alone with CI green before the next, each ablation reported with the
-test it made fail. The approved plan is recorded in "The Owner's approval of
-the N5.10 plan, 2026-09-28", below; its answers in "The Owner's answers on
-the N5.10 plan, 2026-09-28". Commit 0 (this record) is the first of the
-twelve.
+**Plan N5.11 — the PDF, Print and WhatsApp — and present it to the Owner.
+Plan only: no code until it is approved.** It must carry what this file
+already owes N5.11: print "Last edited by <name>, <date time>" right after
+the date, its time **from the server's clock** and checked by the rule
+against the request time; Duplicate's message back to **V8C4's exact
+words**; the PDF's fallback to the live company settings while `snap` is
+absent; and each of the three calling the finalise gate first, as V8C4's
+do.
 
-What N5.10's plan must also carry, already recorded in this file:
+N5.10 is complete and CI-verified at `4283ef2` (below). Its phone rows,
+T-Q11 to T-Q22, join T-Q1 to T-Q10 in `PHONE-TEST-CHECKLIST.md` and are run
+once, at the final staging pass, with the rules deployed from the head
+then current — the anchor is now `ff20dd4`.
 
-- **"N5.10 is coupled to the finalise retry"** — widening `/quotations`
-  for edit removes the rules' second defence against a duplicate number;
-  bound the edit branch, never accept the document whole, keep cancel at
-  `admin()` for V8C4's payload.
-- **Never re-freeze `snap`, never re-resolve an absent `partyId`.**
-- **Area geometry degrades gracefully** (`docs/N5-plan.md`, the line
-  table).
+### N5.10 — every commit pushed alone; one red run, fixed by its own commit
 
-Still open for the Owner, from 8b and not blocking: the party **type on
-update**, and the **Parties screen's own Add/Edit flows** versus V8C4's.
+From `git log --oneline 9065eb3..4283ef2`, each pushed alone, and nothing
+pushed on top of a head until CI had passed it, as the Owner's approval
+required — commit 10's red run was followed only by its own fix:
+
+| Commit | What | Run |
+|---|---|---|
+| `0e9d0b8` | 0 — the Owner's approval recorded, before any code; `N5-plan.md` in line | #211 green |
+| `3e5a745` | 1 — the read side: installation, discount, `discBase`, the stamp, `rev` | #212 green |
+| `ff20dd4` | 2 — the rules: edit, the creator's cancel, the cap only when raised. **The new ruleset anchor** | #213 green |
+| `7275c93` | 3 — the domain: `QuotationEdit`, `QuoteDiscount.raised`, the codec, `Permissions` | #214 green |
+| `b19c880` | 4 — the store and repository: `edit` and `cancel`, each one transaction | #215 green |
+| `bdc72dc` | 5 — the gate: Save changes beside Finalise, never through it | #216 green |
+| `feb48d4` | 6 — the wiring: the edit request, `QuotationsViewModel` | #217 green |
+| `5c6a5af` | 7 — the screens: Edit and Cancel on the detail, the builder's edit mode, the list tag | #218 green |
+| `94a2132` | 8 — Duplicate | #219 green |
+| `e010742` | 9 — the party type on the quotation | #220 green |
+| `c7b397d` | 10 — the Parties screen: Dealer or Client, chosen, and the three checks | **#221 red**: did not compile |
+| `4283ef2` | fix — `SegmentedChoice`'s selected semantics: its own `selected` parameter shadowed the property | #222 green |
+
+**Every ablation is in its commit's message, with the test it made fail.**
+Rules (R2-R6, R16-R20, R22, R23) were measured on the local emulator;
+Kotlin (R1, R8-R15, R21, R24-R32, and each commit's own W-, X-, G- and
+T-series) in the local JVM sweep; each was restored and compared byte for
+byte. **The screens were not measured**: they run only under Robolectric,
+on CI, and a deliberately red push is not allowed on this branch.
+
+**Where the build departed from the plan's text — each stated in its
+commit, none changing a decision:**
+
+- **Edit is not offered on a beta record** (`legacyBetaShape`) — the plan
+  named that for Cancel only. A beta record has no document-level GST and
+  its lines are not V8C4's, so a save would rewrite its shape (commit 6).
+- **An edit's "Rates as quoted on X" carries no date** — the draft carries
+  no issue date, and after an earlier edit the issue date would not be when
+  its rates were set. A copy's line is dated (commits 7 and 8).
+- **The note goes once a switch of tier has repriced a line**, for an edit
+  and a copy alike, when it would no longer be true — `QuoteDraft.tierRepriced`,
+  appended to the draft codec as field 31 (commit 8).
+- **`PartyWrite.create`'s refusal of an unstated type landed in commit 10,
+  not 9** — in 9 it would have refused a Parties-screen Add made under the
+  Client chip that screen still showed selected. R31 was measured in 10, as
+  planned.
+- **`SegmentedChoice` now reports which segment is selected** in its
+  semantics (commit 10) — until now only the colour did.
+
+**For the record — three things the Owner should know:**
+
+- **Run #221 was red: commit 10 did not compile.** In `SegmentedChoice`,
+  `.semantics { selected = isSelected }` bound `selected` to the function's
+  own `selected: T` parameter — "'val' cannot be reassigned". The local
+  sweep never compiles `ui/components`. Reproduced locally with the same
+  shape before fixing, the same two errors word for word; `4283ef2` writes
+  `this.selected` and is its own commit — nothing was amended or
+  force-pushed.
+- **Commit 5 was re-made locally before its first push.** Its first form
+  did not compile: `ProductsViewModel.finalise`'s `when` over the gate's
+  outcomes was not exhaustive once `Saved` and `NotSaved` existed, and the
+  local sweep does not compile the view model. It was `git reset --soft` and
+  committed again with the fix; the broken form was never pushed, and no
+  pushed commit was rewritten. Its message says so.
+- **Commit 7's message miscounts one file:** it says `QuoteBuilderEditScreenTest`
+  holds 13 tests; it held **12** (`git grep -c '@Test' 5c6a5af --
+  app/src/test/java/in/smartie/quotedesk/ui/QuoteBuilderEditScreenTest.kt`).
+  Not amended, per the Owner's rule; corrected here.
+
+**Closed by the Owner's amendment D:** the two questions held open since
+8b — the party **type on update**, and the **Parties screen's Add/Edit
+flows** versus V8C4's. A pick moves the rate only on an empty quotation that
+is not an edit; a new customer's type is always asked for; the Parties
+screen offers Dealer and Client only, with no default, and runs the three
+format checks. **Recorded, not fixed, as the Owner accepted:** a Manager's
+rename on the Parties screen is still refused only after Save.
+
+**`FirestoreQuotationStore.updateQuotation` is proven only by CI's
+compile**, like finalise's store (N5.9a's recorded bound 2): the
+repository's tests run against a fake and the emulator tests are Node. The
+phone rows T-Q11 and T-Q13 are its first real exercise.
+
+Counts at `4283ef2`. Kotlin tests: **1799** (`git grep -h -o '@Test' 4283ef2
+-- app/src/test | wc -l`), from 1605 at `2848bb9`. Local JVM sweep: **943
+across 61 classes**, all passing, `-ea`. Emulator: **290**, all passing
+(`npx firebase emulators:exec --project smartie-rules-test --only firestore
+"node --test --test-concurrency=1 tests/*.test.js"`, from `firestore/`).
+**The rules changed once, in commit 2**: `git log -1 --format=%h --
+firestore/firestore.rules` answers `ff20dd4`, and `git diff --quiet
+ff20dd4 4283ef2 -- firestore/firestore.rules` is silent.
 
 ### N5.9b — every commit CI-verified, one run per head
 
@@ -3276,6 +3359,27 @@ This is why the N5.7 unit correction is done **by hand in the editor** and no
 import is run.
 
 ## Deferred — known defects, recorded and not fixed
+
+### The rules' 1,000-expression limit is reached 58 times in the purchase and stock emulator tests — pre-existing
+
+Found in N5.10 commit 2. The rules engine stops evaluating a request at
+1,000 expressions and **refuses** it. N5.10's own first draft hit that
+limit, so that refusal tests passed **because of the limit, not the rule**;
+it was restructured, and every N5.10 refusal now goes through `refused()`,
+which fails if the denial was the limit's. **The same limit is reached 58
+times in the purchase and stock tests**, and was at `2848bb9`, before any
+N5.10 rule: `grep -c "maximum of 1000 expressions"` over the emulator log of
+the full suite. So **some purchase or stock refusal tests may pass for the
+wrong reason.** Not investigated here — outside N5.10 — and not fixed.
+The remedy is the one N5.10 used: give those tests a `refused()` that
+rejects the limit's denial, then restructure whichever rules it catches.
+
+### A Manager's rename on the Parties screen is refused only after Save — accepted
+
+The Owner accepted it on 2026-09-28 (amendment D): **recorded, not
+fixed.** The Parties editor closes on Save and the rules then refuse the
+rename. Every other N5.10 check on that screen runs before anything is sent.
+
 
 These are findings from N5.6c, N5.7 and N5.9a that were deliberately not fixed in the
 batch that found them. A plan document gets superseded; this list does not.

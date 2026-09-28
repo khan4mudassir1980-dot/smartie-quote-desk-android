@@ -58,6 +58,18 @@ object QuotationCancel {
         "Only the person who issued this quotation, an Owner or an Administrator can cancel it"
 
     /**
+     * Whether the detail offers Cancel on [record] to [member]: V8C4's
+     * `s !== "Cancelled"`, with its `admin` widened to the creator (the
+     * 2026-09-28 decision), and **never on a beta record** (`legacyBetaShape`)
+     * — the plan's choice, the same as for Edit. Offering is a courtesy;
+     * [plan] decides again inside the transaction, and the rules after it.
+     */
+    fun offered(member: Member, record: QuotationRecord): Boolean =
+        !record.status.equals(STATUS, ignoreCase = true) &&
+            !record.legacyBetaShape &&
+            Permissions.canCancelQuotation(member, record)
+
+    /**
      * Cancelling [stored] — the quotation read **inside the transaction**,
      * null when it has gone — as [member], at [at].
      */

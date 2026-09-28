@@ -76,7 +76,9 @@ fun QuoteBar(
     total: String,
     onOpen: () -> Unit,
     modifier: Modifier = Modifier,
-    needsRate: Int = 0
+    needsRate: Int = 0,
+    /** The number of the issued quotation being edited, if it is one (N5.10). */
+    editing: String? = null
 ) {
     val dimens = LocalSmartieDimens.current
     SmartieCard(modifier = modifier, accent = SmartieColors.Purple) {
@@ -87,7 +89,11 @@ fun QuoteBar(
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    if (lineCount == 0) "Empty" else "$lineCount in the quotation",
+                    when {
+                        editing != null -> "Editing $editing"
+                        lineCount == 0 -> "Empty"
+                        else -> "$lineCount in the quotation"
+                    },
                     style = MaterialTheme.typography.titleSmall,
                     color = SmartieColors.Ink
                 )
@@ -100,7 +106,8 @@ fun QuoteBar(
             SmartiePrimaryButton(
                 text = "View quote",
                 onClick = onOpen,
-                enabled = lineCount > 0
+                // An edit is open even with no lines: Discard is on the builder.
+                enabled = lineCount > 0 || editing != null
             )
         }
     }

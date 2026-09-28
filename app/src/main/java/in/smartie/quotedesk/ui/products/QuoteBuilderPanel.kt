@@ -137,7 +137,11 @@ internal fun QuoteBuilderPanel(
     zeroRateQuestion: String? = null,
     onFinalise: () -> Unit = {},
     /** The answer to [zeroRateQuestion]: true for "Continue anyway". */
-    onAnswerZeroRates: (Boolean) -> Unit = {}
+    onAnswerZeroRates: (Boolean) -> Unit = {},
+    /** **Save changes** on an edit of an issued quotation (N5.10). */
+    onSaveEdit: () -> Unit = {},
+    /** Discards the edit, once the person has answered the question. */
+    onDiscardEdit: () -> Unit = {}
 ) {
     // Which saved customer the picker is showing, and what is typed into its
     // search box. The panel's own state: nothing about it belongs on a draft
@@ -176,6 +180,11 @@ internal fun QuoteBuilderPanel(
     // Which existing opening the area form is editing, if any.
     var editingAreaId by rememberSaveable { mutableStateOf("") }
     var mintedLineId by rememberSaveable { mutableStateOf("") }
+
+    // N5.10: the issued quotation this draft edits, if it is one — and
+    // whether "Discard changes" is waiting on its question.
+    val editOf = draft.editOf
+    var askingDiscard by rememberSaveable { mutableStateOf(false) }
 
     // The money boxes hold what was typed, so a half-typed "18." is not
     // rounded to 18 under the person's fingers and an emptied box is not
@@ -257,6 +266,15 @@ internal fun QuoteBuilderPanel(
             // nobody typed a rate into, so it is a decision taken before the
             // quotation is built rather than after.
             item(key = BUILDER_TIER_KEY) { TierPicker(draft.tier, onTierChange) }
+
+            // Seen, not guessed (amendment C): an edit's lines carry the rates
+            // it was issued at, not today's catalogue, until the switch above
+            // reprices them.
+            ratesNote(draft)?.let { note ->
+                item(key = BUILDER_RATES_NOTE_KEY) {
+                    Text(note, style = MaterialTheme.typography.labelMedium, color = SmartieColors.Steel)
+                }
+            }
 
             item(key = BUILDER_PICK_PARTY_KEY) {
                 SmartieGhostButton(
@@ -574,9 +592,29 @@ internal fun QuoteBuilderPanel(
                 }
             }
 
+            // An edit is saved, never finalised: its own control, its own path
+            // (`QuoteFinaliser.saveEdit`), and a way out that leaves the
+            // quotation exactly as stored.
+            if (editOf != null) {
+                editControls(
+                    number = editOf.number,
+                    canSave = canFinalise,
+                    gatePhase = gatePhase,
+                    blocked = savingCustomer || mergeQuestion != null,
+                    failure = finaliseFailure,
+                    askingDiscard = askingDiscard,
+                    onSave = onSaveEdit,
+                    onAskDiscard = { if (!locked) askingDiscard = true },
+                    onAnswerDiscard = { discard ->
+                        askingDiscard = false
+                        if (discard && !locked) onDiscardEdit()
+                    }
+                )
+            }
+
             // The finalise gate's first caller. N5.11's PDF, Print and WhatsApp
             // become the others (V8C4 has no Finalise button, only the gate).
-            if (canFinalise && !draft.isEmpty) {
+            if (editOf == null && canFinalise && !draft.isEmpty) {
                 item(key = BUILDER_FINALISE_KEY) {
                     val taking = gatePhase == GatePhase.TAKING_NUMBER
                     SmartiePrimaryButton(
@@ -628,7 +666,7 @@ internal fun QuoteBuilderPanel(
             // mean "the list stopped composing at the fold".
             item(key = BUILDER_TAIL_KEY) {
                 Text(
-                    ISSUING_NOTE,
+                    editOf?.let { editNote(it.number) } ?: ISSUING_NOTE,
                     style = MaterialTheme.typography.bodySmall,
                     color = SmartieColors.Steel
                 )
@@ -720,7 +758,7 @@ private fun BuilderHeader(draft: QuoteDraft, onBack: () -> Unit) {
             modifier = Modifier.semantics { contentDescription = BACK_TO_PRODUCTS }
         )
         Text(
-            BUILDER_HEADING,
+            draft.editOf?.let { editingHeading(it.number) } ?: BUILDER_HEADING,
             style = MaterialTheme.typography.titleMedium,
             color = SmartieColors.Ink
         )
@@ -836,6 +874,89 @@ private fun LazyListScope.formFooter(
                 text = CANCEL_LINE,
                 onClick = onCancel,
                 modifier = Modifier.semantics { contentDescription = CANCEL_LINE }
+            )
+        }
+    }
+}
+
+/**
+ * An edit's two ways on (N5.10): **Save changes** and **Discard changes**, in
+ * place of Finalise, which an edit never reaches.
+ *
+ * Save is busy — and says so — while the gate saves; a failure stays under it
+ * until the next press, as Finalise's does. Discard asks first, because it
+ * throws away every change on the draft; the quotation itself is untouched
+ * either way. The question's answers are this app's own: V8C4 has no edit.
+ */
+private fun LazyListScope.editControls(
+    number: String,
+    canSave: Boolean,
+    gatePhase: GatePhase,
+    /** A customer being saved, or its question open: Save waits, as Finalise does. */
+    blocked: Boolean,
+    failure: String?,
+    askingDiscard: Boolean,
+    onSave: () -> Unit,
+    onAskDiscard: () -> Unit,
+    onAnswerDiscard: (Boolean) -> Unit
+) {
+    val idle = gatePhase == GatePhase.IDLE
+    if (canSave) {
+        item(key = BUILDER_SAVE_EDIT_KEY) {
+            val saving = gatePhase == GatePhase.SAVING
+            SmartiePrimaryButton(
+                text = SAVE_CHANGES,
+                onClick = onSave,
+                enabled = idle && !blocked,
+                busy = saving,
+                busyText = SAVING_CHANGES,
+                modifier = Modifier
+                    .semantics { contentDescription = if (saving) SAVING_CHANGES else SAVE_CHANGES }
+                    .fillMaxWidth()
+            )
+        }
+        if (failure != null) {
+            item(key = BUILDER_FINALISE_FAILURE_KEY) {
+                Text(failure, style = MaterialTheme.typography.bodyMedium, color = SmartieColors.Danger)
+            }
+        }
+    }
+    if (askingDiscard) {
+        item(key = BUILDER_DISCARD_QUESTION_KEY) {
+            Text(discardQuestion(number), style = MaterialTheme.typography.bodyMedium, color = SmartieColors.Ink)
+        }
+        item(key = BUILDER_DISCARD_CONFIRM_KEY) {
+            SmartieGhostButton(
+                text = DISCARD_CONFIRM,
+                onClick = { onAnswerDiscard(true) },
+                enabled = idle,
+                danger = true,
+                modifier = Modifier
+                    .semantics { contentDescription = DISCARD_CONFIRM }
+                    .fillMaxWidth()
+            )
+        }
+        item(key = BUILDER_KEEP_EDITING_KEY) {
+            SmartieGhostButton(
+                text = KEEP_EDITING,
+                onClick = { onAnswerDiscard(false) },
+                modifier = Modifier
+                    .semantics { contentDescription = KEEP_EDITING }
+                    .fillMaxWidth()
+            )
+        }
+    } else {
+        item(key = BUILDER_DISCARD_KEY) {
+            SmartieGhostButton(
+                text = DISCARD_CHANGES,
+                // Disabled while the gate is open, and the click checks again:
+                // TalkBack's click action does not pass through the lock layer.
+                onClick = onAskDiscard,
+                enabled = idle,
+                danger = true,
+                modifier = Modifier
+                    .semantics { contentDescription = DISCARD_CHANGES }
+                    .fillMaxWidth()
             )
         }
     }
@@ -1382,6 +1503,26 @@ internal fun eyebrow(draft: QuoteDraft): String {
     return "$rates · ${formatDate(draft.updatedAt)}"
 }
 
+/** "Editing SIE/QD/2025-26/009" — the builder's heading on an edit (N5.10). */
+internal fun editingHeading(number: String): String = "Editing $number"
+
+/**
+ * The line that says whose rates the lines carry, or null on a quotation
+ * built from the catalogue today. An edit's are the ones it was issued at.
+ */
+internal fun ratesNote(draft: QuoteDraft): String? {
+    val editOf = draft.editOf ?: return null
+    return "Rates as quoted on ${editOf.number}. $REPRICES_AT_TODAYS"
+}
+
+/** The tail on an edit, in place of [ISSUING_NOTE]. */
+internal fun editNote(number: String): String =
+    "Saving keeps the number $number and records you as the last to edit it. " +
+        "It needs an internet connection."
+
+internal fun discardQuestion(number: String): String =
+    "Discard your changes to $number? The quotation stays exactly as it was."
+
 internal fun needsRateNote(count: Int): String =
     "$count line${if (count == 1) "" else "s"} still need${if (count == 1) "s" else ""} " +
         "a rate before this can be issued."
@@ -1413,6 +1554,12 @@ internal const val BUILDER_NEEDS_RATE_KEY = "builder-needs-rate"
 internal const val BUILDER_CLEAR_KEY = "builder-clear"
 internal const val BUILDER_FINALISE_KEY = "builder-finalise"
 internal const val BUILDER_FINALISE_FAILURE_KEY = "builder-finalise-failure"
+internal const val BUILDER_RATES_NOTE_KEY = "builder-rates-note"
+internal const val BUILDER_SAVE_EDIT_KEY = "builder-save-edit"
+internal const val BUILDER_DISCARD_KEY = "builder-discard"
+internal const val BUILDER_DISCARD_QUESTION_KEY = "builder-discard-question"
+internal const val BUILDER_DISCARD_CONFIRM_KEY = "builder-discard-confirm"
+internal const val BUILDER_KEEP_EDITING_KEY = "builder-keep-editing"
 
 /** The layer that takes every touch while the finalise gate is open. */
 internal const val BUILDER_LOCK_TAG = "builder-lock"
@@ -1502,4 +1649,10 @@ internal const val ISSUING_NOTE =
 internal const val FINALISE = "Finalise"
 internal const val TAKING_A_NUMBER = "Taking a number…"
 internal const val CONTINUE_ANYWAY = "Continue anyway"
+internal const val SAVE_CHANGES = "Save changes"
+internal const val SAVING_CHANGES = "Saving changes…"
+internal const val DISCARD_CHANGES = "Discard changes"
+internal const val DISCARD_CONFIRM = "Discard them"
+internal const val KEEP_EDITING = "Keep editing"
+internal const val REPRICES_AT_TODAYS = "Switching Dealer / Client reprices at today's rates."
 internal const val CANCEL_FINALISE = "Cancel"

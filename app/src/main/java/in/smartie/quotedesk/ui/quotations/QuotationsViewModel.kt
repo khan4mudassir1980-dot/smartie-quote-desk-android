@@ -25,6 +25,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
+/** Why cancelling [quotationId] did not happen. */
+data class CancelFailure(val quotationId: String, val message: String)
+
 /**
  * The Quotations tab's writes (N5.10): **Edit** hands the quotation to the
  * builder, and **Cancel** cancels it — remote-first.
@@ -63,10 +66,13 @@ class QuotationsViewModel(
     /** The id of the quotation being cancelled, while the write is out. */
     val cancelling: StateFlow<String?> = _cancelling.asStateFlow()
 
-    private val _failure = MutableStateFlow<String?>(null)
+    private val _failure = MutableStateFlow<CancelFailure?>(null)
 
-    /** Why the last cancel did not happen, until the next is tried. */
-    val failure: StateFlow<String?> = _failure.asStateFlow()
+    /**
+     * Why the last cancel did not happen, until the next is tried — naming
+     * its quotation, so the detail of another one never shows it.
+     */
+    val failure: StateFlow<CancelFailure?> = _failure.asStateFlow()
 
     /** Opens [record] in the builder for editing; the caller moves to the Products tab. */
     fun edit(record: QuotationRecord) {
@@ -77,7 +83,7 @@ class QuotationsViewModel(
     fun cancel(record: QuotationRecord) {
         if (_cancelling.value != null) return
         if (!online.value) {
-            _failure.value = CANCEL_OFFLINE
+            _failure.value = CancelFailure(record.id, CANCEL_OFFLINE)
             return
         }
         _failure.value = null
@@ -90,15 +96,16 @@ class QuotationsViewModel(
                     throw cancelled
                 } catch (failure: Throwable) {
                     log(failure)
-                    _failure.value = notCancelled(describe(failure), mayHaveLanded = true)
+                    _failure.value = CancelFailure(record.id, notCancelled(describe(failure), mayHaveLanded = true))
                     return@launch
                 }
                 when (outcome) {
-                    null -> _failure.value = notCancelled(QuoteFinaliser.TIMED_OUT, mayHaveLanded = true)
+                    null -> _failure.value =
+                        CancelFailure(record.id, notCancelled(QuoteFinaliser.TIMED_OUT, mayHaveLanded = true))
                     is CancelOutcome.Cancelled -> _messages.trySend(QuotationCancel.cancelledText(outcome.number))
                     is CancelOutcome.Refused -> {
                         outcome.cause?.let(log)
-                        _failure.value = notCancelled(outcome.message)
+                        _failure.value = CancelFailure(record.id, notCancelled(outcome.message))
                     }
                 }
             } finally {

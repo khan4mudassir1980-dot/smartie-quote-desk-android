@@ -17,8 +17,11 @@ import `in`.smartie.quotedesk.data.model.QuotationRecord
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.Role
 import `in`.smartie.quotedesk.ui.quotations.BACK_TO_QUOTATIONS
+import `in`.smartie.quotedesk.ui.quotations.CANCEL_QUOTATION
+import `in`.smartie.quotedesk.ui.quotations.DETAIL_ACTIONS_KEY
 import `in`.smartie.quotedesk.ui.quotations.DETAIL_LIST_TAG
 import `in`.smartie.quotedesk.ui.quotations.DISCOUNT_ROW
+import `in`.smartie.quotedesk.ui.quotations.EDIT_QUOTATION
 import `in`.smartie.quotedesk.ui.quotations.GRAND_TOTAL
 import `in`.smartie.quotedesk.ui.quotations.INSTALLATION_ROW
 import `in`.smartie.quotedesk.ui.quotations.LAST_EDITED
@@ -265,11 +268,19 @@ class QuotationListScreenTest {
     }
 
     @Test
-    fun `nothing on the detail offers to change it`() {
+    fun `the detail offers Edit and Cancel, and nothing else that changes it`() {
+        // Until N5.10 this was "nothing on the detail offers to change it".
+        // Edit and Cancel are now offered to the creator and to an Owner or
+        // Administrator (`QuotationActionsScreenTest` has who); Delete and
+        // Share are still not — nothing deletes a quotation, and sharing is
+        // N5.11's.
         screen()
         open("SIE/QD/2025-26/007")
+        compose.onNodeWithTag(DETAIL_LIST_TAG).performScrollToKey(DETAIL_ACTIONS_KEY)
 
-        listOf("Edit", "Save", "Cancel", "Delete", "Share").forEach { control ->
+        compose.onNodeWithContentDescription(EDIT_QUOTATION).assertExists()
+        compose.onNodeWithContentDescription(CANCEL_QUOTATION).assertExists()
+        listOf("Save", "Delete", "Share").forEach { control ->
             assertTrue(
                 "$control must not be offered yet",
                 compose.onAllNodesWithText(control, substring = false)

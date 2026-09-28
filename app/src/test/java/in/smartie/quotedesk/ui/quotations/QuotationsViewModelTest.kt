@@ -79,7 +79,7 @@ class QuotationsViewModelTest {
         model.cancel(nine)
 
         assertTrue(sent.isEmpty())
-        assertEquals(QuotationsViewModel.CANCEL_OFFLINE, model.failure.value)
+        assertEquals(CancelFailure("qd_9", QuotationsViewModel.CANCEL_OFFLINE), model.failure.value)
     }
 
     @Test
@@ -89,7 +89,10 @@ class QuotationsViewModelTest {
 
         model.cancel(nine)
 
-        assertEquals(QuotationsViewModel.notCancelled(QuotationWriteRepository.CANCEL_REFUSED), model.failure.value)
+        assertEquals(
+            CancelFailure("qd_9", QuotationsViewModel.notCancelled(QuotationWriteRepository.CANCEL_REFUSED)),
+            model.failure.value
+        )
         assertEquals(listOf<Throwable>(cause), logged)
         assertNull(model.cancelling.value)
     }
@@ -102,7 +105,7 @@ class QuotationsViewModelTest {
 
         assertEquals(
             "Not cancelled — Network unavailable. If it went through, the list will show it as cancelled.",
-            model.failure.value
+            model.failure.value?.message
         )
         assertEquals("Network unavailable", logged.single().message)
     }
@@ -116,7 +119,10 @@ class QuotationsViewModelTest {
         advanceTimeBy(51)
         runCurrent()
 
-        assertEquals(QuotationsViewModel.notCancelled(QuoteFinaliser.TIMED_OUT, mayHaveLanded = true), model.failure.value)
+        assertEquals(
+            CancelFailure("qd_9", QuotationsViewModel.notCancelled(QuoteFinaliser.TIMED_OUT, mayHaveLanded = true)),
+            model.failure.value
+        )
         assertNull(model.cancelling.value)
     }
 

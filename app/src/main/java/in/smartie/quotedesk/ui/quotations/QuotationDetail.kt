@@ -11,6 +11,10 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -20,9 +24,13 @@ import androidx.compose.ui.text.style.TextAlign
 import `in`.smartie.quotedesk.data.mapping.Money
 import `in`.smartie.quotedesk.data.model.QuotationLineRecord
 import `in`.smartie.quotedesk.data.model.QuotationRecord
+import `in`.smartie.quotedesk.domain.Member
+import `in`.smartie.quotedesk.domain.QuotationCancel
+import `in`.smartie.quotedesk.domain.QuotationEdit
 import `in`.smartie.quotedesk.ui.components.ListRow
 import `in`.smartie.quotedesk.ui.components.SmartieCard
 import `in`.smartie.quotedesk.ui.components.SmartieGhostButton
+import `in`.smartie.quotedesk.ui.components.SmartiePrimaryButton
 import `in`.smartie.quotedesk.ui.components.Tag
 import `in`.smartie.quotedesk.ui.components.TagTone
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
@@ -32,7 +40,8 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * One quotation exactly as it was issued, **read-only**.
+ * One quotation exactly as it was issued — or last edited — and, since
+ * N5.10, the two things that may be done to it: **Edit** and **Cancel**.
  *
  * Shared by the Quotations tab and by More → Quotation history, because they
  * are two ways into the same document and a quotation that read differently
@@ -68,8 +77,23 @@ import java.util.Locale
  * a `gstTotal`, and the subtraction lands on exactly the 3,132 it stored.
  */
 @Composable
-internal fun QuotationDetail(quotation: QuotationRecord, onBack: () -> Unit) {
+internal fun QuotationDetail(
+    quotation: QuotationRecord,
+    onBack: () -> Unit,
+    /** Who is looking: what is offered is theirs to do (`QuotationEdit.refusalToOpen`, `QuotationCancel.offered`). */
+    viewer: Member = Member(uid = ""),
+    actions: QuotationActions = QuotationActions(),
+    /** True while this quotation's cancel is out. */
+    cancelling: Boolean = false,
+    /** Why this quotation's last cancel did not happen. */
+    cancelFailure: String? = null
+) {
     val dimens = LocalSmartieDimens.current
+    val offersEdit = QuotationEdit.refusalToOpen(viewer, quotation) == null
+    val offersCancel = QuotationCancel.offered(viewer, quotation)
+    // V8C4's confirm, asked on the screen: the detail's own state, keyed on the
+    // quotation so another one never opens with the question already asked.
+    var askingCancel by rememberSaveable(quotation.id) { mutableStateOf(false) }
 
     LazyColumn(
         // Tagged so a test can scroll to a card below the fold. A LazyColumn
@@ -188,14 +212,105 @@ internal fun QuotationDetail(quotation: QuotationRecord, onBack: () -> Unit) {
             }
         }
 
-        item(key = "read-only") {
+        if (offersEdit || offersCancel) {
+            item(key = DETAIL_ACTIONS_KEY) {
+                Column(verticalArrangement = Arrangement.spacedBy(dimens.gapS)) {
+                    if (offersEdit) {
+                        SmartiePrimaryButton(
+                            text = EDIT_QUOTATION,
+                            onClick = { actions.onEdit(quotation) },
+                            enabled = !cancelling,
+                            modifier = Modifier
+                                .semantics { contentDescription = EDIT_QUOTATION }
+                                .fillMaxWidth()
+                        )
+                    }
+                    if (offersCancel) {
+                        CancelControls(
+                            number = quotation.number,
+                            asking = askingCancel,
+                            cancelling = cancelling,
+                            failure = cancelFailure,
+                            onAsk = { if (!cancelling) askingCancel = true },
+                            onAnswer = { cancel ->
+                                askingCancel = false
+                                if (cancel && !cancelling) actions.onCancel(quotation)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        // The last item: an absence check scrolls here first.
+        item(key = DETAIL_END_KEY) {
             Text(
-                READ_ONLY_NOTE,
+                SHARING_NOTE,
                 style = MaterialTheme.typography.bodySmall,
                 color = SmartieColors.Steel,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
+        }
+    }
+}
+
+/**
+ * Cancel, and V8C4's question before it.
+ *
+ * **The question is V8C4's, word for word** (`QuotationCancel.confirmText`);
+ * its two answers, "Cancel quotation" and "Keep it", are **a choice, not a
+ * port** — V8C4 asks through `window.confirm`, whose OK / Cancel are the
+ * browser's, and "Cancel" would name both buttons here. Nothing is marked
+ * cancelled on this screen: the write is remote-first, and the quotation
+ * turns Cancelled when the listener brings it.
+ */
+@Composable
+private fun CancelControls(
+    number: String,
+    asking: Boolean,
+    cancelling: Boolean,
+    failure: String?,
+    onAsk: () -> Unit,
+    onAnswer: (Boolean) -> Unit
+) {
+    val dimens = LocalSmartieDimens.current
+    Column(verticalArrangement = Arrangement.spacedBy(dimens.gapS)) {
+        if (asking) {
+            Text(
+                QuotationCancel.confirmText(number),
+                style = MaterialTheme.typography.bodyMedium,
+                color = SmartieColors.Ink,
+                modifier = Modifier.testTag(CANCEL_QUESTION_TAG)
+            )
+            SmartieGhostButton(
+                text = CONFIRM_CANCEL,
+                onClick = { onAnswer(true) },
+                danger = true,
+                modifier = Modifier
+                    .semantics { contentDescription = CONFIRM_CANCEL }
+                    .fillMaxWidth()
+            )
+            SmartieGhostButton(
+                text = KEEP_IT,
+                onClick = { onAnswer(false) },
+                modifier = Modifier
+                    .semantics { contentDescription = KEEP_IT }
+                    .fillMaxWidth()
+            )
+        } else {
+            SmartieGhostButton(
+                text = if (cancelling) CANCELLING else CANCEL_QUOTATION,
+                onClick = onAsk,
+                enabled = !cancelling,
+                danger = true,
+                modifier = Modifier
+                    .semantics { contentDescription = if (cancelling) CANCELLING else CANCEL_QUOTATION }
+                    .fillMaxWidth()
+            )
+        }
+        if (failure != null) {
+            Text(failure, style = MaterialTheme.typography.bodyMedium, color = SmartieColors.Danger)
         }
     }
 }
@@ -305,6 +420,17 @@ internal const val MANUAL_LINE = "Typed by hand"
 internal const val BETA_RECORD = "Beta record"
 internal const val NO_LINES = "This quotation stored no item lines."
 internal const val NOT_RECORDED = "Not recorded"
-internal const val READ_ONLY_NOTE =
-    "Quotations are read-only in the app. Creating, editing and sharing one arrives with " +
-        "the rest of the Quotation phase."
+/**
+ * Replaced N5.4's "Quotations are read-only in the app…", which N5.10 made
+ * false. Downloading, printing and sharing are N5.11's.
+ */
+internal const val SHARING_NOTE =
+    "Downloading, printing and sharing a quotation arrive with the rest of the Quotation phase."
+internal const val DETAIL_ACTIONS_KEY = "detail-actions"
+internal const val DETAIL_END_KEY = "detail-end"
+internal const val CANCEL_QUESTION_TAG = "cancel-question"
+internal const val EDIT_QUOTATION = "Edit"
+internal const val CANCEL_QUOTATION = "Cancel this quotation"
+internal const val CONFIRM_CANCEL = "Cancel quotation"
+internal const val KEEP_IT = "Keep it"
+internal const val CANCELLING = "Cancelling…"

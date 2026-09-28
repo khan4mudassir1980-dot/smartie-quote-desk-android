@@ -59,8 +59,8 @@ internal fun QuotationListScreen(
     banner: Boolean = false,
     /** The id of the quotation whose cancel is out, if any. */
     cancelling: String? = null,
-    /** Why the last cancel did not happen. */
-    cancelFailure: String? = null,
+    /** Why the last cancel did not happen, and on which quotation. */
+    cancelFailure: CancelFailure? = null,
     actions: QuotationActions = QuotationActions()
 ) {
     val dimens = LocalSmartieDimens.current
@@ -70,7 +70,15 @@ internal fun QuotationListScreen(
     val open = openId?.let { id -> visible.firstOrNull { it.id == id } }
 
     if (open != null) {
-        QuotationDetail(quotation = open, onBack = { openId = null })
+        QuotationDetail(
+            quotation = open,
+            onBack = { openId = null },
+            viewer = viewer,
+            actions = actions,
+            cancelling = cancelling == open.id,
+            // Only this quotation's: a failure on another is not about this one.
+            cancelFailure = cancelFailure?.takeIf { it.quotationId == open.id }?.message
+        )
         return
     }
 
@@ -113,6 +121,7 @@ private fun QuotationRow(quotation: QuotationRecord, onOpen: () -> Unit) {
         meta = quotation.at.takeIf { it > 0 }?.let(::formatDate),
         tags = {
             Tag(quotation.status.ifBlank { "Finalised" }, statusTone(quotation.status))
+            if (quotation.lastEditedAt > 0) Tag(EDITED, TagTone.NEUTRAL)
             if (quotation.legacyBetaShape) Tag(BETA_RECORD, TagTone.WARN)
         },
         trailing = {
@@ -127,6 +136,9 @@ private fun QuotationRow(quotation: QuotationRecord, onOpen: () -> Unit) {
 }
 
 internal const val PARTY_NOT_RECORDED = "Party not recorded"
+
+/** The list's tag on a quotation somebody edited after it was issued (N5.10). */
+internal const val EDITED = "Edited"
 internal const val LOADING_QUOTATIONS = "Loading quotations…"
 internal const val NO_QUOTATIONS = "No quotations have been issued from this database yet."
 internal const val BANNER_DETAIL =

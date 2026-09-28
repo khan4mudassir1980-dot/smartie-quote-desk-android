@@ -76,6 +76,7 @@ import `in`.smartie.quotedesk.domain.DraftLine
 import `in`.smartie.quotedesk.domain.ManualEntry
 import `in`.smartie.quotedesk.domain.Discount
 import `in`.smartie.quotedesk.domain.Installation
+import `in`.smartie.quotedesk.domain.QuotationEdit
 import `in`.smartie.quotedesk.domain.QuoteDiscount
 import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.QuoteTier
@@ -394,7 +395,10 @@ fun ProductsCatalogue(
                 onTransportNoteChange = actions.onTransportNoteChange,
                 onInstallationChange = actions.onInstallationChange,
                 onDiscountChange = actions.onDiscountChange,
-                discountCap = discountCap,
+                // On an edit, the cap only when the discount went up against
+                // what was opened (amendment A) — so the warning here agrees
+                // with what Save changes will do.
+                discountCap = QuotationEdit.screenCap(draft, discountCap),
                 parties = parties,
                 onPartyChange = actions.onPartyChange,
                 onChooseParty = actions.onChooseParty,
@@ -414,6 +418,8 @@ fun ProductsCatalogue(
                 zeroRateQuestion = zeroRateQuestion,
                 onFinalise = actions.onFinalise,
                 onAnswerZeroRates = actions.onAnswerZeroRates,
+                onSaveEdit = actions.onSaveEdit,
+                onDiscardEdit = actions.onDiscardEdit,
             )
         }
         BackHandler { showDraft = false }
@@ -674,6 +680,9 @@ fun ProductsCatalogue(
                 needsRate = draft.needsRateCount,
                 onOpen = { showDraft = true },
                 modifier = Modifier.fillMaxWidth(),
+                // An edit stays reachable with every line removed: its way
+                // out, Discard changes, is on the builder.
+                editing = draft.editOf?.number,
             )
         }
     }
@@ -682,14 +691,16 @@ fun ProductsCatalogue(
 
 /**
  * What the finalise gate is doing, for a catalogue whose builder is closed:
- * "Taking a number…" while it works, the failure once it has failed, and
- * nothing otherwise. "Finalised as X" is not here — it goes to the snackbar,
- * and since 9b's review the view model keeps it until the screen shows it.
+ * "Taking a number…" or, on an edit, "Saving changes…" while it works, the
+ * failure once it has failed, and nothing otherwise. "Finalised as X" and
+ * "Saved changes to X" are not here — they go to the snackbar, and since
+ * 9b's review the view model keeps them until the screen shows them.
  */
 @Composable
 private fun FinaliseStatus(gatePhase: GatePhase, failure: String?, modifier: Modifier = Modifier) {
     val text = when {
         gatePhase == GatePhase.TAKING_NUMBER -> TAKING_A_NUMBER
+        gatePhase == GatePhase.SAVING -> SAVING_CHANGES
         failure != null -> failure
         else -> return
     }

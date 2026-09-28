@@ -6,8 +6,13 @@ import `in`.smartie.quotedesk.data.mapping.toQuotationRecord
 import `in`.smartie.quotedesk.data.mapping.toQuotingRecord
 import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.data.model.QuotationRecord
+import `in`.smartie.quotedesk.domain.CancelPlan
+import `in`.smartie.quotedesk.domain.EditConflict
+import `in`.smartie.quotedesk.domain.EditPlan
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.Permissions
+import `in`.smartie.quotedesk.domain.QuotationCancel
+import `in`.smartie.quotedesk.domain.QuotationEdit
 import `in`.smartie.quotedesk.domain.QuotationPlan
 import `in`.smartie.quotedesk.domain.QuotationWrite
 import `in`.smartie.quotedesk.domain.QuoteDraft
@@ -51,6 +56,27 @@ sealed interface FinaliseOutcome {
      * made here.
      */
     data class Refused(val message: String, val cause: Throwable? = null) : FinaliseOutcome
+}
+
+/** What saving an edit came to (N5.10). */
+sealed interface EditOutcome {
+    /** Written: the same number, the edit stored over it. */
+    data class Saved(val number: String) : EditOutcome
+
+    /** Nothing was written; [message] is for the person. */
+    data class Refused(val message: String, val cause: Throwable? = null) : EditOutcome
+
+    /** The quotation moved since the edit was opened; nothing was written. */
+    data class Conflict(val conflict: EditConflict) : EditOutcome
+}
+
+/** What cancelling came to (N5.10). */
+sealed interface CancelOutcome {
+    /** Written, and the server accepted it. */
+    data class Cancelled(val number: String) : CancelOutcome
+
+    /** Nothing was written; [message] is for the person. */
+    data class Refused(val message: String, val cause: Throwable? = null) : CancelOutcome
 }
 
 /**
@@ -240,7 +266,85 @@ class QuotationWriteRepository(
             }
         }
 
+    // --- N5.10: editing and cancelling a quotation already issued -------------------
+
+    /**
+     * Saves an edit of a finalised quotation — **never through [finalise]**,
+     * whose read-first would find the quotation, answer "already issued" and
+     * throw the edits away. One transaction: the quotation is read, and the
+     * Owner's discount limit when the edit carries a discount; the counter is
+     * never read and never moved; the write is an `update()` of the fields
+     * `QuotationEdit.plan` names, never a `set()`.
+     *
+     * **No retry.** Finalise retries a refusal because the race for the
+     * counter surfaces as one; an edit has no counter to race for, and its
+     * one contention — somebody else's edit landing first — is decided inside
+     * the transaction and answered as [EditOutcome.Conflict] with the loser's
+     * sentence. A refusal from the rules is reported as it is.
+     */
+    suspend fun edit(member: Member, draft: QuoteDraft, customers: List<PartyRecord>): EditOutcome {
+        if (!Permissions.canQuote(member)) return EditOutcome.Refused(QuotationWrite.NOT_ALLOWED)
+        val origin = draft.editOf ?: return EditOutcome.Refused(QuotationEdit.NOT_AN_EDIT)
+        val at = now()
+        return try {
+            store.transaction { transaction ->
+                val stored = transaction.readQuotation(origin.quotationId)?.toQuotationRecord()
+                val quoting = if (stored != null && draft.discount != null) {
+                    transaction.readQuoting()?.toQuotingRecord()
+                } else {
+                    null
+                }
+                when (val plan = QuotationEdit.plan(draft, member, quoting, stored, customers, at)) {
+                    is EditPlan.Update -> {
+                        transaction.updateQuotation(plan.quotationId, plan.fields)
+                        EditOutcome.Saved(plan.number)
+                    }
+                    is EditPlan.Refused -> EditOutcome.Refused(plan.message)
+                    is EditPlan.Conflict -> EditOutcome.Conflict(plan.conflict)
+                }
+            }
+        } catch (refused: Throwable) {
+            if (!store.isRefusal(refused)) throw refused
+            EditOutcome.Refused(EDIT_REFUSED, cause = refused)
+        }
+    }
+
+    /**
+     * Cancels a finalised quotation — **remote-first**. A transaction, so the
+     * cancel reaches no listener until the server has accepted it, and there
+     * is never a quotation this device shows as cancelled that the team does
+     * not; V8C4's local-first "Cancelled here, but not for the team" has no
+     * counterpart. Writes **exactly** V8C4's three keys (`QuotationCancel`).
+     */
+    suspend fun cancel(member: Member, quotationId: String, number: String): CancelOutcome {
+        if (!Permissions.canQuote(member)) return CancelOutcome.Refused(QuotationCancel.NOT_YOURS)
+        val at = now()
+        return try {
+            store.transaction { transaction ->
+                val stored = transaction.readQuotation(quotationId)?.toQuotationRecord()
+                when (val plan = QuotationCancel.plan(member, number, stored, at)) {
+                    is CancelPlan.Write -> {
+                        transaction.updateQuotation(plan.quotationId, plan.fields)
+                        CancelOutcome.Cancelled(plan.number)
+                    }
+                    is CancelPlan.Refused -> CancelOutcome.Refused(plan.message)
+                }
+            }
+        } catch (refused: Throwable) {
+            if (!store.isRefusal(refused)) throw refused
+            CancelOutcome.Refused(CANCEL_REFUSED, cause = refused)
+        }
+    }
+
     companion object {
+        /** The rules refused an edit this app believed allowed. */
+        const val EDIT_REFUSED =
+            "The server refused this change - reload the quotation and check it before trying again"
+
+        /** The rules refused a cancel this app believed allowed. */
+        const val CANCEL_REFUSED =
+            "The server refused to cancel this quotation - reload it and check it before trying again"
+
         /**
          * Tries at one number before [finalise] gives up and says so — the
          * emulator's pessimistic worst case (5) plus one. See the class KDoc

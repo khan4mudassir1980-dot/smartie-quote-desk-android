@@ -1,10 +1,12 @@
 package `in`.smartie.quotedesk.data.repository
 
 import com.google.firebase.firestore.DocumentReference
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Transaction
 import `in`.smartie.quotedesk.data.mapping.DocData
 import `in`.smartie.quotedesk.data.mapping.toDocData
+import `in`.smartie.quotedesk.domain.DeleteField
 import kotlinx.coroutines.tasks.await
 
 /** The real [QuotationStore]. */
@@ -27,6 +29,19 @@ class FirestoreQuotationStore(private val firestore: FirebaseFirestore) : Quotat
                             firestore.collection(QUOTATIONS).document(id),
                             data.filterValues { it != null }.mapValues { it.value!! }
                         )
+                    }
+
+                    override fun updateQuotation(id: String, fields: Map<String, Any?>) {
+                        // `DeleteField` becomes the real sentinel; a null is
+                        // dropped, as `writeQuotation` drops one.
+                        val resolved = mutableMapOf<String, Any>()
+                        for ((field, value) in fields) {
+                            when {
+                                value === DeleteField -> resolved[field] = FieldValue.delete()
+                                value != null -> resolved[field] = value
+                            }
+                        }
+                        transaction.update(firestore.collection(QUOTATIONS).document(id), resolved)
                     }
 
                     override fun writeNumbering(fields: Map<String, Any?>) {

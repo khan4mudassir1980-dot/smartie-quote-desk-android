@@ -1,6 +1,7 @@
 package `in`.smartie.quotedesk.data.repository
 
 import `in`.smartie.quotedesk.data.mapping.DocData
+import `in`.smartie.quotedesk.domain.DeleteField
 
 internal const val NUMBERING = "teamSettings/numbering"
 
@@ -68,6 +69,19 @@ internal class FakeQuotationStore(
 
                 override fun writeQuotation(id: String, data: Map<String, Any?>) {
                     staged += "quotations/$id" to data
+                }
+
+                override fun updateQuotation(id: String, fields: Map<String, Any?>) {
+                    // An update, as Firestore's: named fields replaced whole,
+                    // `DeleteField` removing one, every other key kept. On a
+                    // document that is not there Firestore fails the write;
+                    // `getValue` throws the same way.
+                    val path = "quotations/$id"
+                    val merged = docs.getValue(path).toMutableMap()
+                    fields.forEach { (field, value) ->
+                        if (value === DeleteField) merged.remove(field) else merged[field] = value
+                    }
+                    staged += path to merged
                 }
 
                 override fun writeNumbering(fields: Map<String, Any?>) {

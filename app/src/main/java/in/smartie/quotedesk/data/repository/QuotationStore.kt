@@ -42,11 +42,11 @@ interface QuotationStore {
 }
 
 /**
- * The reads and writes available inside one finalise.
+ * The reads and writes available inside one finalise, edit or cancel.
  *
  * Every read comes before every write, as a Firestore transaction requires.
- * **No delete, and no write to `/teamSettings/quoting`**, which finalise
- * reads and never changes.
+ * **No delete, and no write to `/teamSettings/quoting`**, which finalise and
+ * edit read and never change.
  */
 interface QuotationTransaction {
     /** `/quotations/{id}` — this draft's own quotation, if it was already issued. */
@@ -60,6 +60,15 @@ interface QuotationTransaction {
 
     /** A whole new document at `/quotations/{id}` — a set, never a merge. */
     fun writeQuotation(id: String, data: Map<String, Any?>)
+
+    /**
+     * Named fields of an **existing** `/quotations/{id}` — an update, never a
+     * set (N5.10's edit and cancel). Each field is replaced whole;
+     * `DeleteField` removes one. Every other stored key — `no`, `at`, `snap`,
+     * anything V8C4 wrote — stays exactly as it is, which is what the rule's
+     * key lists require.
+     */
+    fun updateQuotation(id: String, fields: Map<String, Any?>)
 
     /**
      * Named fields of `/teamSettings/numbering`, **each replaced whole** — an

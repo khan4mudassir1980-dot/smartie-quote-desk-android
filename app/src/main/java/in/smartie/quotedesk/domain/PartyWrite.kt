@@ -15,13 +15,14 @@ data class PartyAuthor(val name: String, val uid: String)
  *
  * **An unset [type] is empty, not `client`.** A default here would make a
  * draft nobody chose a type on indistinguishable from one where somebody
- * chose Client, and the two mean different things, so resolving it belongs to
- * whichever writer has the context: [PartyWrite.create] takes V8C4's `client`
- * fallback because there is nothing stored to keep, while [PartyWrite.edit]
- * and [PartyWrite.mergeInto] keep the stored one. With the fallback baked in
- * here, the first "Save this customer" from a quotation would have demoted
- * every contractor — which is exactly what [PartyWrite.mergeInto] promises
- * never to do.
+ * chose Client, and the two mean different things. Since N5.10 commit 10 the
+ * Parties screen's two writers **refuse** an unset type — [PartyWrite.create]
+ * no longer takes V8C4's `client` fallback, and [PartyWrite.edit] asks a
+ * legacy contractor for Dealer or Client at its next save (the Owner's
+ * amendment D) — while [PartyWrite.mergeInto], the quotation side's fill,
+ * keeps the stored one. With a fallback baked in here, the first "Save this
+ * customer" from a quotation would have demoted every contractor — which is
+ * exactly what [PartyWrite.mergeInto] promises never to do.
  */
 data class PartyDraft(
     val name: String = "",
@@ -99,8 +100,33 @@ object PartyWrite {
     const val TYPE_CONTRACTOR = "contractor"
     const val TYPE_CLIENT = "client"
 
-    /** V8C4's three, and the one a party falls back to. */
+    /** V8C4's three, which a stored party may still carry. */
     val TYPES: List<String> = listOf(TYPE_DEALER, TYPE_CONTRACTOR, TYPE_CLIENT)
+
+    /**
+     * The two a party may be **saved** as (the Owner, amendment D): Dealer and
+     * Client. A stored `contractor` still reads, and is asked for one of these
+     * at its next edit.
+     */
+    val OFFERED_TYPES: List<String> = listOf(TYPE_DEALER, TYPE_CLIENT)
+
+    /** [value] as one of [OFFERED_TYPES], or null — unset, contractor, or unknown. */
+    fun offeredType(value: String): String? =
+        OFFERED_TYPES.firstOrNull { it.equals(value.trim(), ignoreCase = true) }
+
+    /**
+     * Why the Parties screen may not save [draft], or null when it may — its
+     * checks on Add and on Edit alike (N5.10 commit 10): a name; **Dealer or
+     * Client, chosen** — no default; and `PartyFormat`'s GSTIN, phone and
+     * email checks, shown bare, as "Save this customer" shows them. Nothing
+     * else: no merge question, no name restriction, no archived rule.
+     */
+    fun formRefusal(draft: PartyDraft): String? =
+        draft.refusal()
+            ?: CHOOSE_TYPE.takeIf { offeredType(draft.type) == null }
+            ?: PartyFormat.gstinProblem(draft.gstin)
+            ?: PartyFormat.phoneProblem(draft.phone)
+            ?: PartyFormat.emailProblem(draft.email)
 
     // --- creating ---------------------------------------------------------------
 
@@ -122,7 +148,8 @@ object PartyWrite {
         at: Long,
         alreadyExists: Boolean = false
     ): PartyPlan {
-        draft.refusal()?.let { return PartyPlan.Refused(it) }
+        formRefusal(draft)?.let { return PartyPlan.Refused(it) }
+        val type = offeredType(draft.type) ?: return PartyPlan.Refused(CHOOSE_TYPE)
         if (alreadyExists) return PartyPlan.Refused(ALREADY_EXISTS)
         return PartyPlan.Write(
             docId = id,
@@ -131,7 +158,8 @@ object PartyWrite {
             data = buildMap {
                 put("id", id)
                 put("name", draft.name.trim())
-                put("type", normaliseType(draft.type))
+                // Dealer or Client, as chosen. V8C4 fell back to `client`.
+                put("type", type)
                 put("city", draft.city.trim())
                 put("gstin", draft.gstin.trim())
                 put("contact", draft.contact.trim())
@@ -171,7 +199,8 @@ object PartyWrite {
         canRename: Boolean,
         canArchive: Boolean
     ): PartyPlan {
-        draft.refusal()?.let { return PartyPlan.Refused(it) }
+        formRefusal(draft)?.let { return PartyPlan.Refused(it) }
+        val type = offeredType(draft.type) ?: return PartyPlan.Refused(CHOOSE_TYPE)
         val renaming = draft.name.trim() != stored.name.trim()
         if (renaming && !canRename) return PartyPlan.Refused(CANNOT_RENAME)
         // The rules refuse a Manager any write at all to an archived party,
@@ -180,16 +209,11 @@ object PartyWrite {
         if (stored.archived && !canArchive) return PartyPlan.Refused(ARCHIVED_IS_READ_ONLY)
 
         val fields = buildMap {
-            // An unstated type is no statement, and every writer resolves that
-            // the same way: `create` takes V8C4's fallback because there is
-            // nothing stored to keep, while here — and in `mergeInto` — the
-            // stored one is kept. The editor always shows a type, so this only
-            // catches a draft built in code, and catching it is the point: a
-            // correction to somebody's city must not quietly demote a
-            // contractor to a client on the way past.
-            put("type", draft.type.trim().let {
-                if (it.isEmpty()) normaliseType(stored.type) else normaliseType(it)
-            })
+            // Dealer or Client, as chosen on screen: an unstated type was
+            // refused above, so a correction to somebody's city can never
+            // quietly turn a contractor into a client on the way past — the
+            // person is asked, and says (amendment D).
+            put("type", type)
             put("city", draft.city.trim())
             put("gstin", draft.gstin.trim())
             put("contact", draft.contact.trim())
@@ -329,10 +353,15 @@ object PartyWrite {
         else -> ""
     }
 
-    /** Every editable field, for a caller building a draft from a record. */
+    /**
+     * Every editable field, for a caller building a draft from a record. A
+     * type the screen does not offer — a legacy `contractor`, an unknown
+     * word, none — comes back **unset**, so the editor shows nothing chosen
+     * and asks, rather than showing Client selected (D4).
+     */
     fun draftOf(stored: PartyRecord): PartyDraft = PartyDraft(
         name = stored.name,
-        type = normaliseType(stored.type),
+        type = offeredType(stored.type).orEmpty(),
         city = stored.city,
         gstin = stored.gstin,
         contact = stored.contact,
@@ -343,6 +372,7 @@ object PartyWrite {
     )
 
     const val NAME_REQUIRED = "Enter the party's name"
+    const val CHOOSE_TYPE = "Choose Dealer or Client"
     const val ALREADY_EXISTS = "That party was already saved"
     const val CANNOT_RENAME = "Only an Owner or Administrator can rename a party"
     const val CANNOT_ARCHIVE = "Only an Owner or Administrator can archive a party"

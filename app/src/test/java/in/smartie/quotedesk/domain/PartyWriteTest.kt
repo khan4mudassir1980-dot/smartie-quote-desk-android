@@ -40,6 +40,14 @@ class PartyWriteTest {
         notes = "Pays in 30 days"
     )
 
+    /**
+     * The same party saved as a Dealer. Since N5.10 commit 10 an edit must
+     * state Dealer or Client, so the edits below that are about something
+     * else start from this; [stored] stays a legacy contractor for the merge
+     * tests and for the type's own.
+     */
+    private val dealer = stored.copy(type = "dealer")
+
     private fun written(plan: PartyPlan): Map<String, Any?> =
         (plan as PartyPlan.Write).data
 
@@ -87,10 +95,15 @@ class PartyWriteTest {
     }
 
     @Test
-    fun `an unknown type falls back to client, as V8C4 does`() {
-        val plan = PartyWrite.create("c_new", PartyDraft(name = "X", type = "reseller"), author, 1L)
-        assertEquals("client", written(plan)["type"])
-        assertEquals("client", PartyWrite.normaliseType(""))
+    fun `Add refuses a party with no type - V8C4's client fallback is gone`() {
+        // R31. Until N5.10 commit 10: "an unknown type falls back to client,
+        // as V8C4 does". The Owner's amendment D: Dealer or Client, chosen.
+        listOf("", "reseller", "contractor").forEach { type ->
+            val plan = PartyWrite.create("c_new", PartyDraft(name = "X", type = type), author, 1L)
+            assertEquals("type '$type'", PartyPlan.Refused(PartyWrite.CHOOSE_TYPE), plan)
+        }
+        assertEquals("client", written(PartyWrite.create("c_new", PartyDraft(name = "X", type = " Client "), author, 1L))["type"])
+        // What a stored party reads as is unchanged: a legacy contractor still reads.
         assertEquals("contractor", PartyWrite.normaliseType(" Contractor "))
     }
 
@@ -99,7 +112,7 @@ class PartyWriteTest {
         // A `set` on a taken id is evaluated by the rules as an update, which
         // any non-Worker may make — so a collision would quietly overwrite
         // somebody else's customer.
-        val plan = PartyWrite.create("c_1", PartyDraft(name = "X"), author, 1L, alreadyExists = true)
+        val plan = PartyWrite.create("c_1", PartyDraft(name = "X", type = "client"), author, 1L, alreadyExists = true)
         assertEquals(PartyWrite.ALREADY_EXISTS, (plan as PartyPlan.Refused).message)
     }
 
@@ -109,8 +122,8 @@ class PartyWriteTest {
     fun `an Owner clearing a field really clears it`() {
         // The whole point of the editor. A GSTIN entered against the wrong
         // firm has to be removable.
-        val draft = PartyWrite.draftOf(stored).copy(gstin = "", notes = "")
-        val plan = PartyWrite.edit(stored, draft, author, 2_000L, canRename = true, canArchive = true)
+        val draft = PartyWrite.draftOf(dealer).copy(gstin = "", notes = "")
+        val plan = PartyWrite.edit(dealer, draft, author, 2_000L, canRename = true, canArchive = true)
         val data = written(plan)
 
         assertEquals("", data["gstin"])
@@ -124,9 +137,9 @@ class PartyWriteTest {
 
     @Test
     fun `an edit never rewrites who created the customer`() {
-        val draft = PartyWrite.draftOf(stored).copy(city = "Pune")
+        val draft = PartyWrite.draftOf(dealer).copy(city = "Pune")
         val data = written(
-            PartyWrite.edit(stored, draft, author, 2_000L, canRename = true, canArchive = true)
+            PartyWrite.edit(dealer, draft, author, 2_000L, canRename = true, canArchive = true)
         )
 
         listOf("t", "by", "byUid").forEach {
@@ -137,7 +150,7 @@ class PartyWriteTest {
     @Test
     fun `saving an unchanged party writes nothing at all`() {
         val plan = PartyWrite.edit(
-            stored, PartyWrite.draftOf(stored), author, 2_000L, canRename = true, canArchive = true
+            dealer, PartyWrite.draftOf(dealer), author, 2_000L, canRename = true, canArchive = true
         )
         assertEquals(PartyPlan.NoChange, plan)
     }
@@ -149,9 +162,9 @@ class PartyWriteTest {
         // The rule requires `data.name == resource.data.name`, and a merged
         // update that omits the key keeps the stored value — which is exactly
         // what satisfies it.
-        val draft = PartyWrite.draftOf(stored).copy(contact = "Mrs Deshmukh")
+        val draft = PartyWrite.draftOf(dealer).copy(contact = "Mrs Deshmukh")
         val data = written(
-            PartyWrite.edit(stored, draft, author, 2_000L, canRename = false, canArchive = false)
+            PartyWrite.edit(dealer, draft, author, 2_000L, canRename = false, canArchive = false)
         )
 
         assertEquals("Mrs Deshmukh", data["contact"])
@@ -161,8 +174,8 @@ class PartyWriteTest {
 
     @Test
     fun `a Manager who somehow submits a rename is refused here, not by the server`() {
-        val draft = PartyWrite.draftOf(stored).copy(name = "Renamed Ltd")
-        val plan = PartyWrite.edit(stored, draft, author, 2_000L, canRename = false, canArchive = false)
+        val draft = PartyWrite.draftOf(dealer).copy(name = "Renamed Ltd")
+        val plan = PartyWrite.edit(dealer, draft, author, 2_000L, canRename = false, canArchive = false)
 
         assertEquals(PartyWrite.CANNOT_RENAME, (plan as PartyPlan.Refused).message)
     }
@@ -172,7 +185,7 @@ class PartyWriteTest {
         // The staff branch requires the party was not archived to begin with,
         // so there is no correction to attempt — a sentence beats a permission
         // error nobody can act on.
-        val archived = stored.copy(archived = true)
+        val archived = dealer.copy(archived = true)
         val draft = PartyWrite.draftOf(archived).copy(city = "Pune")
         val plan = PartyWrite.edit(archived, draft, author, 2_000L, canRename = false, canArchive = false)
 
@@ -213,10 +226,11 @@ class PartyWriteTest {
         // thing `mergeInto` promises never to do.
         assertEquals("a draft states nothing until somebody types", "", PartyDraft().type)
 
-        // `create` still answers V8C4's fallback for an unstated type...
+        // `create` refuses an unstated type since N5.10 commit 10 — it took
+        // V8C4's `client` fallback until then...
         assertEquals(
-            "client",
-            written(PartyWrite.create("c_new", PartyDraft(name = "X"), author, 1L))["type"]
+            PartyPlan.Refused(PartyWrite.CHOOSE_TYPE),
+            PartyWrite.create("c_new", PartyDraft(name = "X"), author, 1L)
         )
         // ...while a merge of the same silence leaves the stored one alone.
         assertEquals(
@@ -263,14 +277,14 @@ class PartyWriteTest {
 
     @Test
     fun `and the two disagree on exactly that, which is the point`() {
-        val emptying = PartyWrite.draftOf(stored).copy(gstin = "")
+        val emptying = PartyWrite.draftOf(dealer).copy(gstin = "")
 
         val replaced = written(
-            PartyWrite.edit(stored, emptying, author, 5_000L, canRename = true, canArchive = true)
+            PartyWrite.edit(dealer, emptying, author, 5_000L, canRename = true, canArchive = true)
         )
         assertEquals("the editor clears it", "", replaced["gstin"])
 
-        val filled = PartyWrite.mergeInto(stored, emptying, author, 5_000L)
+        val filled = PartyWrite.mergeInto(dealer, emptying, author, 5_000L)
         assertNull(
             "the quotation side leaves it alone",
             (filled as? PartyPlan.Write)?.data?.get("gstin")

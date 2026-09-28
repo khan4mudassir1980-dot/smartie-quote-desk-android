@@ -44,6 +44,15 @@ import `in`.smartie.quotedesk.ui.theme.SmartieColors
  * shown as a fact rather than a field and no archive control is drawn. That
  * is not politeness: the rules refuse both, and a control that produces a
  * permission error is worse than no control.
+ *
+ * **The type is Dealer or Client, and nobody's default** (the Owner's
+ * amendment D, N5.10 commit 10). Add starts with neither chosen; a stored
+ * legacy `contractor`, or an unknown type, opens with neither chosen and is
+ * asked for one. Save is refused until one is — and until the GSTIN, phone
+ * and email pass `PartyFormat` — here, before anything is sent
+ * (`PartyWrite.formRefusal`, which the writers apply again). **Recorded, not
+ * fixed:** a Manager's rename is still refused only after Save, as the Owner
+ * accepted.
  */
 @Composable
 internal fun PartyEditPanel(
@@ -60,6 +69,8 @@ internal fun PartyEditPanel(
 ) {
     val dimens = LocalSmartieDimens.current
     val creating = editing == null
+    // Why the last press did not save, until the next.
+    var refusal by rememberSaveable(editing?.id ?: "new") { mutableStateOf<String?>(null) }
 
     // The fields are the panel's own, and saveable: a half-typed party must
     // survive a rotation. Keyed on the party being edited so opening a
@@ -143,11 +154,13 @@ internal fun PartyEditPanel(
                     style = MaterialTheme.typography.labelMedium,
                     color = SmartieColors.Steel
                 )
-                SegmentedChoice(
-                    options = PartyWrite.TYPES,
-                    selected = PartyWrite.normaliseType(type),
-                    label = { it.replaceFirstChar(Char::titlecase) },
-                    onSelect = { type = it }
+                SegmentedChoice<String?>(
+                    options = PartyWrite.OFFERED_TYPES,
+                    // Null — nothing chosen — for an Add, and for a stored
+                    // type the screen no longer offers. Never Client by default.
+                    selected = PartyWrite.offeredType(type),
+                    label = { it.orEmpty().replaceFirstChar(Char::titlecase) },
+                    onSelect = { type = it.orEmpty() }
                 )
             }
         }
@@ -174,10 +187,19 @@ internal fun PartyEditPanel(
             Field(NOTES_LABEL, notes, saving) { notes = it }
         }
 
+        refusal?.let { message ->
+            item(key = REFUSAL_KEY) {
+                Text(message, style = MaterialTheme.typography.bodyMedium, color = SmartieColors.Danger)
+            }
+        }
+
         item(key = SAVE_KEY) {
             SmartiePrimaryButton(
                 text = if (creating) SAVE_NEW else SAVE_CHANGES,
-                onClick = { onSave(draft) },
+                onClick = {
+                    refusal = PartyWrite.formRefusal(draft)
+                    if (refusal == null) onSave(draft)
+                },
                 enabled = !saving,
                 modifier = Modifier
                     .semantics { contentDescription = if (creating) SAVE_NEW else SAVE_CHANGES }
@@ -263,6 +285,7 @@ internal fun duplicateHeadline(match: PartyMatch): String =
 internal const val PARTY_EDITOR_TAG = "party-editor"
 internal const val SAVE_KEY = "save"
 internal const val DUPLICATE_KEY = "duplicate"
+internal const val REFUSAL_KEY = "refusal"
 
 internal const val ADD_HEADING = "New party"
 internal const val EDIT_HEADING = "Edit party"

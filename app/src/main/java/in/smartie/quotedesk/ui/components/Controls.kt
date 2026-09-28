@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -386,6 +387,9 @@ fun <T> SegmentedChoice(
                     .heightIn(min = dimens.buttonHeightCompact)
                     .background(if (isSelected) tint.copy(alpha = 0.12f) else SmartieColors.Panel)
                     .clickableNoRipple { onSelect(option) }
+                    // Which one is chosen, for TalkBack and for a test —
+                    // until N5.10 only the colour said so.
+                    .semantics { selected = isSelected }
                     .padding(horizontal = 6.dp),
                 contentAlignment = Alignment.Center
             ) {

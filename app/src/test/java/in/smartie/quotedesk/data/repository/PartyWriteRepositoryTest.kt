@@ -72,7 +72,9 @@ class PartyWriteRepositoryTest {
     /** Stored `worker`, displayed Staff. */
     private val staff = Member(uid = "uid_worker", name = "Ravi", role = Role.WORKER)
 
-    private val draft = PartyDraft(name = "Metro Glass", city = "Mumbai")
+    // Dealer or Client is chosen on every Parties-screen save since N5.10
+    // commit 10; these tests are about ids, stamps and replays, not the type.
+    private val draft = PartyDraft(name = "Metro Glass", city = "Mumbai", type = "dealer")
 
     private val sunriseDoc = mapOf(
         "id" to "c_1", "name" to "Sunrise Constructions", "city" to "Mumbai", "type" to "contractor"
@@ -154,7 +156,7 @@ class PartyWriteRepositoryTest {
         val store = FakeStore(mutableMapOf("c_1" to sunriseDoc))
         val writes = PartyWriteRepository(store, now = { 2_000L })
 
-        writes.edit(manager, sunrise, PartyDraft(name = "Sunrise Constructions", city = "Pune"))
+        writes.edit(manager, sunrise, PartyDraft(name = "Sunrise Constructions", city = "Pune", type = "client"))
 
         val data = store.writes.single().data
         assertEquals("Pune", data["city"])
@@ -162,9 +164,23 @@ class PartyWriteRepositoryTest {
         assertEquals("Sam", data["upBy"])
         assertTrue("no name key", !data.containsKey("name"))
         assertTrue("no archived key", !data.containsKey("archived"))
-        // The draft states no type, so the stored one is kept. Correcting a
-        // city must not demote a contractor to a client on the way past.
-        assertEquals("contractor", data["type"])
+        // Until N5.10 commit 10 the draft stated no type and the stored
+        // `contractor` was kept. A contractor is now asked for Dealer or
+        // Client at its next edit (amendment D), and the answer is written.
+        assertEquals("client", data["type"])
+    }
+
+    @Test
+    fun `a correction to a contractor with no type chosen is refused, and nothing is written`() = runTest {
+        // Never quietly demoted, never quietly kept: asked.
+        val store = FakeStore(mutableMapOf("c_1" to sunriseDoc))
+        val refusal = failureOf {
+            PartyWriteRepository(store, now = { 2_000L })
+                .edit(manager, sunrise, PartyDraft(name = "Sunrise Constructions", city = "Pune"))
+        }
+
+        assertEquals(PartyWrite.CHOOSE_TYPE, refusal?.message)
+        assertTrue(store.writes.isEmpty())
     }
 
     @Test
@@ -201,7 +217,7 @@ class PartyWriteRepositoryTest {
         val writes = PartyWriteRepository(store, now = { 2_000L })
 
         val refusal = failureOf {
-            writes.edit(manager, sunrise, PartyDraft(name = "Sunrise Constructions", city = "Pune"))
+            writes.edit(manager, sunrise, PartyDraft(name = "Sunrise Constructions", city = "Pune", type = "client"))
         }
 
         assertEquals(PartyWrite.ARCHIVED_IS_READ_ONLY, refusal?.message)

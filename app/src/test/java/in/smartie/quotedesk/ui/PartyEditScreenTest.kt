@@ -2,11 +2,14 @@ package `in`.smartie.quotedesk.ui
 
 import android.app.Application
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.performTextClearance
@@ -14,6 +17,8 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.domain.PartyDraft
+import `in`.smartie.quotedesk.domain.PartyFormat
+import `in`.smartie.quotedesk.domain.PartyWrite
 import `in`.smartie.quotedesk.ui.more.ADD_KEY
 import `in`.smartie.quotedesk.ui.more.ADD_PARTY
 import `in`.smartie.quotedesk.ui.more.ARCHIVE_KEY
@@ -30,11 +35,14 @@ import `in`.smartie.quotedesk.ui.more.PARTY_DETAIL_TAG
 import `in`.smartie.quotedesk.ui.more.PARTY_EDITOR_TAG
 import `in`.smartie.quotedesk.ui.more.PartiesScreen
 import `in`.smartie.quotedesk.ui.more.PartyActions
+import `in`.smartie.quotedesk.ui.more.PHONE_LABEL
 import `in`.smartie.quotedesk.ui.more.PartyCapabilities
 import `in`.smartie.quotedesk.ui.more.READ_ONLY_KEY
+import `in`.smartie.quotedesk.ui.more.REFUSAL_KEY
 import `in`.smartie.quotedesk.ui.more.SAVE_CHANGES
 import `in`.smartie.quotedesk.ui.more.SAVE_KEY
 import `in`.smartie.quotedesk.ui.more.SAVE_NEW
+import `in`.smartie.quotedesk.ui.more.TYPE_LABEL
 import `in`.smartie.quotedesk.ui.more.openLabel
 import `in`.smartie.quotedesk.ui.theme.SmartieTheme
 import org.junit.Assert.assertEquals
@@ -154,6 +162,18 @@ class PartyEditScreenTest {
 
     private fun save(description: String) = tapInEditor(SAVE_KEY, description)
 
+    /**
+     * Dealer or Client, tapped. Since N5.10 commit 10 every save states one
+     * (amendment D): an Add starts with neither, and a legacy contractor —
+     * Sunrise here — opens with neither and is asked.
+     */
+    private fun choose(type: String) {
+        scrollTo(PARTY_EDITOR_TAG, TYPE_LABEL)
+        compose.onNodeWithText(type).performClick()
+    }
+
+    private fun segment(type: String) = compose.onNodeWithText(type)
+
     // --- what a Manager is offered -------------------------------------------------
 
     @Test
@@ -184,6 +204,7 @@ class PartyEditScreenTest {
         openEditorFor(sunrise)
 
         box(CITY_LABEL).performTextInput("Pune ")
+        choose("Client")
         save(SAVE_CHANGES)
 
         assertEquals("c_1", edited?.first?.id)
@@ -207,6 +228,7 @@ class PartyEditScreenTest {
         openEditorFor(sunrise)
 
         box(GSTIN_LABEL).performTextClearance()
+        choose("Dealer")
         save(SAVE_CHANGES)
 
         assertEquals("", edited?.second?.gstin)
@@ -220,6 +242,7 @@ class PartyEditScreenTest {
         startAdding()
 
         box(NAME_LABEL).performTextInput("Harbour Interiors")
+        choose("Client")
         save(SAVE_NEW)
 
         assertNull("nothing was written", created)
@@ -234,6 +257,7 @@ class PartyEditScreenTest {
         screen(manager)
         startAdding()
         box(NAME_LABEL).performTextInput("Harbour Interiors")
+        choose("Client")
         save(SAVE_NEW)
 
         tapInEditor(DUPLICATE_KEY, openLabel("Harbour Interiors"))
@@ -251,6 +275,7 @@ class PartyEditScreenTest {
         screen(manager)
         startAdding()
         box(NAME_LABEL).performTextInput("Harbour Interiors")
+        choose("Client")
 
         save(SAVE_NEW)
         assertNull(created)
@@ -267,11 +292,13 @@ class PartyEditScreenTest {
 
         box(NAME_LABEL).performTextInput("Metro Glass")
         box(CITY_LABEL).performTextInput("Mumbai")
+        choose("Dealer")
         save(SAVE_NEW)
 
         assertEquals("c_minted", created?.first)
         assertEquals("Metro Glass", created?.second?.name)
         assertEquals("Mumbai", created?.second?.city)
+        assertEquals("dealer", created?.second?.type)
     }
 
     @Test
@@ -280,10 +307,93 @@ class PartyEditScreenTest {
         screen(manager)
         startAdding()
         box(NAME_LABEL).performTextInput("Metro Glass")
+        choose("Dealer")
 
         save(SAVE_NEW)
 
         assertEquals("c_minted", created?.first)
+    }
+
+    // --- the type and the three formats (N5.10 commit 10, amendment D) ------------------
+
+    @Test
+    fun `Add offers Dealer and Client only, and neither is chosen`() {
+        screen(manager)
+        startAdding()
+        scrollTo(PARTY_EDITOR_TAG, TYPE_LABEL)
+
+        segment("Dealer").assertIsNotSelected()
+        segment("Client").assertIsNotSelected()
+        assertTrue("no Contractor to choose", !shows("Contractor"))
+    }
+
+    @Test
+    fun `Add refuses a party with no type, and says so before anything is sent`() {
+        screen(manager)
+        startAdding()
+        box(NAME_LABEL).performTextInput("Metro Glass")
+        save(SAVE_NEW)
+
+        assertNull(created)
+        scrollTo(PARTY_EDITOR_TAG, REFUSAL_KEY)
+        assertTrue(shows(PartyWrite.CHOOSE_TYPE))
+    }
+
+    @Test
+    fun `Add refuses a malformed GSTIN, phone or email, shown bare`() {
+        screen(manager)
+        startAdding()
+        box(NAME_LABEL).performTextInput("Metro Glass")
+        choose("Dealer")
+        box(PHONE_LABEL).performTextInput("12345")
+        save(SAVE_NEW)
+
+        assertNull(created)
+        scrollTo(PARTY_EDITOR_TAG, REFUSAL_KEY)
+        assertTrue(shows(PartyFormat.phoneProblem("12345")!!))
+    }
+
+    @Test
+    fun `a contractor opens with neither chosen, and is asked at its next edit`() {
+        screen(manager)
+        openEditorFor(sunrise)
+        scrollTo(PARTY_EDITOR_TAG, TYPE_LABEL)
+        segment("Dealer").assertIsNotSelected()
+        segment("Client").assertIsNotSelected()
+
+        save(SAVE_CHANGES)
+        assertNull("nothing sent without an answer", edited)
+        scrollTo(PARTY_EDITOR_TAG, REFUSAL_KEY)
+        assertTrue(shows(PartyWrite.CHOOSE_TYPE))
+
+        choose("Client")
+        save(SAVE_CHANGES)
+        assertEquals("client", edited?.second?.type)
+    }
+
+    @Test
+    fun `a stored Dealer opens chosen`() {
+        val dealer = sunrise.copy(id = "c_3", name = "Harbour Traders", type = "dealer", gstin = "")
+        screen(manager, parties = listOf(sunrise, harbour, dealer))
+        openEditorFor(dealer)
+        scrollTo(PARTY_EDITOR_TAG, TYPE_LABEL)
+
+        segment("Dealer").assertIsSelected()
+        segment("Client").assertIsNotSelected()
+    }
+
+    @Test
+    fun `Edit runs the same format checks`() {
+        screen(manager)
+        openEditorFor(sunrise)
+        choose("Client")
+        box(GSTIN_LABEL).performTextClearance()
+        box(GSTIN_LABEL).performTextInput("27AAACS1234")
+        save(SAVE_CHANGES)
+
+        assertNull(edited)
+        scrollTo(PARTY_EDITOR_TAG, REFUSAL_KEY)
+        assertTrue(shows(PartyFormat.gstinProblem("27AAACS1234")!!))
     }
 
     @Test

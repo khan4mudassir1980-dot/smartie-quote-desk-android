@@ -83,7 +83,9 @@ import `in`.smartie.quotedesk.ui.products.ProductsScreen
 import `in`.smartie.quotedesk.ui.products.ProductsViewModel
 import `in`.smartie.quotedesk.ui.purchase.PurchaseHistoryScreen
 import `in`.smartie.quotedesk.ui.purchase.PurchaseViewModel
+import `in`.smartie.quotedesk.ui.quotations.QuotationActions
 import `in`.smartie.quotedesk.ui.quotations.QuotationListScreen
+import `in`.smartie.quotedesk.ui.quotations.QuotationsViewModel
 import `in`.smartie.quotedesk.ui.screens.PurchaseScreen
 import `in`.smartie.quotedesk.ui.screens.QuotationsScreen
 import `in`.smartie.quotedesk.ui.screens.SignInScreen
@@ -164,6 +166,16 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
 
     LaunchedEffect(data) { data.messages.collect { snackbar.showSnackbar(it) } }
 
+    // N5.10: a quotation opened for editing goes to the builder, which lives
+    // on the Products tab — reached exactly as its tab button reaches it.
+    val openBuilder: () -> Unit = {
+        navController.navigate("products") {
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
     Scaffold(
         topBar = {
             SmartieTopBar(
@@ -234,7 +246,23 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
                     }
                     PurchaseScreen(viewModel = purchaseViewModel)
                 }
-                composable("quotations") { QuotationsScreen(data) }
+                composable("quotations") {
+                    val quotationsViewModel: QuotationsViewModel = viewModel(
+                        key = "quotations-${member.uid}",
+                        factory = QuotationsViewModel.Factory(container, member),
+                    )
+                    LaunchedEffect(quotationsViewModel) {
+                        quotationsViewModel.messages.collect { snackbar.showSnackbar(it) }
+                    }
+                    QuotationsScreen(
+                        data = data,
+                        viewModel = quotationsViewModel,
+                        onEdit = { record ->
+                            quotationsViewModel.edit(record)
+                            openBuilder()
+                        },
+                    )
+                }
                 composable("more") {
                     MoreScreen(
                         member = member,
@@ -303,10 +331,28 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
                 }
                 composable("more/quotation-history") {
                     val quotations by data.quotations.collectAsStateWithLifecycle()
+                    val quotationsViewModel: QuotationsViewModel = viewModel(
+                        key = "quotations-${member.uid}",
+                        factory = QuotationsViewModel.Factory(container, member),
+                    )
+                    LaunchedEffect(quotationsViewModel) {
+                        quotationsViewModel.messages.collect { snackbar.showSnackbar(it) }
+                    }
+                    val cancelling by quotationsViewModel.cancelling.collectAsStateWithLifecycle()
+                    val cancelFailure by quotationsViewModel.failure.collectAsStateWithLifecycle()
                     QuotationListScreen(
                         records = quotations,
                         viewer = member,
-                        loading = quotations.isEmpty()
+                        loading = quotations.isEmpty(),
+                        cancelling = cancelling,
+                        cancelFailure = cancelFailure,
+                        actions = QuotationActions(
+                            onEdit = { record ->
+                                quotationsViewModel.edit(record)
+                                openBuilder()
+                            },
+                            onCancel = quotationsViewModel::cancel,
+                        ),
                     )
                 }
                 composable("more/purchase-history") {

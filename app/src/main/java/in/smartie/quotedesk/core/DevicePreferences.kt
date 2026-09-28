@@ -162,6 +162,19 @@ class AccountPreferences internal constructor(
     }
 
     /**
+     * Stores [draft] and makes it the current one, in one edit — how an edit
+     * of an issued quotation opens (N5.10): **a draft of its own beside the
+     * one in progress**, which is not touched, and which [retireDraft] falls
+     * back to when the edit is saved or discarded. Answers the draft's id.
+     */
+    suspend fun openDraft(draft: QuoteDraft): String {
+        store.edit { stored ->
+            stored[draftsKey] = QuoteDraftsCodec.encode(QuoteDraftsCodec.decode(stored[draftsKey]).save(draft))
+        }
+        return draft.id
+    }
+
+    /**
      * Moves what the ownerless keys held into this account, once.
      *
      * The old draft was a single one, so it is adopted as this account's first

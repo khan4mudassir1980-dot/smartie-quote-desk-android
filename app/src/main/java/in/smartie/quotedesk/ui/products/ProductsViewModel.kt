@@ -9,12 +9,14 @@ import `in`.smartie.quotedesk.data.mapping.Keys
 import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
+import `in`.smartie.quotedesk.data.model.QuotationRecord
 import `in`.smartie.quotedesk.data.model.QuotingRecord
 import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.data.repository.PartyWriteResult
 import `in`.smartie.quotedesk.domain.AreaEntry
 import `in`.smartie.quotedesk.domain.Discount
 import `in`.smartie.quotedesk.domain.DraftLine
+import `in`.smartie.quotedesk.domain.EditOpening
 import `in`.smartie.quotedesk.domain.Installation
 import `in`.smartie.quotedesk.domain.ManualEntry
 import `in`.smartie.quotedesk.domain.Member
@@ -24,9 +26,11 @@ import `in`.smartie.quotedesk.domain.PinChange
 import `in`.smartie.quotedesk.domain.ProductDraft
 import `in`.smartie.quotedesk.domain.ProductPins
 import `in`.smartie.quotedesk.domain.ProductWrite
+import `in`.smartie.quotedesk.domain.QuotationEdit
 import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.QuoteDrafts
 import `in`.smartie.quotedesk.domain.QuoteParty
+import `in`.smartie.quotedesk.ui.quotations.formatDateTime
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -35,6 +39,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
@@ -134,11 +139,45 @@ class ProductsViewModel(
         retire = ::retire,
         confirmZeroRates = ::askZeroRates,
         describe = { it.toAppError().message },
-        log = { container.errorReporter.report(it) }
+        log = { container.errorReporter.report(it) },
+        // N5.10: an edit's own path, never finalise — see `QuoteFinaliser`.
+        edit = { draft -> container.quotationWriteRepository.edit(member, draft, pressCustomers) },
+        closeEdit = ::retire,
+        timeText = ::formatDateTime
     )
 
     /** IDLE, or CHECKING (the question included), or TAKING_NUMBER. */
     val gatePhase: StateFlow<GatePhase> = finaliser.phase
+
+    // --- an issued quotation opened for editing (N5.10) ----------------------
+
+    private val _builderRequested = MutableStateFlow(false)
+
+    /**
+     * True when something asked for the builder to open — an edit requested
+     * from the Quotations tab. The screen opens it and calls [builderShown].
+     */
+    val builderRequested: StateFlow<Boolean> = _builderRequested.asStateFlow()
+
+    fun builderShown() {
+        _builderRequested.value = false
+    }
+
+    init {
+        // A quotation the Quotations tab asked to edit, taken once. Waits for
+        // the draft store as every save does (`DraftWrites`). Another
+        // account's request — left over across a sign-out — is taken and
+        // dropped, never opened here.
+        viewModelScope.launch {
+            container.quoteRequests.pending.filterNotNull().collect { request ->
+                if (!container.quoteRequests.take(request)) return@collect
+                if (request.requestedBy != member.uid) return@collect
+                when (request) {
+                    is QuoteRequest.Edit -> openEdit(request.record)
+                }
+            }
+        }
+    }
 
     init {
         // The stored draft is read once. After that this view model owns it,
@@ -468,6 +507,85 @@ class ProductsViewModel(
         }
     }
 
+    /**
+     * Opens [record] for editing — **a draft of its own**, beside the one in
+     * progress, which is not touched and comes back when the edit is saved
+     * or discarded (hazard 2).
+     *
+     * **One edit at a time**, decided against the stored collection under
+     * [DraftWrites]' lock — never against the draft on screen, which is empty
+     * until the store answers: an edit already open, of any quotation, is
+     * what the builder shows, changes and all, and if it is another
+     * quotation's the person is told to finish or discard it first.
+     */
+    private suspend fun openEdit(record: QuotationRecord) {
+        if (refusedWhileFinalising()) return
+        var shown = false
+        runCatching {
+            draftWrites.replace { current ->
+                val opening = QuotationEdit.opening(
+                    member = member,
+                    record = record,
+                    stored = account.drafts.first(),
+                    onScreen = _draft.value,
+                    at = System.currentTimeMillis()
+                )
+                when (opening) {
+                    is EditOpening.Refused -> {
+                        emit(opening.message)
+                        current
+                    }
+                    is EditOpening.Show -> {
+                        opening.unfinished?.let { emit(finishEditFirst(it)) }
+                        account.openDraft(opening.draft)
+                        _draft.value = opening.draft
+                        shown = true
+                        opening.draft.id
+                    }
+                }
+            }
+        }.onFailure { report(it) }
+        if (shown) _builderRequested.value = true
+    }
+
+    /**
+     * **Save changes** on an edit — through the gate's own edit path, never
+     * finalise (`QuoteFinaliser.saveEdit`). [capPercent] is the Manager's
+     * limit as the screen holds it; it is asked only when the discount went
+     * up against the opened quotation, and the transaction decides against
+     * the stored one.
+     */
+    fun saveEdit(customers: List<PartyRecord>, capPercent: Double?) {
+        if (finaliser.phase.value != GatePhase.IDLE) return
+        if (_savingParty.value || _mergeQuestion.value != null) return
+        _finaliseFailure.value = null
+        pressCustomers = customers
+        val draft = _draft.value
+        viewModelScope.launch {
+            when (val outcome = finaliser.saveEdit(draft, QuotationEdit.screenCap(draft, capPercent))) {
+                is GateOutcome.Saved -> emit(outcome.message)
+                is GateOutcome.NotSaved -> _finaliseFailure.value = outcome.message
+                is GateOutcome.Finalised, is GateOutcome.NotFinalised,
+                GateOutcome.Cancelled, GateOutcome.AlreadyRunning -> Unit
+            }
+        }
+    }
+
+    /**
+     * Discards the edit open in the builder, after the screen has asked. The
+     * quotation stays exactly as stored; the draft in progress comes back.
+     */
+    fun discardEdit() {
+        if (refusedWhileFinalising()) return
+        val edit = _draft.value.takeIf { it.isEdit } ?: return
+        _finaliseFailure.value = null
+        viewModelScope.launch {
+            runCatching { retire(edit.id) }
+                .onSuccess { emit(changesDiscarded(edit.editOf?.number.orEmpty())) }
+                .onFailure { report(it) }
+        }
+    }
+
     /** The answer to [zeroRateQuestion]: true for "Continue anyway". */
     fun answerZeroRates(continueAnyway: Boolean) {
         zeroRateAnswer?.complete(continueAnyway)
@@ -703,9 +821,13 @@ class ProductsViewModel(
      */
     private fun refusedWhileFinalising(): Boolean {
         if (finaliser.phase.value == GatePhase.IDLE) return false
-        emit(TAKING_A_NUMBER)
+        emit(busyMessage())
         return true
     }
+
+    /** What the gate is doing, in the words a refused action is answered with. */
+    private fun busyMessage(): String =
+        if (finaliser.phase.value == GatePhase.SAVING) SAVING_CHANGES else TAKING_A_NUMBER
 
     /** The same, for what the screen does on its own: skipped, and never announced. */
     private val gateOpen: Boolean get() = finaliser.phase.value != GatePhase.IDLE
@@ -716,7 +838,7 @@ class ProductsViewModel(
         // the draft when it is retired — V8C4 loses such an edit silently;
         // this says so instead, on purpose.
         if (finaliser.phase.value != GatePhase.IDLE) {
-            emit(TAKING_A_NUMBER)
+            emit(busyMessage())
             return
         }
         // Shown immediately; stored once the id is known. The person never
@@ -766,5 +888,11 @@ class ProductsViewModel(
         // stored, so there was nothing to write.
         const val CUSTOMER_UNCHANGED = "Nothing to save — this customer is already up to date"
         const val TAKING_A_NUMBER = "A number is being taken for this quotation — wait a moment"
+        const val SAVING_CHANGES = "Your changes to this quotation are being saved — wait a moment"
+
+        fun finishEditFirst(number: String): String =
+            "Finish or discard your changes to $number first"
+
+        fun changesDiscarded(number: String): String = "Changes to $number discarded"
     }
 }

@@ -72,6 +72,20 @@ sealed interface EditConflict {
     }
 }
 
+/** What asking to edit a quotation opens (N5.10), decided against this device's drafts. */
+sealed interface EditOpening {
+
+    /**
+     * Store [draft], make it current, and show it. [unfinished] is the number
+     * of **another** quotation whose edit was already open — that edit is what
+     * is shown, and the person is told to finish or discard it first.
+     */
+    data class Show(val draft: QuoteDraft, val unfinished: String? = null) : EditOpening
+
+    /** Nothing opens; [message] is for the person. */
+    data class Refused(val message: String) : EditOpening
+}
+
 /**
  * Editing a finalised quotation — **new behaviour, not a port**: V8C4 cannot
  * edit one at all. The Owner's decision is the whole specification: the
@@ -254,6 +268,75 @@ object QuotationEdit {
     }
 
     private const val STATUS_CANCELLED = "Cancelled"
+
+    fun cancelledNotEditable(number: String): String =
+        "$number is cancelled — a cancelled quotation cannot be edited"
+
+    fun betaNotEditable(number: String): String =
+        "$number was written by the beta app — it cannot be edited here"
+
+    /**
+     * Why [member] may not open [record] for editing, or null when they may.
+     * The detail offers Edit only when this is null; [opening] asks it again.
+     *
+     * A **beta record** (`legacyBetaShape`) is refused as well: it has no
+     * document-level GST and its lines are not V8C4's, so [draftFrom] would
+     * rewrite its shape on the first save. Nothing in the plan asks for one
+     * to be edited; it is never offered.
+     */
+    fun refusalToOpen(member: Member, record: QuotationRecord): String? = when {
+        record.status.equals(STATUS_CANCELLED, ignoreCase = true) -> cancelledNotEditable(record.number)
+        record.legacyBetaShape -> betaNotEditable(record.number)
+        !Permissions.canEditQuotation(member, record) -> NOT_YOURS
+        else -> null
+    }
+
+    /**
+     * What asking to edit [record] opens, given the drafts [stored] on this
+     * device and the draft [onScreen].
+     *
+     * **One edit at a time.** An edit already open, of any quotation, is
+     * shown with its changes — the on-screen copy when it is that draft, since
+     * it may hold a change the store has not caught up with — and when it is
+     * another quotation's, its number comes back so the person is told.
+     * Otherwise the quotation is rebuilt ([draftFrom]) under its own id. That
+     * takes the slot of a finalised draft whose retire failed (9b's recorded
+     * case) — what the next Finalise press would have done anyway. The draft
+     * in progress is never touched.
+     */
+    fun opening(
+        member: Member,
+        record: QuotationRecord,
+        stored: QuoteDrafts,
+        onScreen: QuoteDraft,
+        at: Long,
+        newLineId: () -> String = { Keys.generateId(QuoteDraft.LINE_PREFIX) }
+    ): EditOpening {
+        refusalToOpen(member, record)?.let { return EditOpening.Refused(it) }
+        val open = stored.drafts.firstOrNull { it.isEdit }
+            ?: return EditOpening.Show(draftFrom(record, at, newLineId))
+        val shown = onScreen.takeIf { it.id == open.id && it.isEdit } ?: open
+        return EditOpening.Show(shown, unfinished = open.editOf?.takeIf { it.quotationId != record.id }?.number)
+    }
+
+    /**
+     * The cap the builder shows, and the gate checks, for [draft]: a new
+     * quotation's is [capPercent] as it stands; an edit's only when its
+     * discount went up against what was **opened** (`EditOrigin`) — else none.
+     * A courtesy, so the warning agrees with what Save will do; the save
+     * decides against the quotation read inside its transaction.
+     */
+    fun screenCap(draft: QuoteDraft, capPercent: Double?): Double? {
+        val origin = draft.editOf ?: return capPercent
+        val totals = draft.totals()
+        val raised = draft.discount != null && QuoteDiscount.raised(
+            beforeAmount = origin.discountAmount,
+            beforeBase = origin.discountBase,
+            afterAmount = totals.discount,
+            afterBase = totals.discountBase
+        )
+        return if (raised) capPercent else QuoteMath.NO_CAP
+    }
 
     /**
      * Whether [stored] is this edit, already written: one revision on from

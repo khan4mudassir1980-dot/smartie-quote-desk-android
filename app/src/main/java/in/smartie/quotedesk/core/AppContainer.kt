@@ -24,6 +24,7 @@ import `in`.smartie.quotedesk.data.repository.QuotationWriteRepository
 import `in`.smartie.quotedesk.data.repository.StockPhotoRepository
 import `in`.smartie.quotedesk.data.repository.StockWriteRepository
 import `in`.smartie.quotedesk.data.repository.StoppedStockRepository
+import `in`.smartie.quotedesk.ui.products.QuoteRequests
 import java.io.File
 
 class AppContainer(
@@ -60,6 +61,12 @@ class AppContainer(
      * `operationsRepository`.
      */
     val quotationWriteRepository = QuotationWriteRepository(FirestoreQuotationStore(firestore))
+
+    /**
+     * N5.10: a quotation the Quotations tab asks the builder to open for
+     * editing. App-scoped, because the two tabs' view models are not.
+     */
+    val quoteRequests = QuoteRequests()
 
     /**
      * N5.6's reader and writer for the two settings documents the quotation

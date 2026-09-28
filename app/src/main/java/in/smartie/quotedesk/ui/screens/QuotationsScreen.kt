@@ -3,8 +3,11 @@ package `in`.smartie.quotedesk.ui.screens
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import `in`.smartie.quotedesk.data.model.QuotationRecord
 import `in`.smartie.quotedesk.ui.AppDataViewModel
+import `in`.smartie.quotedesk.ui.quotations.QuotationActions
 import `in`.smartie.quotedesk.ui.quotations.QuotationListScreen
+import `in`.smartie.quotedesk.ui.quotations.QuotationsViewModel
 
 /**
  * The Quotations tab.
@@ -19,13 +22,23 @@ import `in`.smartie.quotedesk.ui.quotations.QuotationListScreen
  * PWA's job, and the tab says so.
  */
 @Composable
-fun QuotationsScreen(data: AppDataViewModel) {
+fun QuotationsScreen(
+    data: AppDataViewModel,
+    viewModel: QuotationsViewModel,
+    /** Edit (N5.10): the caller moves to the builder on the Products tab. */
+    onEdit: (QuotationRecord) -> Unit,
+) {
     val quotations by data.quotations.collectAsStateWithLifecycle()
+    val cancelling by viewModel.cancelling.collectAsStateWithLifecycle()
+    val cancelFailure by viewModel.failure.collectAsStateWithLifecycle()
 
     QuotationListScreen(
         records = quotations,
         viewer = data.member,
         loading = quotations.isEmpty(),
-        banner = true
+        banner = true,
+        cancelling = cancelling,
+        cancelFailure = cancelFailure,
+        actions = QuotationActions(onEdit = onEdit, onCancel = viewModel::cancel)
     )
 }

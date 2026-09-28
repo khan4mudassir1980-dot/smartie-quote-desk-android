@@ -156,6 +156,10 @@ data class ProductsActions(
     val onFinalise: () -> Unit = {},
     /** The answer to the ₹0 question: true for "Continue anyway". */
     val onAnswerZeroRates: (Boolean) -> Unit = {},
+    /** **Save changes** on an edit of an issued quotation (N5.10). */
+    val onSaveEdit: () -> Unit = {},
+    /** Discards the edit open in the builder, once the person has confirmed. */
+    val onDiscardEdit: () -> Unit = {},
     /** Save one product's corrections. The draft is what the sheet showed. */
     val onSaveProduct: (ProductRecord, ProductDraft) -> Unit = { _, _ -> },
 )
@@ -182,6 +186,7 @@ fun ProductsScreen(
     val gatePhase by viewModel.gatePhase.collectAsStateWithLifecycle()
     val finaliseFailure by viewModel.finaliseFailure.collectAsStateWithLifecycle()
     val zeroRateQuestion by viewModel.zeroRateQuestion.collectAsStateWithLifecycle()
+    val builderRequested by viewModel.builderRequested.collectAsStateWithLifecycle()
     val quoting by viewModel.quoting.collectAsStateWithLifecycle()
     // Null while the settings document has not arrived OR does not exist.
     // Indistinguishable from here, which is the safe way round: a cap that
@@ -234,6 +239,8 @@ fun ProductsScreen(
         gatePhase = gatePhase,
         finaliseFailure = finaliseFailure,
         zeroRateQuestion = zeroRateQuestion,
+        builderRequested = builderRequested,
+        onBuilderShown = viewModel::builderShown,
         newPartyId = viewModel::mintPartyId,
         newLineId = viewModel::mintLineId,
         gstOf = { key -> productsByKey[key]?.gst },
@@ -268,6 +275,10 @@ fun ProductsScreen(
             // transaction re-reads the cap before anything is written.
             onFinalise = { viewModel.finalise(parties, discountCap) },
             onAnswerZeroRates = viewModel::answerZeroRates,
+            // The same customers and cap as Finalise; the cap is asked only
+            // when an edit puts the discount up (`QuotationEdit.screenCap`).
+            onSaveEdit = { viewModel.saveEdit(parties, discountCap) },
+            onDiscardEdit = viewModel::discardEdit,
             onSaveProduct = viewModel::saveProduct,
         ),
     )
@@ -303,6 +314,12 @@ fun ProductsCatalogue(
     gatePhase: GatePhase = GatePhase.IDLE,
     finaliseFailure: String? = null,
     zeroRateQuestion: String? = null,
+    /**
+     * True when something asked for the builder — an edit requested from the
+     * Quotations tab (N5.10). It opens, and [onBuilderShown] says so.
+     */
+    builderRequested: Boolean = false,
+    onBuilderShown: () -> Unit = {},
     /** Minted once per quotation. See `ProductsViewModel.mintPartyId`. */
     newPartyId: () -> String = { "" },
     /** Minted once per line being typed. See `ProductsViewModel.mintLineId`. */
@@ -322,6 +339,12 @@ fun ProductsCatalogue(
 
     val dimens = LocalSmartieDimens.current
     var showDraft by remember { mutableStateOf(false) }
+    LaunchedEffect(builderRequested) {
+        if (builderRequested) {
+            showDraft = true
+            onBuilderShown()
+        }
+    }
 
     // The product being corrected, if any. The editor replaces the catalogue
     // rather than floating over it: it is a form with seven fields, and on a

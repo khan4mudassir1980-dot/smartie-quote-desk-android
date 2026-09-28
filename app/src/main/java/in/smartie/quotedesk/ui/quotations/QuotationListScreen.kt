@@ -27,6 +27,14 @@ import `in`.smartie.quotedesk.ui.components.TagTone
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
 import `in`.smartie.quotedesk.ui.theme.SmartieColors
 
+/** What the detail may do to a quotation (N5.10). */
+data class QuotationActions(
+    /** Open it in the builder to edit; the caller moves to the Products tab. */
+    val onEdit: (QuotationRecord) -> Unit = {},
+    /** Cancel it, once the person has answered V8C4's question. */
+    val onCancel: (QuotationRecord) -> Unit = {},
+)
+
 /**
  * Every quotation this person may look back at, newest first, and a way into
  * each one.
@@ -48,7 +56,12 @@ internal fun QuotationListScreen(
     viewer: Member = Member(uid = ""),
     loading: Boolean = false,
     /** The Quotations tab shows it; More → Quotation history does not. */
-    banner: Boolean = false
+    banner: Boolean = false,
+    /** The id of the quotation whose cancel is out, if any. */
+    cancelling: String? = null,
+    /** Why the last cancel did not happen. */
+    cancelFailure: String? = null,
+    actions: QuotationActions = QuotationActions()
 ) {
     val dimens = LocalSmartieDimens.current
     var openId by rememberSaveable { mutableStateOf<String?>(null) }

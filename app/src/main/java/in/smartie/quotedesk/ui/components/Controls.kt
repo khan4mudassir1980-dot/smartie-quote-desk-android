@@ -388,8 +388,10 @@ fun <T> SegmentedChoice(
                     .background(if (isSelected) tint.copy(alpha = 0.12f) else SmartieColors.Panel)
                     .clickableNoRipple { onSelect(option) }
                     // Which one is chosen, for TalkBack and for a test —
-                    // until N5.10 only the colour said so.
-                    .semantics { selected = isSelected }
+                    // until N5.10 only the colour said so. `this.`, because
+                    // this function's own `selected` parameter shadows the
+                    // semantics property (run #221 did not compile without it).
+                    .semantics { this.selected = isSelected }
                     .padding(horizontal = 6.dp),
                 contentAlignment = Alignment.Center
             ) {

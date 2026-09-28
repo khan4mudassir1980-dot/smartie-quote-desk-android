@@ -24,6 +24,14 @@ sealed interface EditPlan {
         val fields: Map<String, Any?>
     ) : EditPlan
 
+    /**
+     * **This very edit is already stored** — its acknowledgement was lost and
+     * the person pressed Save again. Nothing is written; the answer is
+     * "saved", as finalise's read-first answers a lost issue. Without it the
+     * retry would be told the quotation "was changed by" — themselves.
+     */
+    data class AlreadySaved(val quotationId: String, val number: String) : EditPlan
+
     /** The edit must not be written; [message] is for the person. */
     data class Refused(val message: String) : EditPlan
 
@@ -180,9 +188,14 @@ object QuotationEdit {
             return EditPlan.Conflict(EditConflict.Cancelled(stored.number, stored.cancelledBy))
         }
         // Before any refusal: a quotation that moved is the news, whatever
-        // else this edit might be refused for.
+        // else this edit might be refused for — unless what it moved to is
+        // this edit itself, landed by an attempt whose answer was lost.
         if (stored.revision != origin.revision) {
-            return EditPlan.Conflict(EditConflict.Changed(stored.number, stored.lastEditedBy, stored.lastEditedAt))
+            return if (alreadyLanded(edited, member, stored, origin, customers)) {
+                EditPlan.AlreadySaved(stored.id, stored.number)
+            } else {
+                EditPlan.Conflict(EditConflict.Changed(stored.number, stored.lastEditedBy, stored.lastEditedAt))
+            }
         }
         if (!Permissions.canEditQuotation(member, stored)) return EditPlan.Refused(NOT_YOURS)
 
@@ -241,6 +254,43 @@ object QuotationEdit {
     }
 
     private const val STATUS_CANCELLED = "Cancelled"
+
+    /**
+     * Whether [stored] is this edit, already written: one revision on from
+     * the opening, stamped by this person, and holding exactly what this
+     * draft would write — compared as quotation content (every line as it
+     * would be stored, carriage, installation, discount, GST, the party and
+     * its link), rebuilt through [draftFrom] so a stored figure and a typed
+     * one are read the same way.
+     */
+    private fun alreadyLanded(
+        edited: QuoteDraft,
+        member: Member,
+        stored: QuotationRecord,
+        origin: EditOrigin,
+        customers: List<PartyRecord>
+    ): Boolean {
+        if (stored.revision != origin.revision + 1 || stored.lastEditedByUid != member.uid) return false
+        val written = draftFrom(stored, stored.lastEditedAt) { "" }
+        val mine = edited.copy(partyId = QuoteParty.keptLink(edited.party, edited.partyId, customers))
+        return contentOf(written) == contentOf(mine)
+    }
+
+    /**
+     * A draft as the quotation it would store — ids and timestamps aside, and
+     * every figure as stored: the party trimmed as `partyData` writes it,
+     * carriage in whole rupees, its note only when there is carriage to
+     * carry it.
+     */
+    private fun contentOf(draft: QuoteDraft): List<Any?> {
+        val totals = draft.totals()
+        return listOf(
+            draft.tier, QuotationWrite.partyData(draft.party), draft.partyId,
+            if (totals.transport > 0.0) draft.transportNote.trim() else "",
+            draft.installation, draft.discount, draft.gstEnabled, draft.gstPercent,
+            totals, draft.lines.map { it.toRecord() }
+        )
+    }
 
     /**
      * V8C4's carriage line, when there is exactly one: `Transportation`, no

@@ -461,6 +461,8 @@ class ProductsViewModel(
             when (val outcome = finaliser.ensureFinalised(_draft.value, capPercent)) {
                 is GateOutcome.Finalised -> emit(outcome.message)
                 is GateOutcome.NotFinalised -> _finaliseFailure.value = outcome.message
+                // An edit's outcomes; `ensureFinalised` never answers either.
+                is GateOutcome.Saved, is GateOutcome.NotSaved,
                 GateOutcome.Cancelled, GateOutcome.AlreadyRunning -> Unit
             }
         }

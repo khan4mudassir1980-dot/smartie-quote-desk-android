@@ -1,7 +1,9 @@
 package `in`.smartie.quotedesk.ui.products
 
+import `in`.smartie.quotedesk.data.repository.EditOutcome
 import `in`.smartie.quotedesk.data.repository.FinaliseOutcome
 import `in`.smartie.quotedesk.domain.PartyFormat
+import `in`.smartie.quotedesk.domain.QuotationEdit
 import `in`.smartie.quotedesk.domain.QuoteDraft
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +20,10 @@ enum class GatePhase {
     CHECKING,
 
     /** The finalise transaction is out: the control says it is taking a number. */
-    TAKING_NUMBER
+    TAKING_NUMBER,
+
+    /** An edit's save is out (N5.10): the control says it is saving. */
+    SAVING
 }
 
 /** What one press of the gate came to. */
@@ -34,6 +39,12 @@ sealed interface GateOutcome {
 
     /** A press arrived while the gate was already open; it did nothing. */
     data object AlreadyRunning : GateOutcome
+
+    /** An edit saved — now, or by an attempt whose answer was lost — and closed. */
+    data class Saved(val number: String, val message: String) : GateOutcome
+
+    /** An edit stopped, and why. The edit draft stays; nothing typed is lost. */
+    data class NotSaved(val message: String) : GateOutcome
 }
 
 /**
@@ -99,6 +110,15 @@ sealed interface GateOutcome {
  * **One gate at a time:** a press while the gate is open does nothing, across
  * the question and the network alike. Pure — the view model supplies what
  * touches Android and Firebase — so every step is unit-tested.
+ *
+ * ## An edit of an issued quotation (N5.10) — [saveEdit], never this gate
+ *
+ * **[ensureFinalised] refuses an edit draft before anything else.** Its
+ * read-first would find the quotation, answer "already issued", retire the
+ * draft and say "Finalised as X" — every edit discarded without a word.
+ * [saveEdit] runs the same checks — steps 1 and 3 to 6, and the cap on the
+ * network, one at a time — and then saves the edit through its own path,
+ * never taking a number. Its words are this app's own: V8C4 has no edit.
  */
 class QuoteFinaliser(
     /** Whether the system reports a connection. See step 6. */
@@ -113,7 +133,13 @@ class QuoteFinaliser(
     private val describe: (Throwable) -> String,
     /** Where failures are logged; never shown through here. */
     private val log: (Throwable) -> Unit = {},
-    private val capMillis: Long = CAP_MILLIS
+    private val capMillis: Long = CAP_MILLIS,
+    /** `QuotationWriteRepository.edit` for this member (N5.10). */
+    private val edit: suspend (QuoteDraft) -> EditOutcome = { EditOutcome.Refused(QuotationEdit.NOT_AN_EDIT) },
+    /** Takes a saved edit's draft out and returns to the draft in progress. */
+    private val closeEdit: suspend (editId: String) -> Unit = {},
+    /** How a conflict names the time the quotation changed. */
+    private val timeText: (Long) -> String = { it.toString() }
 ) {
 
     private val _phase = MutableStateFlow(GatePhase.IDLE)
@@ -127,20 +153,12 @@ class QuoteFinaliser(
     suspend fun ensureFinalised(draft: QuoteDraft, capPercent: Double?): GateOutcome {
         if (!_phase.compareAndSet(GatePhase.IDLE, GatePhase.CHECKING)) return GateOutcome.AlreadyRunning
         try {
-            draft.refusal(capPercent)?.let { return GateOutcome.NotFinalised(it) }
+            // Before everything: see "An edit of an issued quotation" above.
+            draft.editOf?.let { return GateOutcome.NotFinalised(editNotFinalised(it.number)) }
 
-            zeroRateQuestion(draft)?.let { question ->
-                if (!confirmZeroRates(question)) return GateOutcome.Cancelled
+            checks(draft, capPercent, OFFLINE)?.let { stop ->
+                return if (stop is Stop.Refused) GateOutcome.NotFinalised(stop.message) else GateOutcome.Cancelled
             }
-
-            PartyFormat.gstinProblem(draft.party.gstin)?.let {
-                return GateOutcome.NotFinalised(CLIENT_GSTIN + it)
-            }
-            PartyFormat.phoneProblem(draft.party.phone)?.let {
-                return GateOutcome.NotFinalised(CLIENT_PHONE + it)
-            }
-
-            if (!online()) return GateOutcome.NotFinalised(OFFLINE)
 
             _phase.value = GatePhase.TAKING_NUMBER
             val outcome = try {
@@ -166,6 +184,80 @@ class QuoteFinaliser(
         } finally {
             _phase.value = GatePhase.IDLE
         }
+    }
+
+    /**
+     * One press of **Save changes** on an edit (N5.10). The same checks as
+     * [ensureFinalised], in the same order, then `QuotationWriteRepository.
+     * edit` under the same cap — never finalise, never a number. Saved, the
+     * edit draft is closed ([closeEdit]) and the draft in progress comes
+     * back; stopped for any reason, the edit draft stays as it was.
+     */
+    suspend fun saveEdit(draft: QuoteDraft, capPercent: Double?): GateOutcome {
+        if (!_phase.compareAndSet(GatePhase.IDLE, GatePhase.CHECKING)) return GateOutcome.AlreadyRunning
+        try {
+            if (draft.editOf == null) return GateOutcome.NotSaved(notSaved(QuotationEdit.NOT_AN_EDIT))
+
+            checks(draft, capPercent, EDIT_OFFLINE)?.let { stop ->
+                return if (stop is Stop.Refused) GateOutcome.NotSaved(stop.message) else GateOutcome.Cancelled
+            }
+
+            _phase.value = GatePhase.SAVING
+            val outcome = try {
+                withTimeoutOrNull(capMillis) { edit(draft) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                log(failure)
+                return GateOutcome.NotSaved(notSaved(describe(failure), mayHaveLanded = true))
+            }
+            return when (outcome) {
+                null -> GateOutcome.NotSaved(notSaved(TIMED_OUT, mayHaveLanded = true))
+                is EditOutcome.Saved -> {
+                    try {
+                        closeEdit(draft.id)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (failure: Throwable) {
+                        // Saved all the same; the next press is answered as
+                        // saved by the plan, and closes it then.
+                        log(failure)
+                    }
+                    GateOutcome.Saved(outcome.number, savedTo(outcome.number))
+                }
+                is EditOutcome.Refused -> {
+                    outcome.cause?.let(log)
+                    GateOutcome.NotSaved(notSaved(outcome.message))
+                }
+                is EditOutcome.Conflict -> GateOutcome.NotSaved(outcome.conflict.message(timeText))
+            }
+        } finally {
+            _phase.value = GatePhase.IDLE
+        }
+    }
+
+    /** Why a check stopped the gate: a sentence, or the ₹0 question answered Cancel. */
+    private sealed interface Stop {
+        data class Refused(val message: String) : Stop
+        data object Cancelled : Stop
+    }
+
+    /**
+     * Steps 1 and 3 to 6 — shared by [ensureFinalised] and [saveEdit], so the
+     * two can never check different things. Null when every check passes.
+     */
+    private suspend fun checks(draft: QuoteDraft, capPercent: Double?, offline: String): Stop? {
+        draft.refusal(capPercent)?.let { return Stop.Refused(it) }
+
+        zeroRateQuestion(draft)?.let { question ->
+            if (!confirmZeroRates(question)) return Stop.Cancelled
+        }
+
+        PartyFormat.gstinProblem(draft.party.gstin)?.let { return Stop.Refused(CLIENT_GSTIN + it) }
+        PartyFormat.phoneProblem(draft.party.phone)?.let { return Stop.Refused(CLIENT_PHONE + it) }
+
+        if (!online()) return Stop.Refused(offline)
+        return null
     }
 
     private suspend fun finished(draft: QuoteDraft, number: String): GateOutcome {
@@ -207,6 +299,28 @@ class QuoteFinaliser(
 
         const val CLIENT_GSTIN = "Client GSTIN: "
         const val CLIENT_PHONE = "Client phone: "
+
+        // --- N5.10: an edit's words, this app's own (V8C4 has no edit) -------
+
+        const val EDIT_OFFLINE =
+            "Saving changes needs an internet connection — the quotation is shared with the team"
+
+        const val SAVE_AGAIN =
+            "Press Save changes again — if they were saved, you will be told so, and nothing is saved twice."
+
+        /** An edit draft sent to Finalise — refused before the read-first. */
+        fun editNotFinalised(number: String): String =
+            "$number is already issued — save your changes to it instead"
+
+        fun savedTo(number: String): String = "Saved changes to $number"
+
+        /** An edit stopped: the reason, and that nothing typed was lost. */
+        fun notSaved(reason: String, mayHaveLanded: Boolean = false): String = buildString {
+            append("Not saved — ")
+            append(reason.trim().trimEnd('.'))
+            append(". Your changes are still here.")
+            if (mayHaveLanded) append(' ').append(SAVE_AGAIN)
+        }
 
         /** V8C4's toast, `Finalised as ${no}`. */
         fun finalisedAs(number: String): String = "Finalised as $number"

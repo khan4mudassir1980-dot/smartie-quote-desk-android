@@ -299,6 +299,8 @@ class QuotationWriteRepository(
                         transaction.updateQuotation(plan.quotationId, plan.fields)
                         EditOutcome.Saved(plan.number)
                     }
+                    // A lost acknowledgement, answered: nothing is written.
+                    is EditPlan.AlreadySaved -> EditOutcome.Saved(plan.number)
                     is EditPlan.Refused -> EditOutcome.Refused(plan.message)
                     is EditPlan.Conflict -> EditOutcome.Conflict(plan.conflict)
                 }

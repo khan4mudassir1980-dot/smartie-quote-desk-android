@@ -81,6 +81,8 @@ object QuoteDraftCodec {
             draft.editOf?.discountBase?.toString().orEmpty(),
             escape(draft.copiedFrom?.number.orEmpty()),
             draft.copiedFrom?.at?.toString().orEmpty(),
+            // --- appended in N5.10 commit 8: a switch of tier repriced a line
+            if (draft.tierRepriced) "1" else "",
         ).joinToString(FIELD.toString())
         val lines = draft.lines.map { line ->
             listOf(
@@ -193,7 +195,8 @@ object QuoteDraftCodec {
             transportNote = head.getOrNull(21)?.let(::unescape).orEmpty(),
             faults = faults,
             editOf = editOf(head),
-            copiedFrom = copiedFrom(head)
+            copiedFrom = copiedFrom(head),
+            tierRepriced = head.getOrNull(30) == "1"
         )
     }
 

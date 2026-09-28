@@ -13,24 +13,30 @@ import androidx.compose.ui.test.performScrollToKey
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.QuotationRecord
+import `in`.smartie.quotedesk.domain.CopyStart
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.QuotationCancel
+import `in`.smartie.quotedesk.domain.QuotationCopy
 import `in`.smartie.quotedesk.domain.Role
 import `in`.smartie.quotedesk.ui.quotations.BACK_TO_QUOTATIONS
 import `in`.smartie.quotedesk.ui.quotations.CANCELLING
 import `in`.smartie.quotedesk.ui.quotations.CANCEL_QUESTION_TAG
 import `in`.smartie.quotedesk.ui.quotations.CANCEL_QUOTATION
 import `in`.smartie.quotedesk.ui.quotations.CONFIRM_CANCEL
+import `in`.smartie.quotedesk.ui.quotations.COPY_WAITS_TAG
 import `in`.smartie.quotedesk.ui.quotations.CancelFailure
 import `in`.smartie.quotedesk.ui.quotations.DETAIL_ACTIONS_KEY
 import `in`.smartie.quotedesk.ui.quotations.DETAIL_END_KEY
 import `in`.smartie.quotedesk.ui.quotations.DETAIL_LIST_TAG
+import `in`.smartie.quotedesk.ui.quotations.DUPLICATE
 import `in`.smartie.quotedesk.ui.quotations.EDITED
 import `in`.smartie.quotedesk.ui.quotations.EDIT_QUOTATION
 import `in`.smartie.quotedesk.ui.quotations.KEEP_IT
+import `in`.smartie.quotedesk.ui.quotations.KEEP_MINE
 import `in`.smartie.quotedesk.ui.quotations.QuotationActions
 import `in`.smartie.quotedesk.ui.quotations.QuotationDetail
 import `in`.smartie.quotedesk.ui.quotations.QuotationListScreen
+import `in`.smartie.quotedesk.ui.quotations.REPLACE_IT
 import `in`.smartie.quotedesk.ui.quotations.SHARING_NOTE
 import `in`.smartie.quotedesk.ui.quotations.openQuotationLabel
 import `in`.smartie.quotedesk.ui.theme.SmartieTheme
@@ -80,13 +86,19 @@ class QuotationActionsScreenTest {
 
     private val edited = mutableListOf<QuotationRecord>()
     private val cancelled = mutableListOf<QuotationRecord>()
-    private val actions = QuotationActions(onEdit = { edited += it }, onCancel = { cancelled += it })
+    private val duplicated = mutableListOf<QuotationRecord>()
+    private val actions = QuotationActions(
+        onEdit = { edited += it },
+        onCancel = { cancelled += it },
+        onDuplicate = { duplicated += it }
+    )
 
     private fun detail(
         quotation: QuotationRecord = nine,
         viewer: Member = manager,
         cancelling: Boolean = false,
-        cancelFailure: String? = null
+        cancelFailure: String? = null,
+        copyStart: CopyStart = CopyStart.Go
     ) {
         compose.setContent {
             SmartieTheme {
@@ -96,7 +108,8 @@ class QuotationActionsScreenTest {
                     viewer = viewer,
                     actions = actions,
                     cancelling = cancelling,
-                    cancelFailure = cancelFailure
+                    cancelFailure = cancelFailure,
+                    copyStart = copyStart
                 )
             }
         }
@@ -113,7 +126,7 @@ class QuotationActionsScreenTest {
         compose.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isNotEmpty()
 
     /** Neither control, with the reach proved by the note after them. */
-    private fun offersNothing() {
+    private fun offersNeitherEditNorCancel() {
         toEnd()
         compose.onNodeWithText(SHARING_NOTE).assertExists()
         assertEquals(0, count(EDIT_QUOTATION))
@@ -150,7 +163,7 @@ class QuotationActionsScreenTest {
     @Test
     fun `a Manager is not offered Cancel, or Edit, on another's`() {
         detail(viewer = otherManager)
-        offersNothing()
+        offersNeitherEditNorCancel()
     }
 
     @Test
@@ -179,13 +192,13 @@ class QuotationActionsScreenTest {
     @Test
     fun `a cancelled quotation offers neither Edit nor Cancel`() {
         detail(quotation = nine.copy(status = "Cancelled", cancelledBy = "Owner Person"), viewer = owner)
-        offersNothing()
+        offersNeitherEditNorCancel()
     }
 
     @Test
     fun `a beta record offers neither`() {
         detail(quotation = nine.copy(legacyBetaShape = true), viewer = owner)
-        offersNothing()
+        offersNeitherEditNorCancel()
     }
 
     @Test
@@ -225,6 +238,65 @@ class QuotationActionsScreenTest {
         toActions()
         compose.onNodeWithContentDescription(CANCEL_QUOTATION).assertExists()
         assertTrue("another quotation's failure", !shows(failure))
+    }
+
+    // --- Duplicate (N5.10 commit 8, amendment C) -------------------------------------------
+
+    @Test
+    fun `Duplicate is offered on a cancelled quotation too, and with nothing in progress goes straight in`() {
+        val gone = nine.copy(status = "Cancelled", cancelledBy = "Owner Person")
+        detail(quotation = gone, viewer = owner)
+        toActions()
+        compose.onNodeWithContentDescription(DUPLICATE).performClick()
+
+        assertEquals(listOf(gone), duplicated)
+        assertEquals(0, count(CANCEL_QUOTATION))
+    }
+
+    @Test
+    fun `with lines in progress, V8C4's question comes first, and Keep mine copies nothing`() {
+        detail(copyStart = CopyStart.AskFirst)
+        toActions()
+        compose.onNodeWithContentDescription(DUPLICATE).performClick()
+
+        compose.onNodeWithText(QuotationCopy.REPLACE_QUESTION).assertExists()
+        assertTrue(duplicated.isEmpty())
+        compose.onNodeWithContentDescription(KEEP_MINE).performClick()
+
+        assertTrue(duplicated.isEmpty())
+        compose.onNodeWithContentDescription(DUPLICATE).assertExists()
+    }
+
+    @Test
+    fun `and Replace it copies`() {
+        detail(copyStart = CopyStart.AskFirst)
+        toActions()
+        compose.onNodeWithContentDescription(DUPLICATE).performClick()
+        compose.onNodeWithContentDescription(REPLACE_IT).performClick()
+
+        assertEquals(listOf(nine), duplicated)
+    }
+
+    @Test
+    fun `with an edit open, Duplicate is not offered, and the line says why`() {
+        detail(copyStart = CopyStart.EditOpen("SIE/QD/2025-26/010"))
+        toActions()
+
+        compose.onNodeWithTag(COPY_WAITS_TAG).assertExists()
+        compose.onNodeWithText("Finish or discard your changes to SIE/QD/2025-26/010 first").assertExists()
+        assertEquals(0, count(DUPLICATE))
+        // The reach: Edit sits in the same item.
+        compose.onNodeWithContentDescription(EDIT_QUOTATION).assertExists()
+    }
+
+    @Test
+    fun `Staff are offered nothing at all`() {
+        detail(viewer = Member(uid = "u_m", name = "Manager Person", role = Role.WORKER))
+        toEnd()
+        compose.onNodeWithText(SHARING_NOTE).assertExists()
+        assertEquals(0, count(DUPLICATE))
+        assertEquals(0, count(EDIT_QUOTATION))
+        assertEquals(0, count(CANCEL_QUOTATION))
     }
 
     // --- the list's tag -----------------------------------------------------------------

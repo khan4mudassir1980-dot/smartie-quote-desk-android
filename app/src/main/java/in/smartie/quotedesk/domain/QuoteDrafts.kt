@@ -53,6 +53,14 @@ data class QuoteDrafts(
         return copy(drafts = updated, currentId = draft.id)
     }
 
+    /**
+     * [draft] in place of [replacing] — Duplicate's "Replace the quotation you
+     * are working on" (N5.10) — and made current. Every other draft is left
+     * alone; a null [replacing] only adds.
+     */
+    fun replaceWith(replacing: String?, draft: QuoteDraft): QuoteDrafts =
+        (if (replacing != null) remove(replacing) else this).save(draft)
+
     fun remove(id: String): QuoteDrafts = copy(
         drafts = drafts.filterNot { it.id == id },
         currentId = if (currentId == id) "" else currentId

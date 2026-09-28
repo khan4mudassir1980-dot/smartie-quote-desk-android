@@ -7,8 +7,11 @@ import `in`.smartie.quotedesk.core.AppContainer
 import `in`.smartie.quotedesk.core.toAppError
 import `in`.smartie.quotedesk.data.model.QuotationRecord
 import `in`.smartie.quotedesk.data.repository.CancelOutcome
+import `in`.smartie.quotedesk.domain.CopyStart
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.QuotationCancel
+import `in`.smartie.quotedesk.domain.QuotationCopy
+import `in`.smartie.quotedesk.domain.QuoteDrafts
 import `in`.smartie.quotedesk.ui.products.QuoteFinaliser
 import `in`.smartie.quotedesk.ui.products.QuoteRequest
 import `in`.smartie.quotedesk.ui.products.QuoteRequests
@@ -20,6 +23,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -48,7 +53,9 @@ class QuotationsViewModel(
     /** A thrown failure in words — `toAppError().message` in the app. */
     private val describe: (Throwable) -> String,
     private val log: (Throwable) -> Unit = {},
-    private val capMillis: Long = QuoteFinaliser.CAP_MILLIS
+    private val capMillis: Long = QuoteFinaliser.CAP_MILLIS,
+    /** This account's drafts on this device, for what Duplicate would come to. */
+    drafts: Flow<QuoteDrafts> = flowOf(QuoteDrafts())
 ) : ViewModel() {
 
     private val _messages = Channel<String>(Channel.BUFFERED)
@@ -73,6 +80,26 @@ class QuotationsViewModel(
      * its quotation, so the detail of another one never shows it.
      */
     val failure: StateFlow<CancelFailure?> = _failure.asStateFlow()
+
+    /**
+     * What pressing Duplicate would come to now (amendment C): not offered
+     * while an edit is open, V8C4's question when the quotation being worked
+     * on has lines, straight through when it is empty. Until the store
+     * answers, the question is asked — the safe way round. The builder
+     * decides again under its lock (`ProductsViewModel.openCopy`).
+     */
+    val copyStart: StateFlow<CopyStart> = drafts
+        .map(QuotationCopy::start)
+        .catch { emit(CopyStart.AskFirst) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, CopyStart.AskFirst)
+
+    /**
+     * Copies [record] into a new draft, once the person has answered V8C4's
+     * question or had nothing to lose; the caller moves to the Products tab.
+     */
+    fun duplicate(record: QuotationRecord) {
+        requests.request(QuoteRequest.Copy(record, requestedBy = uid))
+    }
 
     /** Opens [record] in the builder for editing; the caller moves to the Products tab. */
     fun edit(record: QuotationRecord) {
@@ -121,6 +148,7 @@ class QuotationsViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T = QuotationsViewModel(
             uid = member.uid,
+            drafts = container.devicePreferences.forAccount(member.uid).drafts,
             cancelWrite = { id, number -> container.quotationWriteRepository.cancel(member, id, number) },
             requests = container.quoteRequests,
             onlineFlow = container.connectivity.online,

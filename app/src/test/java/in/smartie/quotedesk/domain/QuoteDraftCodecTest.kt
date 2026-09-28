@@ -79,12 +79,33 @@ class QuoteDraftCodecTest {
         // 22nd field; the eight N5.10 appends are simply absent.
         val records = QuoteDraftCodec.encode(draft).split('\u001E')
         val head = records.first().split('\u001F')
-        assertEquals("today's head is 22 fields and eight more", 30, head.size)
+        // Nine since N5.10 commit 8 appended `tierRepriced`.
+        assertEquals("today's head is 22 fields and nine more", 31, head.size)
         val before = (listOf(head.take(22).joinToString("\u001F")) + records.drop(1)).joinToString("\u001E")
         val restored = QuoteDraftCodec.decode(before)
         assertNull(restored.editOf)
         assertNull(restored.copiedFrom)
         assertEquals(draft, restored)
+    }
+
+    @Test
+    fun `a draft stored before N5_10 commit 8 reads back as not repriced`() {
+        // Its head stops after the copy's origin, the 30th field.
+        val copied = draft.copy(copiedFrom = CopyOrigin("SIE/QD/2025-26/009", 1_760_000_000_000L), tierRepriced = true)
+        val records = QuoteDraftCodec.encode(copied).split('\u001E')
+        val head = records.first().split('\u001F')
+        val before = (listOf(head.take(30).joinToString("\u001F")) + records.drop(1)).joinToString("\u001E")
+
+        val restored = QuoteDraftCodec.decode(before)
+        assertEquals(CopyOrigin("SIE/QD/2025-26/009", 1_760_000_000_000L), restored.copiedFrom)
+        assertFalse(restored.tierRepriced)
+    }
+
+    @Test
+    fun `a switch of tier that repriced a line survives the store`() {
+        val repriced = draft.copy(copiedFrom = CopyOrigin("SIE/QD/2025-26/009"), tierRepriced = true)
+        assertTrue(roundTrip(repriced).tierRepriced)
+        assertFalse(roundTrip(repriced.copy(tierRepriced = false)).tierRepriced)
     }
 
     @Test

@@ -166,8 +166,9 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
 
     LaunchedEffect(data) { data.messages.collect { snackbar.showSnackbar(it) } }
 
-    // N5.10: a quotation opened for editing goes to the builder, which lives
-    // on the Products tab — reached exactly as its tab button reaches it.
+    // N5.10: a quotation opened for editing, or copied, goes to the builder,
+    // which lives on the Products tab — reached exactly as its tab button
+    // reaches it.
     val openBuilder: () -> Unit = {
         navController.navigate("products") {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -261,6 +262,10 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
                             quotationsViewModel.edit(record)
                             openBuilder()
                         },
+                        onDuplicate = { record ->
+                            quotationsViewModel.duplicate(record)
+                            openBuilder()
+                        },
                     )
                 }
                 composable("more") {
@@ -340,18 +345,24 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
                     }
                     val cancelling by quotationsViewModel.cancelling.collectAsStateWithLifecycle()
                     val cancelFailure by quotationsViewModel.failure.collectAsStateWithLifecycle()
+                    val copyStart by quotationsViewModel.copyStart.collectAsStateWithLifecycle()
                     QuotationListScreen(
                         records = quotations,
                         viewer = member,
                         loading = quotations.isEmpty(),
                         cancelling = cancelling,
                         cancelFailure = cancelFailure,
+                        copyStart = copyStart,
                         actions = QuotationActions(
                             onEdit = { record ->
                                 quotationsViewModel.edit(record)
                                 openBuilder()
                             },
                             onCancel = quotationsViewModel::cancel,
+                            onDuplicate = { record ->
+                                quotationsViewModel.duplicate(record)
+                                openBuilder()
+                            },
                         ),
                     )
                 }

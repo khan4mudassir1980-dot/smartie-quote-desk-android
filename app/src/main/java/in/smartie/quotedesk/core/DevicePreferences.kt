@@ -175,6 +175,20 @@ class AccountPreferences internal constructor(
     }
 
     /**
+     * Stores a Duplicate's [draft] in place of [replacing] — the draft in
+     * progress, which the person has agreed to replace, or null — and makes
+     * it current, in one edit (N5.10). Answers the copy's id.
+     */
+    suspend fun replaceDraft(replacing: String?, draft: QuoteDraft): String {
+        store.edit { stored ->
+            stored[draftsKey] = QuoteDraftsCodec.encode(
+                QuoteDraftsCodec.decode(stored[draftsKey]).replaceWith(replacing, draft)
+            )
+        }
+        return draft.id
+    }
+
+    /**
      * Moves what the ownerless keys held into this account, once.
      *
      * The old draft was a single one, so it is adopted as this account's first

@@ -1508,11 +1508,19 @@ internal fun editingHeading(number: String): String = "Editing $number"
 
 /**
  * The line that says whose rates the lines carry, or null on a quotation
- * built from the catalogue today. An edit's are the ones it was issued at.
+ * built from the catalogue today — and null once a switch of tier has
+ * repriced a line, when it would no longer be true (`QuoteDraft.ratesAsQuoted`).
+ * An edit's rates are the ones it was issued at; a copy's, its original's,
+ * dated (amendment C).
  */
 internal fun ratesNote(draft: QuoteDraft): String? {
-    val editOf = draft.editOf ?: return null
-    return "Rates as quoted on ${editOf.number}. $REPRICES_AT_TODAYS"
+    if (!draft.ratesAsQuoted) return null
+    val source = draft.editOf?.number
+        ?: draft.copiedFrom?.let { copied ->
+            if (copied.at > 0L) "${copied.number}, ${formatDate(copied.at)}" else copied.number
+        }
+        ?: return null
+    return "Rates as quoted on $source. $REPRICES_AT_TODAYS"
 }
 
 /** The tail on an edit, in place of [ISSUING_NOTE]. */

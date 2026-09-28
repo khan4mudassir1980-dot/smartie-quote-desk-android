@@ -3,6 +3,10 @@ package `in`.smartie.quotedesk.ui.quotations
 import `in`.smartie.quotedesk.data.model.QuotationRecord
 import `in`.smartie.quotedesk.data.repository.CancelOutcome
 import `in`.smartie.quotedesk.data.repository.QuotationWriteRepository
+import `in`.smartie.quotedesk.domain.CopyStart
+import `in`.smartie.quotedesk.domain.EditOrigin
+import `in`.smartie.quotedesk.domain.QuoteDraft
+import `in`.smartie.quotedesk.domain.QuoteDrafts
 import `in`.smartie.quotedesk.ui.products.QuoteFinaliser
 import `in`.smartie.quotedesk.ui.products.QuoteRequest
 import `in`.smartie.quotedesk.ui.products.QuoteRequests
@@ -46,6 +50,8 @@ class QuotationsViewModelTest {
     private val online = MutableStateFlow(true)
     private val requests = QuoteRequests()
 
+    private val drafts = MutableStateFlow(QuoteDrafts())
+
     private fun viewModel(
         capMillis: Long = QuoteFinaliser.CAP_MILLIS,
         write: suspend (String, String) -> CancelOutcome = { _, number -> CancelOutcome.Cancelled(number) }
@@ -56,7 +62,8 @@ class QuotationsViewModelTest {
         onlineFlow = online,
         describe = { it.message ?: "Something went wrong" },
         log = { logged += it },
-        capMillis = capMillis
+        capMillis = capMillis,
+        drafts = drafts
     )
 
     @Test
@@ -150,6 +157,27 @@ class QuotationsViewModelTest {
         model.cancel(nine)
 
         assertNull(model.failure.value)
+    }
+
+    @Test
+    fun `Duplicate hands the quotation to the builder as a copy, marked with who asked`() = runTest {
+        viewModel().duplicate(nine)
+
+        assertEquals(QuoteRequest.Copy(nine, requestedBy = "u_m"), requests.pending.value)
+    }
+
+    @Test
+    fun `what Duplicate would do follows this device's drafts`() = runTest {
+        val model = viewModel()
+        assertEquals(CopyStart.Go, model.copyStart.value)
+
+        val inProgress = QuoteDraft(id = "qd_now").addManual(id = "ln_n", title = "Gate survey", rate = 500.0)
+        drafts.value = QuoteDrafts(listOf(inProgress), currentId = inProgress.id)
+        assertEquals(CopyStart.AskFirst, model.copyStart.value)
+
+        val edit = QuoteDraft(id = "qd_9", editOf = EditOrigin("qd_9", nine.number))
+        drafts.value = QuoteDrafts(listOf(inProgress, edit), currentId = edit.id)
+        assertEquals(CopyStart.EditOpen(nine.number), model.copyStart.value)
     }
 
     @Test

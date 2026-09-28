@@ -14,6 +14,7 @@ import `in`.smartie.quotedesk.data.model.QuotingRecord
 import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.data.repository.PartyWriteResult
 import `in`.smartie.quotedesk.domain.AreaEntry
+import `in`.smartie.quotedesk.domain.CopyOpening
 import `in`.smartie.quotedesk.domain.Discount
 import `in`.smartie.quotedesk.domain.DraftLine
 import `in`.smartie.quotedesk.domain.EditOpening
@@ -26,6 +27,7 @@ import `in`.smartie.quotedesk.domain.PinChange
 import `in`.smartie.quotedesk.domain.ProductDraft
 import `in`.smartie.quotedesk.domain.ProductPins
 import `in`.smartie.quotedesk.domain.ProductWrite
+import `in`.smartie.quotedesk.domain.QuotationCopy
 import `in`.smartie.quotedesk.domain.QuotationEdit
 import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.QuoteDrafts
@@ -174,6 +176,7 @@ class ProductsViewModel(
                 if (request.requestedBy != member.uid) return@collect
                 when (request) {
                     is QuoteRequest.Edit -> openEdit(request.record)
+                    is QuoteRequest.Copy -> openCopy(request.record)
                 }
             }
         }
@@ -536,7 +539,7 @@ class ProductsViewModel(
                         current
                     }
                     is EditOpening.Show -> {
-                        opening.unfinished?.let { emit(finishEditFirst(it)) }
+                        opening.unfinished?.let { emit(QuotationEdit.finishEditFirst(it)) }
                         account.openDraft(opening.draft)
                         _draft.value = opening.draft
                         shown = true
@@ -546,6 +549,41 @@ class ProductsViewModel(
             }
         }.onFailure { report(it) }
         if (shown) _builderRequested.value = true
+    }
+
+    /**
+     * Opens a copy of [record] — Duplicate (amendment C) — **under a new id**,
+     * in place of the draft in progress, which the person agreed to replace
+     * on the Quotations tab or which was empty. Refused while an edit is
+     * open, decided again here under [DraftWrites]' lock, against the stored
+     * drafts.
+     */
+    private suspend fun openCopy(record: QuotationRecord) {
+        if (refusedWhileFinalising()) return
+        // Minted before the lock, as every draft id is: never inside a store
+        // transform that may run twice.
+        val newId = Keys.generateId(QuoteDrafts.DRAFT_PREFIX)
+        var shown = false
+        runCatching {
+            draftWrites.replace { current ->
+                when (val opening = QuotationCopy.opening(account.drafts.first(), record, System.currentTimeMillis(), newId)) {
+                    is CopyOpening.Refused -> {
+                        emit(opening.message)
+                        current
+                    }
+                    is CopyOpening.Show -> {
+                        account.replaceDraft(opening.replacing, opening.draft)
+                        _draft.value = opening.draft
+                        shown = true
+                        opening.draft.id
+                    }
+                }
+            }
+        }.onFailure { report(it) }
+        if (shown) {
+            emit(QuotationCopy.COPIED)
+            _builderRequested.value = true
+        }
     }
 
     /**
@@ -889,9 +927,6 @@ class ProductsViewModel(
         const val CUSTOMER_UNCHANGED = "Nothing to save — this customer is already up to date"
         const val TAKING_A_NUMBER = "A number is being taken for this quotation — wait a moment"
         const val SAVING_CHANGES = "Your changes to this quotation are being saved — wait a moment"
-
-        fun finishEditFirst(number: String): String =
-            "Finish or discard your changes to $number first"
 
         fun changesDiscarded(number: String): String = "Changes to $number discarded"
     }

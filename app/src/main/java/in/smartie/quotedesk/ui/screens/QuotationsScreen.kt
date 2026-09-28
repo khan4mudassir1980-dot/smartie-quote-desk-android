@@ -27,10 +27,13 @@ fun QuotationsScreen(
     viewModel: QuotationsViewModel,
     /** Edit (N5.10): the caller moves to the builder on the Products tab. */
     onEdit: (QuotationRecord) -> Unit,
+    /** Duplicate (N5.10): the caller moves to the builder on the Products tab. */
+    onDuplicate: (QuotationRecord) -> Unit,
 ) {
     val quotations by data.quotations.collectAsStateWithLifecycle()
     val cancelling by viewModel.cancelling.collectAsStateWithLifecycle()
     val cancelFailure by viewModel.failure.collectAsStateWithLifecycle()
+    val copyStart by viewModel.copyStart.collectAsStateWithLifecycle()
 
     QuotationListScreen(
         records = quotations,
@@ -39,6 +42,7 @@ fun QuotationsScreen(
         banner = true,
         cancelling = cancelling,
         cancelFailure = cancelFailure,
-        actions = QuotationActions(onEdit = onEdit, onCancel = viewModel::cancel)
+        copyStart = copyStart,
+        actions = QuotationActions(onEdit = onEdit, onCancel = viewModel::cancel, onDuplicate = onDuplicate)
     )
 }

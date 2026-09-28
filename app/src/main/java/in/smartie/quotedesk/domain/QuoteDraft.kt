@@ -267,10 +267,23 @@ data class QuoteDraft(
      */
     val editOf: EditOrigin? = null,
     /** Set on a Duplicate: whose rates these are, for the note the builder shows. */
-    val copiedFrom: CopyOrigin? = null
+    val copiedFrom: CopyOrigin? = null,
+    /**
+     * True once a change of tier has repriced a line — after which an edit's
+     * or a copy's lines are no longer all "as quoted", and the builder stops
+     * saying they are (N5.10).
+     */
+    val tierRepriced: Boolean = false
 ) {
     /** True when this draft edits a quotation already issued. */
     val isEdit: Boolean get() = editOf != null
+
+    /**
+     * True while an edit's or a copy's lines still carry the rates they were
+     * quoted at: nothing has been repriced by a switch of tier. A line
+     * somebody typed a rate into is theirs either way.
+     */
+    val ratesAsQuoted: Boolean get() = (isEdit || copiedFrom != null) && !tierRepriced
 
     val lineCount: Int get() = lines.size
 
@@ -452,7 +465,11 @@ data class QuoteDraft(
             if (moved === line) kept++ else repriced++
             moved
         }
-        return Repriced(copy(tier = newTier, lines = updated), repriced, kept)
+        return Repriced(
+            copy(tier = newTier, lines = updated, tierRepriced = tierRepriced || repriced > 0),
+            repriced,
+            kept
+        )
     }
 
     /**

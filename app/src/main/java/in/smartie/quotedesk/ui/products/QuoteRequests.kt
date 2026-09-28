@@ -17,6 +17,13 @@ sealed interface QuoteRequest {
 
     /** Edit it: the same number, saved over (N5.10). */
     data class Edit(override val record: QuotationRecord, override val requestedBy: String) : QuoteRequest
+
+    /**
+     * Duplicate it into a new draft, in place of the one in progress — asked
+     * only once the person has answered V8C4's question, or had nothing to
+     * lose (N5.10, amendment C).
+     */
+    data class Copy(override val record: QuotationRecord, override val requestedBy: String) : QuoteRequest
 }
 
 /**

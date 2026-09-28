@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import `in`.smartie.quotedesk.data.mapping.Money
 import `in`.smartie.quotedesk.data.model.QuotationRecord
+import `in`.smartie.quotedesk.domain.CopyStart
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.QuotationHistory
 import `in`.smartie.quotedesk.ui.components.EmptyState
@@ -33,6 +34,11 @@ data class QuotationActions(
     val onEdit: (QuotationRecord) -> Unit = {},
     /** Cancel it, once the person has answered V8C4's question. */
     val onCancel: (QuotationRecord) -> Unit = {},
+    /**
+     * Copy it into a new draft, once V8C4's question is answered or there was
+     * nothing to lose; the caller moves to the Products tab.
+     */
+    val onDuplicate: (QuotationRecord) -> Unit = {},
 )
 
 /**
@@ -61,6 +67,8 @@ internal fun QuotationListScreen(
     cancelling: String? = null,
     /** Why the last cancel did not happen, and on which quotation. */
     cancelFailure: CancelFailure? = null,
+    /** What Duplicate would come to on this device now. */
+    copyStart: CopyStart = CopyStart.Go,
     actions: QuotationActions = QuotationActions()
 ) {
     val dimens = LocalSmartieDimens.current
@@ -77,7 +85,8 @@ internal fun QuotationListScreen(
             actions = actions,
             cancelling = cancelling == open.id,
             // Only this quotation's: a failure on another is not about this one.
-            cancelFailure = cancelFailure?.takeIf { it.quotationId == open.id }?.message
+            cancelFailure = cancelFailure?.takeIf { it.quotationId == open.id }?.message,
+            copyStart = copyStart
         )
         return
     }

@@ -17,6 +17,7 @@ import `in`.smartie.quotedesk.data.model.ProductRecord
 import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.domain.Catalogue
+import `in`.smartie.quotedesk.domain.CopyOrigin
 import `in`.smartie.quotedesk.domain.Discount
 import `in`.smartie.quotedesk.domain.DiscountKind
 import `in`.smartie.quotedesk.domain.EditOrigin
@@ -242,6 +243,38 @@ class QuoteBuilderEditScreenTest {
         scrollTo(BUILDER_DISCOUNT_KEY)
 
         assertTrue(shows(QuoteDiscount.refusal(Discount(DiscountKind.PERCENT, 12.0), 44_400.0, 5.0)!!))
+    }
+
+    // --- a Duplicate's copy (N5.10 commit 8) -------------------------------------------------
+
+    private val copied = editing.copy(
+        id = "qd_copy",
+        editOf = null,
+        discount = null,
+        gstPercent = null,
+        copiedFrom = CopyOrigin(number, 1_760_000_000_000L)
+    )
+
+    @Test
+    fun `a copy says whose rates it carries, dated, and is finalised like any new quotation`() {
+        render(draft = copied)
+        scrollTo(BUILDER_TIER_KEY)
+
+        val note = ratesNote(copied)!!
+        assertTrue(note, note.startsWith("Rates as quoted on SIE/QD/2025-26/009, "))
+        assertTrue(shows(note))
+        scrollTo(BUILDER_TAIL_KEY)
+        compose.onNodeWithText(ISSUING_NOTE).assertExists()
+        assertEquals(0, count(SAVE_CHANGES))
+    }
+
+    @Test
+    fun `once a switch has repriced a line, the note is gone`() {
+        render(draft = copied.copy(tierRepriced = true))
+        scrollTo(BUILDER_TIER_KEY)
+
+        assertTrue(shows("Client"))
+        assertTrue(!shows("Rates as quoted on"))
     }
 
     // --- with the builder closed ------------------------------------------------------------

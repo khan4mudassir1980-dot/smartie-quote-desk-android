@@ -269,6 +269,9 @@ object QuotationEdit {
 
     private const val STATUS_CANCELLED = "Cancelled"
 
+    /** One edit at a time: said when another quotation's edit, or a copy, is asked for. */
+    fun finishEditFirst(number: String): String = "Finish or discard your changes to $number first"
+
     fun cancelledNotEditable(number: String): String =
         "$number is cancelled — a cancelled quotation cannot be edited"
 

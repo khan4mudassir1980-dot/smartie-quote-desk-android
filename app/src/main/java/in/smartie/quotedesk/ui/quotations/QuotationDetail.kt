@@ -24,8 +24,10 @@ import androidx.compose.ui.text.style.TextAlign
 import `in`.smartie.quotedesk.data.mapping.Money
 import `in`.smartie.quotedesk.data.model.QuotationLineRecord
 import `in`.smartie.quotedesk.data.model.QuotationRecord
+import `in`.smartie.quotedesk.domain.CopyStart
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.QuotationCancel
+import `in`.smartie.quotedesk.domain.QuotationCopy
 import `in`.smartie.quotedesk.domain.QuotationEdit
 import `in`.smartie.quotedesk.ui.components.ListRow
 import `in`.smartie.quotedesk.ui.components.SmartieCard
@@ -86,14 +88,18 @@ internal fun QuotationDetail(
     /** True while this quotation's cancel is out. */
     cancelling: Boolean = false,
     /** Why this quotation's last cancel did not happen. */
-    cancelFailure: String? = null
+    cancelFailure: String? = null,
+    /** What Duplicate would come to on this device now (`QuotationCopy.start`). */
+    copyStart: CopyStart = CopyStart.Go
 ) {
     val dimens = LocalSmartieDimens.current
     val offersEdit = QuotationEdit.refusalToOpen(viewer, quotation) == null
     val offersCancel = QuotationCancel.offered(viewer, quotation)
+    val offersCopy = QuotationCopy.offered(viewer)
     // V8C4's confirm, asked on the screen: the detail's own state, keyed on the
     // quotation so another one never opens with the question already asked.
     var askingCancel by rememberSaveable(quotation.id) { mutableStateOf(false) }
+    var askingCopy by rememberSaveable(quotation.id) { mutableStateOf(false) }
 
     LazyColumn(
         // Tagged so a test can scroll to a card below the fold. A LazyColumn
@@ -212,7 +218,7 @@ internal fun QuotationDetail(
             }
         }
 
-        if (offersEdit || offersCancel) {
+        if (offersEdit || offersCancel || offersCopy) {
             item(key = DETAIL_ACTIONS_KEY) {
                 Column(verticalArrangement = Arrangement.spacedBy(dimens.gapS)) {
                     if (offersEdit) {
@@ -223,6 +229,23 @@ internal fun QuotationDetail(
                             modifier = Modifier
                                 .semantics { contentDescription = EDIT_QUOTATION }
                                 .fillMaxWidth()
+                        )
+                    }
+                    if (offersCopy) {
+                        DuplicateControls(
+                            start = copyStart,
+                            asking = askingCopy,
+                            onPress = {
+                                when (copyStart) {
+                                    is CopyStart.EditOpen -> Unit
+                                    CopyStart.AskFirst -> askingCopy = true
+                                    CopyStart.Go -> actions.onDuplicate(quotation)
+                                }
+                            },
+                            onAnswer = { replace ->
+                                askingCopy = false
+                                if (replace) actions.onDuplicate(quotation)
+                            }
                         )
                     }
                     if (offersCancel) {
@@ -250,6 +273,63 @@ internal fun QuotationDetail(
                 color = SmartieColors.Steel,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+/**
+ * Duplicate (amendment C), offered on every quotation — a cancelled one
+ * included, since cancel and duplicate is how a quotation is reissued.
+ *
+ * While an edit is open it is not offered, and the line says why. When the
+ * quotation being worked on has lines, **V8C4's question** comes first —
+ * "Replace the quotation you are working on with a copy of this one?" —
+ * answered "Replace it" / "Keep mine" (a choice: V8C4's is `window.confirm`).
+ */
+@Composable
+private fun DuplicateControls(
+    start: CopyStart,
+    asking: Boolean,
+    onPress: () -> Unit,
+    onAnswer: (Boolean) -> Unit
+) {
+    val dimens = LocalSmartieDimens.current
+    Column(verticalArrangement = Arrangement.spacedBy(dimens.gapS)) {
+        when {
+            start is CopyStart.EditOpen -> Text(
+                QuotationEdit.finishEditFirst(start.number),
+                style = MaterialTheme.typography.bodyMedium,
+                color = SmartieColors.Steel,
+                modifier = Modifier.testTag(COPY_WAITS_TAG)
+            )
+            asking -> {
+                Text(
+                    QuotationCopy.REPLACE_QUESTION,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = SmartieColors.Ink
+                )
+                SmartieGhostButton(
+                    text = REPLACE_IT,
+                    onClick = { onAnswer(true) },
+                    modifier = Modifier
+                        .semantics { contentDescription = REPLACE_IT }
+                        .fillMaxWidth()
+                )
+                SmartieGhostButton(
+                    text = KEEP_MINE,
+                    onClick = { onAnswer(false) },
+                    modifier = Modifier
+                        .semantics { contentDescription = KEEP_MINE }
+                        .fillMaxWidth()
+                )
+            }
+            else -> SmartieGhostButton(
+                text = DUPLICATE,
+                onClick = onPress,
+                modifier = Modifier
+                    .semantics { contentDescription = DUPLICATE }
+                    .fillMaxWidth()
             )
         }
     }
@@ -434,3 +514,7 @@ internal const val CANCEL_QUOTATION = "Cancel this quotation"
 internal const val CONFIRM_CANCEL = "Cancel quotation"
 internal const val KEEP_IT = "Keep it"
 internal const val CANCELLING = "Cancelling…"
+internal const val DUPLICATE = "Duplicate"
+internal const val REPLACE_IT = "Replace it"
+internal const val KEEP_MINE = "Keep mine"
+internal const val COPY_WAITS_TAG = "copy-waits"

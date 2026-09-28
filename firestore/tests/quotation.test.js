@@ -1,14 +1,18 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
+const firebase = require('firebase/compat/app');
+require('firebase/compat/firestore');
 const { createTestEnvironment, seed, as, UIDS } = require('./helpers');
 
 /**
  * Quotations, parties, and the one counter the whole business queues behind.
  *
- * **Nothing here changes a rule.** This file is written first, against the
- * rules exactly as deployed, so that what they already do is written down
- * before N5 builds a writer on top of them. Three tests in `data.test.js`
+ * **Nothing here changed a rule when it was written.** This file was written
+ * first, against the rules exactly as deployed, so that what they already did
+ * was written down before N5 built a writer on top of them. N5.9a added the
+ * discount cap and N5.10 the edit and the creator's cancel; each has its own
+ * section below. Three tests in `data.test.js`
  * cover the plain role matrix for these collections; what is here is the part
  * that only shows up under contention, or against the shapes V8C4 writes.
  *
@@ -593,10 +597,12 @@ test('a quotation with no snap at all is accepted - what N5.9b writes until N6',
   await assertSucceeds(quotations(db).doc('q_nosnap').set(unfrozen));
 });
 
-test('a quotation is never edited or deleted by the person who wrote it', async () => {
-  // The N5 position is different — the creator will be allowed to correct
-  // their own — but this is what is deployed today, and the batch that changes
-  // it changes this test with it.
+test('an unstamped change is refused, even from the person who wrote it, and nobody deletes one', async () => {
+  // **Renamed in N5.10.** It read "a quotation is never edited or deleted by
+  // the person who wrote it" — true until N5.10 let the creator edit. The
+  // body is unchanged and still passes: none of these writes carries the
+  // edit stamp and revision the edit branch requires, and a cancel still may
+  // not touch `at`.
   const db = as(testEnv, UIDS.staff);
   await assertSucceeds(quotations(db).doc('q_1').set(quotation('q_1', UIDS.staff)));
 
@@ -611,6 +617,451 @@ test('a quotation is never edited or deleted by the person who wrote it', async 
   }));
   await assertSucceeds(quotations(adminDb).doc('q_1').update({
     status: 'Cancelled', cancelledBy: 'Administrator', cancelledAt: Date.now(),
+  }));
+});
+
+// --- N5.10: editing a finalised quotation --------------------------------------
+//
+// New behaviour, not a port: V8C4 cannot edit a finalised quotation. The
+// Owner's specification: the creator, and an Owner or Administrator on
+// anyone's; the same number overwritten; no revision copy; a stamp; `snap`
+// never re-frozen. What an edit may touch is the Owner's list (Q3).
+
+/**
+ * A refusal **by the rule**, never by the engine giving up.
+ *
+ * The rules engine stops at 1,000 evaluated expressions per request and
+ * denies the write. The first draft of N5.10's rule reached that on every
+ * discount raised within the cap, and the refusal tests here passed because
+ * of it rather than because of the clause each one names. So every N5.10
+ * refusal checks it was not that.
+ */
+async function refused(write) {
+  const error = await assertFails(write);
+  assert.doesNotMatch(String(error?.message ?? error), /maximum of 1000 expressions/,
+    'refused by the expression limit, not by the rule');
+}
+
+/** Edit times, strictly increasing, so no two edits in a test share one. */
+let editClock = 1_760_000_000_000;
+
+/**
+ * What an edit sends through `update()`: the changed fields, the stamp and
+ * the next revision — the shape `QuotationEdit` builds.
+ */
+const edit = (uid, rev, fields = {}) => ({
+  ...fields,
+  lastEditedBy: 'Editor Person',
+  lastEditedByUid: uid,
+  lastEditedAt: ++editClock,
+  rev,
+});
+
+/** A quotation already issued, planted with the rules disabled. */
+async function givenIssued(id, uid = UIDS.staff, extra = {}) {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await context.firestore().collection('quotations').doc(id).set(quotation(id, uid, extra));
+  });
+}
+
+/** What the quotation holds right now, rules bypassed. */
+async function stored(id) {
+  let data;
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    data = (await context.firestore().collection('quotations').doc(id).get()).data();
+  });
+  return data;
+}
+
+/** Two motors instead of one: 88,800 of products, 18% GST. */
+const twoMotors = {
+  lines: [{ t: 'Sliding gate motor', s: '', u: 'each', qty: 4, rate: 22200, origRate: 22200, k: 'gateMotors|SIE1000', manual: false, amt: 88800 }],
+  subtotal: 88800,
+  total: 104784,
+};
+
+test('the creator edits their own quotation; the number and the counter stay', async () => {
+  // Hazard 1's rule half: an edit is an update, never a second issue.
+  await givenCounter();
+  await givenIssued('q_e1');
+  const db = as(testEnv, UIDS.staff);
+
+  await assertSucceeds(quotations(db).doc('q_e1').update(edit(UIDS.staff, 1, twoMotors)));
+
+  const after = await stored('q_e1');
+  assert.equal(after.lines[0].qty, 4);
+  assert.equal(after.no, 'SIE/QD/2025-26/009');
+  assert.equal(after.rev, 1);
+  assert.equal((await counter()).next, 9, 'no number was taken');
+});
+
+test('an Owner and an Administrator edit anybody\'s', async () => {
+  await givenIssued('q_e2');
+  await assertSucceeds(quotations(as(testEnv, UIDS.primaryOwner)).doc('q_e2')
+    .update(edit(UIDS.primaryOwner, 1, twoMotors)));
+  await assertSucceeds(quotations(as(testEnv, UIDS.admin)).doc('q_e2')
+    .update(edit(UIDS.admin, 2, { total: 104785 })));
+});
+
+test('a Manager edits no other Manager\'s quotation, and Staff edit nothing', async () => {
+  await givenIssued('q_e3');
+  await refused(quotations(as(testEnv, UIDS.otherStaff)).doc('q_e3')
+    .update(edit(UIDS.otherStaff, 1, twoMotors)));
+  await refused(quotations(as(testEnv, UIDS.worker)).doc('q_e3')
+    .update(edit(UIDS.worker, 1, twoMotors)));
+  // The reach: the same edit from the creator is accepted.
+  await assertSucceeds(quotations(as(testEnv, UIDS.staff)).doc('q_e3')
+    .update(edit(UIDS.staff, 1, twoMotors)));
+});
+
+test('a quotation with no recorded author is edited by an Owner or Administrator only', async () => {
+  // A blank `byUid` belongs to nobody — `"" == ""` must never make everybody
+  // its creator.
+  await givenIssued('q_e4', '');
+  await refused(quotations(as(testEnv, UIDS.staff)).doc('q_e4').update(edit(UIDS.staff, 1, twoMotors)));
+  await assertSucceeds(quotations(as(testEnv, UIDS.admin)).doc('q_e4').update(edit(UIDS.admin, 1, twoMotors)));
+});
+
+// Each key an edit may not touch, one test apiece: the same valid edit, plus
+// that one change. The first test above is the witness that the edit alone
+// is accepted.
+const IMMUTABLE = {
+  id: 'q_elsewhere',
+  no: 'SIE/QD/2025-26/999',
+  at: 1_800_000_000_000,
+  by: 'Somebody Else',
+  byUid: UIDS.otherStaff,
+  snap: { gstPct: 12 },
+  status: 'Draft',
+  cancelledBy: 'Nobody',
+  schemaVersion: 7,
+};
+for (const [key, value] of Object.entries(IMMUTABLE)) {
+  test(`an edit cannot touch ${key}`, async () => {
+    await givenIssued('q_imm');
+    await refused(quotations(as(testEnv, UIDS.staff)).doc('q_imm')
+      .update(edit(UIDS.staff, 1, { ...twoMotors, [key]: value })));
+  });
+}
+
+test('an edit cannot touch a stored serverAt either', async () => {
+  // Nothing this app writes carries one; whether V8C4 does is not in this
+  // repository. The key list pins it present or absent — here, present.
+  await givenIssued('q_srv', UIDS.staff, { serverAt: 1_712_000_000_000 });
+  const db = as(testEnv, UIDS.staff);
+  await refused(quotations(db).doc('q_srv')
+    .update(edit(UIDS.staff, 1, { ...twoMotors, serverAt: 1_799_000_000_000 })));
+  await assertSucceeds(quotations(db).doc('q_srv').update(edit(UIDS.staff, 1, twoMotors)));
+});
+
+test('a set that drops a key is refused, so snap cannot be removed either', async () => {
+  await givenIssued('q_drop');
+  const whole = { ...quotation('q_drop', UIDS.staff), ...edit(UIDS.staff, 1, twoMotors) };
+  const { snap, ...withoutSnap } = whole;
+  const db = as(testEnv, UIDS.staff);
+  // The stored `at` is Date.now() at planting, so re-send exactly that.
+  const at = (await stored('q_drop')).at;
+  await refused(quotations(db).doc('q_drop').set({ ...withoutSnap, at }));
+  await assertSucceeds(quotations(db).doc('q_drop').set({ ...whole, at }));
+});
+
+test('an edit stamped with somebody else\'s uid is refused', async () => {
+  // R2a.
+  await givenIssued('q_uid');
+  const db = as(testEnv, UIDS.staff);
+  await refused(quotations(db).doc('q_uid').update(edit(UIDS.otherStaff, 1, twoMotors)));
+  const { lastEditedByUid, ...noUid } = edit(UIDS.staff, 1, twoMotors);
+  await refused(quotations(db).doc('q_uid').update(noUid));
+});
+
+test('an edit whose name is not text or whose time is not a number is refused', async () => {
+  await givenIssued('q_types');
+  const db = as(testEnv, UIDS.staff);
+  await refused(quotations(db).doc('q_types')
+    .update({ ...edit(UIDS.staff, 1, twoMotors), lastEditedBy: 42 }));
+  await refused(quotations(db).doc('q_types')
+    .update({ ...edit(UIDS.staff, 1, twoMotors), lastEditedAt: 'just now' }));
+});
+
+test('an edit that leaves the previous edit\'s time in place is refused', async () => {
+  // R2b. After one edit the stored stamp already names this person, so only
+  // `hasAll` stops a second update from riding on the old time.
+  await givenIssued('q_time');
+  const db = as(testEnv, UIDS.staff);
+  await assertSucceeds(quotations(db).doc('q_time').update(edit(UIDS.staff, 1, twoMotors)));
+  await refused(quotations(db).doc('q_time').update({ total: 104785, rev: 2 }));
+});
+
+test('an edit from an opening two edits behind is refused', async () => {
+  // R4. Opened at revision 0, saved after two others: it sends rev 1 against
+  // a stored 2 — a value that differs from the stored one, so only the
+  // "stored plus one" clause can refuse it.
+  await givenIssued('q_stale');
+  const db = as(testEnv, UIDS.staff);
+  await assertSucceeds(quotations(db).doc('q_stale').update(edit(UIDS.staff, 1, twoMotors)));
+  await assertSucceeds(quotations(as(testEnv, UIDS.admin)).doc('q_stale')
+    .update(edit(UIDS.admin, 2, { total: 104785 })));
+  await refused(quotations(db).doc('q_stale').update(edit(UIDS.staff, 1, { total: 104786 })));
+});
+
+test('a byte-for-byte re-write of an issued quotation is refused, and the counter stays', async () => {
+  // R3. The second defence against a duplicate number, now that an edit
+  // branch exists. The old retry test above sends a fresh `at`, which the
+  // key list refuses; this one re-sends the quotation exactly — same `at` —
+  // so only the stamp and `rev` can refuse it.
+  await givenCounter();
+  const db = as(testEnv, UIDS.staff);
+  const doc = quotation('q_twice', UIDS.staff, { at: 1_712_345_678_000 });
+  const commit = (next) => {
+    const batch = db.batch();
+    batch.set(quotations(db).doc('q_twice'), doc);
+    batch.update(numbering(db), {
+      next, lastIssued: { no: doc.no, at: Date.now(), by: 'Manager Person', uid: UIDS.staff },
+    });
+    return batch.commit();
+  };
+
+  await assertSucceeds(commit(10));
+  await refused(commit(11));
+  assert.equal((await counter()).next, 10);
+});
+
+test('and a retry against a quotation that has since been edited is refused too', async () => {
+  await givenCounter();
+  const db = as(testEnv, UIDS.staff);
+  const doc = quotation('q_retry_edited', UIDS.staff, { at: 1_712_345_678_000 });
+  await givenIssued('q_retry_edited', UIDS.staff, { at: doc.at });
+  await assertSucceeds(quotations(db).doc('q_retry_edited').update(edit(UIDS.staff, 1, twoMotors)));
+
+  // The finalise transaction's write, as a retry after a lost answer sends it.
+  await refused(quotations(db).doc('q_retry_edited').set(doc));
+});
+
+test('a cancelled quotation cannot be edited', async () => {
+  // R5.
+  await givenIssued('q_gone');
+  const db = as(testEnv, UIDS.staff);
+  await assertSucceeds(quotations(db).doc('q_gone').update(edit(UIDS.staff, 1, twoMotors)));
+  await assertSucceeds(quotations(as(testEnv, UIDS.admin)).doc('q_gone').update({
+    status: 'Cancelled', cancelledBy: 'Administrator', cancelledAt: Date.now(),
+  }));
+  await refused(quotations(db).doc('q_gone').update(edit(UIDS.staff, 2, { total: 104785 })));
+  await refused(quotations(as(testEnv, UIDS.admin)).doc('q_gone')
+    .update(edit(UIDS.admin, 2, { total: 104785 })));
+});
+
+test('an edit may remove the discount', async () => {
+  await givenCap(5);
+  await givenIssued('q_nodisc', UIDS.staff, {
+    disc: { kind: 'pct', value: 5, amt: 2220 }, discBase: 44400, subtotal: 42180, total: 49772,
+  });
+  const db = as(testEnv, UIDS.staff);
+  const remove = firebase.firestore.FieldValue.delete();
+  await assertSucceeds(quotations(db).doc('q_nodisc').update(edit(UIDS.staff, 1, {
+    disc: remove, discBase: remove, subtotal: 44400, total: 52392,
+  })));
+  const after = await stored('q_nodisc');
+  assert.equal(after.disc, undefined);
+});
+
+// --- N5.10: the cap on an edit — only when the discount goes up (amendment A) --
+//
+// A Manager's quotation issued at 10% of 44,400 under a cap that allowed it;
+// the Owner has since lowered the cap to 5%. The same arithmetic is in
+// `QuoteDiscount.raised` and pinned in the Kotlin tests. Change one, change both.
+
+/** Issued at [pct] of [base] (or a flat [amt]) by the Manager, planted. */
+async function givenDiscounted(id, base, amt, kind = 'pct', value = null) {
+  await givenIssued(id, UIDS.staff, {
+    lines: [{ t: 'Sliding gate motor', u: 'each', qty: 1, rate: base, amt: base }],
+    disc: { kind, value: value ?? amt, amt },
+    discBase: base, subtotal: base - amt, total: Math.round((base - amt) * 1.18),
+  });
+}
+
+/** An edit that leaves the quotation discounting [amt] off [base]. */
+const discountedTo = (base, amt, kind = 'pct', value = 10) => ({
+  lines: [{ t: 'Sliding gate motor', u: 'each', qty: 1, rate: base, amt: base }],
+  disc: { kind, value, amt },
+  discBase: base, subtotal: base - amt, total: Math.round((base - amt) * 1.18),
+});
+
+test('(i) a Manager fixing only a phone number is not stopped by a lowered cap', async () => {
+  await givenDiscounted('q_i', 44400, 4440);
+  await givenCap(5);
+  await assertSucceeds(quotations(as(testEnv, UIDS.staff)).doc('q_i').update(edit(UIDS.staff, 1, {
+    party: { name: 'Sunrise Constructions', city: 'Mumbai', phone: '9876543211' },
+  })));
+});
+
+test('(ii) raising the discount brings the cap back', async () => {
+  await givenDiscounted('q_ii', 44400, 4440);
+  await givenCap(5);
+  await refused(quotations(as(testEnv, UIDS.staff)).doc('q_ii')
+    .update(edit(UIDS.staff, 1, discountedTo(44400, 5328, 'pct', 12))));
+});
+
+test('(ii) and a raise within the cap is accepted - the witness', async () => {
+  await givenDiscounted('q_ii_ok', 44400, 1332, 'pct', 3);
+  await givenCap(5);
+  await assertSucceeds(quotations(as(testEnv, UIDS.staff)).doc('q_ii_ok')
+    .update(edit(UIDS.staff, 1, discountedTo(44400, 1776, 'pct', 4))));
+});
+
+test('(iii) lines added under an unchanged percentage raise the amount, so the cap applies', async () => {
+  // Deliberate: otherwise new items get the old over-cap rate, a way round
+  // the Owner's cap.
+  await givenDiscounted('q_iii', 44400, 4440);
+  await givenCap(5);
+  await refused(quotations(as(testEnv, UIDS.staff)).doc('q_iii')
+    .update(edit(UIDS.staff, 1, discountedTo(66600, 6660))));
+});
+
+test('(iii) and lines added under a percentage the cap allows are accepted - the witness', async () => {
+  // 4% of 66,600 is 2,664, inside a 5% cap: the same raise, evaluated to the
+  // end, and accepted — so the refusal above is the cap's.
+  await givenDiscounted('q_iii_ok', 44400, 1776, 'pct', 4);
+  await givenCap(5);
+  await assertSucceeds(quotations(as(testEnv, UIDS.staff)).doc('q_iii_ok')
+    .update(edit(UIDS.staff, 1, discountedTo(66600, 2664, 'pct', 4))));
+});
+
+test('(iv) a flat discount kept while lines are removed raises the rate, so the cap applies', async () => {
+  // 2,000 on 44,400 is inside a 5% cap; 2,000 on 22,200 is not.
+  await givenCap(5);
+  await givenDiscounted('q_iv', 44400, 2000, 'amt', 2000);
+  await refused(quotations(as(testEnv, UIDS.staff)).doc('q_iv')
+    .update(edit(UIDS.staff, 1, discountedTo(22200, 2000, 'amt', 2000))));
+});
+
+test('(iv) and a flat discount the cap still allows is accepted - the witness', async () => {
+  // 1,000 on 22,200 is inside a 5% cap (1,111): the rate rose, the cap was
+  // asked, and it said yes.
+  await givenCap(5);
+  await givenDiscounted('q_iv_ok', 44400, 1000, 'amt', 1000);
+  await assertSucceeds(quotations(as(testEnv, UIDS.staff)).doc('q_iv_ok')
+    .update(edit(UIDS.staff, 1, discountedTo(22200, 1000, 'amt', 1000))));
+});
+
+test('(v) lines removed under an unchanged percentage are accepted', async () => {
+  await givenDiscounted('q_v', 44400, 4440);
+  await givenCap(5);
+  await assertSucceeds(quotations(as(testEnv, UIDS.staff)).doc('q_v')
+    .update(edit(UIDS.staff, 1, discountedTo(22200, 2220))));
+});
+
+test('(v) with a base that rounds, only because of the rupee margin', async () => {
+  // 10% of 44,410 is 4,441; of 22,205 it is 2,220.5, which is 2,221. Without
+  // the margin 2,221 × 44,410 > 4,441 × 22,205 would read as a rate rise.
+  await givenDiscounted('q_v_round', 44410, 4441);
+  await givenCap(5);
+  await assertSucceeds(quotations(as(testEnv, UIDS.staff)).doc('q_v_round')
+    .update(edit(UIDS.staff, 1, discountedTo(22205, 2221))));
+});
+
+test('a discount added where there was none counts as raised', async () => {
+  await givenCap(5);
+  await givenIssued('q_add');
+  const db = as(testEnv, UIDS.staff);
+  await refused(quotations(db).doc('q_add').update(edit(UIDS.staff, 1, discountedTo(44400, 4440))));
+  // Within the cap it is accepted, as at issue.
+  await assertSucceeds(quotations(db).doc('q_add').update(edit(UIDS.staff, 1, discountedTo(44400, 2220, 'pct', 5))));
+});
+
+test('an Owner or Administrator raising a discount past the cap is accepted', async () => {
+  await givenDiscounted('q_admin_up', 44400, 4440);
+  await givenCap(5);
+  await assertSucceeds(quotations(as(testEnv, UIDS.admin)).doc('q_admin_up')
+    .update(edit(UIDS.admin, 1, discountedTo(44400, 22200, 'pct', 50))));
+});
+
+test('the shape still binds when the cap does not: an inflated base is refused', async () => {
+  // Not raised (the amount falls) — but the claimed base is past
+  // subtotal + amount, which no honest quotation can hold.
+  await givenDiscounted('q_shape', 44400, 4440);
+  await givenCap(5);
+  await refused(quotations(as(testEnv, UIDS.staff)).doc('q_shape').update(edit(UIDS.staff, 1, {
+    ...discountedTo(22200, 2220),
+    discBase: 4_000_000,
+  })));
+});
+
+// --- N5.10: cancelling --------------------------------------------------------
+
+test('V8C4\'s own cancel, byte for byte, is accepted from an administrator', async () => {
+  // Q4, the advisor's reading of V8C4: `status: "Cancelled"`,
+  // `cancelledBy = currentUserName()` — a name, "unnamed" when there is none
+  // — and `cancelledAt = Date.now()`, a number. Its three keys and no other.
+  await givenIssued('q_v8c4');
+  await assertSucceeds(quotations(as(testEnv, UIDS.admin)).doc('q_v8c4').update({
+    status: 'Cancelled', cancelledBy: 'Asha Nair', cancelledAt: 1_760_100_000_000,
+  }));
+  await givenIssued('q_v8c4_unnamed');
+  await assertSucceeds(quotations(as(testEnv, UIDS.primaryOwner)).doc('q_v8c4_unnamed').update({
+    status: 'Cancelled', cancelledBy: 'unnamed', cancelledAt: 1_760_100_000_000,
+  }));
+});
+
+test('a second cancel is refused, and the first cancellation stands', async () => {
+  // R22. A second cancel would rewrite who cancelled it and when.
+  await givenIssued('q_twice_cancelled');
+  await assertSucceeds(quotations(as(testEnv, UIDS.admin)).doc('q_twice_cancelled').update({
+    status: 'Cancelled', cancelledBy: 'First Admin', cancelledAt: 1_760_100_000_000,
+  }));
+  await refused(quotations(as(testEnv, UIDS.otherAdmin)).doc('q_twice_cancelled').update({
+    status: 'Cancelled', cancelledBy: 'Second Admin', cancelledAt: 1_760_200_000_000,
+  }));
+  const after = await stored('q_twice_cancelled');
+  assert.equal(after.cancelledBy, 'First Admin');
+  assert.equal(after.cancelledAt, 1_760_100_000_000);
+});
+
+test('a cancel whose name is not text or whose time is not a number is refused', async () => {
+  // R23.
+  await givenIssued('q_cancel_types');
+  const db = as(testEnv, UIDS.admin);
+  await refused(quotations(db).doc('q_cancel_types').update({
+    status: 'Cancelled', cancelledBy: 42, cancelledAt: 1_760_100_000_000,
+  }));
+  await refused(quotations(db).doc('q_cancel_types').update({
+    status: 'Cancelled', cancelledBy: 'Asha Nair', cancelledAt: '28 Sep',
+  }));
+});
+
+test('a cancel carries V8C4\'s three keys and sets Cancelled - nothing else', async () => {
+  await givenIssued('q_cancel_keys');
+  const db = as(testEnv, UIDS.admin);
+  await refused(quotations(db).doc('q_cancel_keys').update({
+    status: 'Cancelled', cancelledBy: 'Asha Nair', cancelledAt: 1_760_100_000_000, note: 'why',
+  }));
+  await refused(quotations(db).doc('q_cancel_keys').update({
+    status: 'Void', cancelledBy: 'Asha Nair', cancelledAt: 1_760_100_000_000,
+  }));
+});
+
+test('a Manager cancels their own quotation - the 28 Sept decision', async () => {
+  // This REPLACED the ruling of 2026-09-25, "a Manager cannot cancel,
+  // including their own".
+  await givenIssued('q_mine');
+  await assertSucceeds(quotations(as(testEnv, UIDS.staff)).doc('q_mine').update({
+    status: 'Cancelled', cancelledBy: 'Manager Person', cancelledAt: 1_760_100_000_000,
+  }));
+});
+
+test('but never another\'s, and Staff cancel nothing', async () => {
+  await givenIssued('q_theirs');
+  await refused(quotations(as(testEnv, UIDS.otherStaff)).doc('q_theirs').update({
+    status: 'Cancelled', cancelledBy: 'Other Manager', cancelledAt: 1_760_100_000_000,
+  }));
+  await refused(quotations(as(testEnv, UIDS.worker)).doc('q_theirs').update({
+    status: 'Cancelled', cancelledBy: 'Staff Person', cancelledAt: 1_760_100_000_000,
+  }));
+});
+
+test('an Owner cancels a Manager\'s quotation', async () => {
+  await givenIssued('q_owner_cancels');
+  await assertSucceeds(quotations(as(testEnv, UIDS.primaryOwner)).doc('q_owner_cancels').update({
+    status: 'Cancelled', cancelledBy: 'Owner Person', cancelledAt: 1_760_100_000_000,
   }));
 });
 

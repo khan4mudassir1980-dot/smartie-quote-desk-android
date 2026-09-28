@@ -260,7 +260,10 @@ test('a stale revision loses instead of overwriting silently', async () => {
   }));
 });
 
-test('a quotation cannot be edited or deleted, only cancelled by an administrator', async () => {
+test('a quotation is never changed without an edit stamp, never deleted, and an administrator may cancel it', async () => {
+  // Renamed in N5.10: it read "cannot be edited", which stopped being true
+  // when the creator and an Owner or Administrator could edit with a stamp.
+  // The body is unchanged: an unstamped change is still refused.
   const staffDb = as(testEnv, UIDS.staff);
   await assertSucceeds(staffDb.collection('quotations').doc('q_1').set({
     id: 'q_1', no: 'SIE/QD/2025-26/009', byUid: UIDS.staff, at: Date.now(), total: 1000,

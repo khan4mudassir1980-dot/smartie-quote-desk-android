@@ -20,6 +20,9 @@ rules_version = '2';
 //      the record to everyone but an Administrator.
 //   6. Reads stay V8C4-compatible so the PWA keeps working during the
 //      transition.
+//   7. A finalised quotation may be EDITED (N5.10) — new behaviour; V8C4
+//      cannot — within a fixed list of keys, stamped and revisioned; and its
+//      creator may cancel it as well as an Owner or Administrator.
 //
 // A note on vocabulary, because the stored values are not the words anybody
 // reads: role `staff` is displayed **Manager** and role `worker` is
@@ -136,8 +139,24 @@ service cloud.firestore {
      * than allowing any — an unseeded project is not an uncapped one.
      */
     function discountOk() {
-      let disc = request.resource.data.get('disc', {});
-      let amount = disc.get('amt', 0);
+      return discountShapeOk()
+        && (discountAmount() == 0 || admin() || discountWithinCap());
+    }
+
+    // **Split in N5.10 so an edit can take the shape without the cap**, and
+    // `discountOk()` keeps its meaning exactly: every N5.9a cap test passes
+    // unchanged against it. Short-circuits as it always did — an amount of
+    // zero is accepted before `subtotal` is type-checked, which is what lets
+    // V8C4's `q_string_totals` shape through.
+
+    /** `disc.amt` as the write leaves it; zero when there is no discount. */
+    function discountAmount() {
+      return request.resource.data.get('disc', {}).get('amt', 0);
+    }
+
+    /** Everything about a discount except the cap: its type and its bounds. */
+    function discountShapeOk() {
+      let amount = discountAmount();
       let base = request.resource.data.get('discBase', 0);
       let subtotal = request.resource.data.get('subtotal', 0);
       return amount is number && amount == 0 || (
@@ -146,12 +165,14 @@ service cloud.firestore {
         && subtotal is number
         && base <= subtotal + amount
         && amount <= base
-        && (
-          admin()
-          || (exists(/databases/$(database)/documents/teamSettings/quoting)
-              && amount <= base * discountCap() / 100 + 1)
-        )
       );
+    }
+
+    /** The Owner's limit, one rupee generous — only ever for a real discount. */
+    function discountWithinCap() {
+      return exists(/databases/$(database)/documents/teamSettings/quoting)
+        && discountAmount()
+           <= request.resource.data.get('discBase', 0) * discountCap() / 100 + 1;
     }
 
     // The issuer marker on the counter's `lastIssued`: which app took the
@@ -673,6 +694,112 @@ service cloud.firestore {
       allow delete: if admin();
     }
 
+    // --- a finalised quotation, edited and cancelled (N5.10) ---------------
+
+    /** The person who issued it. A quotation with no author belongs to nobody. */
+    function qnCreator() {
+      return resource.data.get('byUid', '') != '' && resource.data.byUid == mine();
+    }
+
+    /**
+     * V8C4's cancel — its three keys, exactly as its `updateDoc` sends them,
+     * and **never twice**: a second cancel would overwrite who cancelled it
+     * and when, which rewrites history. V8C4 never sends one (its button shows
+     * only when `admin && s !== "Cancelled"`), so this refuses nothing the
+     * PWA does. V8C4 writes `cancelledBy = currentUserName()`, a **name**, and
+     * `cancelledAt = Date.now()`, a **number** (the advisor's reading, Q4).
+     */
+    function qnCancel() {
+      return touched().hasOnly(['status','cancelledBy','cancelledAt'])
+        && resource.data.get('status', '') != 'Cancelled'
+        && request.resource.data.status == 'Cancelled'
+        && request.resource.data.cancelledBy is string
+        && request.resource.data.cancelledAt is number
+        && request.resource.data.no == resource.data.no
+        && request.resource.data.total == resource.data.total
+        && (admin() || (member() && !worker() && qnCreator()));
+    }
+
+    /**
+     * Everything an edit may change — the Owner's list (Q3), and nothing
+     * else. Every other key — `id`, `no`, `at`, `by`, `byUid`, `serverAt`,
+     * `snap`, `status`, `cancelledBy`, `cancelledAt`, anything unknown — is
+     * untouched, **present or absent**, and a `set` cannot remove one.
+     */
+    function qnEditKeys(changed) {
+      return changed.hasOnly(['lines','party','partyId','tier','tierName','gst',
+        'gstPct','subtotal','total','install','disc','discBase',
+        'lastEditedBy','lastEditedByUid','lastEditedAt','rev']);
+    }
+
+    /**
+     * The stamp and the revision — **what a finalise never writes**, and so
+     * two of the three things that keep a finalise retry refused (the key
+     * list is the third). `hasAll` because an update is checked against the
+     * merged document: after one edit the stored stamp already names its
+     * author, and without it that person's next update would pass carrying
+     * the old time. `rev` must be the stored one plus one, so a save from a
+     * stale opening is refused by the rule itself, not only by the app.
+     */
+    function qnEditStamped(changed) {
+      return changed.hasAll(['rev', 'lastEditedAt'])
+        && request.resource.data.get('lastEditedByUid', '') == mine()
+        && request.resource.data.get('lastEditedBy', null) is string
+        && request.resource.data.get('lastEditedAt', null) is number
+        && request.resource.data.get('rev', -1) == resource.data.get('rev', 0) + 1;
+    }
+
+    /**
+     * Whether an edit puts the discount **up** — the Owner's rule for the cap
+     * on an edit (2026-09-28): the cap stops an edit only then. Compared with
+     * the **stored** document, never with a figure the client supplies.
+     *
+     * Up means: a discount added where there was none; the amount rising by
+     * more than a rupee; or the rate rising — the new amount exceeding the old
+     * rate applied to the new base by more than a rupee (9a's margin),
+     * cross-multiplied so there is no division. Anything unreadable before
+     * counts as up: it fails closed.
+     */
+    function qnDiscountRaised() {
+      let before = resource.data.get('disc', {}).get('amt', 0);
+      let baseBefore = resource.data.get('discBase', 0);
+      let after = discountAmount();
+      let baseAfter = request.resource.data.get('discBase', 0);
+      return after > 0 && (
+        !(before is number) || before <= 0
+        || after > before + 1
+        || !(baseBefore is number)
+        || after * baseBefore > before * baseAfter + baseBefore
+      );
+    }
+
+    /**
+     * The whole edit branch, **cheapest checks first**. The rules engine
+     * stops at 1,000 evaluated expressions per request, and a first draft
+     * that asked `admin()` three times and diffed the document twice reached
+     * it on every discount raised within the cap — a write that must pass was
+     * refused, and the refusal tests beside it passed for that reason
+     * instead of theirs. So the diff is taken once, the role once, and every
+     * key and stamp check runs before any role or document lookup.
+     */
+    function qnEdit() {
+      let changed = touched();
+      return qnEditKeys(changed)
+        && qnEditStamped(changed)
+        && resource.data.get('status', '') != 'Cancelled'
+        && request.resource.data.lines is list
+        && request.resource.data.subtotal is number
+        && request.resource.data.total is number
+        && discountShapeOk()
+        && qnEditPermitted(admin());
+    }
+
+    /** Who may edit, and the cap — with the role asked once, by the caller. */
+    function qnEditPermitted(isAdmin) {
+      return (isAdmin || (member() && !worker() && qnCreator()))
+        && (isAdmin || !qnDiscountRaised() || discountWithinCap());
+    }
+
     match /quotations/{id} {
       allow read: if member() && !worker();
       allow create: if member() && !worker()
@@ -682,29 +809,34 @@ service cloud.firestore {
                     && request.resource.data.at is number
                     && request.resource.data.total is number
                     && discountOk();
-      // **CANCEL, and only cancel.** Owner and Administrator, as V8C4 has it:
-      // `if(!admin) return toast("Only an administrator can cancel a
-      // quotation")`. A Manager cannot cancel, including their own.
+
+      // Two update branches, told apart by the keys they touch.
       //
-      // **N5.10 WIDENS THIS, AND DOING SO REMOVES A DEFENCE.** The Owner's
-      // ruling is that a finalised quotation may be EDITED — by its creator,
-      // and by an Owner or Administrator on anyone's — which V8C4 cannot do at
-      // all, so it needs a new branch beside this one while cancel stays at
-      // `admin()`.
+      // **CANCEL: the creator, and an Owner or Administrator on anyone's.**
+      // The Owner's decision of 2026-09-28, which REPLACED the ruling of
+      // 2026-09-25 that read "Owner and Administrator only … A Manager cannot
+      // cancel, including their own" (V8C4's `if(!admin)`). V8C4's own
+      // three-field payload from an admin is accepted unchanged.
       //
-      // What that costs: today a retry that blindly re-writes a quotation is
-      // evaluated as an *update*, fails this `hasOnly`, and takes the whole
-      // transaction down with it — so the counter never advances and no second
-      // number is burned. That is the second of two defences against a
-      // duplicate. **The moment an edit branch accepts a full document, it
-      // stops holding**, and the finalise transaction's read-first is the only
-      // thing between a lost response and a customer holding two quotations
-      // for one job. Whoever widens this is removing a guard, not only adding
-      // a capability.
-      allow update: if admin()
-                    && touched().hasOnly(['status','cancelledBy','cancelledAt'])
-                    && request.resource.data.no == resource.data.no
-                    && request.resource.data.total == resource.data.total;
+      // **EDIT: the creator, and an Owner or Administrator on anyone's** —
+      // new behaviour; V8C4 cannot edit a finalised quotation. The same number
+      // is overwritten, there is no revision copy, and `snap` is never
+      // re-frozen (it is not in the list). A cancelled quotation cannot be
+      // edited.
+      //
+      // **The second defence against a duplicate number survives the
+      // widening.** Before N5.10, a retry that blindly re-wrote a quotation
+      // was evaluated as an update, failed the cancel-only `hasOnly`, and took
+      // the whole transaction — the counter bump with it — down. The edit
+      // branch refuses that retry three ways: a finalise writes a fresh `at`,
+      // which is not in the edit list; it carries no stamp; and no `rev`.
+      // `quotation.test.js` pins the first with the old retry test and the
+      // other two with a byte-for-byte re-write.
+      //
+      // **The cap on an edit applies only when the discount goes up**
+      // (`qnDiscountRaised`); the shape of any discount is checked always, so
+      // a claimed `discBase` stays bounded by `subtotal + disc.amt`.
+      allow update: if qnCancel() || qnEdit();
       allow delete: if false;
     }
 

@@ -1361,11 +1361,12 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**Plan N5.10, edit and cancel — plan only, no code until the Owner
-approves**, answering the six hazards in "The Owner's review of 9b, and the
-N5.10 brief, 2026-09-28", below, with Duplicate as its own separable commit.
-Part A of that review is done and CI-verified at `2848bb9` (run #208); what
-it found is recorded there.
+**Re-present the N5.10 plan with the Owner's answers and amendments A–E
+folded in — no N5.10 code until it is approved.** The answers are in "The
+Owner's answers on the N5.10 plan, 2026-09-28", below; the plan answers the
+six hazards of the brief above them, and now carries Duplicate and the party
+type as well. Part A of the 9b review is done and CI-verified at `2848bb9`
+(run #208); what it found is recorded there.
 
 What N5.10's plan must also carry, already recorded in this file:
 
@@ -2550,6 +2551,110 @@ Counts at `2848bb9`: Kotlin 1605 `@Test`
 across 50 classes; emulator 248, unchanged — no rule change, and
 `git diff --quiet 2848bb9 ead0a52 -- firestore/firestore.rules` is silent.
 
+### The Owner's answers on the N5.10 plan, 2026-09-28 — recorded before acting
+
+Rule 8. The plan was **approved in principle** with these answers and
+amendments, to be folded in and re-presented; **no code until it is
+approved.** Advisor answers are V8C4 read by the advisor: evidence, not
+authority.
+
+**The Owner's answers:**
+
+- **Q1 — cancel:** the creator (a Manager on their own quotation) **and**
+  Owner/Administrator on anyone's. **This supersedes the 2026-09-25 ruling**
+  "a Manager cannot cancel, including their own". All four places that
+  carried it are updated, each saying the 28 Sept decision replaced the old
+  ruling: `docs/N5-plan.md`, this file (done above, in "N5.10 is coupled…"),
+  `firestore/firestore.rules:685-687`, and `Permissions.canCancelQuotation`
+  with its test.
+- **Q3 — what an edit may change:** exactly `lines`, `party`, `partyId`,
+  `tier`, `tierName`, `gst`, `gstPct`, `subtotal`, `total`, `install`,
+  `disc`, `discBase`, the stamp and `rev`. Nothing else.
+- **Q5 — Duplicate:** yes, in N5.10, as its own commit.
+- **The cap on an edit:** it stops an edit **only when the discount goes
+  up** — replacing the plan's default of checking the whole document
+  (amendment A).
+
+**The advisor's answers:**
+
+- **Q2 — the stamp:** `lastEditedBy`, `lastEditedByUid`, `lastEditedAt`;
+  `docs/N5-plan.md`'s table corrected to match.
+- **Q4 — V8C4's cancel values:** `q.cancelledBy = currentUserName()` (4246:
+  `state.auth.name` when signed in, else `state.sync.who || "unnamed"`) —
+  a **name string**, never a uid; `q.cancelledAt = Date.now()` — a
+  **number** in ms, not a server time. V8C4's Cancel button renders only
+  when `admin && s !== "Cancelled"`: never on a cancelled quotation or a
+  draft. So the cancel clause may require `is string` and `is number`, and
+  the emulator test sends exactly
+  `{status:"Cancelled", cancelledBy:"<name>", cancelledAt:<ms>}`.
+- **Q6 — tier on an edit:** the stored tier stands unless the person
+  changes it.
+- **Duplicate's carriage:** **restored** to the transport field, as edit
+  does — a **deliberate divergence from V8C4**, recorded as one.
+
+**The amendments:**
+
+- **A. The cap on an edit.** "The discount went up" is compared **against
+  the stored document, never a value the client supplies**: the **amount**
+  rises, or its effective **rate** (amount ÷ base) rises, allowing 9a's
+  one-rupee margin; adding a discount where there was none counts as going
+  up. Not raised: the cap does not apply. Raised: it applies exactly as at
+  issue. Owner/Administrator stay exempt. Tests: (i) a Manager fixes only a
+  phone number on a quotation whose discount now exceeds a lowered cap —
+  accepted; (ii) the same Manager raises the discount — the cap applies;
+  (iii) lines added under an unchanged percentage — the amount rises, the
+  cap applies, **deliberately**, or new items get the old over-cap rate;
+  (iv) a rupee discount kept while lines are removed — the rate rises, the
+  cap applies; (v) lines removed under an unchanged percentage — accepted.
+  Say where the check lives (rule and app), with an ablation.
+- **B. A second cancel is refused.** As sketched, a second cancel would
+  overwrite `cancelledBy` and `cancelledAt` — rewriting history. The stored
+  status must not be "Cancelled". Safe for V8C4, whose button is hidden
+  once a quotation is cancelled. Emulator test and ablation.
+- **C. Duplicate, from V8C4:** offered on **every issued quotation,
+  cancelled ones included** (cancel then duplicate is how a quotation is
+  reissued), never on drafts; V8C4's replace question when the draft in
+  progress has lines; always a new id; copies lines, party (**with the
+  link**) and tier, **not** installation or discount; V8C4 keeps the
+  original's line **rates** — the plan must say whether anything in the
+  builder then re-prices them to today's catalogue, and when. "Nobody
+  should be surprised that a copy of a March quotation carries March prices,
+  or that one tap changes them."
+- **D. The Owner's party decisions**, in N5.10, as their own commits after
+  Duplicate.
+  - **The party type:** picking a **saved** customer pre-selects the
+    quotation's rate (Dealer or Client) from its type. A **new** customer
+    must be saved with an **explicit Dealer or Client choice — no default,
+    and no save without it**, in "Save this customer" and in Add on the
+    Parties screen. The quotation has a one-tap Dealer / Client switch for
+    saved and new customers alike; **the switch changes only this
+    quotation's rate. A customer's saved type never changes from a
+    quotation** — not by the switch, not by "Save this customer" on an
+    existing customer (V8C4 overwrites it on every save; that is the defect
+    this removes). A customer's type is changed only on the Parties screen.
+    Say what happens when a saved customer is picked on a quotation that
+    already has lines (V8C4 auto-sets the tier only on an empty quotation,
+    6604), and on an edit draft (Q6). A legacy `contractor` type: the rate
+    is left unchanged on pick, and Dealer or Client is asked for when the
+    party is next edited.
+  - **The Parties screen — checks only:** Add and Edit run `PartyFormat`'s
+    three checks (GSTIN, phone, email); the customer's type is shown and
+    changed here; **nothing else changes** — no merge question, no name
+    restriction, no archived rule. **The Owner accepted that a Manager
+    renaming a party is refused after Save. Recorded; not to be fixed.**
+- **E. The Part A report** — neither the Owner nor the advisor had seen the
+  answers to A1–A4; restated, two lines each with commits and runs, at the
+  top of the revised plan.
+
+**Approved as written:** C5's three-way defence and the byte-for-byte test;
+fixing the reader (C6) first; C7 to C9; the edit as its own draft; `rev`;
+the transaction cancel; ablations R1 to R15.
+
+**Raised back with the revised plan, not yet answered:** Duplicate's toast
+names download, print and share, which do not exist here until N5.11 — the
+plan recommends "…when it is finalised" until then; and whether a copy
+carries the stored GST, which V8C4's copy list does not include.
+
 ### Owed in N6: the validators on the fields and on the company's own details
 
 Recorded 2026-09-26. V8C4 runs `gstinProblem`, `phoneProblem` and
@@ -2587,11 +2692,12 @@ The Owner's ruling of 2026-09-25, and the guard it costs:
 - **Edit** a finalised quotation: the creator, and Owner/Administrator on
   anyone's. **New capability** — V8C4 cannot edit a finalised quotation at
   all — so N5.10 writes a **new update branch**.
-- **Cancel**: Owner and Administrator only, as V8C4 has it
-  (`if(!admin) return toast("Only an administrator can cancel a quotation")`)
-  and as the deployed rule already says. A Manager cannot cancel, including
-  their own. The rule was stricter than the old plan row, in the safe
-  direction; no deploy-day break.
+- **Cancel — SUPERSEDED on 2026-09-28.** This read: "Owner and
+  Administrator only, as V8C4 has it … A Manager cannot cancel, including
+  their own." **The Owner's decision of 2026-09-28 replaced it: the creator
+  (a Manager on their own quotation) and Owner/Administrator on anyone's.**
+  V8C4's admin payload is still accepted. See "The Owner's answers on the
+  N5.10 plan, 2026-09-28".
 
 **Widening for edit removes the second defence against a duplicate number.**
 Today a retry that blindly re-writes a quotation is evaluated as an *update*,

@@ -51,9 +51,16 @@ import java.util.Locale
  * stored `manual` flag alone, so a V8C4 transport line shows untagged. (This
  * said "manual entry … tagged as typed by hand" until N5.9a commit 3b; the
  * invented fixture's `manual: true` moves with the N5.12 fixture pass.)
- * The separate `install`, `disc` and `discBase` fields N5.2 defined are not
- * shown, because nothing writes them yet: no document in either project
- * carries one, and a row that always read zero would be noise.
+ * **Installation and discount are rows of their own when a quotation carries
+ * them** — the `install` and `disc` N5.9 writes and V8C4 never does. Until
+ * N5.10 commit 1 this said they were not shown "because nothing writes them
+ * yet", which stopped being true the day 9b issued its first quotation: a
+ * discounted quotation's totals then did not visibly add up. They show what
+ * was stored, like every other figure here. The full printed order is N5.11's.
+ *
+ * **"Last edited" sits directly after the issue date** — the place the printed
+ * order gives it (`docs/N5-plan.md`) — and only on a quotation somebody has
+ * edited. N5.11 prints it in the same place.
  *
  * **GST is shown as `total − subtotal`**, both stored figures, rather than
  * recomputed from the percentage. That is what keeps a beta record honest:
@@ -104,6 +111,9 @@ internal fun QuotationDetail(quotation: QuotationRecord, onBack: () -> Unit) {
                         if (quotation.legacyBetaShape) Tag(BETA_RECORD, TagTone.WARN)
                     }
                     Fact("Issued", quotation.at.takeIf { it > 0 }?.let(::formatDate).orEmpty())
+                    if (quotation.lastEditedAt > 0) {
+                        Fact(LAST_EDITED, lastEditedText(quotation))
+                    }
                     Fact("Issued by", quotation.by)
                     if (quotation.status.equals("Cancelled", ignoreCase = true)) {
                         Fact("Cancelled by", quotation.cancelledBy)
@@ -163,6 +173,12 @@ internal fun QuotationDetail(quotation: QuotationRecord, onBack: () -> Unit) {
         item(key = TOTALS_KEY) {
             SmartieCard {
                 Column(verticalArrangement = Arrangement.spacedBy(dimens.gapXs)) {
+                    // What was stored at issue or at the last edit — never
+                    // recomputed, like every figure on this screen.
+                    quotation.installation?.amount?.let { MoneyLine(INSTALLATION_ROW, it) }
+                    quotation.discount?.amount?.takeIf { it > 0.0 }?.let {
+                        MoneyLine(DISCOUNT_ROW, it, deduction = true)
+                    }
                     MoneyLine("Subtotal", quotation.subtotal)
                     if (quotation.gstEnabled) {
                         MoneyLine(gstLabel(quotation.gstPercent), quotation.total - quotation.subtotal)
@@ -224,9 +240,14 @@ private fun Fact(label: String, value: String) {
     }
 }
 
-/** A labelled rupee figure. */
+/** A labelled rupee figure; a [deduction] reads "- ₹…", as the builder shows one. */
 @Composable
-private fun MoneyLine(label: String, amount: Double, emphasis: Boolean = false) {
+private fun MoneyLine(
+    label: String,
+    amount: Double,
+    emphasis: Boolean = false,
+    deduction: Boolean = false
+) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(
             label,
@@ -235,7 +256,7 @@ private fun MoneyLine(label: String, amount: Double, emphasis: Boolean = false) 
             color = if (emphasis) SmartieColors.Ink else SmartieColors.Steel
         )
         Text(
-            Money.formatRupees(amount, decimals = 0),
+            (if (deduction) "- " else "") + Money.formatRupees(amount, decimals = 0),
             style = if (emphasis) MaterialTheme.typography.titleSmall
             else MaterialTheme.typography.bodyMedium,
             color = SmartieColors.Ink,
@@ -257,11 +278,26 @@ internal fun openQuotationLabel(number: String): String = "Open $number"
 internal fun formatDate(millis: Long): String =
     SimpleDateFormat("d MMM yyyy", Locale.forLanguageTag("en-IN")).format(Date(millis))
 
+/** A date with its time, for the "Last edited" stamp. */
+internal fun formatDateTime(millis: Long): String =
+    SimpleDateFormat("d MMM yyyy, h:mm a", Locale.forLanguageTag("en-IN")).format(Date(millis))
+
+/**
+ * "<name>, <date time>" — the stamp the card shows and N5.11 prints. A stamp
+ * with no name still says when; the name reads "Not recorded" rather than
+ * leaving a bare comma.
+ */
+internal fun lastEditedText(quotation: QuotationRecord): String =
+    "${quotation.lastEditedBy.ifBlank { NOT_RECORDED }}, ${formatDateTime(quotation.lastEditedAt)}"
+
 internal const val DETAIL_LIST_TAG = "quotation-detail"
 internal const val TOTALS_KEY = "totals"
 internal const val PARTY_SECTION = "Party, as it was issued"
 internal const val LINES_SECTION = "Items"
 internal const val GRAND_TOTAL = "Grand total"
+internal const val LAST_EDITED = "Last edited"
+internal const val INSTALLATION_ROW = "Installation"
+internal const val DISCOUNT_ROW = "Discount"
 internal const val BACK_TO_QUOTATIONS = "Back to quotations"
 internal const val UNNUMBERED = "Quotation"
 internal const val UNTITLED_LINE = "Item"

@@ -11,15 +11,21 @@ import androidx.compose.ui.test.performScrollToKey
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import `in`.smartie.quotedesk.data.mapping.Fixtures
 import `in`.smartie.quotedesk.data.mapping.toQuotationRecord
+import `in`.smartie.quotedesk.data.model.QuotationDiscountRecord
+import `in`.smartie.quotedesk.data.model.QuotationInstallationRecord
 import `in`.smartie.quotedesk.data.model.QuotationRecord
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.Role
 import `in`.smartie.quotedesk.ui.quotations.BACK_TO_QUOTATIONS
 import `in`.smartie.quotedesk.ui.quotations.DETAIL_LIST_TAG
+import `in`.smartie.quotedesk.ui.quotations.DISCOUNT_ROW
 import `in`.smartie.quotedesk.ui.quotations.GRAND_TOTAL
+import `in`.smartie.quotedesk.ui.quotations.INSTALLATION_ROW
+import `in`.smartie.quotedesk.ui.quotations.LAST_EDITED
 import `in`.smartie.quotedesk.ui.quotations.NO_QUOTATIONS
 import `in`.smartie.quotedesk.ui.quotations.QuotationListScreen
 import `in`.smartie.quotedesk.ui.quotations.TOTALS_KEY
+import `in`.smartie.quotedesk.ui.quotations.lastEditedText
 import `in`.smartie.quotedesk.ui.quotations.openQuotationLabel
 import `in`.smartie.quotedesk.ui.theme.SmartieTheme
 import org.junit.Assert.assertTrue
@@ -161,6 +167,65 @@ class QuotationListScreenTest {
 
         assertTrue(shows("Cancelled"))
         assertTrue(shows("Administrator"))
+    }
+
+    @Test
+    fun `a quotation somebody edited says who and when, right after the issue date`() {
+        // N5.10: the stamp goes on the card now; N5.11 prints it in the same
+        // place, directly after the date.
+        val edited = byId("q_pwa_finalised").copy(
+            lastEditedBy = "Ravi Kulkarni",
+            lastEditedByUid = "uid_manager",
+            lastEditedAt = 1_760_000_000_000L,
+            revision = 1
+        )
+        screen(records = listOf(edited))
+        open("SIE/QD/2025-26/007")
+
+        assertTrue(shows(LAST_EDITED))
+        assertTrue(shows(lastEditedText(edited)))
+        assertTrue("the name is in it", lastEditedText(edited).startsWith("Ravi Kulkarni, "))
+    }
+
+    @Test
+    fun `a quotation nobody edited says nothing about editing`() {
+        screen()
+        open("SIE/QD/2025-26/007")
+
+        // The reach: the issue date's own label is there.
+        assertTrue(shows("Issued"))
+        assertTrue(compose.onAllNodesWithText(LAST_EDITED).fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun `installation and discount are shown as they were stored`() {
+        // Until N5.10 commit 1 the reader dropped both, and a discounted
+        // quotation's totals did not visibly add up.
+        val native = byId("q_pwa_finalised").copy(
+            installation = QuotationInstallationRecord(mode = "door", rate = 500.0, amount = 2_000.0, basis = 4.0),
+            discount = QuotationDiscountRecord(kind = "pct", value = 10.0, amount = 4_440.0),
+            discountBase = 44_400.0
+        )
+        screen(records = listOf(native))
+        open("SIE/QD/2025-26/007")
+        scrollToTotals()
+
+        assertTrue(shows(INSTALLATION_ROW))
+        assertTrue(shows("2,000"))
+        assertTrue(shows(DISCOUNT_ROW))
+        assertTrue("a deduction, as the builder shows one", shows("- ₹4,440"))
+    }
+
+    @Test
+    fun `a quotation with neither shows neither row`() {
+        screen()
+        open("SIE/QD/2025-26/007")
+        scrollToTotals()
+
+        // The reach: the grand total is on the same card.
+        assertTrue(shows(GRAND_TOTAL))
+        assertTrue(compose.onAllNodesWithText(INSTALLATION_ROW).fetchSemanticsNodes().isEmpty())
+        assertTrue(compose.onAllNodesWithText(DISCOUNT_ROW).fetchSemanticsNodes().isEmpty())
     }
 
     // --- the detail view -----------------------------------------------------------

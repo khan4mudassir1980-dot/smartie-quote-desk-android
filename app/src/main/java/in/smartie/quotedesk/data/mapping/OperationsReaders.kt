@@ -4,6 +4,8 @@ import `in`.smartie.quotedesk.data.model.NumberingRecord
 import `in`.smartie.quotedesk.data.model.QuotingRecord
 import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.data.model.PurchaseRecord
+import `in`.smartie.quotedesk.data.model.QuotationDiscountRecord
+import `in`.smartie.quotedesk.data.model.QuotationInstallationRecord
 import `in`.smartie.quotedesk.data.model.QuotationLineGeometry
 import `in`.smartie.quotedesk.data.model.QuotationLineRecord
 import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
@@ -174,9 +176,36 @@ fun DocData.toQuotationRecord(): QuotationRecord {
         cancelledAt = millis("cancelledAt"),
         snapshot = map("snap"),
         schemaVersion = int("schemaVersion"),
-        legacyBetaShape = betaShape
+        legacyBetaShape = betaShape,
+        installation = this["install"].asMapOrNull()?.let { DocData("install", it).toInstallation() },
+        discount = this["disc"].asMapOrNull()?.let { DocData("disc", it).toDiscount() },
+        discountBase = optionalDouble("discBase"),
+        storedTier = string("tier").trim(),
+        storedGstPercent = optionalDouble("gstPct"),
+        lastEditedBy = string("lastEditedBy"),
+        lastEditedByUid = string("lastEditedByUid"),
+        lastEditedAt = millis("lastEditedAt"),
+        revision = int("rev")
     )
 }
+
+/**
+ * `install`, raw: the stored mode word and whatever figures read. Nothing is
+ * defaulted here — see `QuotationInstallationRecord`.
+ */
+private fun DocData.toInstallation(): QuotationInstallationRecord = QuotationInstallationRecord(
+    mode = string("mode").trim(),
+    rate = optionalDouble("rate"),
+    amount = optionalDouble("amt"),
+    basis = optionalDouble("basis")
+)
+
+/** `disc`, raw, for the same reason. */
+private fun DocData.toDiscount(): QuotationDiscountRecord = QuotationDiscountRecord(
+    kind = string("kind").trim(),
+    value = optionalDouble("value"),
+    amount = optionalDouble("amt")
+)
 
 fun DocData.toNumberingRecord(): NumberingRecord {
     val lastIssued = map("lastIssued")

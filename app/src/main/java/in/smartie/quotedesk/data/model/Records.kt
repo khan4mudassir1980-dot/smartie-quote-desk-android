@@ -389,6 +389,34 @@ data class QuotationLineGeometry(
     val count: Double
 )
 
+/**
+ * `install` as stored — `{mode, rate, amt, basis}`, which N5.9 writes and
+ * V8C4 never does (`docs/N5-plan.md`, the data shape).
+ *
+ * **Raw, and deliberately so.** A screen showing a stored quotation may read
+ * leniently; an edit rebuilding a draft from it may not — `InstallationMode`
+ * falls back to `fixed`, and a `pct` charge read as `fixed` bills 8 rupees
+ * instead of 1,552. So [mode] is the stored word and every figure is null when
+ * unreadable, and the edit decides what it can rebuild (`DraftFault`).
+ */
+data class QuotationInstallationRecord(
+    /** The stored mode word, trimmed: `fixed`, `door`, `sqft` or `pct`. */
+    val mode: String = "",
+    val rate: Double? = null,
+    /** What it came to at issue, in whole rupees. */
+    val amount: Double? = null,
+    val basis: Double? = null
+)
+
+/** `disc` as stored — `{kind, value, amt}`. Raw, for the same reason. */
+data class QuotationDiscountRecord(
+    /** The stored kind word, trimmed: `pct` or `amt`. */
+    val kind: String = "",
+    val value: Double? = null,
+    /** What it came to at issue, in whole rupees. */
+    val amount: Double? = null
+)
+
 data class QuotationRecord(
     val id: String,
     val number: String = "",
@@ -410,7 +438,31 @@ data class QuotationRecord(
     val snapshot: Map<String, Any?> = emptyMap(),
     val schemaVersion: Int = 0,
     /** True when the document was written by the native beta (audit D4). */
-    val legacyBetaShape: Boolean = false
+    val legacyBetaShape: Boolean = false,
+    // --- N5.10 commit 1: what an edit needs, and what the card shows -----------
+    /** `install`, or null when the quotation carries none. */
+    val installation: QuotationInstallationRecord? = null,
+    /** `disc`, or null when the quotation carries none. */
+    val discount: QuotationDiscountRecord? = null,
+    /** `discBase` — what the discount was taken against — or null. */
+    val discountBase: Double? = null,
+    /**
+     * `tier` exactly as stored, trimmed. [tier] is the lenient reading, which
+     * turns an unknown word into Dealer; an edit must know it did.
+     */
+    val storedTier: String = "",
+    /**
+     * `gstPct` only when it was stored as a number. [gstPercent] falls back
+     * to a beta line's rate or to zero, which is right for showing a stored
+     * figure and wrong for an edit: an absent rate is "not set", never 0%.
+     */
+    val storedGstPercent: Double? = null,
+    /** The "Last edited by" stamp — blank and zero until somebody edits. */
+    val lastEditedBy: String = "",
+    val lastEditedByUid: String = "",
+    val lastEditedAt: Long = 0L,
+    /** `rev`: one more on every edit, 0 when never edited. */
+    val revision: Int = 0
 )
 
 data class ProductCategoryRecord(

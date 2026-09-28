@@ -1,14 +1,14 @@
 # Project status
 
 **The single current-status record. Read this before planning or changing
-anything.** Last updated 2026-09-26.
+anything.** Last updated 2026-09-28.
 
 ## Where the work is
 
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `57d607a` — [run #204](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36233477085), fully green (unit tests, lint, Firestore rules emulator, APK build). Later commits may sit above it. |
+| **Last CI-verified head** | `2848bb9` — [run #208](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36385798160), fully green (unit tests, lint, Firestore rules emulator, APK build). Later commits may sit above it. |
 | **APK to install** | The `smartie-native-apks` artifact **from the run that verified the head you intend to install** — never from whichever run this table happens to name. A build contains the commit it ran on and nothing above it, so a head hash and an APK go out of step the moment anything lands. Each run's job summary reports its head and the signing certificate; the app must show **Staging**. |
 | **Ruleset anchor** | `ead0a52` — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
 | **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **seven rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
@@ -50,7 +50,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
 | N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2, N4.3 and N4.4 are all code complete and CI-verified**, and both are waiting on the same Owner-run staging rules deployment paired with the APK rollout — they were never deployed separately and must not be. Purchase History is built and open to every role, so what was Batch 5 is done; the tab badge is Batch 6 |
-| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.9 are complete and CI-verified** — N5.9 (finalise) at `57d607a`, run #204. The builder now **issues quotations**: its Finalise control runs V8C4's finalise gate (`QuoteFinaliser`) and takes the next number from `/teamSettings/numbering` in one transaction, against staging only. The finalised draft is retired and the builder moves to a fresh quotation. **Not yet run on a phone** — T-Q1 to T-Q10 are owed. Rules deploy once, at the final staging pass, from the head named above; the ruleset anchor is still `ead0a52`. The Quotation tab keeps its "Keep using the PWA to issue quotations" banner until N5.12. Next is N5.10, edit and cancel |
+| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.9 are complete and CI-verified** — N5.9 (finalise) at `57d607a`, run #204, and Part A of the Owner's review of it at `2848bb9`, run #208. The builder now **issues quotations**: its Finalise control runs V8C4's finalise gate (`QuoteFinaliser`) and takes the next number from `/teamSettings/numbering` in one transaction, against staging only. The finalised draft is retired and the builder moves to a fresh quotation. **Not yet run on a phone** — T-Q1 to T-Q10 are owed. Rules deploy once, at the final staging pass, from the head named above; the ruleset anchor is still `ead0a52`. The Quotation tab keeps its "Keep using the PWA to issue quotations" banner until N5.12. Next is N5.10, edit and cancel |
 | N6 Products & Categories | Not started. The Products & Categories editing screen, which T-P7 is blocked on. **Also owed here: read the company GST from `teamSettings/company.defaultGst`.** V8C4's `stSave` writes it there and the native app is already permitted to read that document. N5.8a resolves a quotation's GST from the rate its catalogue lines agree on, which is an honest stopgap and not the final answer — a quotation whose lines disagree, or which has only hand-typed lines, has nothing to agree on and currently refuses to finalise until somebody sets the rate |
 | N7 Calculators | Not started. Port the four V8C4 calculators — rolling shutter, high-speed door, garage door, glass door — whose output becomes ordinary quotation lines carrying the opening size in the line's spec text |
 | N8 Migration & cutover | Not started. **The production migration and cutover.** `docs/N2-delivery.md:40` calls N8 "the catalogue migration"; that line is the stale one and `docs/N3-plan.md:585` is right. **Read the blocking warning about `import-staging.mjs` under "Decisions that bind future work" before planning any part of this** — the importer carries seed rates in every payload and would destroy live pricing if pointed at production |
@@ -1361,15 +1361,13 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**Part A of the Owner's 9b review, then plan N5.10.** Part A (A1-A4 in "The
-Owner's review of 9b, and the N5.10 brief, 2026-09-28", below) is
-investigated and reported first — if it needs code, one fix commit, CI
-green. Then **plan N5.10, edit and cancel — plan only, no code until the
-Owner approves**, answering the six hazards recorded there, with Duplicate
-as its own separable commit.
+**Plan N5.10, edit and cancel — plan only, no code until the Owner
+approves**, answering the six hazards in "The Owner's review of 9b, and the
+N5.10 brief, 2026-09-28", below, with Duplicate as its own separable commit.
+Part A of that review is done and CI-verified at `2848bb9` (run #208); what
+it found is recorded there.
 
-N5.9 is complete and CI-verified at `57d607a` (run #204). What N5.10's plan
-must also carry, already recorded in this file:
+What N5.10's plan must also carry, already recorded in this file:
 
 - **"N5.10 is coupled to the finalise retry"** — widening `/quotations`
   for edit removes the rules' second defence against a duplicate number;
@@ -2489,6 +2487,68 @@ its own separable commit; the Owner decides whether it ships in N5.10.
 The plan comes in the usual shape — the commits, the tests, the ablations
 each tied to a commit — with anything the repository contradicts set out
 first.
+
+#### Part A — done, and CI-verified at `2848bb9` (run #208)
+
+| Commit | What | Run |
+|---|---|---|
+| `9e7df87` | docs — the review and the N5.10 brief, recorded before acting | #206 green |
+| `42463ec` | fix — A1 to A4 | **#207 red**: one screen test |
+| `2848bb9` | fix — that test asked the wrong node; one more box desync | #208 green |
+
+- **A1.** The emulator test exists: `firestore/tests/quotation.test.js`,
+  "with no quoting document at all, a Manager gets no discount". No new
+  case was needed. The fake's predicate was tightened to the rule's own
+  condition (`disc.amt > 0`) and names that test.
+- **A2.** Every builder action that changes the quotation now asks the view
+  model's `refusedWhileFinalising()` first and says "A number is being taken
+  for this quotation — wait a moment" once; the two automatic ones skip in
+  silence; `persist()` keeps its check as the floor. Before, the draft
+  could not change (everything ended in `persist()`), but five things were
+  wrong around it — see `42463ec`'s message. Back, the ₹0 answers and
+  actions that do not touch the draft are unaffected by design. Clear and
+  the five money boxes are disabled while the gate is open. **Pinned** by a
+  screen test that activates Clear through its accessibility click action,
+  with a witness.
+- **A3.** Back closes the panel and the finalise carries on. "Finalised as
+  X" was **lost** if the person had moved to another tab (a
+  `MutableSharedFlow` with no replay); a failure showed **only on the
+  panel**. Now messages wait in a buffered channel for the Products screen,
+  the catalogue shows "Taking a number…" or the failure above the quote bar,
+  and a builder reopened mid-issue is still locked (pinned). Not covered:
+  leaving the app cancels the attempt with its view model; the next press is
+  answered by the read-first.
+- **A4.** `FieldReaders.kt:30` — **deliberate**: a plain `String.replace`
+  stripping U+00A0 from money strings before parsing, since N0 (`f770bfe`).
+  Changed only in spelling, to the escape, and its pin moved to a no-break
+  space **inside** a figure (one at either end is taken by `trim()` already).
+  Measured: with the line removed, "numeric strings parse instead of becoming
+  zero" fails.
+- **#207, and what it teaches.** The new "money boxes cannot be typed into"
+  test asked `onNodeWithContentDescription(TRANSPORT_LABEL)`, which finds the
+  **column** carrying the label, not the box inside it; the column has no
+  enabled state. The box was disabled all along — and the idle witness
+  passed for the same reason, so **it could never have failed**. `2848bb9`
+  looks inside each of the five boxes. **For the next person:** a
+  `SmartieField`'s `contentDescription` sits on its wrapper; assert on the
+  node inside it.
+- **Found while fixing #207, and fixed in `2848bb9`:** choosing an
+  installation mode filled the basis box before the view model was asked,
+  so a refused mode left the box holding another mode's figure — and
+  `push()` builds the charge from that box. The chip now does nothing while
+  the gate is open, pinned through its accessibility action with a witness.
+- **A commit message is wrong and stays wrong.** `42463ec`'s message says
+  the line was "written as the escape" and then shows a blank: the tool
+  decoded the escape in the **message** into the character itself, a
+  no-break space.
+  The **code** holds the escape `\u00A0` (checked byte by byte). Pushed
+  commits are never amended.
+- **Not measured:** the screen tests run only under Robolectric on CI.
+
+Counts at `2848bb9`: Kotlin 1605 `@Test`
+(`git grep -h -o '@Test' 2848bb9 -- app/src/test | wc -l`); local sweep 803
+across 50 classes; emulator 248, unchanged — no rule change, and
+`git diff --quiet 2848bb9 ead0a52 -- firestore/firestore.rules` is silent.
 
 ### Owed in N6: the validators on the fields and on the company's own details
 

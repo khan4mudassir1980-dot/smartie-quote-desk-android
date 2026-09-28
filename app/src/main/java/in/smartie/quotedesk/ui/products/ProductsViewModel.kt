@@ -361,10 +361,17 @@ class ProductsViewModel(
         persist(_draft.value.copy(party = party))
     }
 
-    /** A saved customer, chosen from the picker. The site is kept. */
+    /**
+     * A saved customer, chosen from the picker. The site is kept. The rate
+     * follows a Dealer or Client only on a quotation with nothing on it and
+     * never on an edit; otherwise it stays, and a note says so when the two
+     * differ (`QuoteParty.pick`, amendment D).
+     */
     fun chooseParty(record: PartyRecord) {
         if (refusedWhileFinalising()) return
-        persist(_draft.value.withParty(record))
+        val pick = QuoteParty.pick(_draft.value, record)
+        persist(pick.draft)
+        pick.note?.let(::emit)
     }
 
     /**
@@ -389,11 +396,14 @@ class ProductsViewModel(
      * saved customer **the form's own details** describe is found, and if
      * there is one **the person is asked** before it is updated
      * ([mergeQuestion], answered through [answerMerge]); otherwise a new one is
-     * created at the quotation's tier. The customer picked earlier is not
+     * created, at the type the person chooses. The customer picked earlier is not
      * consulted — a form typed over it describes somebody else.
      *
      * [customers] is the list the screen holds, which is what V8C4's
-     * `findCustomer` searches. Afterwards the draft **adopts** whichever
+     * `findCustomer` searches. A customer not found is created only once the
+     * person has said Dealer or Client ([typeQuestion], answered through
+     * [answerType]) — there is no default, and the answer sets the customer's
+     * type alone (amendment D). Afterwards the draft **adopts** whichever
      * customer the form was saved as, found or created — V8C4's
      * `state.partyId = c.id; saveDraft()`; finalise re-derives the link from
      * the form regardless. Declined, nothing is written and nothing is said,
@@ -416,10 +426,10 @@ class ProductsViewModel(
                 container.partyWriteRepository.saveFromQuotation(
                     member = member,
                     form = draft.party,
-                    tier = draft.tier,
                     customers = customers,
                     newId = newId,
-                    confirmUpdate = ::askMerge
+                    confirmUpdate = ::askMerge,
+                    chooseType = ::askType
                 )
             }.onSuccess { saved ->
                 if (!saved.declined) {
@@ -430,6 +440,10 @@ class ProductsViewModel(
                         if (saved.result == PartyWriteResult.WRITTEN) CUSTOMER_SAVED
                         else CUSTOMER_UNCHANGED
                     )
+                    // Saved as one type, quoted at the other: said, never moved.
+                    saved.type?.let { type ->
+                        QuoteParty.typeNote(draft.party.name, type, _draft.value.tier)?.let(::emit)
+                    }
                 }
             }.onFailure { failure ->
                 val refusal = (failure as? IllegalStateException)?.message
@@ -460,6 +474,31 @@ class ProductsViewModel(
     fun answerMerge(update: Boolean) {
         mergeAnswer?.complete(update)
     }
+
+    /**
+     * "Save <name> as a Dealer or a Client?" — published, and the save waits,
+     * with its control still busy, until [answerType] is called.
+     */
+    private suspend fun askType(name: String): RateTierV2? {
+        val answer = CompletableDeferred<RateTierV2?>()
+        typeAnswer = answer
+        _typeQuestion.value = QuoteParty.typeQuestion(name)
+        return try {
+            answer.await()
+        } finally {
+            _typeQuestion.value = null
+            typeAnswer = null
+        }
+    }
+
+    /** Dealer or Client for the new customer, or null for Cancel: nothing is saved. */
+    fun answerType(type: RateTierV2?) {
+        typeAnswer?.complete(type)
+    }
+
+    private var typeAnswer: CompletableDeferred<RateTierV2?>? = null
+    private val _typeQuestion = MutableStateFlow<String?>(null)
+    val typeQuestion: StateFlow<String?> = _typeQuestion.asStateFlow()
 
     private var mergeAnswer: CompletableDeferred<Boolean>? = null
     private val _mergeQuestion = MutableStateFlow<QuoteParty.MergeQuestion?>(null)

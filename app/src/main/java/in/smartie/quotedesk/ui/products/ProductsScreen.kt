@@ -153,6 +153,8 @@ data class ProductsActions(
     val onSaveCustomer: (String) -> Unit = {},
     /** The answer to "already saved — update that party?": true to update. */
     val onAnswerMerge: (Boolean) -> Unit = {},
+    /** Dealer or Client for a new customer, or null for Cancel (N5.10). */
+    val onAnswerType: (RateTierV2?) -> Unit = {},
     /** The Finalise control: the finalise gate's first caller (N5.9b). */
     val onFinalise: () -> Unit = {},
     /** The answer to the ₹0 question: true for "Continue anyway". */
@@ -184,6 +186,7 @@ fun ProductsScreen(
     val savingCustomer by viewModel.savingParty.collectAsStateWithLifecycle()
     val customerFailure by viewModel.partyFailure.collectAsStateWithLifecycle()
     val mergeQuestion by viewModel.mergeQuestion.collectAsStateWithLifecycle()
+    val typeQuestion by viewModel.typeQuestion.collectAsStateWithLifecycle()
     val gatePhase by viewModel.gatePhase.collectAsStateWithLifecycle()
     val finaliseFailure by viewModel.finaliseFailure.collectAsStateWithLifecycle()
     val zeroRateQuestion by viewModel.zeroRateQuestion.collectAsStateWithLifecycle()
@@ -236,6 +239,7 @@ fun ProductsScreen(
         savingCustomer = savingCustomer,
         customerFailure = customerFailure,
         mergeQuestion = mergeQuestion,
+        typeQuestion = typeQuestion,
         canFinalise = Permissions.canQuote(data.member),
         gatePhase = gatePhase,
         finaliseFailure = finaliseFailure,
@@ -272,6 +276,7 @@ fun ProductsScreen(
             onChooseParty = viewModel::chooseParty,
             onSaveCustomer = { id -> viewModel.saveCustomer(id, parties) },
             onAnswerMerge = viewModel::answerMerge,
+            onAnswerType = viewModel::answerType,
             // The customers and the cap as the screen holds them; the
             // transaction re-reads the cap before anything is written.
             onFinalise = { viewModel.finalise(parties, discountCap) },
@@ -309,6 +314,8 @@ fun ProductsCatalogue(
     customerFailure: String? = null,
     /** V8C4's question before "Save this customer" updates a saved party. */
     mergeQuestion: QuoteParty.MergeQuestion? = null,
+    /** "Save <name> as a Dealer or a Client?" while it waits for an answer. */
+    typeQuestion: String? = null,
     /** Whether this account may issue — `Permissions.canQuote`. */
     canFinalise: Boolean = false,
     /** Where the finalise gate is. See `QuoteFinaliser`. */
@@ -407,6 +414,8 @@ fun ProductsCatalogue(
                 customerFailure = customerFailure,
                 mergeQuestion = mergeQuestion,
                 onAnswerMerge = actions.onAnswerMerge,
+                typeQuestion = typeQuestion,
+                onAnswerType = actions.onAnswerType,
                 newPartyId = newPartyId,
                 // Clearing empties the LINES and stays put: the party, the
                 // transport and the GST rate on this quotation are not lines and

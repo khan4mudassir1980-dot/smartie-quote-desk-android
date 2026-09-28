@@ -110,6 +110,10 @@ internal fun QuoteBuilderPanel(
     mergeQuestion: QuoteParty.MergeQuestion? = null,
     /** The answer to [mergeQuestion]: true to update that party. */
     onAnswerMerge: (Boolean) -> Unit = {},
+    /** "Save <name> as a Dealer or a Client?" before a new customer is created (N5.10). */
+    typeQuestion: String? = null,
+    /** Dealer or Client, or null for Cancel. */
+    onAnswerType: (RateTierV2?) -> Unit = {},
     /** Minted once, and reused on a retry. See `ProductsViewModel.mintPartyId`. */
     newPartyId: () -> String = { "" },
     onAddManual: (String, ManualEntry) -> Unit = { _, _ -> },
@@ -366,6 +370,31 @@ internal fun QuoteBuilderPanel(
                             .semantics { contentDescription = QuoteParty.LEAVE_IT_ALONE }
                             .fillMaxWidth()
                     )
+                }
+            }
+
+            // Amendment D: a new customer's type is asked for, never assumed —
+            // not from the quotation's rate, not as Client. The answer is the
+            // customer's alone; this quotation's rate stays where it is.
+            if (typeQuestion != null) {
+                item(key = BUILDER_TYPE_QUESTION_KEY) {
+                    Text(typeQuestion, style = MaterialTheme.typography.bodyMedium)
+                }
+                item(key = BUILDER_TYPE_ANSWERS_KEY) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(dimens.gapS)) {
+                        QuoteTier.OFFERED.forEach { tier ->
+                            SmartiePrimaryButton(
+                                text = tier.label,
+                                onClick = { onAnswerType(tier) },
+                                modifier = Modifier.semantics { contentDescription = saveAsLabel(tier) }
+                            )
+                        }
+                        SmartieGhostButton(
+                            text = CANCEL_LINE,
+                            onClick = { onAnswerType(null) },
+                            modifier = Modifier.semantics { contentDescription = DONT_SAVE_CUSTOMER }
+                        )
+                    }
                 }
             }
 
@@ -1563,6 +1592,8 @@ internal const val BUILDER_CLEAR_KEY = "builder-clear"
 internal const val BUILDER_FINALISE_KEY = "builder-finalise"
 internal const val BUILDER_FINALISE_FAILURE_KEY = "builder-finalise-failure"
 internal const val BUILDER_RATES_NOTE_KEY = "builder-rates-note"
+internal const val BUILDER_TYPE_QUESTION_KEY = "builder-type-question"
+internal const val BUILDER_TYPE_ANSWERS_KEY = "builder-type-answers"
 internal const val BUILDER_SAVE_EDIT_KEY = "builder-save-edit"
 internal const val BUILDER_DISCARD_KEY = "builder-discard"
 internal const val BUILDER_DISCARD_QUESTION_KEY = "builder-discard-question"
@@ -1592,6 +1623,10 @@ internal const val PHONE_LABEL = "Phone"
 internal const val EMAIL_LABEL = "Email"
 internal const val ADDRESS_LABEL = "Address"
 internal const val SAVE_CUSTOMER = "Save this customer"
+internal const val DONT_SAVE_CUSTOMER = "Do not save this customer"
+
+/** "Save as a Dealer" — the answer's name, apart from the Dealer / Client switch above. */
+internal fun saveAsLabel(tier: RateTierV2): String = "Save as a ${tier.label}"
 internal const val BACK_TO_PRODUCTS = "Back to products"
 internal const val CLEAR_LINES = "Clear"
 internal const val RATE_NEEDED = "Rate needed"

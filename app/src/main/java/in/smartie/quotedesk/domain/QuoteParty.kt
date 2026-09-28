@@ -2,6 +2,7 @@ package `in`.smartie.quotedesk.domain
 
 import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
+import `in`.smartie.quotedesk.data.model.RateTierV2
 
 /**
  * Moving a customer onto a quotation, and the corrections back off it.
@@ -138,4 +139,53 @@ object QuoteParty {
 
     /** V8C4's Cancel line: "Cancel — leave it alone." */
     const val LEAVE_IT_ALONE = "Leave it alone"
+
+    // --- the party's type and the quotation's rate (N5.10, amendment D) ---------------
+
+    /**
+     * What picking a saved customer does: the party and its link always; the
+     * rate **only on a quotation with nothing on it**, and never on an edit.
+     */
+    data class Pick(val draft: QuoteDraft, val note: String?)
+
+    /**
+     * A saved party's type as a tier the builder offers — Dealer or Client —
+     * or null for a legacy `contractor`, an unknown word or none at all.
+     */
+    fun offeredTierOf(type: String): RateTierV2? =
+        QuoteTier.OFFERED.firstOrNull { it.wireValue.equals(type.trim(), ignoreCase = true) }
+
+    /**
+     * Picking [record] onto [draft], by the Owner's table (amendment D):
+     *
+     * - **a Dealer or Client on a quotation with no lines, not an edit** — the
+     *   rate follows the type, V8C4's own rule (6604); there is nothing to
+     *   reprice;
+     * - **on one with lines** (a copy included) **or on an edit** (Q6) — the
+     *   rate stays, and [typeNote] says so when the two differ;
+     * - **a legacy contractor, or any other type** — the rate stays and
+     *   nothing is said.
+     *
+     * Only this quotation's rate is ever moved; the customer's type is never
+     * written from here (`draftOf` states none).
+     */
+    fun pick(draft: QuoteDraft, record: PartyRecord): Pick {
+        val picked = draft.withParty(record)
+        val type = offeredTierOf(record.type) ?: return Pick(picked, null)
+        if (draft.isEmpty && !draft.isEdit) return Pick(picked.withTier(type) { null }.draft, null)
+        return Pick(picked, typeNote(record.name, type, draft.tier))
+    }
+
+    /**
+     * Ours: "<name> is saved as a Dealer — this quotation stays at Client
+     * rates. Switch above to reprice." Null when the two agree.
+     */
+    fun typeNote(name: String, type: RateTierV2, tier: RateTierV2): String? {
+        if (type == tier) return null
+        return "${name.trim().ifBlank { "This customer" }} is saved as a ${type.label} — " +
+            "this quotation stays at ${tier.label} rates. Switch above to reprice."
+    }
+
+    /** Asked before a new customer is created from the quotation; there is no default. */
+    fun typeQuestion(name: String): String = "Save ${name.trim()} as a Dealer or a Client?"
 }

@@ -14,6 +14,7 @@ import `in`.smartie.quotedesk.domain.PartyPlan
 import `in`.smartie.quotedesk.domain.PartyWrite
 import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.domain.QuoteParty
+import `in`.smartie.quotedesk.domain.QuoteTier
 
 /** Whether a call actually put anything on the wire. */
 enum class PartyWriteResult { WRITTEN, NO_CHANGE }
@@ -23,7 +24,13 @@ enum class PartyWriteResult { WRITTEN, NO_CHANGE }
  * or created — or null when nothing was written because the person declined
  * to update the party found ([declined]) or it had been deleted.
  */
-data class SavedParty(val id: String?, val result: PartyWriteResult, val declined: Boolean = false)
+data class SavedParty(
+    val id: String?,
+    val result: PartyWriteResult,
+    val declined: Boolean = false,
+    /** The type a **new** customer was saved as — the person's answer — else null. */
+    val type: RateTierV2? = null
+)
 
 /**
  * Creating and correcting a customer.
@@ -147,11 +154,15 @@ class PartyWriteRepository(
      * 5. **Confirmed:** merged through `PartyWrite.mergeInto` — V8C4's update
      *    branch, re-read inside the transaction: gaps filled, genuine changes
      *    taken, nothing already stored blanked, **the name never written**.
-     * 6. **Not found:** created under [newId], with the quotation's [tier] as
-     *    its type — V8C4's `type: p.type || state.tier || "client"` where the
-     *    caller passes `type: state.tier`. [newId] is held by the screen for
-     *    as long as one quotation is being filled in, so a retry lands on the
-     *    same document and is refused honestly (N4.4's B2).
+     * 6. **Not found: [chooseType] is asked** — "Save <name> as a Dealer or a
+     *    Client?" — and **nothing is created without an answer** (the Owner,
+     *    amendment D, 2026-09-28). The answer is the customer's type and
+     *    nothing else: the quotation's rate stays where its switch is. V8C4
+     *    took the quotation's tier (`type: state.tier`); until N5.10 commit 9
+     *    so did this — a default, which the Owner ruled out. Created under
+     *    [newId], held by the screen for as long as one quotation is being
+     *    filled in, so a retry lands on the same document and is refused
+     *    honestly (N4.4's B2).
      *
      * Archived customers are never found, as V8C4's `findCustomer` skips them.
      * A customer found in the list but deleted since writes nothing.
@@ -159,10 +170,11 @@ class PartyWriteRepository(
     suspend fun saveFromQuotation(
         member: Member,
         form: QuotationPartySnapshot,
-        tier: RateTierV2,
         customers: List<PartyRecord>,
         newId: String,
-        confirmUpdate: suspend (QuoteParty.MergeQuestion) -> Boolean
+        confirmUpdate: suspend (QuoteParty.MergeQuestion) -> Boolean,
+        /** Dealer or Client for a new customer, or null for Cancel. */
+        chooseType: suspend (name: String) -> RateTierV2?
     ): SavedParty {
         require(Permissions.canUseParties(member)) { NOT_ALLOWED }
         val draft = QuoteParty.draftOf(form)
@@ -173,7 +185,11 @@ class PartyWriteRepository(
         badFormat?.let { throw IllegalStateException(it) }
 
         val match = PartyDuplicates.matchFor(form, customers)
-            ?: return SavedParty(newId, create(member, draft.copy(type = tier.wireValue), newId))
+        if (match == null) {
+            val type = chooseType(draft.name.trim())?.takeIf { it in QuoteTier.OFFERED }
+                ?: return SavedParty(null, PartyWriteResult.NO_CHANGE, declined = true)
+            return SavedParty(newId, create(member, draft.copy(type = type.wireValue), newId), type = type)
+        }
 
         val question = QuoteParty.MergeQuestion(match.party.name, match.on)
         if (!confirmUpdate(question)) return SavedParty(null, PartyWriteResult.NO_CHANGE, declined = true)

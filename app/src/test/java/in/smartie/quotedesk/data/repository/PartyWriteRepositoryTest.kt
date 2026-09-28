@@ -223,7 +223,9 @@ class PartyWriteRepositoryTest {
     //
     // V8C4's `#qSaveParty` and `saveParty`: a name first; the saved customer the
     // FORM describes is found; the person is asked before it is updated; a new
-    // one is created at the quotation's tier. N5.9a commits 8 and 8b.
+    // one is created only once the person has said Dealer or Client — N5.10
+    // commit 9 (amendment D); until then, at the quotation's tier. N5.9a
+    // commits 8 and 8b.
 
     private val sunriseWithGstin = sunriseDoc + ("gstin" to "27AAACS1234F1Z5")
 
@@ -232,14 +234,17 @@ class PartyWriteRepositoryTest {
     private val yes: suspend (QuoteParty.MergeQuestion) -> Boolean = { asked += it; true }
     private val no: suspend (QuoteParty.MergeQuestion) -> Boolean = { asked += it; false }
 
+    /** Whose type was asked for, for a new customer. */
+    private val typeAsked = mutableListOf<String>()
+
     private suspend fun PartyWriteRepository.save(
         member: Member,
         form: QuotationPartySnapshot,
         customers: List<PartyRecord>,
         newId: String = "c_new",
-        tier: RateTierV2 = RateTierV2.CLIENT,
-        confirm: suspend (QuoteParty.MergeQuestion) -> Boolean = yes
-    ) = saveFromQuotation(member, form, tier, customers, newId, confirm)
+        confirm: suspend (QuoteParty.MergeQuestion) -> Boolean = yes,
+        type: RateTierV2? = RateTierV2.CLIENT
+    ) = saveFromQuotation(member, form, customers, newId, confirm) { name -> typeAsked += name; type }
 
     @Test
     fun `the customer the form describes is merged into, so an empty box forgets nothing`() = runTest {
@@ -368,7 +373,10 @@ class PartyWriteRepositoryTest {
     }
 
     @Test
-    fun `a customer typed onto the quotation is created at the quotation's tier, the site as its city`() = runTest {
+    fun `a customer typed onto the quotation is created at the type chosen, the site as its city`() = runTest {
+        // Until N5.10 commit 9 this was "…created at the quotation's tier" —
+        // V8C4's `type: state.tier`, a default the Owner ruled out
+        // (amendment D). The type is asked for, and the answer is written.
         val store = FakeStore()
         val writes = PartyWriteRepository(store, now = { 1_000L })
 
@@ -376,19 +384,42 @@ class PartyWriteRepositoryTest {
             owner,
             QuotationPartySnapshot(name = "Metro Glass", site = "Mumbai"),
             customers = listOf(sunrise),
-            tier = RateTierV2.DEALER
+            type = RateTierV2.DEALER
         )
-        assertEquals(SavedParty("c_new", PartyWriteResult.WRITTEN), saved)
-        assertTrue("nothing to ask about a new customer", asked.isEmpty())
+        assertEquals(SavedParty("c_new", PartyWriteResult.WRITTEN, type = RateTierV2.DEALER), saved)
+        assertTrue("no merge question about a new customer", asked.isEmpty())
+        assertEquals(listOf("Metro Glass"), typeAsked)
 
         val written = store.writes.single()
         assertEquals("c_new", written.docId)
         assertEquals("Metro Glass", written.data["name"])
         assertEquals("Mumbai", written.data["city"])
-        // V8C4: `type: p.type || state.tier || "client"`, with `type: state.tier`.
         assertEquals("dealer", written.data["type"])
         // A new customer has nothing underneath it, so it is written whole.
         assertEquals(false, written.merge)
+    }
+
+    @Test
+    fun `Save this customer creates nobody until Dealer or Client is chosen`() = runTest {
+        // R29. Cancel is an answer too: nothing is written, nothing is said.
+        val store = FakeStore()
+        val saved = PartyWriteRepository(store, now = { 1_000L })
+            .save(owner, QuotationPartySnapshot(name = "Metro Glass"), customers = emptyList(), type = null)
+
+        assertEquals(SavedParty(null, PartyWriteResult.NO_CHANGE, declined = true), saved)
+        assertEquals(listOf("Metro Glass"), typeAsked)
+        assertTrue("nothing on the wire", store.writes.isEmpty())
+    }
+
+    @Test
+    fun `a customer who is found is never asked a type, and none is written`() = runTest {
+        // D2, from the other side: the type question is for a new customer only.
+        val store = FakeStore(mutableMapOf("c_1" to sunriseDoc))
+        PartyWriteRepository(store, now = { 1_000L })
+            .save(manager, QuotationPartySnapshot(name = "Sunrise Constructions", phone = "9820011223"), listOf(sunrise))
+
+        assertTrue(typeAsked.isEmpty())
+        assertNull(store.writes.single().data["type"])
     }
 
     @Test
@@ -480,7 +511,7 @@ class PartyWriteRepositoryTest {
         val sunriseOnly = FakeStore(mutableMapOf("c_1" to sunriseDoc))
         val created = PartyWriteRepository(sunriseOnly, now = { 1_000L })
             .save(manager, typedOver, customers = listOf(sunrise))
-        assertEquals(SavedParty("c_new", PartyWriteResult.WRITTEN), created)
+        assertEquals(SavedParty("c_new", PartyWriteResult.WRITTEN, type = RateTierV2.CLIENT), created)
         assertEquals(listOf("c_new"), sunriseOnly.writes.map { it.docId })
     }
 
@@ -494,8 +525,8 @@ class PartyWriteRepositoryTest {
             QuotationPartySnapshot(name = "Sunrise Constructions", phone = "9820011223"),
             customers = listOf(sunrise.copy(archived = true))
         )
-        assertEquals(SavedParty("c_new", PartyWriteResult.WRITTEN), saved)
+        assertEquals(SavedParty("c_new", PartyWriteResult.WRITTEN, type = RateTierV2.CLIENT), saved)
         assertEquals(listOf("c_new"), store.writes.map { it.docId })
-        assertTrue("nothing to ask about", asked.isEmpty())
+        assertTrue("no merge question to ask", asked.isEmpty())
     }
 }

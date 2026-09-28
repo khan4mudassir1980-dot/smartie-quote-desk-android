@@ -939,6 +939,12 @@ private fun InstallationBlock(
             selected = mode,
             label = { it.label },
             onSelect = { chosen ->
+                // Not while the gate is open. The basis box takes the new
+                // mode's figure here, before the view model is asked; refused
+                // there, the box would keep a figure the quotation does not
+                // hold, and the next rate typed would push it in with the old
+                // mode (the Owner's review of 9b, A2).
+                if (!enabled) return@SegmentedChoiceGrid
                 // The basis follows the mode until somebody edits it: a
                 // per-door figure means nothing to a per-square-foot charge.
                 val basis = draft.defaultBasisFor(chosen)

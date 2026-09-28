@@ -8,8 +8,11 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -367,20 +370,81 @@ class QuoteBuilderScreenTest {
         assertEquals(1, cleared)
     }
 
+    /** A quotation showing all five boxes that keep what is typed. */
+    private fun everyMoneyBox() = oneLine().copy(
+        installation = Installation(InstallationMode.PER_DOOR, 500.0, 4.0),
+        discount = Discount(DiscountKind.PERCENT, 5.0)
+    )
+
+    /** Each box, and the item a test scrolls to before looking for it. */
+    private val moneyBoxes = listOf(
+        BUILDER_INSTALLATION_KEY to INSTALLATION_RATE_LABEL,
+        BUILDER_INSTALLATION_KEY to INSTALLATION_BASIS_LABEL,
+        BUILDER_DISCOUNT_KEY to DISCOUNT_VALUE_LABEL,
+        BUILDER_TRANSPORT_KEY to TRANSPORT_LABEL,
+        BUILDER_GST_KEY to GST_PERCENT_LABEL
+    )
+
+    /**
+     * Disabled nodes inside the box labelled [label].
+     *
+     * **Not the labelled node itself.** The label's `contentDescription` sits
+     * on the column around the box, which carries no enabled state at all:
+     * asserting on it failed "is not enabled" on CI #207, and its idle
+     * witness passed for the same reason — it could never have failed.
+     */
+    private fun disabledIn(label: String) =
+        compose.onAllNodes(isNotEnabled() and hasAnyAncestor(hasContentDescription(label)))
+
     @Test
     fun `the money boxes cannot be typed into while a number is being taken`() {
         // A box that kept a figure the view model refused would show, after
         // a failed finalise, an amount the quotation does not hold.
-        render(oneLine(), gatePhase = GatePhase.TAKING_NUMBER)
-        scrollTo(BUILDER_TRANSPORT_KEY)
-        compose.onNodeWithContentDescription(TRANSPORT_LABEL).assertIsNotEnabled()
+        render(everyMoneyBox(), gatePhase = GatePhase.TAKING_NUMBER)
+        for ((key, label) in moneyBoxes) {
+            scrollTo(key)
+            assertTrue(
+                "$label should be disabled",
+                disabledIn(label).fetchSemanticsNodes().isNotEmpty()
+            )
+        }
     }
 
     @Test
     fun `and can when it is idle`() {
-        render(oneLine())
-        scrollTo(BUILDER_TRANSPORT_KEY)
-        compose.onNodeWithContentDescription(TRANSPORT_LABEL).assertIsEnabled()
+        render(everyMoneyBox())
+        for ((key, label) in moneyBoxes) {
+            scrollTo(key)
+            assertEquals("$label should be enabled", 0, disabledIn(label).fetchSemanticsNodes().size)
+            // The reach: the typing node is there, so an empty count above
+            // is not a box that was never drawn.
+            compose.field(label).assertIsEnabled()
+        }
+    }
+
+    @Test
+    fun `an installation mode chosen while a number is being taken asks nothing and changes nothing`() {
+        // Choosing a mode fills the basis box before the view model is asked.
+        // Refused there, the box would hold another mode's figure, and the
+        // next rate typed would push it into the quotation. The guard sits
+        // above both, so nothing sent means the box was not touched either.
+        render(everyMoneyBox(), gatePhase = GatePhase.TAKING_NUMBER)
+        scrollTo(BUILDER_INSTALLATION_KEY)
+        compose.onNodeWithText(InstallationMode.PER_SQFT.label)
+            .performSemanticsAction(SemanticsActions.OnClick)
+
+        assertNull(installation)
+    }
+
+    @Test
+    fun `and when it is idle the same action changes the mode - the witness`() {
+        render(everyMoneyBox())
+        scrollTo(BUILDER_INSTALLATION_KEY)
+        compose.onNodeWithText(InstallationMode.PER_SQFT.label)
+            .performSemanticsAction(SemanticsActions.OnClick)
+
+        // No area lines, so the per-square-foot basis starts at zero.
+        assertEquals(Installation(InstallationMode.PER_SQFT, 500.0, 0.0), installation?.first)
     }
 
     @Test

@@ -1361,25 +1361,26 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**Plan N5.10 — edit and cancel, with the last-edited stamp. Plan only; no
-code until the Owner approves it.**
+**Part A of the Owner's 9b review, then plan N5.10.** Part A (A1-A4 in "The
+Owner's review of 9b, and the N5.10 brief, 2026-09-28", below) is
+investigated and reported first — if it needs code, one fix commit, CI
+green. Then **plan N5.10, edit and cancel — plan only, no code until the
+Owner approves**, answering the six hazards recorded there, with Duplicate
+as its own separable commit.
 
-N5.9 is complete and CI-verified at `57d607a` (run #204): N5.9b's commits are
-listed below, each with its run. N5.10's plan must carry what is already
-recorded for it in this file:
+N5.9 is complete and CI-verified at `57d607a` (run #204). What N5.10's plan
+must also carry, already recorded in this file:
 
 - **"N5.10 is coupled to the finalise retry"** — widening `/quotations`
   for edit removes the rules' second defence against a duplicate number;
   bound the edit branch, never accept the document whole, keep cancel at
-  `admin()`.
+  `admin()` for V8C4's payload.
 - **Never re-freeze `snap`, never re-resolve an absent `partyId`.**
 - **Area geometry degrades gracefully** (`docs/N5-plan.md`, the line
-  table): present, reopen the form pre-filled; absent, edit as a plain line;
-  never parsed back out of the spec string.
+  table).
 
-Still open for the Owner, from 8b and not blocking N5.10's plan: the party
-**type on update**, and the **Parties screen's own Add/Edit flows** versus
-V8C4's.
+Still open for the Owner, from 8b and not blocking: the party **type on
+update**, and the **Parties screen's own Add/Edit flows** versus V8C4's.
 
 ### N5.9b — every commit CI-verified, one run per head
 
@@ -2376,6 +2377,119 @@ ablation is tied to one commit and a bisect lands on the right change.
   `!(rate > 0)` — and `refusal()` already refused the null case. The two apps
   already diverged in both directions.
 
+### The Owner's review of 9b, and the N5.10 brief, 2026-09-28 — recorded before acting
+
+Rule 8: written here before any of it is acted on. V8C4 facts are
+**advisor-read evidence, not authority**.
+
+**N5.9b reviewed and accepted**, the BOM incident "handled exactly right".
+Part A first — if it needs code, one fix commit, CI green — then Part B,
+**plan only**: no N5.10 code until the plan is approved.
+
+**Keep `backup-9b-before-bom-fix` local, and never push it.**
+
+#### Part A — four 9b follow-ups
+
+- **A1. The fake models a rule; the rule must have its own test.** The
+  fake store models the deployed rule refusing a Manager's discount when
+  `/teamSettings/quoting` is absent. Name the **emulator** test that proves
+  the real rule refuses exactly that write; if none exists, add one
+  emulator case, with no rule change. A fake that models a rule must rest
+  on a test of that rule (rule 6).
+- **A2. The lock blocks touch, not focus, keyboard, D-pad or TalkBack.** So
+  the view-model refusal is the real guard, not a fallback. List every
+  action the builder can take while the gate is open — typing in fields,
+  adding or removing a line, Clear, Save this customer, picking a party,
+  changing tier, transport, installation, discount, Back — and say for each
+  whether the view model refuses it. Any that is not refused is a defect,
+  fixed in the view model. Then one screen test that activates Clear
+  through its **accessibility click action** (TalkBack's path, not injected
+  touch) and asserts nothing changed.
+- **A3. System Back during a finalise.** The panel closes and the view
+  model carries on. Where does "Finalised as X" appear, or a failure with
+  "Press Finalise again"? If it only appears on the closed panel, the
+  person never sees their number or their failure. Report what happens
+  today; if the message is lost, it must survive until it is seen. And:
+  reopened while the number is still being taken, is the builder still
+  locked?
+- **A4. The pre-existing non-breaking space** (`FieldReaders.kt`, reported
+  by the BOM fix). Name the file and line, and say whether it is
+  deliberate or a stray. In a regex, a message constant or a comparison it
+  is probably a defect. Report it; do not change it without saying which.
+
+#### Part B — N5.10, edit and cancel. PLAN ONLY
+
+**V8C4's history screen has exactly five actions:** `hview` (details),
+`hopen` (the current draft), `hpdf` (re-issue), `hdup` (Duplicate),
+`hcancel` (Cancel).
+
+**V8C4 has no edit of a finalised quotation. Edit is new behaviour.** The
+Owner's decision is the whole specification: the creator, and
+Owner/Administrator on anyone's; **the same number is overwritten**; no
+revision copy; a visible **"Last edited by <name>, <date time>"**; `snap`
+is never re-frozen. **Cancel by the creator is also new** — V8C4 lets only
+an admin cancel. Both are to be recorded as new behaviour, not as ports.
+
+**Cancel in V8C4** (6834-6840, 6680-6695):
+
+```
+if(!admin) return toast("Only an administrator can cancel a quotation")
+confirm: `Cancel ${x.no}?\n\nThe record is kept and marked cancelled. The number is never released or re-used.`
+toast:   `${x.no} cancelled`
+write:   updateDoc(quotations/<id>, {status:"Cancelled", cancelledBy, cancelledAt})
+         // "status, cancelledBy and cancelledAt are the only fields the rules allow"
+```
+
+V8C4's cancel is **local-first**: it marks the quotation cancelled on the
+device, then writes, and on failure says "Cancelled here, but not for the
+team: " + `friendlyAuthError(e)`. **Do not copy that shape** (hazard 6).
+
+**Duplicate in V8C4** (6886-6897): "a fresh draft that will take its own
+number". If the current draft has lines it asks "Replace the quotation you
+are working on with a copy of this one?". It copies the lines — the stored
+Transportation line comes over as an **ordinary** line, and the transport
+field is reset — the party and the tier. Toast: "Copied into a new draft —
+it takes a new number when you download, print or share". **Duplicate is
+in no N5 batch, so leaving it out is a regression at cutover.** Plan it as
+its own separable commit; the Owner decides whether it ships in N5.10.
+
+**The hazards the plan must answer:**
+
+1. **Edit must not go through the finalise gate.** The read-first would
+   find the quotation, answer `AlreadyIssued`, **discard the edits without
+   a word** and say "Finalised as X". Edit needs its own write path — an
+   update, not a create — and its own rules clause. Pin it with a test that
+   an edit saved really changes the stored lines.
+2. **Editing must not clobber the draft in progress.** Either ask first, as
+   Duplicate does, or give the edit its own draft slot. Say which, and why.
+3. **Two people editing one quotation.** Last write wins silently unless
+   the save checks, inside a transaction, that the document has not changed
+   since it was opened. Plan that check and the message the loser sees.
+4. **Rules change — the first rule-text change since N5.6** (N5.9a's cap
+   aside):
+   - the edit update: the creator (`byUid == auth.uid`) or Owner/Admin;
+   - `no`, `at`, `by`, `byUid`, the original `serverAt` and `snap` are
+     immutable;
+   - an edit cannot change `status`;
+   - a cancelled quotation cannot be edited;
+   - `lastEditedBy` / `lastEditedAt` are required;
+   - the discount cap applies to the edited discount;
+   - **V8C4's exact three-field cancel payload from an admin must still be
+     accepted**, pinned by an emulator test using V8C4's payload byte for
+     byte.
+   Name the new ruleset anchor when done.
+5. **The "Last edited" stamp goes on the card now. N5.11 must print it** —
+   the printed order has it right after the date. Recorded as an N5.11
+   requirement.
+6. **Cancel is remote-first.** The rules decide, and the list follows the
+   listener; there is never a "cancelled here but not for the team" state.
+   V8C4's confirm and toast text are used; the admin-only gate becomes the
+   Owner's rule.
+
+The plan comes in the usual shape — the commits, the tests, the ablations
+each tied to a commit — with anything the repository contradicts set out
+first.
+
 ### Owed in N6: the validators on the fields and on the company's own details
 
 Recorded 2026-09-26. V8C4 runs `gstinProblem`, `phoneProblem` and
@@ -3049,6 +3163,12 @@ plan", item 6.)
 **No production cutover while finalise passes no `snap`. N6 lands first.**
 Staging is safe today because **no PWA build points at staging**, so no
 V8C4 ever reads a native quotation there.
+
+### Owed in N5.11: print "Last edited by <name>, <date time>" right after the date
+
+Recorded 2026-09-28 at the Owner's instruction, as a **requirement**. N5.10
+puts the stamp on the quotation card; the printed page must carry it too,
+immediately after the date, in the printed order `docs/N5-plan.md` sets out.
 
 ### Owed in N5.11: the PDF falls back to the LIVE company settings when `snap` is absent
 

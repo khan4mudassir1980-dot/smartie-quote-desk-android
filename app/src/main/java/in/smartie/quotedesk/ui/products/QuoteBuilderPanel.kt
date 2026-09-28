@@ -234,6 +234,12 @@ internal fun QuoteBuilderPanel(
         manualOpen = false
     }
     val dimens = LocalSmartieDimens.current
+    // While the finalise gate is open. The layer below blocks touch only; a
+    // keyboard, a D-pad or TalkBack still reach what is under it, so the view
+    // model refuses every change as the real guard. What is disabled here is
+    // what could otherwise show something the quotation does not hold: Clear,
+    // and the money boxes that keep what was typed.
+    val locked = gatePhase != GatePhase.IDLE
     Box(modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize().testTag(QUOTE_BUILDER_TAG),
@@ -465,7 +471,8 @@ internal fun QuoteBuilderPanel(
                     basisTyped = basisTyped,
                     onRateTyped = { installTyped = it },
                     onBasisTyped = { basisTyped = it },
-                    onChange = onInstallationChange
+                    onChange = onInstallationChange,
+                    enabled = !locked
                 )
             }
 
@@ -475,7 +482,8 @@ internal fun QuoteBuilderPanel(
                     typed = discountTyped,
                     cap = discountCap,
                     onTyped = { discountTyped = it },
-                    onChange = onDiscountChange
+                    onChange = onDiscountChange,
+                    enabled = !locked
                 )
             }
 
@@ -491,6 +499,7 @@ internal fun QuoteBuilderPanel(
                         if (it.isBlank()) onTransportChange(0.0)
                         else QuoteLineEntry.number(it)?.let(onTransportChange)
                     },
+                    enabled = !locked,
                     isError = transportRefusal(transportTyped) != null,
                     supportingText = transportRefusal(transportTyped),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -536,6 +545,7 @@ internal fun QuoteBuilderPanel(
                                 gstTyped = it
                                 onGstPercentChange(QuoteLineEntry.number(it))
                             },
+                            enabled = !locked,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier.semantics { contentDescription = GST_PERCENT_LABEL }
                         )
@@ -599,7 +609,12 @@ internal fun QuoteBuilderPanel(
                 item(key = BUILDER_CLEAR_KEY) {
                     SmartieGhostButton(
                         text = CLEAR_LINES,
-                        onClick = onClear,
+                        // Disabled while the gate is open, and the click itself
+                        // checks again: TalkBack's click action does not pass
+                        // through the lock layer, and an action a disabled
+                        // node still carries must do nothing either.
+                        onClick = { if (!locked) onClear() },
+                        enabled = !locked,
                         danger = true,
                         modifier = Modifier
                             .semantics { contentDescription = CLEAR_LINES }
@@ -863,7 +878,9 @@ private fun InstallationBlock(
     basisTyped: String,
     onRateTyped: (String) -> Unit,
     onBasisTyped: (String) -> Unit,
-    onChange: (Installation?) -> Unit
+    onChange: (Installation?) -> Unit,
+    /** False while the finalise gate is open: the boxes keep what is typed. */
+    enabled: Boolean = true
 ) {
     val dimens = LocalSmartieDimens.current
     val charge = draft.installation
@@ -937,6 +954,7 @@ private fun InstallationBlock(
                 onRateTyped(it)
                 push(rate = it)
             },
+            enabled = enabled,
             isError = negativeRefusal(rateTyped) != null,
             supportingText = negativeRefusal(rateTyped),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -950,6 +968,7 @@ private fun InstallationBlock(
                     onBasisTyped(it)
                     push(basis = it)
                 },
+                enabled = enabled,
                 isError = negativeRefusal(basisTyped) != null,
                 supportingText = negativeRefusal(basisTyped),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -979,7 +998,9 @@ private fun DiscountBlock(
     typed: String,
     cap: Double?,
     onTyped: (String) -> Unit,
-    onChange: (Discount?) -> Unit
+    onChange: (Discount?) -> Unit,
+    /** False while the finalise gate is open: the box keeps what is typed. */
+    enabled: Boolean = true
 ) {
     val dimens = LocalSmartieDimens.current
     val discount = draft.discount
@@ -1029,6 +1050,7 @@ private fun DiscountBlock(
                 onTyped(it)
                 onChange(Discount(kind, QuoteLineEntry.number(it) ?: 0.0))
             },
+            enabled = enabled,
             isError = refusal != null,
             supportingText = refusal,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),

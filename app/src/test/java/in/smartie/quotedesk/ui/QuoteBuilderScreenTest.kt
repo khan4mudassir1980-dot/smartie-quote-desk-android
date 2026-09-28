@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasScrollAction
@@ -16,6 +18,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextClearance
@@ -98,6 +101,7 @@ import `in`.smartie.quotedesk.ui.products.ISSUING_NOTE
 import `in`.smartie.quotedesk.ui.products.BUILDER_FINALISE_FAILURE_KEY
 import `in`.smartie.quotedesk.ui.products.BUILDER_FINALISE_KEY
 import `in`.smartie.quotedesk.ui.products.BUILDER_LOCK_TAG
+import `in`.smartie.quotedesk.ui.products.CATALOGUE_FINALISE_STATUS_TAG
 import `in`.smartie.quotedesk.ui.products.BUILDER_ZERO_RATE_TAG
 import `in`.smartie.quotedesk.ui.products.CANCEL_FINALISE
 import `in`.smartie.quotedesk.ui.products.CONTINUE_ANYWAY
@@ -327,6 +331,93 @@ class QuoteBuilderScreenTest {
         scrollTo(BUILDER_CLEAR_KEY)
         compose.onNodeWithContentDescription(CLEAR_LINES).performClick()
         assertEquals(1, cleared)
+    }
+
+    // --- the Owner's review of 9b: past the layer, and after Back ----------------------------
+
+    @Test
+    fun `Clear activated through its accessibility click action changes nothing while the gate is open`() {
+        // A2. The layer blocks touch; TalkBack does not touch — it runs the
+        // node's own click action. So Clear is disabled while the gate is
+        // open, and its click checks again, whichever path reaches it.
+        render(oneLine(), gatePhase = GatePhase.TAKING_NUMBER)
+        scrollTo(BUILDER_CLEAR_KEY)
+        val clear = compose.onNodeWithContentDescription(CLEAR_LINES)
+        clear.assertIsNotEnabled()
+
+        val action = clear.fetchSemanticsNode().config.getOrNull(SemanticsActions.OnClick)
+        if (action != null) {
+            // Compose may keep the action on a disabled node; running it must
+            // still change nothing.
+            clear.performSemanticsAction(SemanticsActions.OnClick)
+        }
+        compose.waitForIdle()
+
+        assertEquals(0, cleared)
+    }
+
+    @Test
+    fun `the same accessibility action clears when the gate is idle - the witness`() {
+        // Without this the test above could pass because the action path
+        // reaches nothing at all.
+        render(oneLine())
+        scrollTo(BUILDER_CLEAR_KEY)
+        compose.onNodeWithContentDescription(CLEAR_LINES).performSemanticsAction(SemanticsActions.OnClick)
+
+        assertEquals(1, cleared)
+    }
+
+    @Test
+    fun `the money boxes cannot be typed into while a number is being taken`() {
+        // A box that kept a figure the view model refused would show, after
+        // a failed finalise, an amount the quotation does not hold.
+        render(oneLine(), gatePhase = GatePhase.TAKING_NUMBER)
+        scrollTo(BUILDER_TRANSPORT_KEY)
+        compose.onNodeWithContentDescription(TRANSPORT_LABEL).assertIsNotEnabled()
+    }
+
+    @Test
+    fun `and can when it is idle`() {
+        render(oneLine())
+        scrollTo(BUILDER_TRANSPORT_KEY)
+        compose.onNodeWithContentDescription(TRANSPORT_LABEL).assertIsEnabled()
+    }
+
+    @Test
+    fun `with the builder closed, a failed finalise is shown on the catalogue until the next press`() {
+        // A3. System Back closes the panel and the view model carries on; a
+        // failure only on the closed panel would never be seen.
+        val failure = "Not finalised — The connection timed out. Please try again. Your quotation is untouched. " +
+            "Press Finalise again — if a number was taken, the same one comes back."
+        render(oneLine(), open = false, finaliseFailure = failure)
+
+        compose.onNodeWithTag(CATALOGUE_FINALISE_STATUS_TAG).assertExists()
+        compose.onNodeWithText(failure).assertExists()
+    }
+
+    @Test
+    fun `and while a number is still being taken, the catalogue says so`() {
+        render(oneLine(), open = false, gatePhase = GatePhase.TAKING_NUMBER)
+        compose.onNodeWithText(TAKING_A_NUMBER).assertExists()
+    }
+
+    @Test
+    fun `nothing is said on the catalogue when the gate is idle and nothing failed`() {
+        render(oneLine(), open = false)
+        compose.onNodeWithText("View quote").assertExists()
+        assertEquals(0, compose.onAllNodesWithTag(CATALOGUE_FINALISE_STATUS_TAG).fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun `reopened while a number is still being taken, the builder is still locked`() {
+        // The gate's phase lives in the view model, not the panel, so a panel
+        // opened again reads it and draws the layer and the busy control.
+        render(oneLine(), open = false, gatePhase = GatePhase.TAKING_NUMBER)
+        compose.onNodeWithText("View quote").performClick()
+
+        compose.onNodeWithTag(BUILDER_LOCK_TAG).assertExists()
+        scrollTo(BUILDER_FINALISE_KEY)
+        compose.onNodeWithContentDescription(TAKING_A_NUMBER).assertIsNotEnabled()
     }
 
     @Test

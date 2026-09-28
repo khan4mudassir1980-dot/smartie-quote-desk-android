@@ -27,7 +27,12 @@ fun Any?.asDoubleOrNull(): Double? = when (this) {
         val cleaned = trim()
             .removePrefix("₹")
             .replace(",", "")
-            .replace(" ", "")
+            // A no-break space inside the figure, where formatted money groups
+            // digits with one ("1 250.50" with U+00A0). One at either end is
+            // already taken by trim(), which counts U+00A0 as whitespace; this
+            // is what removes one in the middle. Written as an escape since
+            // N5.9b's review: a literal one is invisible in review.
+            .replace("\u00A0", "")
             .trim()
         when {
             cleaned.isEmpty() -> null

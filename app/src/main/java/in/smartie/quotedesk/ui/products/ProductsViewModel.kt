@@ -28,13 +28,15 @@ import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.QuoteDrafts
 import `in`.smartie.quotedesk.domain.QuoteParty
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -52,7 +54,17 @@ class ProductsViewModel(
     private val member: Member,
 ) : ViewModel() {
 
-    val messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    /**
+     * Messages for the Products screen, **kept until it is there to show
+     * them.** A `MutableSharedFlow` with no replay dropped anything emitted
+     * while nothing collected — the screen collects only while the Products
+     * tab is on screen, and this view model outlives a tab switch — so a
+     * finalise that finished after the person had moved to another tab lost
+     * its "Finalised as X" (the Owner's review of 9b, A3). A buffered channel
+     * holds each message until the next collector takes it, once.
+     */
+    private val _messages = Channel<String>(Channel.BUFFERED)
+    val messages: Flow<String> = _messages.receiveAsFlow()
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
@@ -184,6 +196,7 @@ class ProductsViewModel(
      * ordinary start, so it costs nothing to call.
      */
     fun alignDraftToTier(products: List<ProductRecord>) {
+        if (gateOpen) return
         val current = _draft.value
         if (!current.hasLinesOutOfStep) return
         val byKey = products.associateBy { it.key }
@@ -199,6 +212,7 @@ class ProductsViewModel(
      * what moved and what was kept, as the PWA does (2269-2288).
      */
     fun setTier(newTier: RateTierV2, products: List<ProductRecord>) {
+        if (refusedWhileFinalising()) return
         val current = _draft.value
         if (newTier == current.tier) return
         val byKey = products.associateBy { it.key }
@@ -214,12 +228,14 @@ class ProductsViewModel(
     }
 
     fun add(product: ProductRecord) {
+        if (refusedWhileFinalising()) return
         val before = _draft.value.quantityOf(product.key)
         persist(_draft.value.add(product))
         if (before > 0.0) emit(ALREADY_IN_QUOTE)
     }
 
     fun changeQuantity(key: String, delta: Double) {
+        if (refusedWhileFinalising()) return
         persist(_draft.value.changeCatalogueQuantity(key, delta))
     }
 
@@ -233,6 +249,7 @@ class ProductsViewModel(
      * the person was not looking at.
      */
     fun changeLineQuantity(id: String, delta: Double) {
+        if (refusedWhileFinalising()) return
         persist(_draft.value.changeQuantity(id, delta))
     }
 
@@ -255,27 +272,32 @@ class ProductsViewModel(
      * caller that did not.
      */
     fun addManualLine(id: String, entry: ManualEntry) {
+        if (refusedWhileFinalising()) return
         entry.refusal()?.let { emit(it); return }
         persist(entry.addTo(_draft.value, id))
     }
 
     fun addAreaLine(id: String, entry: AreaEntry) {
+        if (refusedWhileFinalising()) return
         entry.refusal()?.let { emit(it); return }
         persist(entry.addTo(_draft.value, id))
     }
 
     /** A measurement corrected on an opening that is already on the quotation. */
     fun editAreaLine(line: DraftLine, entry: AreaEntry) {
+        if (refusedWhileFinalising()) return
         entry.refusal()?.let { emit(it); return }
         persist(entry.applyTo(_draft.value, line))
     }
 
     /** Taking one line off, by its id. A stepper down to zero does the same. */
     fun removeLine(id: String) {
+        if (refusedWhileFinalising()) return
         persist(_draft.value.remove(id))
     }
 
     fun setQuantity(key: String, quantity: Double) {
+        if (refusedWhileFinalising()) return
         if (!QuoteDraft.isValidQuantity(quantity)) {
             emit(NEGATIVE_QUANTITY)
             return
@@ -293,11 +315,13 @@ class ProductsViewModel(
      * as a half-built line list does (audit C8).
      */
     fun setPartyDetails(party: QuotationPartySnapshot) {
+        if (refusedWhileFinalising()) return
         persist(_draft.value.copy(party = party))
     }
 
     /** A saved customer, chosen from the picker. The site is kept. */
     fun chooseParty(record: PartyRecord) {
+        if (refusedWhileFinalising()) return
         persist(_draft.value.withParty(record))
     }
 
@@ -336,7 +360,7 @@ class ProductsViewModel(
     fun saveCustomer(newId: String, customers: List<PartyRecord>) {
         // Finalise and "Save this customer" exclude each other: a party link
         // adopted into a draft that is being retired would be lost with it.
-        if (finaliser.phase.value != GatePhase.IDLE) return
+        if (refusedWhileFinalising()) return
         val draft = _draft.value
         val party = QuoteParty.draftOf(draft.party)
         party.refusal()?.let {
@@ -481,11 +505,13 @@ class ProductsViewModel(
     // --- GST and transport (N5.8b) ------------------------------------------
 
     fun setGstEnabled(enabled: Boolean) {
+        if (refusedWhileFinalising()) return
         persist(_draft.value.copy(gstEnabled = enabled))
     }
 
     /** Null is "not resolved yet", which blocks finalising. Never a zero. */
     fun setGstPercent(percent: Double?) {
+        if (refusedWhileFinalising()) return
         persist(_draft.value.copy(gstPercent = percent?.takeIf { it.isFinite() && it >= 0.0 }))
     }
 
@@ -499,6 +525,7 @@ class ProductsViewModel(
      * forbade.
      */
     fun suggestGst(products: List<ProductRecord>) {
+        if (gateOpen) return
         val current = _draft.value
         if (current.gstPercent != null || !current.gstEnabled) return
         val byKey = products.associateBy { it.key }
@@ -507,6 +534,7 @@ class ProductsViewModel(
     }
 
     fun setTransport(amount: Double) {
+        if (refusedWhileFinalising()) return
         if (!amount.isFinite() || amount < 0.0) {
             emit(QuoteDraft.NEGATIVE_TRANSPORT)
             return
@@ -515,6 +543,7 @@ class ProductsViewModel(
     }
 
     fun setTransportNote(note: String) {
+        if (refusedWhileFinalising()) return
         persist(_draft.value.copy(transportNote = note))
     }
 
@@ -523,6 +552,7 @@ class ProductsViewModel(
      * same as a charge of zero and is why the model keeps it nullable.
      */
     fun setInstallation(charge: Installation?) {
+        if (refusedWhileFinalising()) return
         if (charge != null && !QuoteDraft.isValidInstallation(charge)) {
             emit(QuoteDraft.NEGATIVE_INSTALLATION)
             return
@@ -539,10 +569,12 @@ class ProductsViewModel(
      * is worse than one that would not save.
      */
     fun setDiscount(discount: Discount?) {
+        if (refusedWhileFinalising()) return
         persist(_draft.value.copy(discount = discount))
     }
 
     fun clearDraft() {
+        if (refusedWhileFinalising()) return
         persist(_draft.value.clear())
     }
 
@@ -655,6 +687,27 @@ class ProductsViewModel(
 
     // --- plumbing ----------------------------------------------------------
 
+    /**
+     * True — and said, once — when the finalise gate is open and a person
+     * tried to change the quotation.
+     *
+     * **This is the real guard, not a fallback.** The panel's lock layer
+     * blocks touch only: focus, a keyboard, a D-pad and TalkBack reach the
+     * controls under it (the Owner's review of 9b, A2). So every action that
+     * changes the quotation asks this first, before it computes anything or
+     * says anything else — until 9b's review `setTier` and `add` were refused
+     * by [persist] and then announced a repricing or a raised quantity that
+     * had not happened. [persist] keeps its own check as the floor.
+     */
+    private fun refusedWhileFinalising(): Boolean {
+        if (finaliser.phase.value == GatePhase.IDLE) return false
+        emit(TAKING_A_NUMBER)
+        return true
+    }
+
+    /** The same, for what the screen does on its own: skipped, and never announced. */
+    private val gateOpen: Boolean get() = finaliser.phase.value != GatePhase.IDLE
+
     private fun persist(draft: QuoteDraft) {
         // Refused while the gate is open. An edit made now would be saved to
         // the draft, missing from the quotation being issued, and removed with
@@ -689,7 +742,7 @@ class ProductsViewModel(
     }
 
     private fun emit(message: String) {
-        messages.tryEmit(message)
+        _messages.trySend(message)
     }
 
     class Factory(

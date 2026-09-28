@@ -43,8 +43,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -632,6 +635,16 @@ fun ProductsCatalogue(
                 visible = backToTop,
                 onClick = { scope.launch { listState.animateScrollToItem(0) } },
             )
+            // The builder was closed with System Back while a number was being
+            // taken, or after a finalise that failed. Its status is shown here
+            // too, so a failure — "Press Finalise again" included — is never
+            // only on a panel the person has left (the Owner's review of 9b,
+            // A3). Kept until the next press, as on the panel.
+            FinaliseStatus(
+                gatePhase = gatePhase,
+                failure = finaliseFailure,
+                modifier = Modifier.fillMaxWidth(),
+            )
             QuoteBar(
                 lineCount = draft.lineCount,
                 total = Money.formatRupees(draft.total, decimals = 0),
@@ -643,6 +656,31 @@ fun ProductsCatalogue(
     }
 
 }
+
+/**
+ * What the finalise gate is doing, for a catalogue whose builder is closed:
+ * "Taking a number…" while it works, the failure once it has failed, and
+ * nothing otherwise. "Finalised as X" is not here — it goes to the snackbar,
+ * and since 9b's review the view model keeps it until the screen shows it.
+ */
+@Composable
+private fun FinaliseStatus(gatePhase: GatePhase, failure: String?, modifier: Modifier = Modifier) {
+    val text = when {
+        gatePhase == GatePhase.TAKING_NUMBER -> TAKING_A_NUMBER
+        failure != null -> failure
+        else -> return
+    }
+    Text(
+        text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = if (failure != null && gatePhase == GatePhase.IDLE) SmartieColors.Danger else SmartieColors.Ink,
+        modifier = modifier
+            .testTag(CATALOGUE_FINALISE_STATUS_TAG)
+            .semantics { liveRegion = LiveRegionMode.Polite }
+    )
+}
+
+internal const val CATALOGUE_FINALISE_STATUS_TAG = "catalogue-finalise-status"
 
 /**
  * Back to the top of the catalogue.

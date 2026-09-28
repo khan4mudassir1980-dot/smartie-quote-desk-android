@@ -315,11 +315,23 @@ class QuotationWriteRepositoryTest {
             // six attempts, about three seconds, and a reason about the counter.
             val store = FakeQuotationStore(seeded()).apply {
                 // The deployed rule, modelled: with no /teamSettings/quoting a
-                // Manager's discount is refused at commit (N5.9a commit 2,
-                // `ccc08c4` — "an absent document refuses a Manager's
-                // discount rather than allowing any").
+                // Manager's discount worth more than zero is refused at commit
+                // (`discountOk()`, N5.9a commit 2, `ccc08c4`).
+                //
+                // **The rule itself is proved by the emulator**, not by this:
+                // `firestore/tests/quotation.test.js`, "with no quoting
+                // document at all, a Manager gets no discount" — a Manager's
+                // create with `disc.amt` 2220 and no quoting document fails,
+                // and the same quotation without a discount succeeds. This
+                // fake only models what that test proves (rule 6), and
+                // models it for a Manager, the only author this test uses;
+                // the rule's exemption for an Owner or Administrator is not
+                // modelled here.
                 refuseCommitWhen = { staged ->
-                    "teamSettings/quoting" !in docs && staged.values.any { it["disc"] != null }
+                    "teamSettings/quoting" !in docs && staged.values.any { doc ->
+                        val amount = (doc["disc"] as? Map<*, *>)?.get("amt")
+                        amount is Number && amount.toDouble() > 0.0
+                    }
                 }
             }
             val discounted = draft.copy(discount = Discount(DiscountKind.PERCENT, 5.0))

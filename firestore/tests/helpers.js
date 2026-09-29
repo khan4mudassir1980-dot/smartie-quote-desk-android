@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { initializeTestEnvironment } = require('@firebase/rules-unit-testing');
+const assert = require('node:assert/strict');
+const { assertFails, initializeTestEnvironment } = require('@firebase/rules-unit-testing');
 
 const OWNER_EMAIL = 'khan4mudassir1980@gmail.com';
 
@@ -69,4 +70,25 @@ function as(testEnv, uid) {
   return testEnv.authenticatedContext(uid, person ? { email: person.email } : {}).firestore();
 }
 
-module.exports = { createTestEnvironment, seed, as, UIDS, PEOPLE, OWNER_EMAIL };
+/**
+ * A refusal **by the rule**, never by the engine giving up. Every refusal in
+ * this suite goes through it.
+ *
+ * The rules engine stops at 1,000 evaluated expressions per request and
+ * **denies** the write, so a plain `assertFails` cannot tell a refusal by the
+ * clause a test names from the engine running out of budget. N5.10's first
+ * draft reached that limit on a valid write, and its refusal tests passed
+ * because of it; N5.10b then found 58 refusals across `purchase.test.js` and
+ * `data.test.js` that passed only because of it. This fails the test when
+ * the denial is the limit's, whatever else it says.
+ *
+ * Returns the error, as `assertFails` does.
+ */
+async function refused(write) {
+  const error = await assertFails(write);
+  assert.doesNotMatch(String(error?.message ?? error), /maximum of 1000 expressions/,
+    'refused by the expression limit, not by the rule');
+  return error;
+}
+
+module.exports = { createTestEnvironment, seed, as, refused, UIDS, PEOPLE, OWNER_EMAIL };

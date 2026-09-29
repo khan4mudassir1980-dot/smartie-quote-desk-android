@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
-const { createTestEnvironment, seed, as, UIDS } = require('./helpers');
+const { assertSucceeds } = require('@firebase/rules-unit-testing');
+const { createTestEnvironment, seed, as, refused, UIDS } = require('./helpers');
 
 /**
  * What `/products` actually accepts.
@@ -147,47 +147,47 @@ test('and so is the minimum chargeable area N5.7 adds', async () => {
 
 test('a product with no seedModel is refused', async () => {
   const db = as(testEnv, UIDS.primaryOwner);
-  await assertFails(products(db).doc(DOC).set(without('seedModel')));
+  await refused(products(db).doc(DOC).set(without('seedModel')));
 });
 
 test('a gst stored as the string an older PWA wrote is refused', async () => {
   const db = as(testEnv, UIDS.primaryOwner);
-  await assertFails(products(db).doc(DOC).set(v8c4Product({ gst: '18' })));
+  await refused(products(db).doc(DOC).set(v8c4Product({ gst: '18' })));
 });
 
 test('an active of 1 rather than true is refused', async () => {
   const db = as(testEnv, UIDS.primaryOwner);
-  await assertFails(products(db).doc(DOC).set(v8c4Product({ active: 1 })));
+  await refused(products(db).doc(DOC).set(v8c4Product({ active: 1 })));
 });
 
 test('a price stored as a formatted string is refused', async () => {
   const db = as(testEnv, UIDS.primaryOwner);
-  await assertFails(products(db).doc(DOC).set(v8c4Product({ dealer: '1,250.50' })));
+  await refused(products(db).doc(DOC).set(v8c4Product({ dealer: '1,250.50' })));
 });
 
 test('and so is the PWA unset marker, which only the reader understands', async () => {
   // `∅` is the PWA's NULLP. Tolerant readers map it to null, but the rule sees
   // a string, so the editor must normalise it to null before writing.
   const db = as(testEnv, UIDS.primaryOwner);
-  await assertFails(products(db).doc(DOC).set(v8c4Product({ contractor: '∅' })));
+  await refused(products(db).doc(DOC).set(v8c4Product({ contractor: '∅' })));
 });
 
 test('a gst above the highest Indian slab is refused', async () => {
   const db = as(testEnv, UIDS.primaryOwner);
-  await assertFails(products(db).doc(DOC).set(v8c4Product({ gst: 29 })));
+  await refused(products(db).doc(DOC).set(v8c4Product({ gst: 29 })));
   await assertSucceeds(products(db).doc(DOC).set(v8c4Product({ gst: 28 })));
 });
 
 test('a negative price is refused', async () => {
   const db = as(testEnv, UIDS.primaryOwner);
-  await assertFails(products(db).doc(DOC).set(v8c4Product({ client: -1 })));
+  await refused(products(db).doc(DOC).set(v8c4Product({ client: -1 })));
   await assertSucceeds(products(db).doc(DOC).set(v8c4Product({ client: 0 })));
 });
 
 test('an empty model or group is refused', async () => {
   const db = as(testEnv, UIDS.primaryOwner);
-  await assertFails(products(db).doc(DOC).set(v8c4Product({ model: '' })));
-  await assertFails(products(db).doc(DOC).set(v8c4Product({ group: '' })));
+  await refused(products(db).doc(DOC).set(v8c4Product({ model: '' })));
+  await refused(products(db).doc(DOC).set(v8c4Product({ group: '' })));
 });
 
 // --- the absence question ------------------------------------------------------
@@ -212,7 +212,7 @@ test('an absent price key is refused where a null one is accepted', async () => 
   // are the same document, at the same path, by the same account, differing
   // in nothing but whether the key is present.
   const db = as(testEnv, UIDS.primaryOwner);
-  await assertFails(products(db).doc(DOC).set(without('contractor')));
+  await refused(products(db).doc(DOC).set(without('contractor')));
   await assertSucceeds(products(db).doc(DOC).set(v8c4Product({ contractor: null })));
 });
 
@@ -220,7 +220,7 @@ test('a gst key that is absent is refused', async () => {
   // The same question for a field with no `null` form at all, so the two
   // cases cannot be confused.
   const db = as(testEnv, UIDS.primaryOwner);
-  await assertFails(products(db).doc(DOC).set(without('gst')));
+  await refused(products(db).doc(DOC).set(without('gst')));
 });
 
 // --- why the editor writes every field -----------------------------------------
@@ -235,7 +235,7 @@ test('a one-field edit on a legacy document is refused', async () => {
     gst: '18', dealer: 18500, contractor: null, client: 25900, active: 1,
   });
   const db = as(testEnv, UIDS.primaryOwner);
-  await assertFails(products(db).doc(DOC).update({ unit: 'per sq ft' }));
+  await refused(products(db).doc(DOC).update({ unit: 'per sq ft' }));
 });
 
 test('and the same edit as a complete, correctly typed write is accepted', async () => {
@@ -261,7 +261,7 @@ test('a document written before seedModel existed repairs the same way', async (
     name: 'Sliding gate motor', gst: 18, dealer: 18500, active: true,
   });
   const db = as(testEnv, UIDS.primaryOwner);
-  await assertFails(products(db).doc(DOC).update({ name: 'Sliding gate motor 1000 kg' }));
+  await refused(products(db).doc(DOC).update({ name: 'Sliding gate motor 1000 kg' }));
   await assertSucceeds(products(db).doc(DOC).set(v8c4Product(), { merge: true }));
 });
 
@@ -271,22 +271,22 @@ test('a Manager is refused a product write however well formed it is', async () 
   // Refused at `admin()`, before any field predicate runs — so this says
   // nothing about the shape, and is not evidence that the shape is good.
   const db = as(testEnv, UIDS.staff);
-  await assertFails(products(db).doc(DOC).set(v8c4Product()));
+  await refused(products(db).doc(DOC).set(v8c4Product()));
 });
 
 test('and so is a Staff account, which cannot even read the catalogue', async () => {
   const db = as(testEnv, UIDS.worker);
-  await assertFails(products(db).doc(DOC).set(v8c4Product()));
-  await assertFails(products(db).doc(DOC).get());
+  await refused(products(db).doc(DOC).set(v8c4Product()));
+  await refused(products(db).doc(DOC).get());
 });
 
 test('a switched-off account is refused', async () => {
   const db = as(testEnv, UIDS.switchedOff);
-  await assertFails(products(db).doc(DOC).set(v8c4Product()));
+  await refused(products(db).doc(DOC).set(v8c4Product()));
 });
 
 test('deleting a product stays with an Administrator', async () => {
   await givenLegacyProduct(v8c4Product());
-  await assertFails(products(as(testEnv, UIDS.staff)).doc(DOC).delete());
+  await refused(products(as(testEnv, UIDS.staff)).doc(DOC).delete());
   await assertSucceeds(products(as(testEnv, UIDS.admin)).doc(DOC).delete());
 });

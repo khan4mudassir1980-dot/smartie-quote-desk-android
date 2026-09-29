@@ -1,9 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
+const { assertSucceeds } = require('@firebase/rules-unit-testing');
 const firebase = require('firebase/compat/app');
 require('firebase/compat/firestore');
-const { createTestEnvironment, seed, as, UIDS } = require('./helpers');
+const { createTestEnvironment, seed, as, refused, UIDS } = require('./helpers');
 
 /**
  * N3.1 stock photos.
@@ -69,19 +69,19 @@ test('Staff may set a photo; a Worker may only read one', async () => {
 
   const workerDb = as(testEnv, UIDS.worker);
   await assertSucceeds(workerDb.collection('stockPhotos').doc(STOCK).get());
-  await assertFails(setPhoto(workerDb, UIDS.worker, 2));
-  await assertFails(workerDb.collection('stockPhotos').doc(STOCK).delete());
+  await refused(setPhoto(workerDb, UIDS.worker, 2));
+  await refused(workerDb.collection('stockPhotos').doc(STOCK).delete());
 });
 
 test('a signed-out caller gets nothing', async () => {
   await assertSucceeds(setPhoto(as(testEnv, UIDS.admin), UIDS.admin, 1));
   const anon = testEnv.unauthenticatedContext().firestore();
-  await assertFails(anon.collection('stockPhotos').doc(STOCK).get());
-  await assertFails(setPhoto(anon, UIDS.admin, 2));
+  await refused(anon.collection('stockPhotos').doc(STOCK).get());
+  await refused(setPhoto(anon, UIDS.admin, 2));
 });
 
 test('a switched-off account may not write a photo', async () => {
-  await assertFails(setPhoto(as(testEnv, UIDS.switchedOff), UIDS.switchedOff, 1));
+  await refused(setPhoto(as(testEnv, UIDS.switchedOff), UIDS.switchedOff, 1));
 });
 
 // --- the payload -------------------------------------------------------
@@ -89,50 +89,50 @@ test('a switched-off account may not write a photo', async () => {
 test('the 80 KiB ceiling is enforced by the rules, not just by the client', async () => {
   const db = as(testEnv, UIDS.staff);
   await assertSucceeds(setPhoto(db, UIDS.staff, 1, { size: MAX_BYTES }));
-  await assertFails(setPhoto(db, UIDS.staff, 2, { size: MAX_BYTES + 1 }));
+  await refused(setPhoto(db, UIDS.staff, 2, { size: MAX_BYTES + 1 }));
 });
 
 test('the image field has to be bytes', async () => {
   const db = as(testEnv, UIDS.staff);
-  await assertFails(setPhoto(db, UIDS.staff, 1, { photo: { bytes: 'not an image' } }));
-  await assertFails(setPhoto(db, UIDS.staff, 1, { photo: { bytes: 12345 } }));
+  await refused(setPhoto(db, UIDS.staff, 1, { photo: { bytes: 'not an image' } }));
+  await refused(setPhoto(db, UIDS.staff, 1, { photo: { bytes: 12345 } }));
 });
 
 test('no price or tax field may ride along on a photo document', async () => {
   const db = as(testEnv, UIDS.staff);
   for (const leak of ['dealer', 'contractor', 'client', 'gst']) {
-    await assertFails(setPhoto(db, UIDS.staff, 1, { photo: { [leak]: 18500 } }));
+    await refused(setPhoto(db, UIDS.staff, 1, { photo: { [leak]: 18500 } }));
   }
 });
 
 test('a photo cannot be attributed to somebody else', async () => {
   const db = as(testEnv, UIDS.staff);
-  await assertFails(setPhoto(db, UIDS.staff, 1, { photo: { byUid: UIDS.admin } }));
+  await refused(setPhoto(db, UIDS.staff, 1, { photo: { byUid: UIDS.admin } }));
 });
 
 // --- the two documents must agree --------------------------------------
 
 test('a photo document alone is refused', async () => {
   const db = as(testEnv, UIDS.staff);
-  await assertFails(db.collection('stockPhotos').doc(STOCK).set(photoDoc(UIDS.staff, 1)));
+  await refused(db.collection('stockPhotos').doc(STOCK).set(photoDoc(UIDS.staff, 1)));
 });
 
 test('stock metadata claiming a photo that is not there is refused', async () => {
   const db = as(testEnv, UIDS.staff);
-  await assertFails(
+  await refused(
     db.collection('stock').doc(STOCK).set(stockRow(UIDS.staff, { hasPhoto: true, photoRev: 1 })),
   );
 });
 
 test('a rev that disagrees between the two documents is refused', async () => {
   const db = as(testEnv, UIDS.staff);
-  await assertFails(setPhoto(db, UIDS.staff, 1, { stock: { hasPhoto: true, photoRev: 2 } }));
+  await refused(setPhoto(db, UIDS.staff, 1, { stock: { hasPhoto: true, photoRev: 2 } }));
 });
 
 test('deleting the photo while the row still claims one is refused', async () => {
   await assertSucceeds(setPhoto(as(testEnv, UIDS.staff), UIDS.staff, 1));
   const db = as(testEnv, UIDS.staff);
-  await assertFails(db.collection('stockPhotos').doc(STOCK).delete());
+  await refused(db.collection('stockPhotos').doc(STOCK).delete());
 });
 
 test('removing a photo takes both documents together', async () => {
@@ -143,7 +143,7 @@ test('removing a photo takes both documents together', async () => {
 test('photoRev may not go backwards', async () => {
   await assertSucceeds(setPhoto(as(testEnv, UIDS.staff), UIDS.staff, 5));
   const db = as(testEnv, UIDS.staff);
-  await assertFails(setPhoto(db, UIDS.staff, 4));
+  await refused(setPhoto(db, UIDS.staff, 4));
   await assertSucceeds(setPhoto(db, UIDS.staff, 6));
 });
 
@@ -152,7 +152,7 @@ test('photoRev may not go backwards', async () => {
 test('a stock row cannot be deleted out from under its photo', async () => {
   await assertSucceeds(setPhoto(as(testEnv, UIDS.admin), UIDS.admin, 1));
   const db = as(testEnv, UIDS.admin);
-  await assertFails(db.collection('stock').doc(STOCK).delete());
+  await refused(db.collection('stock').doc(STOCK).delete());
 });
 
 test('deleting both together is allowed, and is how a photographed row goes', async () => {
@@ -170,7 +170,7 @@ test('photo is a stock lastAction but never a stockMoves action', async () => {
   const db = as(testEnv, UIDS.staff);
   await assertSucceeds(setPhoto(db, UIDS.staff, 1));
 
-  await assertFails(db.collection('stockMoves').doc('mv_photo').set({
+  await refused(db.collection('stockMoves').doc('mv_photo').set({
     id: 'mv_photo', key: STOCK, action: 'photo', prev: 7, next: 7, at: Date.now(),
     byUid: UIDS.staff,
   }));

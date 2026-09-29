@@ -1,9 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
+const { assertSucceeds } = require('@firebase/rules-unit-testing');
 const firebase = require('firebase/compat/app');
 require('firebase/compat/firestore');
-const { createTestEnvironment, seed, as, UIDS } = require('./helpers');
+const { createTestEnvironment, seed, as, refused, UIDS } = require('./helpers');
 
 /**
  * Quotations, parties, and the one counter the whole business queues behind.
@@ -102,7 +102,7 @@ function issue(db, uid, { id, next, no }) {
 
 test('a quotation must carry the document id it is stored under', async () => {
   const db = as(testEnv, UIDS.staff);
-  await assertFails(quotations(db).doc('q_1').set(quotation('q_somewhere_else', UIDS.staff)));
+  await refused(quotations(db).doc('q_1').set(quotation('q_somewhere_else', UIDS.staff)));
   await assertSucceeds(quotations(db).doc('q_1').set(quotation('q_1', UIDS.staff)));
 });
 
@@ -110,8 +110,8 @@ test('and cannot be attributed to somebody else', async () => {
   // The author is the one fact a later edit is decided against, so it is
   // pinned to the caller at the moment it is written and never taken on trust.
   const db = as(testEnv, UIDS.staff);
-  await assertFails(quotations(db).doc('q_1').set(quotation('q_1', UIDS.admin)));
-  await assertFails(quotations(db).doc('q_1').set(quotation('q_1', '')));
+  await refused(quotations(db).doc('q_1').set(quotation('q_1', UIDS.admin)));
+  await refused(quotations(db).doc('q_1').set(quotation('q_1', '')));
 });
 
 test('a total that is not a number is refused outright', async () => {
@@ -119,26 +119,26 @@ test('a total that is not a number is refused outright', async () => {
   // `"total": "12390"`. The reader copes with it; the rules will not accept a
   // new one, because a string total cannot be compared by any rule after it.
   const db = as(testEnv, UIDS.staff);
-  await assertFails(quotations(db).doc('q_1').set(quotation('q_1', UIDS.staff, { total: '52392' })));
-  await assertFails(quotations(db).doc('q_1').set(quotation('q_1', UIDS.staff, { at: '1712000000000' })));
-  await assertFails(quotations(db).doc('q_1').set(quotation('q_1', UIDS.staff, { no: 9 })));
+  await refused(quotations(db).doc('q_1').set(quotation('q_1', UIDS.staff, { total: '52392' })));
+  await refused(quotations(db).doc('q_1').set(quotation('q_1', UIDS.staff, { at: '1712000000000' })));
+  await refused(quotations(db).doc('q_1').set(quotation('q_1', UIDS.staff, { no: 9 })));
 });
 
 test('a Staff account writes no quotation at all', async () => {
   // Stored `worker`, displayed Staff. No Quotation tab, and no way round it.
   const db = as(testEnv, UIDS.worker);
-  await assertFails(quotations(db).doc('q_1').set(quotation('q_1', UIDS.worker)));
-  await assertFails(customers(db).doc('c_new').set({ id: 'c_new', name: 'New Party' }));
+  await refused(quotations(db).doc('q_1').set(quotation('q_1', UIDS.worker)));
+  await refused(customers(db).doc('c_new').set({ id: 'c_new', name: 'New Party' }));
 });
 
 // --- parties ----------------------------------------------------------------
 
 test('a party is created under its own id, with a name that is not empty', async () => {
   const db = as(testEnv, UIDS.staff);
-  await assertFails(customers(db).doc('c_new').set({ id: 'c_elsewhere', name: 'New Party' }));
-  await assertFails(customers(db).doc('c_new').set({ id: 'c_new', name: '' }));
-  await assertFails(customers(db).doc('c_new').set({ id: 'c_new' }));
-  await assertFails(customers(db).doc('c_new').set({ id: 'c_new', name: 42 }));
+  await refused(customers(db).doc('c_new').set({ id: 'c_elsewhere', name: 'New Party' }));
+  await refused(customers(db).doc('c_new').set({ id: 'c_new', name: '' }));
+  await refused(customers(db).doc('c_new').set({ id: 'c_new' }));
+  await refused(customers(db).doc('c_new').set({ id: 'c_new', name: 42 }));
   await assertSucceeds(customers(db).doc('c_new').set({ id: 'c_new', name: 'New Party' }));
 });
 
@@ -151,8 +151,8 @@ test('the counter moves by exactly one, never further', async () => {
 
   // Skipping is how two devices end up believing they own different numbers
   // while the counter says only one of them did.
-  await assertFails(numbering(db).update({ next: 11, lastIssued }));
-  await assertFails(numbering(db).update({ next: 9, lastIssued }));
+  await refused(numbering(db).update({ next: 11, lastIssued }));
+  await refused(numbering(db).update({ next: 9, lastIssued }));
   await assertSucceeds(numbering(db).update({ next: 10, lastIssued }));
 });
 
@@ -169,7 +169,7 @@ test('a Manager working from a stale read is refused the number that is gone', a
     next: 10, lastIssued: { no: 'SIE/QD/2025-26/009', at, by: 'Manager Person', uid: UIDS.staff },
   }));
 
-  await assertFails(numbering(second).update({
+  await refused(numbering(second).update({
     next: 10, lastIssued: { no: 'SIE/QD/2025-26/009', at, by: 'Second Manager', uid: UIDS.otherStaff },
   }));
 
@@ -270,7 +270,7 @@ test('a number that is already spent cannot be re-taken, by anybody', async () =
   }));
 
   // 1. An Administrator no longer reaches the configuration branch at all.
-  await assertFails(numbering(administrator).update({
+  await refused(numbering(administrator).update({
     next: 10, lastIssued: { no: 'SIE/QD/2025-26/009', at, by: 'Administrator', uid: UIDS.admin },
   }));
 
@@ -279,7 +279,7 @@ test('a number that is already spent cannot be re-taken, by anybody', async () =
   //    a stale issue carries one by definition, so it cannot be dressed up
   //    as a configuration write however `next` is set. `settings.test.js`
   //    covers it directly.
-  await assertFails(numbering(ownerDb).update({
+  await refused(numbering(ownerDb).update({
     next: 10, lastIssued: { no: 'SIE/QD/2025-26/009', at, by: 'Primary Owner', uid: UIDS.primaryOwner },
   }));
 
@@ -291,11 +291,11 @@ test('a number that is already spent cannot be re-taken, by anybody', async () =
 test('a Manager may not bump the counter in somebody else s name', async () => {
   await givenCounter();
   const db = as(testEnv, UIDS.staff);
-  await assertFails(numbering(db).update({
+  await refused(numbering(db).update({
     next: 10,
     lastIssued: { no: 'SIE/QD/2025-26/009', at: Date.now(), by: 'Administrator', uid: UIDS.admin },
   }));
-  await assertFails(numbering(db).update({ next: 10, lastIssued: { no: 'SIE/QD/2025-26/009' } }));
+  await refused(numbering(db).update({ next: 10, lastIssued: { no: 'SIE/QD/2025-26/009' } }));
 });
 
 test('the prefix, year and padding are frozen while a number is being issued', async () => {
@@ -306,9 +306,9 @@ test('the prefix, year and padding are frozen while a number is being issued', a
   const db = as(testEnv, UIDS.staff);
   const lastIssued = { no: 'SIE/QD/2025-26/009', at: Date.now(), by: 'Manager Person', uid: UIDS.staff };
 
-  await assertFails(numbering(db).update({ next: 10, lastIssued, prefix: 'SIE/X' }));
-  await assertFails(numbering(db).update({ next: 10, lastIssued, fy: '2026-27' }));
-  await assertFails(numbering(db).update({ next: 10, lastIssued, pad: 4 }));
+  await refused(numbering(db).update({ next: 10, lastIssued, prefix: 'SIE/X' }));
+  await refused(numbering(db).update({ next: 10, lastIssued, fy: '2026-27' }));
+  await refused(numbering(db).update({ next: 10, lastIssued, pad: 4 }));
   await assertSucceeds(numbering(db).update({ next: 10, lastIssued }));
 });
 
@@ -322,7 +322,7 @@ test('an Owner rolls the financial year, and never rewinds inside one', async ()
   // Inside the same year the counter only goes forward. Leaving `next` where
   // it is changes nothing and is allowed — that is what lets a prefix be
   // corrected without burning a number, and `settings.test.js` covers it.
-  await assertFails(numbering(db).update({ prefix: 'SIE/QD', fy: '2025-26', next: 2 }));
+  await refused(numbering(db).update({ prefix: 'SIE/QD', fy: '2025-26', next: 2 }));
   await assertSucceeds(numbering(db).update({ prefix: 'SIE/QD', fy: '2025-26', next: 12 }));
 
   // A new year starts wherever the Owner says, including at 1.
@@ -330,7 +330,7 @@ test('an Owner rolls the financial year, and never rewinds inside one', async ()
   assert.equal((await counter()).next, 1);
 
   // Zero is not a number anybody issues.
-  await assertFails(numbering(db).update({ prefix: 'SIE/QD', fy: '2027-28', next: 0 }));
+  await refused(numbering(db).update({ prefix: 'SIE/QD', fy: '2027-28', next: 0 }));
 });
 
 // --- the retry that must not issue twice ------------------------------------
@@ -350,7 +350,7 @@ test('re-writing a quotation that already exists is refused, so a retry cannot d
   assert.equal((await counter()).next, 10);
 
   // The same commit again, byte for byte. Refused on the quotation half.
-  await assertFails(issue(db, UIDS.staff, {
+  await refused(issue(db, UIDS.staff, {
     id: 'q_draft_7', next: 11, no: 'SIE/QD/2025-26/009',
   }));
 
@@ -404,7 +404,7 @@ test('a Manager may not discount past the Owner\'s limit', async () => {
   const db = as(testEnv, UIDS.staff);
 
   // 90% off, against a cap of 5.
-  await assertFails(quotations(db).doc('q_disc').set(quotation('q_disc', UIDS.staff, {
+  await refused(quotations(db).doc('q_disc').set(quotation('q_disc', UIDS.staff, {
     disc: { kind: 'pct', value: 90, amt: 39960 },
     discBase: 44400, subtotal: 4440, total: 5239,
   })));
@@ -469,7 +469,7 @@ for (const { base, cap, allowed } of CAP_BOUNDARY) {
     await givenCap(cap);
     const db = as(testEnv, UIDS.staff);
 
-    await assertFails(quotations(db).doc('q_over').set(discounted('q_over', base, allowed + 2)));
+    await refused(quotations(db).doc('q_over').set(discounted('q_over', base, allowed + 2)));
   });
 }
 
@@ -484,7 +484,7 @@ test('an inflated discBase cannot buy a bigger discount', async () => {
   await givenCap(5);
   const db = as(testEnv, UIDS.staff);
 
-  await assertFails(quotations(db).doc('q_base').set(quotation('q_base', UIDS.staff, {
+  await refused(quotations(db).doc('q_base').set(quotation('q_base', UIDS.staff, {
     disc: { kind: 'amt', value: 40000, amt: 40000 },
     // The lines come to 44,400. This claims four million.
     discBase: 4000000, subtotal: 4440, total: 5239,
@@ -516,7 +516,7 @@ test('KNOWN BOUND: transport buys transport × cap ÷ 100 past the cap', async (
   // transport. The cap means ₹10,000; the rule accepts ₹15,000. Lines,
   // subtotal and total are all honest — only `discBase` lies. Recorded in
   // `docs/PROJECT-STATUS.md`; the day the bound is closed, this flips to
-  // `assertFails`.
+  // `refused`.
   await givenCounter();
   await givenCap(10);
   const db = as(testEnv, UIDS.staff);
@@ -550,7 +550,7 @@ test('with no quoting document at all, a Manager gets no discount', async () => 
   await givenCounter();
   const db = as(testEnv, UIDS.staff);
 
-  await assertFails(quotations(db).doc('q_nocap').set(quotation('q_nocap', UIDS.staff, {
+  await refused(quotations(db).doc('q_nocap').set(quotation('q_nocap', UIDS.staff, {
     disc: { kind: 'pct', value: 5, amt: 2220 },
     discBase: 44400, subtotal: 42180, total: 49772,
   })));
@@ -606,13 +606,13 @@ test('an unstamped change is refused, even from the person who wrote it, and nob
   const db = as(testEnv, UIDS.staff);
   await assertSucceeds(quotations(db).doc('q_1').set(quotation('q_1', UIDS.staff)));
 
-  await assertFails(quotations(db).doc('q_1').update({ total: 1 }));
-  await assertFails(quotations(db).doc('q_1').update({ lines: [] }));
-  await assertFails(quotations(db).doc('q_1').delete());
+  await refused(quotations(db).doc('q_1').update({ total: 1 }));
+  await refused(quotations(db).doc('q_1').update({ lines: [] }));
+  await refused(quotations(db).doc('q_1').delete());
 
   // Even an Administrator may only cancel, and cancelling never moves `at`.
   const adminDb = as(testEnv, UIDS.admin);
-  await assertFails(quotations(adminDb).doc('q_1').update({
+  await refused(quotations(adminDb).doc('q_1').update({
     status: 'Cancelled', cancelledBy: 'Administrator', cancelledAt: Date.now(), at: Date.now(),
   }));
   await assertSucceeds(quotations(adminDb).doc('q_1').update({
@@ -626,21 +626,6 @@ test('an unstamped change is refused, even from the person who wrote it, and nob
 // Owner's specification: the creator, and an Owner or Administrator on
 // anyone's; the same number overwritten; no revision copy; a stamp; `snap`
 // never re-frozen. What an edit may touch is the Owner's list (Q3).
-
-/**
- * A refusal **by the rule**, never by the engine giving up.
- *
- * The rules engine stops at 1,000 evaluated expressions per request and
- * denies the write. The first draft of N5.10's rule reached that on every
- * discount raised within the cap, and the refusal tests here passed because
- * of it rather than because of the clause each one names. So every N5.10
- * refusal checks it was not that.
- */
-async function refused(write) {
-  const error = await assertFails(write);
-  assert.doesNotMatch(String(error?.message ?? error), /maximum of 1000 expressions/,
-    'refused by the expression limit, not by the rule');
-}
 
 /** Edit times, strictly increasing, so no two edits in a test share one. */
 let editClock = 1_760_000_000_000;
@@ -1127,21 +1112,21 @@ test('and corrects a detail on one, without touching its name', async () => {
 test('but a Manager never renames a party', async () => {
   await givenParty();
   const db = as(testEnv, UIDS.staff);
-  await assertFails(customers(db).doc('c_1').update({ id: 'c_1', name: 'Renamed Ltd' }));
+  await refused(customers(db).doc('c_1').update({ id: 'c_1', name: 'Renamed Ltd' }));
   // Not even by emptying it.
-  await assertFails(customers(db).doc('c_1').update({ id: 'c_1', name: '' }));
+  await refused(customers(db).doc('c_1').update({ id: 'c_1', name: '' }));
 });
 
 test('and never archives one, nor brings one back', async () => {
   await givenParty();
   const db = as(testEnv, UIDS.staff);
-  await assertFails(customers(db).doc('c_1').update({ id: 'c_1', archived: true }));
+  await refused(customers(db).doc('c_1').update({ id: 'c_1', archived: true }));
 
   await givenParty('c_old', { name: 'Old Client Pvt Ltd', archived: true });
   // Unarchiving is refused, and so is every other change to an archived
   // party: the staff branch requires it was not archived to begin with.
-  await assertFails(customers(db).doc('c_old').update({ id: 'c_old', archived: false }));
-  await assertFails(customers(db).doc('c_old').update({ id: 'c_old', city: 'Mumbai' }));
+  await refused(customers(db).doc('c_old').update({ id: 'c_old', archived: false }));
+  await refused(customers(db).doc('c_old').update({ id: 'c_old', city: 'Mumbai' }));
 });
 
 test('an Owner and an Administrator rename and archive', async () => {
@@ -1160,10 +1145,10 @@ test('a Staff account writes no party at all', async () => {
   // Stored `worker`, displayed Staff. No Parties screen, and no way round it.
   await givenParty();
   const db = as(testEnv, UIDS.worker);
-  await assertFails(customers(db).doc('c_new').set({ id: 'c_new', name: 'Metro Glass' }));
-  await assertFails(customers(db).doc('c_1').update({ id: 'c_1', city: 'Mumbai' }));
-  await assertFails(customers(db).doc('c_1').delete());
-  await assertFails(customers(db).doc('c_1').get());
+  await refused(customers(db).doc('c_new').set({ id: 'c_new', name: 'Metro Glass' }));
+  await refused(customers(db).doc('c_1').update({ id: 'c_1', city: 'Mumbai' }));
+  await refused(customers(db).doc('c_1').delete());
+  await refused(customers(db).doc('c_1').get());
 });
 
 test('an edit must still carry the id of the document it is in', async () => {
@@ -1172,5 +1157,5 @@ test('an edit must still carry the id of the document it is in', async () => {
   // document that never had an `id` cannot be edited until one is written.
   await givenParty();
   const db = as(testEnv, UIDS.staff);
-  await assertFails(customers(db).doc('c_1').update({ id: 'c_elsewhere', city: 'Pune' }));
+  await refused(customers(db).doc('c_1').update({ id: 'c_elsewhere', city: 'Pune' }));
 });

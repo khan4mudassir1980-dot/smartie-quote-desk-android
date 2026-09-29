@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
-const { createTestEnvironment, seed, as, UIDS } = require('./helpers');
+const { assertSucceeds } = require('@firebase/rules-unit-testing');
+const { createTestEnvironment, seed, as, refused, UIDS } = require('./helpers');
 
 /**
  * The two settings documents N5.6 puts behind the Owner.
@@ -82,9 +82,9 @@ test('configuring the counter is the Owner s, and an Administrator is refused it
   await givenCounter();
   const config = { prefix: 'SIE/QD', fy: '2025-26', next: 12, pad: 3 };
 
-  await assertFails(numbering(as(testEnv, UIDS.admin)).update(config));
-  await assertFails(numbering(as(testEnv, UIDS.staff)).update(config));
-  await assertFails(numbering(as(testEnv, UIDS.worker)).update(config));
+  await refused(numbering(as(testEnv, UIDS.admin)).update(config));
+  await refused(numbering(as(testEnv, UIDS.staff)).update(config));
+  await refused(numbering(as(testEnv, UIDS.worker)).update(config));
 
   await assertSucceeds(numbering(as(testEnv, UIDS.primaryOwner)).update(config));
 });
@@ -115,8 +115,8 @@ test('an Owner s V8C4-shaped save passes the configuration branch unchanged', as
 test('seeding a counter that does not exist is the Owner s alone', async () => {
   const fresh = { prefix: 'SIE/QD', fy: '2025-26', next: 1, pad: 3 };
 
-  await assertFails(numbering(as(testEnv, UIDS.admin)).set(fresh));
-  await assertFails(numbering(as(testEnv, UIDS.staff)).set(fresh));
+  await refused(numbering(as(testEnv, UIDS.admin)).set(fresh));
+  await refused(numbering(as(testEnv, UIDS.staff)).set(fresh));
   await assertSucceeds(numbering(as(testEnv, UIDS.primaryOwner)).set(fresh));
 });
 
@@ -130,8 +130,8 @@ test('a forward correction is allowed and rewinding is not', async () => {
   // `next` is the number the *next* quotation will carry, so 9 has not gone
   // out yet and 8 has. Setting the counter back to 8 would issue a number a
   // customer is already holding.
-  await assertFails(db.update({ ...at, next: 8 }));
-  await assertFails(db.update({ ...at, next: 1 }));
+  await refused(db.update({ ...at, next: 8 }));
+  await refused(db.update({ ...at, next: 1 }));
 
   await assertSucceeds(db.update({ ...at, next: 10 }));
   await assertSucceeds(db.update({ ...at, next: 40 }));
@@ -165,8 +165,8 @@ test('but configuration may never stamp lastIssued, whatever else it does', asyn
   const db = numbering(as(testEnv, UIDS.primaryOwner));
   const lastIssued = { no: 'SIE/QD/2025-26/008', at: Date.now(), by: 'Primary Owner', uid: UIDS.primaryOwner };
 
-  await assertFails(db.update({ prefix: 'SIE/QD', fy: '2025-26', next: 9, updated: Date.now(), lastIssued }));
-  await assertFails(db.update({ prefix: 'SIE/QD', fy: '2025-26', next: 40, updated: Date.now(), lastIssued }));
+  await refused(db.update({ prefix: 'SIE/QD', fy: '2025-26', next: 9, updated: Date.now(), lastIssued }));
+  await refused(db.update({ prefix: 'SIE/QD', fy: '2025-26', next: 40, updated: Date.now(), lastIssued }));
   // Issuing still stamps it, through the branch that advances by exactly one.
   await assertSucceeds(db.update(issuing(UIDS.primaryOwner)));
 });
@@ -180,7 +180,7 @@ test('a new financial year may start anywhere at or above one', async () => {
   await assertSucceeds(db.update({ prefix: 'SIE/QD', fy: '2026-27', next: 1 }));
   assert.equal((await stored('numbering')).next, 1);
 
-  await assertFails(db.update({ prefix: 'SIE/QD', fy: '2027-28', next: 0 }));
+  await refused(db.update({ prefix: 'SIE/QD', fy: '2027-28', next: 0 }));
 });
 
 // --- issuing is untouched, and that is the point ------------------------------
@@ -191,7 +191,7 @@ test('a Manager still issues a number, and still advances the counter by exactly
 
   // Skipping is refused: the issue branch is an exact `+ 1`, and a Manager
   // has no configuration branch to fall through to.
-  await assertFails(db.update({ ...issuing(UIDS.staff), next: 11 }));
+  await refused(db.update({ ...issuing(UIDS.staff), next: 11 }));
   await assertSucceeds(db.update(issuing(UIDS.staff)));
   assert.equal((await stored('numbering')).next, 10);
 });
@@ -201,9 +201,9 @@ test('and cannot reach the configuration branch by touching the shape of a numbe
   const db = numbering(as(testEnv, UIDS.staff));
   const lastIssued = issuing(UIDS.staff).lastIssued;
 
-  await assertFails(db.update({ next: 10, lastIssued, prefix: 'SIE/X' }));
-  await assertFails(db.update({ next: 10, lastIssued, fy: '2026-27' }));
-  await assertFails(db.update({ next: 10, lastIssued, pad: 4 }));
+  await refused(db.update({ next: 10, lastIssued, prefix: 'SIE/X' }));
+  await refused(db.update({ next: 10, lastIssued, fy: '2026-27' }));
+  await refused(db.update({ next: 10, lastIssued, pad: 4 }));
   await assertSucceeds(db.update({ next: 10, lastIssued }));
 });
 
@@ -229,13 +229,13 @@ test('and refused when it is too long, or not a string at all', async () => {
 
   await assertSucceeds(db.update(issuing(UIDS.staff, { src: 'x'.repeat(16) })));
   await givenCounter();
-  await assertFails(db.update(issuing(UIDS.staff, { src: 'x'.repeat(17) })));
-  await assertFails(db.update(issuing(UIDS.staff, { src: 7 })));
+  await refused(db.update(issuing(UIDS.staff, { src: 'x'.repeat(17) })));
+  await refused(db.update(issuing(UIDS.staff, { src: 7 })));
 });
 
 test('the counter can never be deleted, not even by the Owner', async () => {
   await givenCounter();
-  await assertFails(numbering(as(testEnv, UIDS.primaryOwner)).delete());
+  await refused(numbering(as(testEnv, UIDS.primaryOwner)).delete());
 });
 
 // --- the Manager discount cap --------------------------------------------------
@@ -248,19 +248,19 @@ test('the discount cap is readable by everyone who can quote, and not by Staff',
   await assertSucceeds(quoting(as(testEnv, UIDS.staff)).get());
   await assertSucceeds(quoting(as(testEnv, UIDS.admin)).get());
   await assertSucceeds(quoting(as(testEnv, UIDS.primaryOwner)).get());
-  await assertFails(quoting(as(testEnv, UIDS.worker)).get());
-  await assertFails(quoting(as(testEnv, UIDS.outsider)).get());
+  await refused(quoting(as(testEnv, UIDS.worker)).get());
+  await refused(quoting(as(testEnv, UIDS.outsider)).get());
 });
 
 test('and written by the Owner alone', async () => {
-  await assertFails(quoting(as(testEnv, UIDS.admin)).set({ managerDiscountPct: 10 }));
-  await assertFails(quoting(as(testEnv, UIDS.staff)).set({ managerDiscountPct: 10 }));
+  await refused(quoting(as(testEnv, UIDS.admin)).set({ managerDiscountPct: 10 }));
+  await refused(quoting(as(testEnv, UIDS.staff)).set({ managerDiscountPct: 10 }));
 
   await assertSucceeds(quoting(as(testEnv, UIDS.primaryOwner)).set({ managerDiscountPct: 10 }));
   assert.equal((await stored('quoting')).managerDiscountPct, 10);
 
   // Changing it is the same permission as creating it.
-  await assertFails(quoting(as(testEnv, UIDS.admin)).update({ managerDiscountPct: 50 }));
+  await refused(quoting(as(testEnv, UIDS.admin)).update({ managerDiscountPct: 50 }));
   await assertSucceeds(quoting(as(testEnv, UIDS.primaryOwner)).update({ managerDiscountPct: 15 }));
 });
 
@@ -277,15 +277,15 @@ test('a cap of nothing and a cap of everything are both real settings', async ()
 test('but a cap outside nought to a hundred is not', async () => {
   const db = quoting(as(testEnv, UIDS.primaryOwner));
 
-  await assertFails(db.set({ managerDiscountPct: -1 }));
-  await assertFails(db.set({ managerDiscountPct: 101 }));
-  await assertFails(db.set({ managerDiscountPct: '10' }));
-  await assertFails(db.set({ somethingElse: 10 }));
+  await refused(db.set({ managerDiscountPct: -1 }));
+  await refused(db.set({ managerDiscountPct: 101 }));
+  await refused(db.set({ managerDiscountPct: '10' }));
+  await refused(db.set({ somethingElse: 10 }));
 });
 
 test('the cap document can never be deleted', async () => {
   await givenCap();
-  await assertFails(quoting(as(testEnv, UIDS.primaryOwner)).delete());
+  await refused(quoting(as(testEnv, UIDS.primaryOwner)).delete());
 });
 
 // --- N5.6b: what V8C4 will accept back ------------------------------------------
@@ -299,9 +299,9 @@ test('pad is bounded to what V8C4 itself allows, 1 to 6', async () => {
   const db = numbering(as(testEnv, UIDS.primaryOwner));
   const at = { prefix: 'SIE/QD', fy: '2025-26', next: 12 };
 
-  await assertFails(db.update({ ...at, pad: 0 }));
-  await assertFails(db.update({ ...at, pad: 7 }));
-  await assertFails(db.update({ ...at, pad: '3' }));
+  await refused(db.update({ ...at, pad: 0 }));
+  await refused(db.update({ ...at, pad: 7 }));
+  await refused(db.update({ ...at, pad: '3' }));
 
   await assertSucceeds(db.update({ ...at, pad: 1 }));
   await assertSucceeds(db.update({ prefix: 'SIE/QD', fy: '2025-26', next: 13, pad: 6 }));
@@ -317,10 +317,10 @@ test('the financial year must read like 2026-27, and matches() is proved to anch
   const db = numbering(as(testEnv, UIDS.primaryOwner));
   const at = { prefix: 'SIE/QD', pad: 3, next: 12 };
 
-  await assertFails(db.update({ ...at, fy: '2026-278' }));
-  await assertFails(db.update({ ...at, fy: 'x2026-27' }));
-  await assertFails(db.update({ ...at, fy: '2026-2' }));
-  await assertFails(db.update({ ...at, fy: '202-267' }));
+  await refused(db.update({ ...at, fy: '2026-278' }));
+  await refused(db.update({ ...at, fy: 'x2026-27' }));
+  await refused(db.update({ ...at, fy: '2026-2' }));
+  await refused(db.update({ ...at, fy: '202-267' }));
 
   await assertSucceeds(db.update({ ...at, fy: '2026-27' }));
   assert.equal((await stored('numbering')).fy, '2026-27');
@@ -365,8 +365,8 @@ test('a Manager is refused /teamSettings/access, and the catch-all no longer ove
   // prove that document by document.
   const access = (uid) => as(testEnv, uid).collection('teamSettings').doc('access');
 
-  await assertFails(access(UIDS.staff).get());
-  await assertFails(access(UIDS.worker).get());
+  await refused(access(UIDS.staff).get());
+  await refused(access(UIDS.worker).get());
 
   await assertSucceeds(access(UIDS.admin).get());
   await assertSucceeds(access(UIDS.primaryOwner).get());
@@ -380,10 +380,10 @@ test('an unnamed teamSettings document is closed to everybody, including the Own
   });
   const future = (uid) => as(testEnv, uid).collection('teamSettings').doc('someFutureThing');
 
-  await assertFails(future(UIDS.primaryOwner).get());
-  await assertFails(future(UIDS.admin).get());
-  await assertFails(future(UIDS.staff).get());
-  await assertFails(future(UIDS.primaryOwner).set({ x: 2 }));
+  await refused(future(UIDS.primaryOwner).get());
+  await refused(future(UIDS.admin).get());
+  await refused(future(UIDS.staff).get());
+  await refused(future(UIDS.primaryOwner).set({ x: 2 }));
 });
 
 test('every teamSettings document either app uses is still readable by the roles that need it', async () => {
@@ -412,7 +412,7 @@ test('every teamSettings document either app uses is still readable by the roles
 
   // A Staff account reads none of them, exactly as before.
   for (const id of ['numbering', 'quoting', 'company', 'categories', 'productPins', 'access']) {
-    await assertFails(read(UIDS.worker, id));
+    await refused(read(UIDS.worker, id));
   }
 });
 
@@ -441,17 +441,17 @@ test('and refuses whitespace, quotes, control characters and anything too long',
   const db = numbering(as(testEnv, UIDS.primaryOwner));
   const at = { fy: '2025-26', pad: 3, next: 12 };
 
-  await assertFails(db.update({ ...at, prefix: 'SIE QD' }));
-  await assertFails(db.update({ ...at, prefix: 'SIE/QD ' }));
-  await assertFails(db.update({ ...at, prefix: ' SIE/QD' }));
-  await assertFails(db.update({ ...at, prefix: "SIE'QD" }));
-  await assertFails(db.update({ ...at, prefix: 'SIE"QD' }));
-  await assertFails(db.update({ ...at, prefix: 'SIE\nQD' }));
-  await assertFails(db.update({ ...at, prefix: 'SIE\u0000QD' }));
-  await assertFails(db.update({ ...at, prefix: '/SIE' }));
-  await assertFails(db.update({ ...at, prefix: '-SIE' }));
-  await assertFails(db.update({ ...at, prefix: '' }));
-  await assertFails(db.update({ ...at, prefix: 'A'.repeat(17) }));
+  await refused(db.update({ ...at, prefix: 'SIE QD' }));
+  await refused(db.update({ ...at, prefix: 'SIE/QD ' }));
+  await refused(db.update({ ...at, prefix: ' SIE/QD' }));
+  await refused(db.update({ ...at, prefix: "SIE'QD" }));
+  await refused(db.update({ ...at, prefix: 'SIE"QD' }));
+  await refused(db.update({ ...at, prefix: 'SIE\nQD' }));
+  await refused(db.update({ ...at, prefix: 'SIE\u0000QD' }));
+  await refused(db.update({ ...at, prefix: '/SIE' }));
+  await refused(db.update({ ...at, prefix: '-SIE' }));
+  await refused(db.update({ ...at, prefix: '' }));
+  await refused(db.update({ ...at, prefix: 'A'.repeat(17) }));
 });
 
 test('seeding a counter is bounded exactly as configuring one is', async () => {
@@ -460,11 +460,11 @@ test('seeding a counter is bounded exactly as configuring one is', async () => {
   const ownerDb = numbering(as(testEnv, UIDS.primaryOwner));
   const good = { prefix: 'SIE/QD', fy: '2025-26', next: 1, pad: 3 };
 
-  await assertFails(ownerDb.set({ ...good, prefix: 'SIE QD' }));
-  await assertFails(ownerDb.set({ ...good, prefix: 'A'.repeat(17) }));
-  await assertFails(ownerDb.set({ ...good, fy: '2026-278' }));
-  await assertFails(ownerDb.set({ ...good, pad: 7 }));
-  await assertFails(ownerDb.set({ ...good, pad: 0 }));
+  await refused(ownerDb.set({ ...good, prefix: 'SIE QD' }));
+  await refused(ownerDb.set({ ...good, prefix: 'A'.repeat(17) }));
+  await refused(ownerDb.set({ ...good, fy: '2026-278' }));
+  await refused(ownerDb.set({ ...good, pad: 7 }));
+  await refused(ownerDb.set({ ...good, pad: 0 }));
 
   await assertSucceeds(ownerDb.set(good));
   assert.equal((await stored('numbering')).prefix, 'SIE/QD');

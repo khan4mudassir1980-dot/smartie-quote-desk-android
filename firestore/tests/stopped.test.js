@@ -1,9 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
+const { assertSucceeds } = require('@firebase/rules-unit-testing');
 const firebase = require('firebase/compat/app');
 require('firebase/compat/firestore');
-const { createTestEnvironment, seed, as, UIDS } = require('./helpers');
+const { createTestEnvironment, seed, as, refused, UIDS } = require('./helpers');
 
 /**
  * Stopped-item history.
@@ -75,7 +75,7 @@ test('every member may read stopped-item history', async () => {
 
 test('a signed-out caller may not read it', async () => {
   await givenHistory();
-  await assertFails(
+  await refused(
     testEnv.unauthenticatedContext().firestore()
       .collection('stoppedStock').doc(EVENT).get()
   );
@@ -95,24 +95,24 @@ test('an Owner may too', async () => {
 
 test('the displayed Manager — stored staff — may not', async () => {
   await givenStock();
-  await assertFails(remove(as(testEnv, UIDS.staff), UIDS.staff));
+  await refused(remove(as(testEnv, UIDS.staff), UIDS.staff));
 });
 
 test('the displayed Staff — stored worker — may not', async () => {
   await givenStock();
-  await assertFails(remove(as(testEnv, UIDS.worker), UIDS.worker));
+  await refused(remove(as(testEnv, UIDS.worker), UIDS.worker));
 });
 
 // --- the cross-document guarantee ----------------------------------------
 
 test('history cannot be written while the item is still on the board', async () => {
   await givenStock();
-  await assertFails(remove(as(testEnv, UIDS.admin), UIDS.admin, { keepRow: true }));
+  await refused(remove(as(testEnv, UIDS.admin), UIDS.admin, { keepRow: true }));
 });
 
 test('an author cannot record somebody else as having done it', async () => {
   await givenStock();
-  await assertFails(remove(as(testEnv, UIDS.admin), UIDS.admin, { extra: { byUid: UIDS.staff } }));
+  await refused(remove(as(testEnv, UIDS.admin), UIDS.admin, { extra: { byUid: UIDS.staff } }));
 });
 
 test('the id in the document must be the id of the document', async () => {
@@ -121,7 +121,7 @@ test('the id in the document must be the id of the document', async () => {
   const batch = db.batch();
   batch.set(db.collection('stoppedStock').doc(EVENT), event(UIDS.admin, { id: 'sr_somethingelse' }));
   batch.delete(db.collection('stock').doc(STOCK));
-  await assertFails(batch.commit());
+  await refused(batch.commit());
 });
 
 // --- what may not be smuggled into it ------------------------------------
@@ -129,7 +129,7 @@ test('the id in the document must be the id of the document', async () => {
 for (const field of ['note', 'stockNote', 'hasPhoto', 'photoRev', 'min', 'pinned']) {
   test(`a history entry may not carry ${field}`, async () => {
     await givenStock();
-    await assertFails(
+    await refused(
       remove(as(testEnv, UIDS.admin), UIDS.admin, { extra: { [field]: 1 } })
     );
   });
@@ -137,14 +137,14 @@ for (const field of ['note', 'stockNote', 'hasPhoto', 'photoRev', 'min', 'pinned
 
 test('a history entry may not carry a price', async () => {
   await givenStock();
-  await assertFails(remove(as(testEnv, UIDS.admin), UIDS.admin, { extra: { dealer: 100 } }));
+  await refused(remove(as(testEnv, UIDS.admin), UIDS.admin, { extra: { dealer: 100 } }));
 });
 
 test('a history entry needs its quantity and its source', async () => {
   await givenStock();
-  await assertFails(remove(as(testEnv, UIDS.admin), UIDS.admin, { extra: { q: 'seven' } }));
+  await refused(remove(as(testEnv, UIDS.admin), UIDS.admin, { extra: { q: 'seven' } }));
   await givenStock();
-  await assertFails(remove(as(testEnv, UIDS.admin), UIDS.admin, { extra: { manual: 'no' } }));
+  await refused(remove(as(testEnv, UIDS.admin), UIDS.admin, { extra: { manual: 'no' } }));
 });
 
 // --- immutability --------------------------------------------------------
@@ -152,7 +152,7 @@ test('a history entry needs its quantity and its source', async () => {
 test('nobody may edit a history entry', async () => {
   await givenHistory();
   for (const uid of [UIDS.primaryOwner, UIDS.admin, UIDS.staff, UIDS.worker]) {
-    await assertFails(
+    await refused(
       as(testEnv, uid).collection('stoppedStock').doc(EVENT).update({ q: 999 })
     );
   }
@@ -161,7 +161,7 @@ test('nobody may edit a history entry', async () => {
 test('not even by writing it again with different contents', async () => {
   await givenStock();
   await assertSucceeds(remove(as(testEnv, UIDS.admin), UIDS.admin));
-  await assertFails(
+  await refused(
     as(testEnv, UIDS.admin).collection('stoppedStock').doc(EVENT).set(
       event(UIDS.admin, { q: 999 })
     )
@@ -179,8 +179,8 @@ test('an Owner and an Administrator may clear history', async () => {
 
 test('the displayed Manager and Staff may not clear it', async () => {
   await givenHistory();
-  await assertFails(as(testEnv, UIDS.staff).collection('stoppedStock').doc(EVENT).delete());
-  await assertFails(as(testEnv, UIDS.worker).collection('stoppedStock').doc(EVENT).delete());
+  await refused(as(testEnv, UIDS.staff).collection('stoppedStock').doc(EVENT).delete());
+  await refused(as(testEnv, UIDS.worker).collection('stoppedStock').doc(EVENT).delete());
 });
 
 // --- the whole removal, as the app commits it ----------------------------
@@ -223,7 +223,7 @@ test('the row cannot go without its photo, even with history written', async () 
   batch.set(db.collection('stoppedStock').doc(EVENT), event(UIDS.admin));
   batch.delete(db.collection('stock').doc(STOCK));
 
-  await assertFails(batch.commit());
+  await refused(batch.commit());
 });
 
 test('a removal writes no movement, and cannot smuggle one in', async () => {

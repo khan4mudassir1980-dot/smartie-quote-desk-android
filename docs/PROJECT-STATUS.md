@@ -1,14 +1,14 @@
 # Project status
 
 **The single current-status record. Read this before planning or changing
-anything.** Last updated 2026-09-28.
+anything.** Last updated 2026-09-29.
 
 ## Where the work is
 
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `4283ef2` — [run #222](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36412046793), fully green (unit tests, lint, Firestore rules emulator, APK build). Later commits may sit above it. |
+| **Last CI-verified head** | `6fbc2bc` — [run #224](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36534098134), fully green (unit tests, lint, Firestore rules emulator, APK build). A docs-only commit: the last CI-verified **code** head is `4283ef2`, [run #222](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36412046793). Later commits may sit above it. |
 | **APK to install** | The `smartie-native-apks` artifact **from the run that verified the head you intend to install** — never from whichever run this table happens to name. A build contains the commit it ran on and nothing above it, so a head hash and an APK go out of step the moment anything lands. Each run's job summary reports its head and the signing certificate; the app must show **Staging**. |
 | **Ruleset anchor** | `ff20dd4` (N5.10 commit 2) — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
 | **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **eight rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap), `ff20dd4` (N5.10 — edit, the creator's cancel, the cap only when raised); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
@@ -1361,11 +1361,13 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**N5.10b — the 1,000-expression limit in the emulator suite. Step 1:
-investigate and measure; step 2: plan and present it. Plan only — no code
-until the Owner approves.** The Owner's brief of 2026-09-29 is recorded
-below ("The Owner's acceptance of N5.10, and the N5.10b brief"). The rules
-deploy at the final staging pass depends on it, so it comes before N5.11.
+**N5.10b — build commits 0 to 6 of the plan the Owner approved on
+2026-09-29, each pushed alone with CI green before the next; then HOLD.**
+Once commit 6 is green on CI, stop and send the Owner the **commit-7
+design** (Ordered, and a Manager's cancel) by message. **No code for
+commit 7 until the Owner approves it.** The approval, the Owner's answers
+and the order are recorded below ("The Owner's approval of the N5.10b plan,
+2026-09-29"), and what step 1 and step 1b measured is recorded beside it.
 
 **Then N5.11** — the PDF, Print and WhatsApp — planned only after N5.10b is
 approved and built, and after the Owner has supplied V8C4's PDF, Print and
@@ -2835,6 +2837,169 @@ facts before N5.11 is planned.**
 Guardrails as always: one commit per push, CI green before the next; no
 deploy, no `main`, no PR, no force-push, no amending pushed commits.
 
+### What N5.10b step 1 and step 1b measured — accepted by the Owner, 2026-09-29
+
+Measured at `6fbc2bc` against the emulator, nothing committed. The scripts
+are scratch until N5.10b commit 9 puts them under `firestore/tools/`; every
+count below names what produced it.
+
+**The 58 limit hits are all `/purchase` update — none is in stock.** This
+file said "purchase and stock"; that was wrong. From `firestore/`:
+`npx firebase emulators:exec --project smartie-rules-test --only firestore
+"node --test --test-concurrency=1 tests/*.test.js" > plain.log 2>&1` gives
+290 tests, 290 passing, and `grep -c "maximum of 1000 expressions" plain.log`
+gives **58**, every one naming `'update' @ L643`. A preload recording each
+call site puts them in **39 tests: 54 calls in `purchase.test.js`, 4 in
+`data.test.js`**, of 384 `assertFails` calls and 236 `assertSucceeds` calls,
+all of which pass.
+
+- **Type (a), all 58.** Replayed with the exact stored document, access
+  document and caller against the update rule split into its three branches
+  (none of which reaches the limit alone): **every one is still refused —
+  no refusal test turns green.** By single and pairwise clause ablation:
+  **47** are refused by their own clause alone, **10** by their own clause
+  and one more (`purchase.test.js` 105–107, 185, 333, 527, 560, 585, 894,
+  969), and **1** — `data.test.js:247`, "…only an admin soft deletes" — for
+  a different reason from its title: the row was already removed. Its
+  intended case, a Manager soft-deleting somebody else's open requirement,
+  is refused by every branch. Two of the 58 (`purchase.test.js` 729, 732)
+  are creates refused by the create rule; the limit text in their message
+  comes from the emulator also evaluating the update rule on the missing
+  document.
+- **Type (b): none on the emulator.** Every valid path measured is
+  allowed. The method pads the rules with a known number of terms and finds
+  the most a write survives: cost ≈ (163 − N) × 1000 / 163, about ±6. The
+  costliest valid write per document is **742**, a Manager removing their
+  own untouched requirement. The emulator counts the budget **per
+  document**; production's counting could not be confirmed here (the docs
+  host is blocked from the container). **Per request** the multi-document
+  commits sum to: a Manager's stock movement **945** (503 + 442), a
+  Manager's photo **822** (521 + 301), a Manager's finalise **625**
+  (423 + 202).
+- **Found while looking, against the unmodified rules:** a delivery could
+  set `status` to anything — a Manager recording 4 of 10 on anybody's
+  requirement stored `"Received"` or `"Cancelled"` with `received: false`,
+  and a Staff creator the same on their own — and `upUid` / `rcvUid` could
+  name somebody else.
+
+**Step 1b — V8C4's purchase payloads**, the advisor-read facts the Owner
+supplied on 2026-09-29, sent exactly as `fbPushPurchase` sends them (a
+transaction, the whole local row merged, `upBy`/`upUid`/`serverAt` added):
+on rows the native app has never written, the rules at `6fbc2bc` accept
+**45 of 64** and refuse **19**, all Manager or Staff actions; on rows the
+native app has written, **all 61** updates are refused, Administrator
+included (`revOk`). Decided per branch; the full rules and the per-branch
+verdicts agree on 133 of 133 comparable cases. **V8C4's short receipt was
+accepted only because V8C4 writes `received` as the number 1** and
+`prClosesOnlyWhenMet` asked `!= true`. A V8C4 restore leaves `rcvQty`,
+`rcvBy`, `rcvUid` and `rcvAt` behind; the native app then shows the row as
+part-delivered and the rules treat it as touched.
+
+### The Owner's approval of the N5.10b plan, 2026-09-29 — recorded before acting
+
+Rule 8. **"N5.10b plan APPROVED with the changes below. Build commits 0–6
+now. Do NOT write commit 7 until I approve its design."**
+
+**The Owner's answers**
+
+- **QZ — the PWA stops writing Purchase at cutover.** Everyone uses the
+  native app for Purchase from cutover day. So **D1 and D4 are not fixed**:
+  V8C4's add-to-stock keys and a Manager's restore stay refused, and reopen
+  stays Owner and Administrator. **The N5.12 cutover document says so**:
+  PWA Purchase stops at cutover and its purchase writes will be refused.
+- **QA — enforce the write-off.** A write that sets `received` must set a
+  **boolean**; a numeric `received` (V8C4's 1) is refused, which closes the
+  `received: 1` short close **for everyone**. Readers keep tolerating stored
+  numbers.
+- **QE (D3) — a Manager may cancel anyone's open requirement that is NOT
+  Ordered.** Staff behaviour is unchanged.
+- **QD — "Ordered", the Owner's own design, confirmed:**
+  1. An "Ordered" action, visible only to Owner and Administrator, on open
+     requirements only — not Received, not Cancelled; a part-received row
+     counts as open.
+  2. It puts a small "Ordered" tag on the requirement, visible to everyone
+     including Staff, with a small "by · when".
+  3. Owner and Administrator can undo it, back to Needed.
+  4. Once Ordered, only Owner and Administrator may change name and
+     quantity. Note and urgency follow the existing rules.
+  5. Only Owner and Administrator may cancel an Ordered requirement — and,
+     the advisor's enforcement of the same intent, only they may remove it.
+  6. Mark received works as today (short needs the write-off). A part
+     receipt keeps it Ordered; a full receipt or a write-off closes it as
+     Received.
+
+**The advisor's decisions**
+
+- **Store Ordered as V8C4's existing wire value, `status: "Ordered"`** —
+  stored values are never renamed — so old V8C4 Ordered rows show the tag
+  with no migration. **`prOpen` treats Ordered as open.**
+- **New ordered by / uid / at fields**, named like the cancel fields and
+  stamped the way the app stamps cancel; the uid is pinned to the caller.
+  **The tag and "by · when" show ONLY when status is "Ordered"**, never from
+  leftover fields; old rows without the fields show the tag alone.
+- **QB, variant B adapted: status may change ONLY by** closing to Received
+  (met, or written off), cancel, reopen (Owner and Administrator), and, from
+  commit 7, Needed ↔ Ordered by Owner and Administrator. **A delivery write
+  that does not close leaves status unchanged.**
+- **QC and QF: moot** — the PWA stops. **QG: removing a uid stays
+  allowed.** **QH: yes — restructure `/stock` create too.**
+- **The uid pin covers `upUid`, `rcvUid`, `cancelledUid` and the new ordered
+  uid.**
+- **`v8c4-purchase.test.js` records the post-cutover truth:** which V8C4
+  shapes are refused and by which clause, especially the `received: 1`
+  short close. **Synthetic values only** — no V8C4 code copied, no real
+  names, rates or company data.
+- **D5 / D6, the stale fields: no fix now.** An N8 item: the migration
+  removes the stale receipt fields where `received` is the number 0 and
+  status is Needed or Cancelled.
+- **Headroom:** after every rules commit, report per-document costs **and**
+  per-request sums (today: stock movement 945, photo 822, finalise 625),
+  naming the command (Rule 5). **From commit 4 on, STOP if any valid write,
+  per document or per request, is within 100 of the limit.** The Ordered and
+  QE rules are inside this measurement.
+- **Commit 2:** prove `refused()` by running the new suite against
+  `6fbc2bc`'s rules — **exactly the 58 known limit hits must fail.**
+
+**The order:** 0 docs · 1 purchase restructure · 2 `refused()` · 3 tests
+aimed at their own clause · 4 stock restructure · 5 status pin (variant B
+adapted, boolean `received`, write-off enforced) and the V8C4 test file ·
+6 uid pin and the `base()` fix · **HOLD** · 7 Ordered and QE · 8 witnesses ·
+9 tools · 10 docs.
+
+**HOLD before commit 7.** Once commit 6 is green on CI, stop and send the
+Owner the commit-7 design by message. It must cover: the rules clauses;
+where the Ordered action and tag sit on each screen, and what Staff sees;
+the undo path; the edit, cancel and remove locks, each enforced in the rules
+and not only in the UI; how native cancel works today (who, which screen)
+and what QE changes; the tests with their ablations, and the Robolectric
+screen tests, including clipping of the tag; and whether the UI should be
+its own commit. **No code for commit 7 until the Owner approves.**
+
+**Always:** one commit per push, CI green before the next; branch
+`claude/trusting-hamilton-z12eer` only; no `main`, no PR, no force-push, no
+amending pushed commits; never deploy Firebase. **"If anything here
+contradicts the repo or the rules file, stop and tell me instead of
+guessing."**
+
+**What the repository says against it — found while recording this (Rule
+4), and reported to the Owner:**
+
+1. **The native app has no purchase cancel.** `PurchaseWrite.kt` says so on
+   purpose: "There is **no generic status setter and no cancel** … A
+   `Cancelled` requirement written by the PWA still reads and displays
+   correctly; nothing here writes one." A requirement nobody has delivered
+   against is taken off the list by **removing** it (the soft delete). So
+   "how native cancel works today" has the answer *it does not exist*, and
+   "stamped the way the app stamps cancel" has no purchase precedent: the
+   app stamps a **quotation** cancel (`cancelledBy` a name, `cancelledAt` a
+   number, no uid) and a purchase **removal** (`delBy`, `delAt`,
+   `deletedBy`). Both bear on commit 7 only, and go into its design.
+   Until then the one cancel the rules know is the Administrator's, through
+   the privileged branch.
+2. **`docs/N5-cutover.md` does not exist yet** — `N5-plan.md` schedules it
+   for N5.12. The QZ item is recorded under "Owed in N5.12" below and in
+   the plan's N5.12 row, to be written when that document is.
+
 ### Owed in N6: the validators on the fields and on the company's own details
 
 Recorded 2026-09-26. V8C4 runs `gstinProblem`, `phoneProblem` and
@@ -3160,6 +3325,11 @@ history — only after the PWA is retired, and only together with a one-time
 app-level filter, which `docs/N4.3-plan.md` states plainly rather than
 implying otherwise.
 
+**Decided by the Owner, 2026-09-29 (QZ): option 2 below — the PWA stops
+writing Purchase at cutover**, and everyone uses the native app for Purchase
+from cutover day. Its purchase writes will be refused by the rules; N5.10b
+measured which and why.
+
 **The PWA and the native app must never both write Purchase requirements in
 the same Firebase project.** This is the production cutover restriction, and it
 follows from two independent facts, either of which is enough on its own:
@@ -3409,7 +3579,7 @@ import is run.
 
 ## Deferred — known defects, recorded and not fixed
 
-### The rules' 1,000-expression limit is reached 58 times in the purchase and stock emulator tests — pre-existing
+### The rules' 1,000-expression limit is reached 58 times in the purchase emulator tests — pre-existing, being fixed in N5.10b
 
 Found in N5.10 commit 2. The rules engine stops evaluating a request at
 1,000 expressions and **refuses** it. N5.10's own first draft hit that
@@ -3422,6 +3592,11 @@ the full suite. So **some purchase or stock refusal tests may pass for the
 wrong reason.** Not investigated here — outside N5.10 — and not fixed.
 The remedy is the one N5.10 used: give those tests a `refused()` that
 rejects the limit's denial, then restructure whichever rules it catches.
+
+**Measured in N5.10b step 1 (2026-09-29): all 58 are `/purchase` update,
+none is in stock** — "purchase and stock" above was wrong, and the title is
+corrected. N5.10b commits 1 and 2 are the fix; this entry closes when they
+are CI-verified.
 
 ### A Manager's rename on the Parties screen is refused only after Save — accepted
 
@@ -3579,6 +3754,32 @@ repository can measure it. Whether production's *current* ruleset already
 behaves this way — so the PWA already meets it on the rare busy minute —
 is not something this repository can see; that is the first thing to check
 at N8.
+
+### Owed in N8: remove the receipt fields a V8C4 restore leaves behind
+
+Recorded 2026-09-29 (N5.10b step 1b, D5 and D6), not fixed now by the
+Owner's decision. V8C4's restore and cancel delete `rcvQty`, `rcvBy` and
+`rcvAt` **locally only**; its merge write never removes a field, so the row
+keeps them, with `received: 0` and status Needed or Cancelled. The native
+app then shows a restored row as part-delivered ("10 required · 4 received ·
+6 remaining"), offers "Close with 4 received" — which the rules allow, and
+which closes the row at a figure V8C4 had reversed — and the rules refuse a
+Manager's or the creator's edit and removal because a receipt field is
+present. A cancelled one shows "4 in" in History.
+
+**The migration removes `rcvQty`, `rcvBy`, `rcvUid` and `rcvAt` where
+`received` is the number 0 and status is Needed or Cancelled.** That shape
+is exact: the native app writes `received` as a boolean, and V8C4 never
+records a part receipt. It stays sufficient because the PWA stops writing
+Purchase at cutover (QZ).
+
+### Owed in N5.12: the cutover document says the PWA stops writing Purchase
+
+Recorded 2026-09-29 (QZ). `docs/N5-cutover.md`, written in N5.12, must say:
+**the PWA's Purchase writing stops at cutover; everyone uses the native app
+for Purchase from cutover day; the PWA's purchase writes will be refused by
+the rules.** N5.10b's `firestore/tests/v8c4-purchase.test.js` records which
+V8C4 shapes are refused and by which clause.
 
 ### Owed in N8: normalise the products no edit ever reaches
 

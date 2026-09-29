@@ -486,23 +486,28 @@ service cloud.firestore {
         && request.resource.data.get('t', 0) == resource.data.get('t', 0);
     }
 
-    /** Correcting a requirement: what it is, how many, how urgently, and why. */
-    function prEditKeys() {
-      return touched().hasOnly([
+    /**
+     * Correcting a requirement: what it is, how many, how urgently, and why.
+     *
+     * Every key-list helper takes the diff as `changed` rather than calling
+     * `touched()` itself — see "the diff once" above `prPermitted`.
+     */
+    function prEditKeys(changed) {
+      return changed.hasOnly([
         'id','name','note','qty','urgency','updated','rev','upBy','upUid','serverAt'
       ]);
     }
 
     /** Taking it off the list. `qty` is absent on purpose: a removal is not an edit. */
-    function prRemoveKeys() {
-      return touched().hasOnly([
+    function prRemoveKeys(changed) {
+      return changed.hasOnly([
         'id','del','deletedBy','delBy','delAt','updated','rev','upBy','upUid','serverAt'
-      ]) && prRemovalStamp();
+      ]) && prRemovalStamp(changed);
     }
 
     /** Recording a delivery. */
-    function prReceiptKeys() {
-      return touched().hasOnly([
+    function prReceiptKeys(changed) {
+      return changed.hasOnly([
         'id','status','received','rcvQty','rcvBy','rcvUid','rcvAt',
         'qty','updated','rev','upBy','upUid','serverAt'
       ]);
@@ -513,8 +518,8 @@ service cloud.firestore {
      * requirement closes. **No rcv key at all**, so the receipt cannot be
      * rewritten by the person writing off the remainder.
      */
-    function prShortfallKeys() {
-      return touched().hasOnly([
+    function prShortfallKeys(changed) {
+      return changed.hasOnly([
         'id','status','received','qty','updated','rev','upBy','upUid','serverAt'
       ]);
     }
@@ -597,10 +602,10 @@ service cloud.firestore {
      * takes away corrections and leaves the delivery alone, because somebody
      * should be able to finish the requirement they raised.
      */
-    function prDelivery() {
-      return (prOpen() && prReceiptKeys() && prRcvNumeric()
+    function prDelivery(changed) {
+      return (prReceiptKeys(changed) && prOpen() && prRcvNumeric()
               && prRcvNotReduced() && prQtyKept() && prClosesOnlyWhenMet())
-        || (prShortfall() && prShortfallKeys());
+        || (prShortfallKeys(changed) && prShortfall());
     }
 
     /**
@@ -615,12 +620,57 @@ service cloud.firestore {
      * offline carries the device's clock and syncs later; a server-time bound
      * would refuse a requirement withdrawn in a basement.
      */
-    function prRemovalStamp() {
-      return (!touched().hasAny(['delBy'])
+    function prRemovalStamp(changed) {
+      return (!changed.hasAny(['delBy'])
               || (request.resource.data.delBy is string
                   && request.resource.data.delBy.size() <= 80))
-        && (!touched().hasAny(['delAt']) || request.resource.data.delAt is number)
-        && (!touched().hasAny(['deletedBy']) || request.resource.data.deletedBy == mine());
+        && (!changed.hasAny(['delAt']) || request.resource.data.delAt is number)
+        && (!changed.hasAny(['deletedBy']) || request.resource.data.deletedBy == mine());
+    }
+
+    /**
+     * Who may make this update, once the common checks have passed.
+     *
+     * **Restructured in N5.10b for the rules engine's 1,000-expression limit,
+     * with the same decision for every write.** The rule used to ask
+     * `admin()`, then the Manager branch, then the creator branch, each in
+     * full: `prUntouched()`, `prEditKeys()` and `prDelivery()` twice over, and
+     * the document diff up to nine times. A refused write evaluates every
+     * branch, so 58 refusal tests reached the limit and were denied **by the
+     * engine giving up, not by their own clause** — green for the wrong
+     * reason. Now:
+     *
+     * - **the diff once** — `touched()` is taken by the caller and passed in
+     *   as `changed`;
+     * - **the role once** — `admin()` is asked by the caller and passed in,
+     *   as `qnEditPermitted` does;
+     * - **the two ordinary branches as one** — see `prRaiserOrManager`.
+     */
+    function prPermitted(changed, isAdmin) {
+      return isAdmin || prRaiserOrManager(changed, prCreator());
+    }
+
+    /**
+     * The displayed Manager and the person who raised it, as one expression.
+     *
+     * It was two branches:
+     *
+     *     (staff() && ((prUntouched() && prEditKeys()) || prDelivery()))
+     *     || (prCreator() && ((prUntouched() && (prEditKeys() || prRemoveKeys()))
+     *                         || prDelivery()))
+     *
+     * which is the same as the one below. When the caller raised it, the
+     * Manager branch adds nothing the creator branch does not already allow;
+     * when they did not, `isCreator && …` is false and what is left is the
+     * Manager branch exactly. So **a Manager may still not remove somebody
+     * else's requirement** — the removal list is reached only through
+     * `isCreator` — and everything else is unchanged. Key lists come before
+     * the document reads because they are the cheaper test.
+     */
+    function prRaiserOrManager(changed, isCreator) {
+      return (isCreator || staff())
+        && (((prEditKeys(changed) || (isCreator && prRemoveKeys(changed))) && prUntouched())
+            || prDelivery(changed));
     }
 
     match /purchase/{id} {
@@ -640,37 +690,30 @@ service cloud.firestore {
       // branch structure: the limited role may now change the requirement it
       // raised itself, and `staff` may no longer change one a delivery has
       // reached. Everything common to every branch stays at the top.
-      allow update: if member()
-                    && request.resource.data.id == id
+      //
+      // Who may do what is unchanged since N4.3:
+      //
+      // - **An Owner or Administrator** — anything, including the privileged
+      //   correction of a received requirement and the rescue of a row the
+      //   PWA stored badly.
+      // - **The displayed Manager** — anybody's requirement while nothing has
+      //   arrived, or a delivery against anybody's. A reopen matches neither:
+      //   it removes rcvQty, and no branch here lets a received total fall.
+      // - **The person who raised it**, whatever their role — the same, plus
+      //   taking their own untouched requirement off the list. This is what
+      //   lets a Manager withdraw their own requirement, which the Manager
+      //   rights alone do not, and lets a Staff account finish one.
+      //
+      // N5.10b changed only the shape, for the 1,000-expression limit: the
+      // checks on the request come first, `member()` after them, and the
+      // diff and `admin()` are each taken once and handed to `prPermitted`.
+      allow update: if request.resource.data.id == id
                     && request.resource.data.qty is number && request.resource.data.qty > 0
                     && request.resource.data.updated is number
                     && revOk()
                     && prIdentityPinned()
-                    && (
-                      // An Owner or Administrator: unchanged, including the
-                      // privileged correction of a received requirement and
-                      // the rescue of a row the PWA stored badly.
-                      admin()
-
-                      // The displayed Manager.
-                      || (staff() && (
-                        // Anybody's requirement, while nothing has arrived.
-                        (prUntouched() && prEditKeys())
-                        // Or a delivery against anybody's. A reopen matches
-                        // neither: it removes rcvQty, and no branch here lets
-                        // a received total fall.
-                        || prDelivery()
-                      ))
-
-                      // The person who raised it — whatever their role. This
-                      // is the branch that lets a Manager withdraw their own
-                      // requirement, which the branch above deliberately does
-                      // not, and that lets a Staff account finish one.
-                      || (prCreator() && (
-                        (prUntouched() && (prEditKeys() || prRemoveKeys()))
-                        || prDelivery()
-                      ))
-                    );
+                    && member()
+                    && prPermitted(touched(), admin());
 
       // Never a hard delete: a removed document reappears from a PWA device.
       allow delete: if false;

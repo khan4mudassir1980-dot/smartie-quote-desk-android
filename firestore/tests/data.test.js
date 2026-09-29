@@ -236,14 +236,26 @@ test('the limited role corrects the requirement it raised, and no other', async 
   }));
 });
 
-test('a purchase requirement is never hard deleted and only an admin soft deletes', async () => {
+test('a purchase requirement is never hard deleted, and a Manager does not soft delete somebody else\'s', async () => {
+  // Retitled in N5.10b. It read "…and only an admin soft deletes", which has
+  // not been true since N4.3: whoever raised a requirement may take it off the
+  // list while nothing has arrived. What it pins is the Manager's side of that,
+  // and it now asks on an OPEN row raised by somebody else (`pr_1` is the Staff
+  // account's). It used to ask only after the Administrator had removed the
+  // row, so the refusal came from the row being closed — and it still does,
+  // for the last line — not from whose it was.
+  const staffDb = as(testEnv, UIDS.staff);
+  await refused(staffDb.collection('purchase').doc('pr_1').update({
+    del: true, updated: Date.now(), rev: 2,
+  }));
+
   const adminDb = as(testEnv, UIDS.admin);
   await refused(adminDb.collection('purchase').doc('pr_1').delete());
   await assertSucceeds(adminDb.collection('purchase').doc('pr_1').update({
     del: true, deletedBy: UIDS.admin, updated: Date.now(), rev: 2,
   }));
 
-  const staffDb = as(testEnv, UIDS.staff);
+  // Once removed, it stays removed for a Manager as well.
   await refused(staffDb.collection('purchase').doc('pr_1').update({
     del: true, updated: Date.now(), rev: 3,
   }));

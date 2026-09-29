@@ -557,8 +557,11 @@ test('a legacy string qty makes the row unupdatable until it is rewritten', asyn
   await given('pr_string', { ...HEALTHY, id: 'pr_string', qty: '10' });
   const db = as(testEnv, UIDS.staff);
 
+  // `rev` is the stored one plus one, so the string is the only thing wrong
+  // with this write. Without it `revOk()` refused it as well, and dropping
+  // the `qty` clause from the rule left this test green (N5.10b).
   await refused(
-    db.collection('purchase').doc('pr_string').update({ urgency: 'critical', updated: Date.now() })
+    db.collection('purchase').doc('pr_string').update({ urgency: 'critical', updated: Date.now(), rev: 2 })
   );
 });
 
@@ -582,8 +585,10 @@ test('a row with no id of its own is unupdatable until one is written', async ()
   await given('pr_noid', withoutId);
   const db = as(testEnv, UIDS.staff);
 
+  // `rev` is the stored one plus one, so the missing id is the only thing
+  // wrong with this write — see the string `qty` test above (N5.10b).
   await refused(
-    db.collection('purchase').doc('pr_noid').update({ qty: 5, updated: Date.now() })
+    db.collection('purchase').doc('pr_noid').update({ qty: 5, updated: Date.now(), rev: 2 })
   );
 });
 

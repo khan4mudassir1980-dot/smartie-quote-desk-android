@@ -1361,14 +1361,20 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**Plan N5.11 — the PDF, Print and WhatsApp — and present it to the Owner.
-Plan only: no code until it is approved.** It must carry what this file
-already owes N5.11: print "Last edited by <name>, <date time>" right after
-the date, its time **from the server's clock** and checked by the rule
-against the request time; Duplicate's message back to **V8C4's exact
-words**; the PDF's fallback to the live company settings while `snap` is
-absent; and each of the three calling the finalise gate first, as V8C4's
-do.
+**N5.10b — the 1,000-expression limit in the emulator suite. Step 1:
+investigate and measure; step 2: plan and present it. Plan only — no code
+until the Owner approves.** The Owner's brief of 2026-09-29 is recorded
+below ("The Owner's acceptance of N5.10, and the N5.10b brief"). The rules
+deploy at the final staging pass depends on it, so it comes before N5.11.
+
+**Then N5.11** — the PDF, Print and WhatsApp — planned only after N5.10b is
+approved and built, and after the Owner has supplied V8C4's PDF, Print and
+WhatsApp facts. It must carry what this file already owes N5.11: print
+"Last edited by <name>, <date time>" right after the date, its time **from
+the server's clock** and checked by the rule against the request time;
+Duplicate's message back to **V8C4's exact words**; the PDF's fallback to
+the live company settings while `snap` is absent; and each of the three
+calling the finalise gate first, as V8C4's do.
 
 N5.10 is complete and CI-verified at `4283ef2` (below). Its phone rows,
 T-Q11 to T-Q22, join T-Q1 to T-Q10 in `PHONE-TEST-CHECKLIST.md` and are run
@@ -2785,6 +2791,49 @@ it, is `docs/N5.10-plan.md`:
 | 9 | the party type on the quotation | R27-R30 |
 | 10 | the Parties screen — Dealer / Client only, no default, the three checks | R31-R32 |
 | 11 | docs — phone rows (with addition A), `N5-plan.md`, this file after CI | — |
+
+### The Owner's acceptance of N5.10, and the N5.10b brief, 2026-09-29 — recorded before acting
+
+Rule 8. **"N5.10 accepted."** The Owner singled out the `refused()` guard and
+catching the expression limit on a valid write.
+
+**"Next is NOT N5.11 yet. Before it, N5.10b"** — the expression-limit hits in
+the purchase and stock emulator tests, because the rules deploy at the final
+pass depends on it.
+
+**Step 1 — investigate and measure. No code change is committed.**
+
+- List every test that hits the limit, and the rule path each exercises.
+- Classify each hit: **(a)** a refusal test passing vacuously, the denial
+  coming from the limit and not its own clause; or **(b)** a path where a
+  **valid** write could reach the limit and be denied in real use —
+  including paths no success test covers today. **(b) is the dangerous
+  one: look for it actively**, not only where the existing tests happen to
+  show it.
+- For each (a): with the limit avoided, does it still fail for its own
+  reason? **A refusal test that turns green is a real hole in the rules;
+  report every one separately.**
+- Every count with the command that produced it.
+
+**Step 2 — plan N5.10b. Plan only; no code until approved.**
+
+- Restructure the affected rules as N5.10 did: cheap checks first,
+  `admin()` once, the diff computed once.
+- **Apply the `refused()` guard to every refusal test in the emulator suite,
+  project-wide**, so no denial caused by the limit can ever count as a pass
+  again.
+- A **success test for every (b) path** found.
+- Ablations as usual, each tied to one commit.
+- **No change to purchase or stock behaviour** beyond what is needed to stay
+  under the limit. **A real hole comes to the Owner as a question — never
+  fixed silently.**
+
+**After N5.10b is approved and built, plan N5.11**, whose requirements are
+already in this file. **The Owner will supply V8C4's PDF, Print and WhatsApp
+facts before N5.11 is planned.**
+
+Guardrails as always: one commit per push, CI green before the next; no
+deploy, no `main`, no PR, no force-push, no amending pushed commits.
 
 ### Owed in N6: the validators on the fields and on the company's own details
 

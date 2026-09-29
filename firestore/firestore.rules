@@ -671,7 +671,77 @@ service cloud.firestore {
      * - **the two ordinary branches as one** — see `prRaiserOrManager`.
      */
     function prPermitted(changed, isAdmin) {
-      return isAdmin || prRaiserOrManager(changed, prCreator());
+      return prReceivedIsBoolean(changed)
+        && prStatusMoves(isAdmin)
+        && prClosesMet(changed)
+        && (isAdmin || prRaiserOrManager(changed, prCreator()));
+    }
+
+    /**
+     * `received`, whenever a write sets it, is a **boolean** — for everyone,
+     * an Owner or Administrator included. The Owner's decision of 2026-09-29
+     * (QA).
+     *
+     * V8C4 writes `received` as the number 1 (and 0). A 1 is not `true`, so
+     * `prClosesOnlyWhenMet` never saw it, and V8C4's all-or-nothing receipt
+     * could close a requirement short with no write-off — as could anybody
+     * else who wrote a 1. Refusing the number closes that for every writer.
+     * A stored number is left alone, and the readers still tolerate one; only
+     * a write that sets the field must send a boolean.
+     */
+    function prReceivedIsBoolean(changed) {
+      return !changed.hasAny(['received']) || request.resource.data.received is bool;
+    }
+
+    /**
+     * How `status` may move — **only** by one of these, and a write that does
+     * none of them leaves it where it was. The Owner's rule of 2026-09-29
+     * (QB, variant B adapted), for everyone:
+     *
+     * - **closing to Received** — `received: true` with the total met, or
+     *   written off first (`prClosesMet`), from an open requirement;
+     * - **cancel** — from an open requirement, by an Owner or Administrator
+     *   (the privileged branch is the only cancel the native app has ever
+     *   had; a Manager's is N5.10b commit 7's, held for the Owner);
+     * - **reopen** — back to Needed from Received or Cancelled, by an Owner or
+     *   Administrator, and not while `received` stays true.
+     *
+     * So a delivery that does not close leaves the status alone, and nobody —
+     * an Administrator included — may invent one. Before this, a delivery
+     * could write any status: a Manager recording 4 of 10 could store
+     * "Received" or "Cancelled" beside `received: false`, and the app counts
+     * either as closed. Found in N5.10b step 1.
+     *
+     * N5.10b commit 7 adds Needed ↔ Ordered, by Owner and Administrator.
+     */
+    function prStatusMoves(isAdmin) {
+      let before = resource.data.get('status', 'Needed');
+      let after = request.resource.data.get('status', 'Needed');
+      let receivedAfter = request.resource.data.get('received', false);
+      return after == before
+        || (before == 'Needed' && after == 'Received' && receivedAfter == true)
+        || (isAdmin && before == 'Needed' && after == 'Cancelled' && receivedAfter != true)
+        || (isAdmin && before in ['Received', 'Cancelled'] && after == 'Needed' && receivedAfter != true);
+    }
+
+    /**
+     * Whatever closes a requirement meets its total — **closing short needs
+     * the write-off**, for everyone. A write closes it when it sets `received`
+     * to true or moves `status` to Received; then the receipt must be a
+     * number at least the total. The write-off meets it by setting the total
+     * to the receipt, which is what `prShortfall` insists on.
+     *
+     * `prClosesOnlyWhenMet` says the same for a Manager's or a creator's
+     * delivery; this says it for an Owner or Administrator too, and for a
+     * status move. An Administrator may still correct a closed requirement —
+     * a write that leaves `received` and `status` alone is not a close.
+     */
+    function prClosesMet(changed) {
+      let closes = (changed.hasAny(['received']) && request.resource.data.received == true)
+        || (changed.hasAny(['status']) && request.resource.data.get('status', 'Needed') == 'Received');
+      return !closes
+        || (request.resource.data.get('rcvQty', 0) is number
+            && request.resource.data.get('rcvQty', 0) >= request.resource.data.qty);
     }
 
     /**
@@ -717,9 +787,9 @@ service cloud.firestore {
       //
       // Who may do what is unchanged since N4.3:
       //
-      // - **An Owner or Administrator** — anything, including the privileged
-      //   correction of a received requirement and the rescue of a row the
-      //   PWA stored badly.
+      // - **An Owner or Administrator** — anything the three rules for
+      //   everyone allow (below), including the privileged correction of a
+      //   received requirement and the rescue of a row the PWA stored badly.
       // - **The displayed Manager** — anybody's requirement while nothing has
       //   arrived, or a delivery against anybody's. A reopen matches neither:
       //   it removes rcvQty, and no branch here lets a received total fall.
@@ -728,9 +798,12 @@ service cloud.firestore {
       //   lets a Manager withdraw their own requirement, which the Manager
       //   rights alone do not, and lets a Staff account finish one.
       //
-      // N5.10b changed only the shape, for the 1,000-expression limit: the
-      // checks on the request come first, `member()` after them, and the
-      // diff and `admin()` are each taken once and handed to `prPermitted`.
+      // N5.10b changed the shape, for the 1,000-expression limit: the checks
+      // on the request come first, `member()` after them, and the diff and
+      // `admin()` are each taken once and handed to `prPermitted`. It also
+      // added three rules for everyone, an Owner or Administrator included:
+      // `received` is a boolean when set, `status` moves only by closing,
+      // cancel or reopen, and closing short needs the write-off.
       allow update: if request.resource.data.id == id
                     && request.resource.data.qty is number && request.resource.data.qty > 0
                     && request.resource.data.updated is number

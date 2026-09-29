@@ -944,6 +944,113 @@ test('the reopen payload deletes the received fields rather than blanking them',
 });
 
 
+// --- N5.10b: how status moves, `received` is a boolean, closing short needs the write-off ---
+//
+// The Owner's rules of 2026-09-29, for everyone, an Owner or Administrator
+// included: status moves only by closing to Received (met, or written off),
+// cancel (Owner and Administrator — a Manager's is commit 7's), or reopen
+// (Owner and Administrator); a write that sets `received` sets a boolean; and
+// whatever closes a requirement meets its total. Found in N5.10b step 1: a
+// delivery could write any status beside `received: false`, and the app
+// counts "Received" and "Cancelled" as closed.
+
+/** A requirement ten were asked for, and four of which have arrived. */
+const PART = {
+  ...HEALTHY, id: 'pr_part4', qty: 10,
+  rcvQty: 4, rcvBy: 'Manager Person', rcvUid: UIDS.staff, rcvAt: 1712600000000,
+};
+const receipt = (by, total) => ({ rcvQty: total, rcvBy: 'Someone', rcvUid: by, rcvAt: Date.now() });
+
+test('a delivery may not close a requirement by its status alone', async () => {
+  await given('pr_healthy', { ...HEALTHY, qty: 10 });
+  const db = as(testEnv, UIDS.staff).collection('purchase').doc('pr_healthy');
+
+  await refused(db.update({ ...base('pr_healthy', 1, 10), ...receipt(UIDS.staff, 4), received: false, status: 'Received' }));
+  await refused(db.update({ ...base('pr_healthy', 1, 10), ...receipt(UIDS.staff, 4), received: false, status: 'Cancelled' }));
+  // The same delivery, leaving the status where it was, is what the app sends.
+  await assertSucceeds(db.update({ ...base('pr_healthy', 1, 10), ...receipt(UIDS.staff, 4), received: false, status: 'Needed' }));
+});
+
+test('nor may the person who raised it', async () => {
+  await given('pr_mine', { ...HEALTHY, id: 'pr_mine', qty: 10, byUid: UIDS.worker });
+  const db = as(testEnv, UIDS.worker).collection('purchase').doc('pr_mine');
+
+  await refused(db.update({ ...base('pr_mine', 1, 10), ...receipt(UIDS.worker, 4), received: false, status: 'Received' }));
+  await refused(db.update({ ...base('pr_mine', 1, 10), ...receipt(UIDS.worker, 4), received: false, status: 'Cancelled' }));
+  await assertSucceeds(db.update({ ...base('pr_mine', 1, 10), ...receipt(UIDS.worker, 4), received: false, status: 'Needed' }));
+});
+
+test('a Manager may not change only the status of a part-received requirement', async () => {
+  // No receipt field changes, so this is not a delivery — and it used to pass
+  // through the delivery branch all the same, because the stored rcvQty
+  // satisfied it.
+  await given('pr_part4', PART);
+  const db = as(testEnv, UIDS.staff).collection('purchase').doc('pr_part4');
+
+  await refused(db.update({ ...base('pr_part4', 1, 10), status: 'Cancelled' }));
+  await refused(db.update({ ...base('pr_part4', 1, 10), status: 'Received' }));
+  // A further delivery, the status left alone, still goes through.
+  await assertSucceeds(db.update({ ...base('pr_part4', 1, 10), ...receipt(UIDS.staff, 6), received: false, status: 'Needed' }));
+});
+
+test('received is a boolean whenever a write sets it — an Administrator\'s too', async () => {
+  await given('pr_healthy', { ...HEALTHY, qty: 10 });
+  const manager = as(testEnv, UIDS.staff).collection('purchase').doc('pr_healthy');
+  const admin = as(testEnv, UIDS.admin).collection('purchase').doc('pr_healthy');
+
+  await refused(manager.update({ ...base('pr_healthy', 1, 10), ...receipt(UIDS.staff, 4), received: 0 }));
+  await refused(admin.update({ ...base('pr_healthy', 1, 10), received: 0, status: 'Cancelled' }));
+  await refused(admin.update({ ...base('pr_healthy', 1, 10), ...receipt(UIDS.admin, 10), received: 1, status: 'Received' }));
+  // A boolean, the same writes otherwise, is accepted.
+  await assertSucceeds(admin.update({ ...base('pr_healthy', 1, 10), received: false, status: 'Cancelled' }));
+});
+
+test('a stored number is left alone: only a write that sets received must send a boolean', async () => {
+  // V8C4 rows hold `received: 1`. Correcting one without touching `received`
+  // is still an Administrator's to make.
+  await given('pr_pwa_done', { ...HEALTHY, id: 'pr_pwa_done', qty: 10, status: 'Received', received: 1,
+    rcvQty: 10, rcvBy: 'Someone', rcvUid: UIDS.admin, rcvAt: 1712600000000 });
+
+  await assertSucceeds(as(testEnv, UIDS.admin).collection('purchase').doc('pr_pwa_done')
+    .update({ ...base('pr_pwa_done', 1, 10), note: 'Checked against the invoice' }));
+});
+
+test('closing short needs the write-off — for an Administrator too', async () => {
+  await given('pr_part4', PART);
+  const admin = as(testEnv, UIDS.admin).collection('purchase').doc('pr_part4');
+
+  await refused(admin.update({ ...base('pr_part4', 1, 10), status: 'Received', received: true }));
+  await refused(admin.update({ ...base('pr_part4', 1, 10), received: true }));
+  // Written off — the total set to what arrived — it closes.
+  await assertSucceeds(admin.update({ ...base('pr_part4', 1, 4), status: 'Received', received: true }));
+});
+
+test('an Administrator may still correct a closed requirement without reopening it', async () => {
+  // Not a close: `received` and `status` stay as they were, so the total may
+  // move past the receipt.
+  await given('pr_done', { ...HEALTHY, id: 'pr_done', qty: 10, status: 'Received', received: true,
+    rcvQty: 10, rcvBy: 'Someone', rcvUid: UIDS.staff, rcvAt: 1712600000000 });
+
+  await assertSucceeds(as(testEnv, UIDS.admin).collection('purchase').doc('pr_done')
+    .update({ ...base('pr_done', 1, 12) }));
+});
+
+test('status moves to nothing else — not for an Administrator either', async () => {
+  await given('pr_healthy', { ...HEALTHY, qty: 10 });
+  const admin = as(testEnv, UIDS.admin).collection('purchase').doc('pr_healthy');
+
+  // "Ordered" is the Owner's own design, and arrives with N5.10b commit 7.
+  await refused(admin.update({ ...base('pr_healthy', 1, 10), status: 'Ordered' }));
+  await refused(admin.update({ ...base('pr_healthy', 1, 10), status: 'Archived' }));
+
+  await given('pr_done', { ...HEALTHY, id: 'pr_done', qty: 10, status: 'Received', received: true,
+    rcvQty: 10, rcvBy: 'Someone', rcvUid: UIDS.staff, rcvAt: 1712600000000 });
+  const adminDone = as(testEnv, UIDS.admin).collection('purchase').doc('pr_done');
+  // Cancel is from an open requirement, and a reopen is not still received.
+  await refused(adminDone.update({ ...base('pr_done', 1, 10), status: 'Cancelled', received: false }));
+  await refused(adminDone.update({ ...base('pr_done', 1, 10), status: 'Needed' }));
+});
+
 // --- what never changes ------------------------------------------------------
 
 test('a requirement is never hard deleted, by anyone', async () => {

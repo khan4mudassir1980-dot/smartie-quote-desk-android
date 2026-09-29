@@ -296,28 +296,43 @@ service cloud.firestore {
       // V8C4 document carries no descriptive name, so the native app writes
       // one additively — see noPriceData() above for the line that keeps a
       // price from following it into a Worker-readable collection.
+      /**
+       * Who may write a stock row: an Owner or Administrator with any
+       * action, or the displayed Manager with the ones below. Setting an
+       * exact quantity stays with Owner and Administrator; Staff use the
+       * +/- actions, the reorder level (`min`), the note-only save (`note`)
+       * and a photo change (`photo`).
+       *
+       * **`admin()` is asked once, by the caller** (N5.10b, the 1,000-
+       * expression limit). The rules used to say `stockWriter() && … &&
+       * (admin() || lastAction in …)`, asking it twice; that is
+       * `(A || S) && (A || L)`, which is `A || (S && L)` — this. A stock
+       * movement is two documents in one transaction, and if production
+       * counts the limit per request the two used to sum to 945.
+       */
+      function stockRowRoleOk(isAdmin) {
+        return isAdmin
+          || (staff() && request.resource.data.lastAction in ['in','out','min','add','pin','note','photo']);
+      }
+
       allow read: if member();
-      allow create: if stockWriter()
-                    && request.resource.data.q is number && request.resource.data.q >= 0
+      // The checks on the request first, the documents after them, the role
+      // last: only the role needs the caller's profile.
+      allow create: if request.resource.data.q is number && request.resource.data.q >= 0
                     && request.resource.data.min is number && request.resource.data.min >= 0
                     && request.resource.data.t is number
                     && request.resource.data.byUid == mine()
                     && noPriceData() && safeName()
-                    && photoMetaOk() && photoRevMonotonic()
-                    && (admin() || request.resource.data.lastAction in ['in','out','min','add','pin','note','photo']);
-      allow update: if stockWriter()
-                    && request.resource.data.q is number && request.resource.data.q >= 0
+                    && photoRevMonotonic() && photoMetaOk()
+                    && stockRowRoleOk(admin());
+      allow update: if request.resource.data.q is number && request.resource.data.q >= 0
                     && request.resource.data.min is number && request.resource.data.min >= 0
                     && request.resource.data.t is number
                     && request.resource.data.byUid == mine()
                     && request.resource.data.key == resource.data.key
                     && noPriceData() && safeName()
-                    && photoMetaOk() && photoRevMonotonic()
-                    // Setting an exact quantity stays with Owner and
-                    // Administrator; Staff use the +/- actions, the reorder
-                    // level (`min`), the note-only save (`note`) and a photo
-                    // change (`photo`).
-                    && (admin() || request.resource.data.lastAction in ['in','out','min','add','pin','note','photo']);
+                    && photoRevMonotonic() && photoMetaOk()
+                    && stockRowRoleOk(admin());
       // A row may not be deleted out from under its photo: the photo document
       // has to go in the same commit.
       allow delete: if admin() && !existsAfter(photoDoc());
@@ -362,9 +377,18 @@ service cloud.firestore {
     }
 
     match /stockMoves/{id} {
+      /**
+       * Who may log a movement: an Owner or Administrator with any action,
+       * or the displayed Manager with the four below — the same shape as
+       * `stockRowRoleOk`, and for the same reason, `admin()` asked once.
+       */
+      function stockMoveRoleOk(isAdmin) {
+        return isAdmin
+          || (staff() && request.resource.data.action in ['in','out','min','add']);
+      }
+
       allow read: if member() && !worker();
-      allow create: if stockWriter()
-                    && request.resource.data.id == id
+      allow create: if request.resource.data.id == id
                     && request.resource.data.key is string
                     // `note` is deliberately absent: a note-only save changes
                     // shared text, not a count, and logs nothing.
@@ -374,7 +398,7 @@ service cloud.firestore {
                     && request.resource.data.next >= 0
                     && request.resource.data.at is number
                     && request.resource.data.byUid == mine()
-                    && (admin() || request.resource.data.action in ['in','out','min','add']);
+                    && stockMoveRoleOk(admin());
       allow update, delete: if false;
     }
 

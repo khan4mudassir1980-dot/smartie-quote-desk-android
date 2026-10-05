@@ -472,6 +472,17 @@ service cloud.firestore {
     // **Manager** and `worker` is displayed **Staff**. Nothing here renames
     // either. See docs/N4.2-plan.md.
 
+    /**
+     * `admin()` and `staff()` without the `member()` in front of them, for
+     * the update rule, which has asked `member()` already and reaches these
+     * only when it held. N5.10b commit 8, for the expression limit: each
+     * `member()` is an `exists` and a `get` evaluated again, and a Manager's
+     * write asked it three times. Same decisions — `member() && x` is `x`
+     * wherever `member()` is already known true. Use them nowhere else.
+     */
+    function prAdmin()   { return isPrimaryOwner() || profile().role in ['owner','admin']; }
+    function prManager() { return profile().role == 'staff'; }
+
     /** Ownership. A blank stored byUid never matches a signed-in uid. */
     function prCreator() {
       return resource.data.get('byUid', '') != '' && resource.data.byUid == mine();
@@ -620,6 +631,10 @@ service cloud.firestore {
     /**
      * Recording what arrived, or writing off what will not.
      *
+     * `prQtyKept()` is asked before the document reads (N5.10b commit 8, for
+     * the expression limit): a write-off changes `qty`, so its receipt-list
+     * branch fails there at once instead of after `prOpen()` and the rest.
+     *
      * One definition, shared by the displayed Manager and by the person who
      * raised the requirement, so the two cannot drift apart. It deliberately
      * does **not** ask whether the row is untouched: the post-receipt lock
@@ -627,8 +642,8 @@ service cloud.firestore {
      * should be able to finish the requirement they raised.
      */
     function prDelivery(changed) {
-      return (prReceiptKeys(changed) && prOpen() && prRcvNumeric()
-              && prRcvNotReduced() && prQtyKept() && prClosesOnlyWhenMet())
+      return (prReceiptKeys(changed) && prQtyKept() && prOpen() && prRcvNumeric()
+              && prRcvNotReduced() && prClosesOnlyWhenMet())
         || (prShortfallKeys(changed) && prShortfall());
     }
 
@@ -666,8 +681,9 @@ service cloud.firestore {
      *
      * - **the diff once** — `touched()` is taken by the caller and passed in
      *   as `changed`;
-     * - **the role once** — `admin()` is asked by the caller and passed in,
-     *   as `qnEditPermitted` does;
+     * - **the role once** — asked by the caller and passed in, as
+     *   `qnEditPermitted` does; since commit 8 as `prAdmin()`, which skips
+     *   the `member()` the rule has already asked;
      * - **the two ordinary branches as one** — see `prRaiserOrManager`.
      */
     function prPermitted(changed, isAdmin) {
@@ -793,7 +809,7 @@ service cloud.firestore {
      * the document reads because they are the cheaper test.
      */
     function prRaiserOrManager(changed, isCreator) {
-      return (isCreator || staff())
+      return (isCreator || prManager())
         && (((prEditKeys(changed) || (isCreator && prRemoveKeys(changed))) && prUntouched())
             || prDelivery(changed));
     }
@@ -835,7 +851,8 @@ service cloud.firestore {
       //
       // N5.10b changed the shape, for the 1,000-expression limit: the checks
       // on the request come first, `member()` after them, and the diff and
-      // `admin()` are each taken once and handed to `prPermitted`. It also
+      // the role are each taken once and handed to `prPermitted` — the role
+      // as `prAdmin()`, which does not ask `member()` again (commit 8). It also
       // added three rules for everyone, an Owner or Administrator included:
       // `received` is a boolean when set, `status` moves only by closing,
       // cancel or reopen, and closing short needs the write-off.
@@ -845,7 +862,7 @@ service cloud.firestore {
                     && revOk()
                     && prIdentityPinned()
                     && member()
-                    && prPermitted(touched(), admin());
+                    && prPermitted(touched(), prAdmin());
 
       // Never a hard delete: a removed document reappears from a PWA device.
       allow delete: if false;

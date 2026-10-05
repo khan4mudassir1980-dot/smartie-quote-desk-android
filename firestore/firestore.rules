@@ -674,7 +674,38 @@ service cloud.firestore {
       return prReceivedIsBoolean(changed)
         && prStatusMoves(isAdmin)
         && prClosesMet(changed)
+        && prStampsAreCaller(changed)
         && (isAdmin || prRaiserOrManager(changed, prCreator()));
+    }
+
+    /**
+     * A uid a write sets on a requirement is **the caller's** — `upUid`,
+     * `rcvUid` and `cancelledUid` — for everyone, an Owner or Administrator
+     * included. The Owner's decision of 2026-09-29 (Q1b): if it changes, it
+     * must be the caller. Found in N5.10b step 1: a Manager could name the
+     * Administrator as the person who received a delivery, and the app shows
+     * the name it resolves from that uid.
+     *
+     * Only a uid the write **sets to a value** is asked about. Removing one
+     * stays allowed (QG) — the Administrator's reopen deletes `rcvUid` — and
+     * one carried unchanged is not in the diff, which is what V8C4 did after
+     * its first write. `deletedBy` already had the same pin, in
+     * `prRemovalStamp`. N5.10b commit 7 adds the Ordered uid.
+     */
+    function prStampsAreCaller(changed) {
+      return prSetUidIsCaller(changed, 'upUid')
+        && prSetUidIsCaller(changed, 'rcvUid')
+        && prSetUidIsCaller(changed, 'cancelledUid');
+    }
+
+    function prSetUidIsCaller(changed, field) {
+      return !changed.hasAny([field]) || prNewUidIsCaller(field);
+    }
+
+    /** Absent, or the caller: what a create or an update may leave in `field`. */
+    function prNewUidIsCaller(field) {
+      return !request.resource.data.keys().hasAny([field])
+        || request.resource.data.get(field, '') == mine();
     }
 
     /**
@@ -778,7 +809,11 @@ service cloud.firestore {
                     && (!request.resource.data.keys().hasAny(['received']) || request.resource.data.received == false)
                     && (!request.resource.data.keys().hasAny(['del']) || request.resource.data.del == false)
                     && request.resource.data.urgency in ['critical','urgent','normal']
-                    && request.resource.data.updated is number;
+                    && request.resource.data.updated is number
+                    // A new requirement names nobody else either (Q1b).
+                    && prNewUidIsCaller('upUid')
+                    && prNewUidIsCaller('rcvUid')
+                    && prNewUidIsCaller('cancelledUid');
 
       // `!worker()` is gone from the front of this rule and replaced by
       // branch structure: the limited role may now change the requirement it

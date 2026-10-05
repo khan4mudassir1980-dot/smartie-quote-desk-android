@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { assertSucceeds } = require('@firebase/rules-unit-testing');
 const firebase = require('firebase/compat/app');
 require('firebase/compat/firestore');
-const { createTestEnvironment, seed, as, refused, UIDS } = require('./helpers');
+const { createTestEnvironment, seed, as, refused, UIDS, PEOPLE } = require('./helpers');
 
 /**
  * Purchase requirements, and the five ways the v9 rules refuse a write
@@ -42,10 +42,15 @@ const HEALTHY = {
   t: 1712000000000, updated: 1712000000000, rev: 1,
 };
 
-/** Everything `PurchaseWrite.base()` puts on every update. */
-const base = (id, rev, qty) => ({
+/**
+ * Everything `PurchaseWrite.base()` puts on every update — stamped with **the
+ * caller**, as the app stamps its author. Until N5.10b this stamped the
+ * Administrator on every caller's write; the rules now refuse a `upUid` that
+ * is not the caller's, so the fixture says who is writing.
+ */
+const base = (id, rev, qty, uid) => ({
   id, qty, updated: Date.now(), rev: rev + 1,
-  upBy: 'Asha', upUid: UIDS.admin,
+  upBy: PEOPLE[uid].name, upUid: uid,
   serverAt: firebase.firestore.FieldValue.serverTimestamp(),
 });
 
@@ -56,7 +61,7 @@ test('the limited role corrects the requirement it raised itself', async () => {
 
   await assertSucceeds(
     as(testEnv, UIDS.worker).collection('purchase').doc('pr_healthy').update({
-      ...base('pr_healthy', 1, 6),
+      ...base('pr_healthy', 1, 6, UIDS.worker),
       name: 'Sliding gate rack', note: 'For the Kandivali site', urgency: 'urgent',
     })
   );
@@ -80,7 +85,7 @@ test('but not somebody else\'s requirement', async () => {
 
   await refused(
     as(testEnv, UIDS.worker).collection('purchase').doc('pr_theirs').update({
-      ...base('pr_theirs', 1, 6), name: 'Mine now',
+      ...base('pr_theirs', 1, 6, UIDS.worker), name: 'Mine now',
     })
   );
 });
@@ -93,7 +98,7 @@ test('a requirement with no recorded creator belongs to nobody', async () => {
 
   await refused(
     as(testEnv, UIDS.worker).collection('purchase').doc('pr_orphan').update({
-      ...base('pr_orphan', 1, 6), name: 'Mine now',
+      ...base('pr_orphan', 1, 6, UIDS.worker), name: 'Mine now',
     })
   );
 });
@@ -102,9 +107,9 @@ test('the creator may not rewrite who raised it, or when', async () => {
   await given('pr_healthy', HEALTHY);
   const db = as(testEnv, UIDS.worker).collection('purchase').doc('pr_healthy');
 
-  await refused(db.update({ ...base('pr_healthy', 1, 6), byUid: UIDS.staff }));
-  await refused(db.update({ ...base('pr_healthy', 1, 6), by: 'Somebody else' }));
-  await refused(db.update({ ...base('pr_healthy', 1, 6), t: 1 }));
+  await refused(db.update({ ...base('pr_healthy', 1, 6, UIDS.worker), byUid: UIDS.staff }));
+  await refused(db.update({ ...base('pr_healthy', 1, 6, UIDS.worker), by: 'Somebody else' }));
+  await refused(db.update({ ...base('pr_healthy', 1, 6, UIDS.worker), t: 1 }));
 });
 
 test('not even an Administrator may rewrite who raised a requirement', async () => {
@@ -115,14 +120,14 @@ test('not even an Administrator may rewrite who raised a requirement', async () 
   await given('pr_healthy', HEALTHY);
   const db = as(testEnv, UIDS.admin).collection('purchase').doc('pr_healthy');
 
-  await refused(db.update({ ...base('pr_healthy', 1, 4), byUid: UIDS.admin }));
-  await refused(db.update({ ...base('pr_healthy', 1, 4), by: 'Administrator' }));
-  await refused(db.update({ ...base('pr_healthy', 1, 4), t: 1 }));
+  await refused(db.update({ ...base('pr_healthy', 1, 4, UIDS.admin), byUid: UIDS.admin }));
+  await refused(db.update({ ...base('pr_healthy', 1, 4, UIDS.admin), by: 'Administrator' }));
+  await refused(db.update({ ...base('pr_healthy', 1, 4, UIDS.admin), t: 1 }));
 
   // And the identical write without them is accepted, which is what makes
   // the three refusals mean the pin rather than something else in the rule.
   // A refused write stores nothing, so rev 2 is still the right next one.
-  await assertSucceeds(db.update(base('pr_healthy', 1, 4)));
+  await assertSucceeds(db.update(base('pr_healthy', 1, 4, UIDS.admin)));
 });
 
 test('nor any audit field an edit has no business touching', async () => {
@@ -133,7 +138,7 @@ test('nor any audit field an edit has no business touching', async () => {
   // receipt cases live in the delivery section now, with `qty` kept.
   await given('pr_healthy', HEALTHY);
   const db = as(testEnv, UIDS.worker).collection('purchase').doc('pr_healthy');
-  const good = base('pr_healthy', 1, 6);
+  const good = base('pr_healthy', 1, 6, UIDS.worker);
 
   await refused(db.update({ ...good, stocked: true }));
   await refused(db.update({ ...good, stockedQty: 4 }));
@@ -146,7 +151,7 @@ test('an edit may not smuggle a removal, and a removal may not smuggle an edit',
   await given('pr_healthy', HEALTHY);
   const db = as(testEnv, UIDS.worker).collection('purchase').doc('pr_healthy');
 
-  await refused(db.update({ ...base('pr_healthy', 1, 6), name: 'Gone', del: true }));
+  await refused(db.update({ ...base('pr_healthy', 1, 6, UIDS.worker), name: 'Gone', del: true }));
   await refused(
     db.update({
       id: 'pr_healthy', updated: Date.now(), rev: 2, qty: 99,
@@ -163,7 +168,7 @@ test('the creator loses the requirement the moment something arrives', async () 
   });
   const db = as(testEnv, UIDS.worker).collection('purchase').doc('pr_part');
 
-  await refused(db.update({ ...base('pr_part', 1, 10), name: 'Too late' }));
+  await refused(db.update({ ...base('pr_part', 1, 10, UIDS.worker), name: 'Too late' }));
   await refused(
     db.update({
       id: 'pr_part', updated: Date.now(), rev: 2,
@@ -184,7 +189,7 @@ test('clearing the receipt first does not reopen the window', async () => {
 
   await refused(
     as(testEnv, UIDS.worker).collection('purchase').doc('pr_part').update({
-      ...base('pr_part', 1, 10),
+      ...base('pr_part', 1, 10, UIDS.worker),
       rcvQty: firebase.firestore.FieldValue.delete(),
       rcvBy: firebase.firestore.FieldValue.delete(),
       rcvUid: firebase.firestore.FieldValue.delete(),
@@ -204,7 +209,7 @@ test('and the creator still cannot reopen or hard delete', async () => {
   });
   const db = as(testEnv, UIDS.worker).collection('purchase').doc('pr_done');
 
-  await refused(db.update({ ...base('pr_done', 1, 4), status: 'Needed', received: false }));
+  await refused(db.update({ ...base('pr_done', 1, 4, UIDS.worker), status: 'Needed', received: false }));
   await refused(db.delete());
 });
 
@@ -215,7 +220,7 @@ test('a reopened requirement is its creator\'s again', async () => {
 
   await assertSucceeds(
     as(testEnv, UIDS.worker).collection('purchase').doc('pr_reopened').update({
-      ...base('pr_reopened', 1, 6), name: 'Corrected again',
+      ...base('pr_reopened', 1, 6, UIDS.worker), name: 'Corrected again',
     })
   );
 });
@@ -262,7 +267,7 @@ test('a delivery may not smuggle a removal stamp', async () => {
 
   await refused(
     as(testEnv, UIDS.worker).collection('purchase').doc('pr_mine').update({
-      ...base('pr_mine', 1, 10),
+      ...base('pr_mine', 1, 10, UIDS.worker),
       status: 'Needed', received: false, rcvQty: 4,
       delBy: 'Staff Person', delAt: Date.now(),
     })
@@ -276,7 +281,7 @@ test('a Manager edits anybody\'s untouched requirement, as before', async () => 
 
   await assertSucceeds(
     as(testEnv, UIDS.staff).collection('purchase').doc('pr_healthy').update({
-      ...base('pr_healthy', 1, 6), name: 'Sliding gate rack', urgency: 'critical',
+      ...base('pr_healthy', 1, 6, UIDS.staff), name: 'Sliding gate rack', urgency: 'critical',
     })
   );
 });
@@ -289,7 +294,7 @@ test('but not one a delivery has reached', async () => {
 
   await refused(
     as(testEnv, UIDS.staff).collection('purchase').doc('pr_part').update({
-      ...base('pr_part', 1, 10), name: 'Too late', urgency: 'critical',
+      ...base('pr_part', 1, 10, UIDS.staff), name: 'Too late', urgency: 'critical',
     })
   );
 });
@@ -327,12 +332,12 @@ test('a Manager reopening a received requirement is refused by the rules', async
 
   await refused(
     as(testEnv, UIDS.staff).collection('purchase').doc('pr_done').update({
-      ...base('pr_done', 1, 4), status: 'Needed', received: false,
+      ...base('pr_done', 1, 4, UIDS.staff), status: 'Needed', received: false,
     })
   );
   await refused(
     as(testEnv, UIDS.staff).collection('purchase').doc('pr_done').update({
-      ...base('pr_done', 1, 4), status: 'Needed', received: false,
+      ...base('pr_done', 1, 4, UIDS.staff), status: 'Needed', received: false,
       rcvQty: firebase.firestore.FieldValue.delete(),
       rcvBy: firebase.firestore.FieldValue.delete(),
       rcvUid: firebase.firestore.FieldValue.delete(),
@@ -349,7 +354,7 @@ test('a received total may not be reduced by a Manager', async () => {
 
   await refused(
     as(testEnv, UIDS.staff).collection('purchase').doc('pr_part').update({
-      ...base('pr_part', 1, 10),
+      ...base('pr_part', 1, 10, UIDS.staff),
       status: 'Needed', received: false,
       rcvQty: 2, rcvBy: 'Manager Person', rcvUid: UIDS.staff, rcvAt: Date.now(),
     })
@@ -363,7 +368,7 @@ test('a Manager still delivers against anybody\'s requirement', async () => {
 
   await assertSucceeds(
     as(testEnv, UIDS.staff).collection('purchase').doc('pr_theirs').update({
-      ...base('pr_theirs', 1, 10),
+      ...base('pr_theirs', 1, 10, UIDS.staff),
       status: 'Needed', received: false, rcvQty: 4,
       rcvBy: 'Manager Person', rcvUid: UIDS.staff, rcvAt: Date.now(),
     })
@@ -377,7 +382,7 @@ test('and so does an Owner and an Administrator', async () => {
 
     await assertSucceeds(
       as(testEnv, uid).collection('purchase').doc('pr_theirs').update({
-        ...base('pr_theirs', 1, 10),
+        ...base('pr_theirs', 1, 10, uid),
         status: 'Needed', received: false, rcvQty: 4,
       })
     );
@@ -394,7 +399,7 @@ test('a Manager closes a shortfall at exactly the stored receipt', async () => {
 
   await assertSucceeds(
     as(testEnv, UIDS.staff).collection('purchase').doc('pr_part').update({
-      ...base('pr_part', 1, 7), status: 'Received', received: true,
+      ...base('pr_part', 1, 7, UIDS.staff), status: 'Received', received: true,
     })
   );
 });
@@ -404,14 +409,16 @@ test('and the stored document is exactly what the shortfall promised', async () 
   // did: a shortfall rewrites a stored quantity and closes a requirement, so
   // "permitted" is not the same as "correct", and nothing else in this suite
   // reads a document back.
+  // The delivery was taken in by the Staff account; the Manager writes off
+  // the rest.
   await given('pr_part', {
     ...HEALTHY, id: 'pr_part', qty: 10,
-    rcvQty: 7, rcvBy: 'Manager Person', rcvUid: UIDS.staff, rcvAt: 1712600000000,
+    rcvQty: 7, rcvBy: 'Staff Person', rcvUid: UIDS.worker, rcvAt: 1712600000000,
   });
 
   await assertSucceeds(
     as(testEnv, UIDS.staff).collection('purchase').doc('pr_part').update({
-      ...base('pr_part', 1, 7), status: 'Received', received: true,
+      ...base('pr_part', 1, 7, UIDS.staff), status: 'Received', received: true,
     })
   );
 
@@ -429,18 +436,16 @@ test('and the stored document is exactly what the shortfall promised', async () 
   // The receipt records a delivery somebody made, and the person writing off
   // the remainder is usually not that person. All four survive untouched.
   assert.equal(row.rcvQty, 7);
-  assert.equal(row.rcvBy, 'Manager Person');
-  assert.equal(row.rcvUid, UIDS.staff);
+  assert.equal(row.rcvBy, 'Staff Person');
+  assert.equal(row.rcvUid, UIDS.worker);
   assert.equal(row.rcvAt, 1712600000000);
 
   assert.equal(row.rev, 2, 'the stored revision plus one, as every update does');
 
   // The updater field is its own thing, distinct from the receipt's rcvUid:
   // who wrote off the rest is not who took the delivery in. `base()` stamps
-  // a fixed updater rather than deriving one from the caller, so this says
-  // the field survives and differs from rcvUid — not that Firestore filled
-  // it in.
-  assert.equal(row.upUid, UIDS.admin);
+  // the caller, as the app does, and the rules insist it is the caller.
+  assert.equal(row.upUid, UIDS.staff);
   assert.notEqual(row.upUid, row.rcvUid);
 
   assert.equal(row.byUid, UIDS.worker, 'and who raised it is untouched');
@@ -455,9 +460,9 @@ test('and at no other quantity whatsoever', async () => {
   const db = as(testEnv, UIDS.staff).collection('purchase').doc('pr_part');
 
   // Below the receipt, above it, and the original total: all refused.
-  await refused(db.update({ ...base('pr_part', 1, 5), status: 'Received', received: true }));
-  await refused(db.update({ ...base('pr_part', 1, 8), status: 'Received', received: true }));
-  await refused(db.update({ ...base('pr_part', 1, 10), status: 'Received', received: true }));
+  await refused(db.update({ ...base('pr_part', 1, 5, UIDS.staff), status: 'Received', received: true }));
+  await refused(db.update({ ...base('pr_part', 1, 8, UIDS.staff), status: 'Received', received: true }));
+  await refused(db.update({ ...base('pr_part', 1, 10, UIDS.staff), status: 'Received', received: true }));
 });
 
 test('a shortfall may not rewrite the receipt while it writes off the rest', async () => {
@@ -468,7 +473,7 @@ test('a shortfall may not rewrite the receipt while it writes off the rest', asy
 
   await refused(
     as(testEnv, UIDS.staff).collection('purchase').doc('pr_part').update({
-      ...base('pr_part', 1, 7), status: 'Received', received: true,
+      ...base('pr_part', 1, 7, UIDS.staff), status: 'Received', received: true,
       rcvBy: 'Somebody else', rcvUid: UIDS.staff,
     })
   );
@@ -479,7 +484,7 @@ test('nothing to write off: an untouched requirement cannot be closed short', as
 
   await refused(
     as(testEnv, UIDS.staff).collection('purchase').doc('pr_healthy').update({
-      ...base('pr_healthy', 1, 0.0001), status: 'Received', received: true,
+      ...base('pr_healthy', 1, 0.0001, UIDS.staff), status: 'Received', received: true,
     })
   );
 });
@@ -495,7 +500,7 @@ test('the limited role closes a shortfall on the requirement it raised', async (
 
   await assertSucceeds(
     as(testEnv, UIDS.worker).collection('purchase').doc('pr_part').update({
-      ...base('pr_part', 1, 7), status: 'Received', received: true,
+      ...base('pr_part', 1, 7, UIDS.worker), status: 'Received', received: true,
     })
   );
 });
@@ -508,7 +513,7 @@ test('but never on one somebody else raised', async () => {
 
   await refused(
     as(testEnv, UIDS.worker).collection('purchase').doc('pr_theirs').update({
-      ...base('pr_theirs', 1, 7), status: 'Received', received: true,
+      ...base('pr_theirs', 1, 7, UIDS.worker), status: 'Received', received: true,
     })
   );
 });
@@ -526,11 +531,11 @@ test('a string receipt total fails closed for a Manager, both ways', async () =>
 
   await refused(
     db.update({
-      ...base('pr_legacy', 1, 10), status: 'Needed', received: false,
+      ...base('pr_legacy', 1, 10, UIDS.staff), status: 'Needed', received: false,
       rcvQty: 6, rcvBy: 'Manager Person', rcvUid: UIDS.staff, rcvAt: Date.now(),
     })
   );
-  await refused(db.update({ ...base('pr_legacy', 1, 4), status: 'Received', received: true }));
+  await refused(db.update({ ...base('pr_legacy', 1, 4, UIDS.staff), status: 'Received', received: true }));
 });
 
 test('and an Administrator may still rescue it', async () => {
@@ -541,7 +546,7 @@ test('and an Administrator may still rescue it', async () => {
 
   await assertSucceeds(
     as(testEnv, UIDS.admin).collection('purchase').doc('pr_legacy').update({
-      ...base('pr_legacy', 1, 10),
+      ...base('pr_legacy', 1, 10, UIDS.admin),
       status: 'Needed', received: false,
       rcvQty: 6, rcvBy: 'Administrator', rcvUid: UIDS.admin, rcvAt: Date.now(),
     })
@@ -571,7 +576,7 @@ test('and the same write succeeds once qty is sent as a number', async () => {
 
   await assertSucceeds(
     db.collection('purchase').doc('pr_string').update({
-      ...base('pr_string', 1, 10), urgency: 'critical',
+      ...base('pr_string', 1, 10, UIDS.staff), urgency: 'critical',
     })
   );
 });
@@ -598,7 +603,7 @@ test('and the same write succeeds once the id is re-asserted', async () => {
   const db = as(testEnv, UIDS.staff);
 
   await assertSucceeds(
-    db.collection('purchase').doc('pr_noid').update(base('pr_noid', 1, 5))
+    db.collection('purchase').doc('pr_noid').update(base('pr_noid', 1, 5, UIDS.staff))
   );
 });
 
@@ -613,7 +618,7 @@ test('adding del to a row that has no del key refuses an ordinary save', async (
   const db = as(testEnv, UIDS.staff);
 
   await refused(
-    db.collection('purchase').doc('pr_nodel').update({ ...base('pr_nodel', 1, 4), del: false })
+    db.collection('purchase').doc('pr_nodel').update({ ...base('pr_nodel', 1, 4, UIDS.staff), del: false })
   );
 });
 
@@ -622,7 +627,7 @@ test('and the identical save succeeds when it mentions no del at all', async () 
   const db = as(testEnv, UIDS.staff);
 
   await assertSucceeds(
-    db.collection('purchase').doc('pr_nodel').update(base('pr_nodel', 1, 4))
+    db.collection('purchase').doc('pr_nodel').update(base('pr_nodel', 1, 4, UIDS.staff))
   );
 });
 
@@ -631,7 +636,7 @@ test('an Administrator is the one who may set del', async () => {
 
   await assertSucceeds(
     as(testEnv, UIDS.admin).collection('purchase').doc('pr_nodel').update({
-      ...base('pr_nodel', 1, 4), del: true, deletedBy: UIDS.admin,
+      ...base('pr_nodel', 1, 4, UIDS.admin), del: true, deletedBy: UIDS.admin,
     })
   );
 });
@@ -655,7 +660,7 @@ test('epoch millis in updated, with the server clock beside it, is accepted', as
   const db = as(testEnv, UIDS.staff);
 
   await assertSucceeds(
-    db.collection('purchase').doc('pr_healthy').update(base('pr_healthy', 1, 4))
+    db.collection('purchase').doc('pr_healthy').update(base('pr_healthy', 1, 4, UIDS.staff))
   );
 });
 
@@ -665,9 +670,9 @@ test('a stale revision loses rather than overwriting silently', async () => {
   await given('pr_healthy', HEALTHY);
   const db = as(testEnv, UIDS.staff);
 
-  await assertSucceeds(db.collection('purchase').doc('pr_healthy').update(base('pr_healthy', 1, 4)));
+  await assertSucceeds(db.collection('purchase').doc('pr_healthy').update(base('pr_healthy', 1, 4, UIDS.staff)));
   // A second device still holding rev 1 computes the same rev 2 and loses.
-  await refused(db.collection('purchase').doc('pr_healthy').update(base('pr_healthy', 1, 4)));
+  await refused(db.collection('purchase').doc('pr_healthy').update(base('pr_healthy', 1, 4, UIDS.staff)));
 });
 
 test('once a row carries a rev, omitting it is refused, not tolerated', async () => {
@@ -705,7 +710,7 @@ test('a row with no creation time is still updatable', async () => {
   await given('pr_not', { ...withoutT, id: 'pr_not' });
 
   await assertSucceeds(
-    as(testEnv, UIDS.staff).collection('purchase').doc('pr_not').update(base('pr_not', 1, 4))
+    as(testEnv, UIDS.staff).collection('purchase').doc('pr_not').update(base('pr_not', 1, 4, UIDS.staff))
   );
 });
 
@@ -743,7 +748,7 @@ test('the receive payload the app sends is accepted', async () => {
 
   await assertSucceeds(
     as(testEnv, UIDS.staff).collection('purchase').doc('pr_healthy').update({
-      ...base('pr_healthy', 1, 4),
+      ...base('pr_healthy', 1, 4, UIDS.staff),
       status: 'Received', received: true,
       rcvQty: 4, rcvBy: 'Sam', rcvUid: UIDS.staff, rcvAt: Date.now(),
     })
@@ -761,7 +766,7 @@ test('the partial receipt payload the app sends is accepted', async () => {
 
   await assertSucceeds(
     as(testEnv, UIDS.staff).collection('purchase').doc('pr_healthy').update({
-      ...base('pr_healthy', 1, 10),
+      ...base('pr_healthy', 1, 10, UIDS.staff),
       // Still open, and saying so out loud rather than by omission.
       status: 'Needed', received: false,
       rcvQty: 4, rcvBy: 'Sam', rcvUid: UIDS.staff, rcvAt: Date.now(),
@@ -778,7 +783,7 @@ test('and the delivery that completes it is accepted too', async () => {
 
   await assertSucceeds(
     as(testEnv, UIDS.staff).collection('purchase').doc('pr_part').update({
-      ...base('pr_part', 1, 10),
+      ...base('pr_part', 1, 10, UIDS.staff),
       status: 'Received', received: true,
       // The cumulative total, which is what the app computes inside the
       // transaction from the stored figure.
@@ -793,7 +798,7 @@ test('a partial receipt still carries no del key, on a row that has none', async
   // delete an Administrator's and refuse an ordinary Manager's receipt.
   await given('pr_healthy', { ...HEALTHY, qty: 10 });
   const payload = {
-    ...base('pr_healthy', 1, 10),
+    ...base('pr_healthy', 1, 10, UIDS.staff),
     status: 'Needed', received: false,
     rcvQty: 4, rcvBy: 'Sam', rcvUid: UIDS.staff, rcvAt: Date.now(),
   };
@@ -821,7 +826,7 @@ test('a partly received row still rewrites a legacy string qty as a number', asy
   );
   await assertSucceeds(
     as(testEnv, UIDS.staff).collection('purchase').doc('pr_legacy').update({
-      ...base('pr_legacy', 1, 10),
+      ...base('pr_legacy', 1, 10, UIDS.staff),
       status: 'Needed', received: false, rcvQty: 4,
     })
   );
@@ -834,7 +839,7 @@ test('the limited role records a part delivery against its own requirement', asy
 
   await assertSucceeds(
     as(testEnv, UIDS.worker).collection('purchase').doc('pr_mine').update({
-      ...base('pr_mine', 1, 10),
+      ...base('pr_mine', 1, 10, UIDS.worker),
       status: 'Needed', received: false, rcvQty: 4,
       rcvBy: 'Staff Person', rcvUid: UIDS.worker, rcvAt: Date.now(),
     })
@@ -849,7 +854,7 @@ test('and the delivery that completes it', async () => {
 
   await assertSucceeds(
     as(testEnv, UIDS.worker).collection('purchase').doc('pr_mine').update({
-      ...base('pr_mine', 1, 10),
+      ...base('pr_mine', 1, 10, UIDS.worker),
       status: 'Received', received: true, rcvQty: 10,
       rcvBy: 'Staff Person', rcvUid: UIDS.worker, rcvAt: Date.now(),
     })
@@ -861,7 +866,7 @@ test('but not a part delivery against somebody else\'s requirement', async () =>
 
   await refused(
     as(testEnv, UIDS.worker).collection('purchase').doc('pr_theirs').update({
-      ...base('pr_theirs', 1, 10),
+      ...base('pr_theirs', 1, 10, UIDS.worker),
       status: 'Needed', received: false, rcvQty: 4,
     })
   );
@@ -873,7 +878,7 @@ test('nor against one with no recorded creator', async () => {
 
   await refused(
     as(testEnv, UIDS.worker).collection('purchase').doc('pr_orphan').update({
-      ...base('pr_orphan', 1, 10),
+      ...base('pr_orphan', 1, 10, UIDS.worker),
       status: 'Needed', received: false, rcvQty: 4,
     })
   );
@@ -887,7 +892,7 @@ test('the creator cannot reduce a received total while delivering', async () => 
 
   await refused(
     as(testEnv, UIDS.worker).collection('purchase').doc('pr_mine').update({
-      ...base('pr_mine', 1, 10),
+      ...base('pr_mine', 1, 10, UIDS.worker),
       status: 'Needed', received: false, rcvQty: 2,
     })
   );
@@ -898,7 +903,7 @@ test('nor rewrite who raised it while delivering', async () => {
 
   await refused(
     as(testEnv, UIDS.worker).collection('purchase').doc('pr_mine').update({
-      ...base('pr_mine', 1, 10),
+      ...base('pr_mine', 1, 10, UIDS.worker),
       status: 'Needed', received: false, rcvQty: 4,
       byUid: UIDS.staff,
     })
@@ -912,7 +917,7 @@ test('two devices cannot both record the same part delivery', async () => {
   await given('pr_part', { ...HEALTHY, id: 'pr_part', qty: 10 });
 
   const first = {
-    ...base('pr_part', 1, 10), status: 'Needed', received: false, rcvQty: 4,
+    ...base('pr_part', 1, 10, UIDS.staff), status: 'Needed', received: false, rcvQty: 4,
   };
   await assertSucceeds(
     as(testEnv, UIDS.staff).collection('purchase').doc('pr_part').update(first)
@@ -920,7 +925,7 @@ test('two devices cannot both record the same part delivery', async () => {
   // The second device planned against rev 1 as well, and is refused.
   await refused(
     as(testEnv, UIDS.admin).collection('purchase').doc('pr_part').update({
-      ...base('pr_part', 1, 10), status: 'Needed', received: false, rcvQty: 4,
+      ...base('pr_part', 1, 10, UIDS.admin), status: 'Needed', received: false, rcvQty: 4,
     })
   );
 });
@@ -933,7 +938,7 @@ test('the reopen payload deletes the received fields rather than blanking them',
 
   await assertSucceeds(
     as(testEnv, UIDS.admin).collection('purchase').doc('pr_done').update({
-      ...base('pr_done', 1, 4),
+      ...base('pr_done', 1, 4, UIDS.admin),
       status: 'Needed', received: false,
       rcvQty: firebase.firestore.FieldValue.delete(),
       rcvBy: firebase.firestore.FieldValue.delete(),
@@ -965,19 +970,19 @@ test('a delivery may not close a requirement by its status alone', async () => {
   await given('pr_healthy', { ...HEALTHY, qty: 10 });
   const db = as(testEnv, UIDS.staff).collection('purchase').doc('pr_healthy');
 
-  await refused(db.update({ ...base('pr_healthy', 1, 10), ...receipt(UIDS.staff, 4), received: false, status: 'Received' }));
-  await refused(db.update({ ...base('pr_healthy', 1, 10), ...receipt(UIDS.staff, 4), received: false, status: 'Cancelled' }));
+  await refused(db.update({ ...base('pr_healthy', 1, 10, UIDS.staff), ...receipt(UIDS.staff, 4), received: false, status: 'Received' }));
+  await refused(db.update({ ...base('pr_healthy', 1, 10, UIDS.staff), ...receipt(UIDS.staff, 4), received: false, status: 'Cancelled' }));
   // The same delivery, leaving the status where it was, is what the app sends.
-  await assertSucceeds(db.update({ ...base('pr_healthy', 1, 10), ...receipt(UIDS.staff, 4), received: false, status: 'Needed' }));
+  await assertSucceeds(db.update({ ...base('pr_healthy', 1, 10, UIDS.staff), ...receipt(UIDS.staff, 4), received: false, status: 'Needed' }));
 });
 
 test('nor may the person who raised it', async () => {
   await given('pr_mine', { ...HEALTHY, id: 'pr_mine', qty: 10, byUid: UIDS.worker });
   const db = as(testEnv, UIDS.worker).collection('purchase').doc('pr_mine');
 
-  await refused(db.update({ ...base('pr_mine', 1, 10), ...receipt(UIDS.worker, 4), received: false, status: 'Received' }));
-  await refused(db.update({ ...base('pr_mine', 1, 10), ...receipt(UIDS.worker, 4), received: false, status: 'Cancelled' }));
-  await assertSucceeds(db.update({ ...base('pr_mine', 1, 10), ...receipt(UIDS.worker, 4), received: false, status: 'Needed' }));
+  await refused(db.update({ ...base('pr_mine', 1, 10, UIDS.worker), ...receipt(UIDS.worker, 4), received: false, status: 'Received' }));
+  await refused(db.update({ ...base('pr_mine', 1, 10, UIDS.worker), ...receipt(UIDS.worker, 4), received: false, status: 'Cancelled' }));
+  await assertSucceeds(db.update({ ...base('pr_mine', 1, 10, UIDS.worker), ...receipt(UIDS.worker, 4), received: false, status: 'Needed' }));
 });
 
 test('a Manager may not change only the status of a part-received requirement', async () => {
@@ -987,10 +992,10 @@ test('a Manager may not change only the status of a part-received requirement', 
   await given('pr_part4', PART);
   const db = as(testEnv, UIDS.staff).collection('purchase').doc('pr_part4');
 
-  await refused(db.update({ ...base('pr_part4', 1, 10), status: 'Cancelled' }));
-  await refused(db.update({ ...base('pr_part4', 1, 10), status: 'Received' }));
+  await refused(db.update({ ...base('pr_part4', 1, 10, UIDS.staff), status: 'Cancelled' }));
+  await refused(db.update({ ...base('pr_part4', 1, 10, UIDS.staff), status: 'Received' }));
   // A further delivery, the status left alone, still goes through.
-  await assertSucceeds(db.update({ ...base('pr_part4', 1, 10), ...receipt(UIDS.staff, 6), received: false, status: 'Needed' }));
+  await assertSucceeds(db.update({ ...base('pr_part4', 1, 10, UIDS.staff), ...receipt(UIDS.staff, 6), received: false, status: 'Needed' }));
 });
 
 test('received is a boolean whenever a write sets it — an Administrator\'s too', async () => {
@@ -998,11 +1003,11 @@ test('received is a boolean whenever a write sets it — an Administrator\'s too
   const manager = as(testEnv, UIDS.staff).collection('purchase').doc('pr_healthy');
   const admin = as(testEnv, UIDS.admin).collection('purchase').doc('pr_healthy');
 
-  await refused(manager.update({ ...base('pr_healthy', 1, 10), ...receipt(UIDS.staff, 4), received: 0 }));
-  await refused(admin.update({ ...base('pr_healthy', 1, 10), received: 0, status: 'Cancelled' }));
-  await refused(admin.update({ ...base('pr_healthy', 1, 10), ...receipt(UIDS.admin, 10), received: 1, status: 'Received' }));
+  await refused(manager.update({ ...base('pr_healthy', 1, 10, UIDS.staff), ...receipt(UIDS.staff, 4), received: 0 }));
+  await refused(admin.update({ ...base('pr_healthy', 1, 10, UIDS.admin), received: 0, status: 'Cancelled' }));
+  await refused(admin.update({ ...base('pr_healthy', 1, 10, UIDS.admin), ...receipt(UIDS.admin, 10), received: 1, status: 'Received' }));
   // A boolean, the same writes otherwise, is accepted.
-  await assertSucceeds(admin.update({ ...base('pr_healthy', 1, 10), received: false, status: 'Cancelled' }));
+  await assertSucceeds(admin.update({ ...base('pr_healthy', 1, 10, UIDS.admin), received: false, status: 'Cancelled' }));
 });
 
 test('a stored number is left alone: only a write that sets received must send a boolean', async () => {
@@ -1012,17 +1017,17 @@ test('a stored number is left alone: only a write that sets received must send a
     rcvQty: 10, rcvBy: 'Someone', rcvUid: UIDS.admin, rcvAt: 1712600000000 });
 
   await assertSucceeds(as(testEnv, UIDS.admin).collection('purchase').doc('pr_pwa_done')
-    .update({ ...base('pr_pwa_done', 1, 10), note: 'Checked against the invoice' }));
+    .update({ ...base('pr_pwa_done', 1, 10, UIDS.admin), note: 'Checked against the invoice' }));
 });
 
 test('closing short needs the write-off — for an Administrator too', async () => {
   await given('pr_part4', PART);
   const admin = as(testEnv, UIDS.admin).collection('purchase').doc('pr_part4');
 
-  await refused(admin.update({ ...base('pr_part4', 1, 10), status: 'Received', received: true }));
-  await refused(admin.update({ ...base('pr_part4', 1, 10), received: true }));
+  await refused(admin.update({ ...base('pr_part4', 1, 10, UIDS.admin), status: 'Received', received: true }));
+  await refused(admin.update({ ...base('pr_part4', 1, 10, UIDS.admin), received: true }));
   // Written off — the total set to what arrived — it closes.
-  await assertSucceeds(admin.update({ ...base('pr_part4', 1, 4), status: 'Received', received: true }));
+  await assertSucceeds(admin.update({ ...base('pr_part4', 1, 4, UIDS.admin), status: 'Received', received: true }));
 });
 
 test('an Administrator may still correct a closed requirement without reopening it', async () => {
@@ -1032,7 +1037,7 @@ test('an Administrator may still correct a closed requirement without reopening 
     rcvQty: 10, rcvBy: 'Someone', rcvUid: UIDS.staff, rcvAt: 1712600000000 });
 
   await assertSucceeds(as(testEnv, UIDS.admin).collection('purchase').doc('pr_done')
-    .update({ ...base('pr_done', 1, 12) }));
+    .update({ ...base('pr_done', 1, 12, UIDS.admin) }));
 });
 
 test('status moves to nothing else — not for an Administrator either', async () => {
@@ -1040,15 +1045,68 @@ test('status moves to nothing else — not for an Administrator either', async (
   const admin = as(testEnv, UIDS.admin).collection('purchase').doc('pr_healthy');
 
   // "Ordered" is the Owner's own design, and arrives with N5.10b commit 7.
-  await refused(admin.update({ ...base('pr_healthy', 1, 10), status: 'Ordered' }));
-  await refused(admin.update({ ...base('pr_healthy', 1, 10), status: 'Archived' }));
+  await refused(admin.update({ ...base('pr_healthy', 1, 10, UIDS.admin), status: 'Ordered' }));
+  await refused(admin.update({ ...base('pr_healthy', 1, 10, UIDS.admin), status: 'Archived' }));
 
   await given('pr_done', { ...HEALTHY, id: 'pr_done', qty: 10, status: 'Received', received: true,
     rcvQty: 10, rcvBy: 'Someone', rcvUid: UIDS.staff, rcvAt: 1712600000000 });
   const adminDone = as(testEnv, UIDS.admin).collection('purchase').doc('pr_done');
   // Cancel is from an open requirement, and a reopen is not still received.
-  await refused(adminDone.update({ ...base('pr_done', 1, 10), status: 'Cancelled', received: false }));
-  await refused(adminDone.update({ ...base('pr_done', 1, 10), status: 'Needed' }));
+  await refused(adminDone.update({ ...base('pr_done', 1, 10, UIDS.admin), status: 'Cancelled', received: false }));
+  await refused(adminDone.update({ ...base('pr_done', 1, 10, UIDS.admin), status: 'Needed' }));
+});
+
+// --- N5.10b: a uid a write sets is the caller's ------------------------------------
+//
+// The Owner's decision of 2026-09-29 (Q1b): `upUid`, `rcvUid` and
+// `cancelledUid`, if a write sets one, must be the caller — for everyone, an
+// Owner or Administrator included. Removing one stays allowed (QG). Step 1
+// found a Manager could record a delivery naming the Administrator, and the
+// app shows the name it resolves from that uid.
+
+test('a uid a write sets is the caller\'s — upUid, rcvUid, cancelledUid — an Administrator\'s too', async () => {
+  await given('pr_healthy', { ...HEALTHY, qty: 10 });
+  const manager = as(testEnv, UIDS.staff).collection('purchase').doc('pr_healthy');
+
+  await refused(manager.update({ ...base('pr_healthy', 1, 10, UIDS.staff), upUid: UIDS.admin, urgency: 'urgent' }));
+  await refused(manager.update({ ...base('pr_healthy', 1, 10, UIDS.staff), ...receipt(UIDS.admin, 4), received: false }));
+  await assertSucceeds(manager.update({ ...base('pr_healthy', 1, 10, UIDS.staff), ...receipt(UIDS.staff, 4), received: false }));
+
+  await given('pr_open', { ...HEALTHY, id: 'pr_open', qty: 10 });
+  const admin = as(testEnv, UIDS.admin).collection('purchase').doc('pr_open');
+  await refused(admin.update({ ...base('pr_open', 1, 10, UIDS.admin), status: 'Cancelled', received: false,
+    cancelledBy: 'Manager Person', cancelledUid: UIDS.staff, cancelledAt: Date.now() }));
+  await refused(admin.update({ ...base('pr_open', 1, 10, UIDS.admin), upUid: UIDS.otherAdmin }));
+  await assertSucceeds(admin.update({ ...base('pr_open', 1, 10, UIDS.admin), status: 'Cancelled', received: false,
+    cancelledBy: 'Administrator', cancelledUid: UIDS.admin, cancelledAt: Date.now() }));
+});
+
+test('a uid carried unchanged, or removed, is not asked about', async () => {
+  // The Manager took this delivery in; the Administrator corrects the note.
+  // `rcvUid` stays the Manager's, which is not the caller, and that is fine.
+  await given('pr_done', { ...HEALTHY, id: 'pr_done', qty: 10, status: 'Received', received: true,
+    rcvQty: 10, rcvBy: 'Manager Person', rcvUid: UIDS.staff, rcvAt: 1712600000000 });
+  const admin = as(testEnv, UIDS.admin).collection('purchase').doc('pr_done');
+  await assertSucceeds(admin.update({ ...base('pr_done', 1, 10, UIDS.admin), note: 'Checked' }));
+
+  // And the reopen removes it outright (QG).
+  await assertSucceeds(admin.update({
+    ...base('pr_done', 2, 10, UIDS.admin), status: 'Needed', received: false,
+    rcvQty: firebase.firestore.FieldValue.delete(), rcvBy: firebase.firestore.FieldValue.delete(),
+    rcvUid: firebase.firestore.FieldValue.delete(), rcvAt: firebase.firestore.FieldValue.delete(),
+  }));
+});
+
+test('a new requirement names nobody else either', async () => {
+  const db = as(testEnv, UIDS.worker).collection('purchase');
+  const fresh = (id, extra = {}) => ({
+    id, name: 'Anchor bolts', qty: 20, urgency: 'normal', status: 'Needed',
+    by: 'Staff Person', byUid: UIDS.worker, t: Date.now(), updated: Date.now(), ...extra,
+  });
+
+  await refused(db.doc('pr_new1').set(fresh('pr_new1', { upBy: 'Administrator', upUid: UIDS.admin })));
+  await refused(db.doc('pr_new2').set(fresh('pr_new2', { rcvUid: UIDS.admin })));
+  await assertSucceeds(db.doc('pr_new3').set(fresh('pr_new3', { upBy: 'Staff Person', upUid: UIDS.worker })));
 });
 
 // --- what never changes ------------------------------------------------------
@@ -1068,8 +1126,8 @@ test('the limited role adds, and is still refused what N4.3 did not loosen', asy
   await given('pr_mine', { ...HEALTHY, id: 'pr_mine', byUid: UIDS.worker });
   const db = as(testEnv, UIDS.worker).collection('purchase').doc('pr_mine');
 
-  await refused(db.update({ ...base('pr_mine', 1, 4), status: 'Cancelled' }));
-  await refused(db.update({ ...base('pr_mine', 1, 4), stocked: true }));
+  await refused(db.update({ ...base('pr_mine', 1, 4, UIDS.worker), status: 'Cancelled' }));
+  await refused(db.update({ ...base('pr_mine', 1, 4, UIDS.worker), stocked: true }));
   await refused(db.delete());
 });
 
@@ -1078,5 +1136,5 @@ test('a switched-off account does nothing at all', async () => {
   const db = as(testEnv, UIDS.switchedOff);
 
   await refused(db.collection('purchase').doc('pr_healthy').get());
-  await refused(db.collection('purchase').doc('pr_healthy').update(base('pr_healthy', 1, 4)));
+  await refused(db.collection('purchase').doc('pr_healthy').update(base('pr_healthy', 1, 4, UIDS.switchedOff)));
 });

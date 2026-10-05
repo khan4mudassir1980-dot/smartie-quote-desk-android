@@ -165,3 +165,27 @@ test('still accepted: an Administrator\'s cancel or restore where received is al
     cancelledAt: 1712700000000, received: 0, status: 'Cancelled' })));
   await assertSucceeds(pwaPush(UIDS.admin, pwaRow({ cancelledUid: UIDS.admin, received: 0, status: 'Needed' })));
 });
+
+// --- what N5.10b commit 9 changed for V8C4's own shapes ------------------------------
+//
+// Found by the differential replay of commit 8b's rules against commit 9's
+// (`firestore/tools/diffrules.js`): of V8C4's payloads, exactly these two
+// decisions moved. One more is accepted and one fewer, so the count of V8C4
+// writes still accepted on rows the native app never wrote stays 19.
+
+test('since commit 9, an Administrator takes a V8C4 Ordered row back to Needed; a Manager still may not', async () => {
+  await given(pwaRow({ status: 'Ordered' }));
+  await refused(pwaPush(UIDS.staff, pwaRow({ status: 'Needed' })));
+  await assertSucceeds(pwaPush(UIDS.admin, pwaRow({ status: 'Needed' })));
+});
+
+test('since commit 9, an Administrator\'s V8C4 cancel of a restored row with stale receipt fields is refused — nothing received binds an Administrator', async () => {
+  // V8C4 deletes the receipt locally; its merge leaves it in Firestore, so the
+  // row still counts as received. An Administrator may still remove it, and
+  // the N8 cleanup clears the fields.
+  const stale = { rcvQty: 4, rcvBy: name(UIDS.admin), rcvUid: UIDS.admin, rcvAt: 1712100000000, received: 0 };
+  await given(pwaRow({ ...stale, stocked: 0, stockedQty: 0 }));
+  await refused(pwaPush(UIDS.admin, pwaRow({ received: 0, cancelledBy: name(UIDS.admin),
+    cancelledUid: UIDS.admin, cancelledAt: Date.now(), status: 'Cancelled' })));
+  await assertSucceeds(pwaPush(UIDS.admin, pwaRow({ ...stale, del: 1 })));
+});

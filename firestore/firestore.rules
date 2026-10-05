@@ -479,9 +479,15 @@ service cloud.firestore {
      * `member()` is an `exists` and a `get` evaluated again, and a Manager's
      * write asked it three times. Same decisions — `member() && x` is `x`
      * wherever `member()` is already known true. Use them nowhere else.
+     *
+     * The role is read with a default (commit 8b): a profile with no `role`
+     * is no role here, not an error. With `admin() || …` the error was
+     * absorbed and such a creator kept their rights; the ternary in
+     * `prPermitted` would have turned it into a refusal. A replay found it —
+     * 30 decisions — before this was written.
      */
-    function prAdmin()   { return isPrimaryOwner() || profile().role in ['owner','admin']; }
-    function prManager() { return profile().role == 'staff'; }
+    function prAdmin()   { return isPrimaryOwner() || profile().get('role', '') in ['owner','admin']; }
+    function prManager() { return profile().get('role', '') == 'staff'; }
 
     /** Ownership. A blank stored byUid never matches a signed-in uid. */
     function prCreator() {
@@ -537,7 +543,7 @@ service cloud.firestore {
     function prRemoveKeys(changed) {
       return changed.hasOnly([
         'id','del','deletedBy','delBy','delAt','updated','rev','upBy','upUid','serverAt'
-      ]) && prRemovalStamp(changed);
+      ]) ? prRemovalStamp(changed) : false;
     }
 
     /** Recording a delivery. */
@@ -642,9 +648,10 @@ service cloud.firestore {
      * should be able to finish the requirement they raised.
      */
     function prDelivery(changed) {
-      return (prReceiptKeys(changed) && prQtyKept() && prOpen() && prRcvNumeric()
-              && prRcvNotReduced() && prClosesOnlyWhenMet())
-        || (prShortfallKeys(changed) && prShortfall());
+      return (prReceiptKeys(changed)
+              ? prQtyKept() && prOpen() && prRcvNumeric() && prRcvNotReduced() && prClosesOnlyWhenMet()
+              : false)
+        || (prShortfallKeys(changed) ? prShortfall() : false);
     }
 
     /**
@@ -660,11 +667,11 @@ service cloud.firestore {
      * would refuse a requirement withdrawn in a basement.
      */
     function prRemovalStamp(changed) {
-      return (!changed.hasAny(['delBy'])
-              || (request.resource.data.delBy is string
-                  && request.resource.data.delBy.size() <= 80))
-        && (!changed.hasAny(['delAt']) || request.resource.data.delAt is number)
-        && (!changed.hasAny(['deletedBy']) || request.resource.data.deletedBy == mine());
+      return (changed.hasAny(['delBy'])
+              ? request.resource.data.delBy is string && request.resource.data.delBy.size() <= 80
+              : true)
+        && (changed.hasAny(['delAt']) ? request.resource.data.delAt is number : true)
+        && (changed.hasAny(['deletedBy']) ? request.resource.data.deletedBy == mine() : true);
     }
 
     /**
@@ -685,13 +692,24 @@ service cloud.firestore {
      *   `qnEditPermitted` does; since commit 8 as `prAdmin()`, which skips
      *   the `member()` the rule has already asked;
      * - **the two ordinary branches as one** — see `prRaiserOrManager`.
+     *
+     * **Ternaries at the branch points (N5.10b commit 8b).** Measured in the
+     * emulator: on a **refused** write, `a && b` and `a || b` inside these
+     * functions went on to evaluate `b` after `a` had already decided — a
+     * Staff account's refused edit of a Manager's requirement cost about
+     * 908 of the 1,000, against 448 for the Manager's own valid edit — while
+     * `a ? b : false` did not. So where a cheap test decides whether an
+     * expensive one matters, it is written as a ternary. The decisions are
+     * the same (the replay, the suite and the ablations say so); refusals
+     * fall to about 411, and the dearest valid purchase write rises from
+     * 650 to 669.
      */
     function prPermitted(changed, isAdmin) {
       return prReceivedIsBoolean(changed)
         && prStatusMoves(isAdmin)
         && prClosesMet(changed)
         && prStampsAreCaller(changed)
-        && (isAdmin || prRaiserOrManager(changed, prCreator()));
+        && (isAdmin ? true : prRaiserOrManager(changed, prCreator()));
     }
 
     /**
@@ -715,7 +733,7 @@ service cloud.firestore {
     }
 
     function prSetUidIsCaller(changed, field) {
-      return !changed.hasAny([field]) || prNewUidIsCaller(field);
+      return changed.hasAny([field]) ? prNewUidIsCaller(field) : true;
     }
 
     /** Absent, or the caller: what a create or an update may leave in `field`. */
@@ -737,7 +755,7 @@ service cloud.firestore {
      * a write that sets the field must send a boolean.
      */
     function prReceivedIsBoolean(changed) {
-      return !changed.hasAny(['received']) || request.resource.data.received is bool;
+      return changed.hasAny(['received']) ? request.resource.data.received is bool : true;
     }
 
     /**
@@ -765,8 +783,8 @@ service cloud.firestore {
       let before = resource.data.get('status', 'Needed');
       let after = request.resource.data.get('status', 'Needed');
       let receivedAfter = request.resource.data.get('received', false);
-      return after == before
-        || (before == 'Needed' && after == 'Received' && receivedAfter == true)
+      return after == before ? true :
+        (before == 'Needed' && after == 'Received' && receivedAfter == true)
         || (isAdmin && before == 'Needed' && after == 'Cancelled' && receivedAfter != true)
         || (isAdmin && before in ['Received', 'Cancelled'] && after == 'Needed' && receivedAfter != true);
     }
@@ -786,9 +804,10 @@ service cloud.firestore {
     function prClosesMet(changed) {
       let closes = (changed.hasAny(['received']) && request.resource.data.received == true)
         || (changed.hasAny(['status']) && request.resource.data.get('status', 'Needed') == 'Received');
-      return !closes
-        || (request.resource.data.get('rcvQty', 0) is number
-            && request.resource.data.get('rcvQty', 0) >= request.resource.data.qty);
+      return closes
+        ? request.resource.data.get('rcvQty', 0) is number
+            && request.resource.data.get('rcvQty', 0) >= request.resource.data.qty
+        : true;
     }
 
     /**
@@ -810,8 +829,9 @@ service cloud.firestore {
      */
     function prRaiserOrManager(changed, isCreator) {
       return (isCreator || prManager())
-        && (((prEditKeys(changed) || (isCreator && prRemoveKeys(changed))) && prUntouched())
-            || prDelivery(changed));
+        ? ((prEditKeys(changed) || (isCreator ? prRemoveKeys(changed) : false)) ? prUntouched() : false)
+            || prDelivery(changed)
+        : false;
     }
 
     match /purchase/{id} {

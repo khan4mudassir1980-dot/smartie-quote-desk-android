@@ -48,6 +48,7 @@ import `in`.smartie.quotedesk.domain.PurchaseWrite
 import `in`.smartie.quotedesk.ui.components.SmartieField
 import `in`.smartie.quotedesk.ui.components.SmartieGhostButton
 import `in`.smartie.quotedesk.ui.components.SmartiePrimaryButton
+import `in`.smartie.quotedesk.ui.components.SmartieToggleButton
 import `in`.smartie.quotedesk.ui.components.clickableNoRipple
 import `in`.smartie.quotedesk.ui.components.urgencyColour
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
@@ -85,6 +86,13 @@ data class PurchaseActions(
     val onRemove: (PurchaseRecord) -> Unit = {},
     /** Close it at what arrived, writing off the rest. Takes no quantity. */
     val onCloseShortfall: (PurchaseRecord) -> Unit = {},
+    /**
+     * The Owner's one Order / Not ordered button: no sheet and no question,
+     * which way it goes is the record's own state (N5.10b).
+     */
+    val onToggleOrdered: (PurchaseRecord) -> Unit = {},
+    /** Cancel, once the cancel confirm has been answered. */
+    val onCancel: (PurchaseRecord) -> Unit = {},
     /** Open the panel for one of the above. The screen decides how. */
     val onOpen: (PurchaseSheet, PurchaseRecord?) -> Unit = { _, _ -> },
     /** Close whatever is open. Writes nothing; it is a Cancel button. */
@@ -92,7 +100,7 @@ data class PurchaseActions(
 )
 
 /** Which panel a surface is asking to open. */
-enum class PurchaseSheet { ADD, EDIT, URGENCY, RECEIVE, REOPEN, REMOVE, SHORTFALL }
+enum class PurchaseSheet { ADD, EDIT, URGENCY, RECEIVE, REOPEN, REMOVE, SHORTFALL, CANCEL }
 
 /**
  * What this person may do **to this requirement**.
@@ -122,10 +130,18 @@ data class PurchaseCapabilities(
      * Close it at what arrived. Owner, Administrator and Manager — and, since
      * N4.3, the person who raised it.
      */
-    val shortfall: Boolean = false
+    val shortfall: Boolean = false,
+    /** Order / Not ordered. **Owner and Administrator only**, on an open row. */
+    val order: Boolean = false,
+    /**
+     * Cancel, while nothing has arrived: an Owner or Administrator on any, a
+     * Manager on anybody's that is not Ordered, Staff never (N5.10b).
+     */
+    val cancel: Boolean = false
 ) {
     /** Whether a card needs a control row at all. */
-    val anyRowAction: Boolean get() = edit || receive || reopen || remove || shortfall
+    val anyRowAction: Boolean
+        get() = edit || receive || reopen || remove || shortfall || order || cancel
 
     companion object {
         /** The screen-wide part, which is now only the Add control. */
@@ -147,7 +163,9 @@ data class PurchaseCapabilities(
                 receive = PurchaseAccess.canReceive(member, record),
                 reopen = PurchaseAccess.canReopen(member, record),
                 remove = PurchaseAccess.canRemove(member, record),
-                shortfall = PurchaseAccess.canCloseShortfall(member, record)
+                shortfall = PurchaseAccess.canCloseShortfall(member, record),
+                order = PurchaseAccess.canToggleOrdered(member, record),
+                cancel = PurchaseAccess.canCancel(member, record)
             )
     }
 }
@@ -257,7 +275,14 @@ internal fun EditRequirementPanel(
     record: PurchaseRecord,
     online: Boolean = true,
     saving: Boolean = false,
-    actions: PurchaseActions = PurchaseActions()
+    actions: PurchaseActions = PurchaseActions(),
+    /**
+     * On an Ordered requirement, only an Owner or Administrator changes what
+     * or how many (the Owner's QD4): for anybody else the two fields are
+     * shown and disabled, with the reason, and the note and the urgency stay
+     * theirs. `PurchaseAccess.canChangeWhatOrHowMany`; the rules agree.
+     */
+    whatAndHowManyLocked: Boolean = false
 ) {
     var name by rememberSaveable(record.id) { mutableStateOf(record.name) }
     var quantity by rememberSaveable(record.id) {
@@ -280,7 +305,7 @@ internal fun EditRequirementPanel(
                 label = NAME_LABEL,
                 value = name,
                 onValueChange = { name = it },
-                enabled = !saving,
+                enabled = !saving && !whatAndHowManyLocked,
                 keyboardOptions = nextField(KeyboardType.Text),
                 keyboardActions = moveNext(focus),
                 modifier = Modifier.semantics { contentDescription = NAME_LABEL }
@@ -289,11 +314,18 @@ internal fun EditRequirementPanel(
                 label = QUANTITY_LABEL,
                 value = quantity,
                 onValueChange = { quantity = it },
-                enabled = !saving,
+                enabled = !saving && !whatAndHowManyLocked,
                 keyboardOptions = nextField(KeyboardType.Decimal),
                 keyboardActions = moveNext(focus),
                 modifier = Modifier.semantics { contentDescription = QUANTITY_LABEL }
             )
+            if (whatAndHowManyLocked) {
+                Text(
+                    PurchaseAccess.ORDERED_WHAT_AND_HOW_MANY,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = SmartieColors.BlueDeep
+                )
+            }
             UrgencyChoice(
                 selected = urgency,
                 enabled = !saving,
@@ -541,6 +573,35 @@ internal fun RemoveConfirmPanel(
     )
 }
 
+/**
+ * Cancel a requirement nothing has arrived against — the advisor's words of
+ * 2026-10-05, from V8C4's own: it moves to history and leaves the Open list,
+ * and nothing is marked as received.
+ *
+ * Answered "Cancel requirement" or "Keep it", as the quotation cancel is, so
+ * the dialog never shows two buttons both called Cancel.
+ */
+@Composable
+internal fun CancelConfirmPanel(
+    record: PurchaseRecord,
+    online: Boolean = true,
+    saving: Boolean = false,
+    actions: PurchaseActions = PurchaseActions()
+) {
+    ConfirmPanel(
+        question = cancelQuestion(record.name),
+        detail = null,
+        confirmText = if (saving) CANCELLING else CANCEL_REQUIREMENT,
+        confirmDescription = CONFIRM_CANCEL,
+        online = online,
+        saving = saving,
+        onConfirm = { actions.onCancel(record) },
+        onDismiss = actions.onDismiss,
+        dismissText = KEEP_IT,
+        danger = true
+    )
+}
+
 // --- the controls on a card -----------------------------------------------
 
 /**
@@ -575,14 +636,19 @@ internal fun PurchaseRowActions(
         verticalArrangement = Arrangement.spacedBy(dimens.gapXs)
     ) {
         rowActionsFor(record, capabilities).forEach { action ->
-            RowAction(action.text, action.sheet, record, online, saving, actions, action.danger)
+            val sheet = action.sheet
+            if (sheet == null) {
+                OrderedToggle(record, online, saving, actions)
+            } else {
+                RowAction(action.text, sheet, record, online, saving, actions, action.danger)
+            }
         }
     }
 }
 
-/** One offered control, and what it opens. */
+/** One offered control, and what it opens — or null for the Ordered toggle. */
 private data class RowActionSpec(
-    val sheet: PurchaseSheet,
+    val sheet: PurchaseSheet?,
     val text: String,
     val danger: Boolean = false
 )
@@ -600,9 +666,15 @@ private data class RowActionSpec(
  * again. Three inline plus a fold would have been one tidy row in every case
  * rather than most, but it puts Remove behind a tap — and a missing Remove is
  * precisely what the phone pass reported. With the buttons compact, four fit
- * on one row at 360dp; only an Owner looking at a part-delivered requirement
- * sees five, and that wraps to a second row, which is safe now that
- * `SmartieCard` measures what it draws.
+ * on one row at 360dp, and anything more wraps to a second row, which is safe
+ * now that `SmartieCard` measures what it draws.
+ *
+ * **N5.10b** added Order / Not ordered (Owner and Administrator, open rows)
+ * after Urgency, and Cancel (nothing received) before Reopen. The most any
+ * card shows is now **six** — an Owner or Administrator on an open
+ * requirement: Received, Edit, Urgency, Order, then Close short (part
+ * received) or Cancel (nothing received), never both, and Remove. A
+ * Manager's most is five. No overflow menu: the Owner was asked first.
  */
 private fun rowActionsFor(
     record: PurchaseRecord,
@@ -616,10 +688,18 @@ private fun rowActionsFor(
         add(RowActionSpec(PurchaseSheet.EDIT, EDIT))
         add(RowActionSpec(PurchaseSheet.URGENCY, URGENCY))
     }
+    // No sheet: a toggle, drawn by `PurchaseRowActions` itself.
+    if (open && capabilities.order) {
+        add(RowActionSpec(sheet = null, text = orderToggleText(record.isOrdered)))
+    }
     // Only on a requirement that is part way there: nothing has arrived means
-    // remove it, and everything has means it closes itself.
+    // cancel or remove it, and everything has means it closes itself.
     if (open && capabilities.shortfall) {
         add(RowActionSpec(PurchaseSheet.SHORTFALL, CLOSE_SHORT))
+    }
+    // Only while nothing has arrived — so never beside Close short.
+    if (open && capabilities.cancel) {
+        add(RowActionSpec(PurchaseSheet.CANCEL, CANCEL_ACTION, danger = true))
     }
     // Only a closed requirement can come back, and only for the two roles the
     // rules cannot be made to check.
@@ -629,6 +709,35 @@ private fun rowActionsFor(
     if (capabilities.remove) {
         add(RowActionSpec(PurchaseSheet.REMOVE, REMOVE, danger = true))
     }
+}
+
+/**
+ * Order / Not ordered, one button (the Owner's answer of 2026-10-05): a tap
+ * marks it Ordered and the button turns blue with the tag; a tap again takes
+ * it back to Needed. No question asked — the view model's snackbar says what
+ * happened. `selected` while Ordered, and TalkBack reads the state.
+ */
+@Composable
+private fun OrderedToggle(
+    record: PurchaseRecord,
+    online: Boolean,
+    saving: Boolean,
+    actions: PurchaseActions
+) {
+    val description = orderToggleLabel(record.name)
+    SmartieToggleButton(
+        text = orderToggleText(record.isOrdered),
+        selected = record.isOrdered,
+        stateDescription = if (record.isOrdered) ORDERED_STATE else NOT_ORDERED_STATE,
+        onClick = { actions.onToggleOrdered(record) },
+        enabled = online && !saving,
+        compact = true,
+        modifier = Modifier
+            .semantics {
+                contentDescription = if (online) description else disabledLabel(description)
+            }
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+    )
 }
 
 /** One card control: 48dp of something to hit, and 48dp is what it measures. */
@@ -828,7 +937,11 @@ private fun ConfirmPanel(
     online: Boolean,
     saving: Boolean,
     onConfirm: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    /** "Keep it" where the confirm itself says Cancel. */
+    dismissText: String = CANCEL,
+    /** A red confirm, as the quotation cancel has, for an irreversible-looking act. */
+    danger: Boolean = false
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(question, style = MaterialTheme.typography.bodyLarge, color = SmartieColors.Ink)
@@ -837,13 +950,28 @@ private fun ConfirmPanel(
         }
         if (!online) OfflineNote()
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SmartieGhostButton(text = CANCEL, onClick = onDismiss, enabled = !saving)
-            SmartiePrimaryButton(
-                text = confirmText,
-                onClick = onConfirm,
-                enabled = online && !saving,
-                modifier = Modifier.semantics { contentDescription = confirmDescription }
+            SmartieGhostButton(
+                text = dismissText,
+                onClick = onDismiss,
+                enabled = !saving,
+                modifier = Modifier.semantics { contentDescription = dismissText }
             )
+            if (danger) {
+                SmartieGhostButton(
+                    text = confirmText,
+                    onClick = onConfirm,
+                    enabled = online && !saving,
+                    danger = true,
+                    modifier = Modifier.semantics { contentDescription = confirmDescription }
+                )
+            } else {
+                SmartiePrimaryButton(
+                    text = confirmText,
+                    onClick = onConfirm,
+                    enabled = online && !saving,
+                    modifier = Modifier.semantics { contentDescription = confirmDescription }
+                )
+            }
         }
     }
 }
@@ -896,6 +1024,7 @@ internal const val RECEIVE_TITLE: String = "Mark as received"
 internal const val REOPEN_TITLE: String = "Reopen this requirement?"
 internal const val REMOVE_TITLE: String = "Remove this requirement?"
 internal const val SHORTFALL_TITLE: String = "Close it at what arrived?"
+internal const val CANCEL_TITLE: String = "Cancel this requirement?"
 
 internal const val CANCEL: String = "Cancel"
 
@@ -928,6 +1057,34 @@ internal const val REMOVING: String = "Removing…"
 internal const val CLOSE_SHORT: String = "Close short"
 internal const val CLOSING: String = "Closing…"
 
+/** The card's control. Its confirm says the longer "Cancel requirement". */
+internal const val CANCEL_ACTION: String = "Cancel"
+internal const val CANCEL_REQUIREMENT: String = "Cancel requirement"
+internal const val CANCELLING: String = "Cancelling…"
+internal const val KEEP_IT: String = "Keep it"
+
+/**
+ * The advisor's words of 2026-10-05, from V8C4's: "It moves to history and
+ * leaves the Open list" in place of V8C4's badge, which this app does not
+ * have. The name in curly quotes, as V8C4 writes it.
+ */
+internal fun cancelQuestion(name: String): String =
+    "Cancel the requirement for \u201c$name\u201d? It moves to history and leaves the " +
+        "Open list. Nothing is marked as received."
+
+/** The toggle's face: what a tap does while not ordered, and the state while it is. */
+internal fun orderToggleText(ordered: Boolean): String = if (ordered) ORDERED else ORDER
+
+internal const val ORDER: String = "Order"
+internal const val ORDERED: String = "Ordered"
+
+/** What TalkBack says of the toggle's state, beside "selected". */
+internal const val ORDERED_STATE: String = "Ordered"
+internal const val NOT_ORDERED_STATE: String = "Not ordered"
+
+/** One description in both states, so the control is the same control by ear. */
+internal fun orderToggleLabel(name: String): String = "Ordered: $name"
+
 internal const val REOPEN_WARNING: String =
     "Put this back on the active list? The received quantity and who received " +
         "it will be cleared."
@@ -942,6 +1099,7 @@ internal const val CONFIRM_EDIT: String = "Confirm the changes to this requireme
 internal const val CONFIRM_RECEIVE: String = "Confirm this requirement has arrived"
 internal const val CONFIRM_REOPEN: String = "Confirm reopening this requirement"
 internal const val CONFIRM_REMOVE: String = "Confirm removing this requirement"
+internal const val CONFIRM_CANCEL: String = "Confirm cancelling this requirement"
 internal const val CONFIRM_SHORTFALL: String =
     "Confirm closing this requirement at what has arrived"
 
@@ -1031,4 +1189,5 @@ internal fun rowActionLabel(sheet: PurchaseSheet, name: String): String = when (
     PurchaseSheet.REOPEN -> "Reopen $name"
     PurchaseSheet.REMOVE -> "Remove $name"
     PurchaseSheet.SHORTFALL -> "Close $name at what has arrived"
+    PurchaseSheet.CANCEL -> "Cancel $name"
 }

@@ -1,5 +1,6 @@
 package `in`.smartie.quotedesk.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +35,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import `in`.smartie.quotedesk.ui.theme.LocalSmartieDimens
@@ -116,6 +118,70 @@ fun SmartieGhostButton(
             horizontal = if (compact) 9.dp else 14.dp
         ),
         modifier = modifier.heightIn(min = dimens.buttonHeightCompact)
+    ) {
+        Text(
+            text,
+            style = if (compact) {
+                MaterialTheme.typography.labelMedium
+            } else {
+                MaterialTheme.typography.labelLarge
+            },
+            maxLines = 1
+        )
+    }
+}
+
+/**
+ * A ghost button that is **on or off**: blue while on, the way the thing it
+ * marks is blue, and saying which to TalkBack — `selected`, and
+ * [stateDescription] in words.
+ *
+ * Built for the Owner's one Order / Not ordered button (N5.10b, 2026-10-05):
+ * "the button shows its state (selected while Ordered), and TalkBack reads
+ * that state". The same height as [SmartieGhostButton], so it sits in a row
+ * of them.
+ */
+@Composable
+fun SmartieToggleButton(
+    text: String,
+    selected: Boolean,
+    stateDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    compact: Boolean = false
+) {
+    val dimens = LocalSmartieDimens.current
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(dimens.radius),
+        colors = if (selected) {
+            ButtonDefaults.outlinedButtonColors(
+                containerColor = SmartieColors.BlueSoft,
+                contentColor = SmartieColors.BlueDeep
+            )
+        } else {
+            ButtonDefaults.outlinedButtonColors(contentColor = SmartieColors.Ink2)
+        },
+        // The outlined button's own 1dp outline, made blue while on.
+        border = BorderStroke(
+            1.dp,
+            when {
+                selected -> SmartieColors.Blue
+                enabled -> SmartieColors.Rule
+                else -> SmartieColors.Rule.copy(alpha = 0.12f)
+            }
+        ),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            horizontal = if (compact) 9.dp else 14.dp
+        ),
+        modifier = modifier
+            .semantics {
+                this.selected = selected
+                this.stateDescription = stateDescription
+            }
+            .heightIn(min = dimens.buttonHeightCompact)
     ) {
         Text(
             text,

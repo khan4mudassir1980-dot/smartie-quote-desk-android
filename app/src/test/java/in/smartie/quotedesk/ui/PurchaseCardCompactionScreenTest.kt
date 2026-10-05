@@ -75,16 +75,20 @@ class PurchaseCardCompactionScreenTest {
         bounds(sheet, record).top
 
     @Test
-    fun `an Owner's four controls on an untouched card share one row`() {
-        card(untouched)
+    fun `a Manager's four controls on somebody's untouched card share one row`() {
+        // Until N5.10b this was an Owner's four — Received, Edit, Urgency and
+        // Remove. The Owner's design of 2026-10-05 gives an Owner six on that
+        // card (Order and Cancel join them), which wrap to a second row; see
+        // `PurchaseOrderedClippingScreenTest`. C5's claim — four compact
+        // controls fit side by side at 360dp — is kept here, on the card that
+        // still has exactly four: a Manager's, with Cancel where Remove was.
+        card(untouched, viewer = purchaseStaff)
 
-        // Received, Edit, Urgency and Remove. Compact enough that 360dp holds
-        // them side by side, which is what C5 asked for.
         val tops = listOf(
             PurchaseSheet.RECEIVE,
             PurchaseSheet.EDIT,
             PurchaseSheet.URGENCY,
-            PurchaseSheet.REMOVE
+            PurchaseSheet.CANCEL
         ).map { actionTop(it, untouched) }
 
         assertEquals("four controls, one row", 1, tops.distinct().size)

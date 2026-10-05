@@ -23,14 +23,16 @@ import `in`.smartie.quotedesk.ui.theme.SmartieTagTextStyle
 
 /**
  * The PWA's `.tag` family: neutral, `g` success, `w` warning, `r` danger and
- * `o` purple/info (`index.html:258-261, 711-713, 761`).
+ * `o` purple/info (`index.html:258-261, 711-713, 761`) — and BLUE, this app's
+ * own, for a requirement marked Ordered (N5.10b, the Owner's choice).
  */
 enum class TagTone(val background: Color, val content: Color, val border: Color) {
     NEUTRAL(SmartieColors.Panel2, SmartieColors.Steel, SmartieColors.Rule),
     GREEN(SmartieColors.SuccessSoft, SmartieColors.SuccessDeep, SmartieColors.SuccessLine),
     WARN(SmartieColors.WarnSoft, SmartieColors.Warn, SmartieColors.WarnLine),
     DANGER(SmartieColors.DangerSoft, SmartieColors.Danger, SmartieColors.DangerLine),
-    PURPLE(SmartieColors.PurpleLight, SmartieColors.PurpleDark, SmartieColors.PurpleLine)
+    PURPLE(SmartieColors.PurpleLight, SmartieColors.PurpleDark, SmartieColors.PurpleLine),
+    BLUE(SmartieColors.BlueSoft, SmartieColors.BlueDeep, SmartieColors.BlueLine)
 }
 
 @Composable

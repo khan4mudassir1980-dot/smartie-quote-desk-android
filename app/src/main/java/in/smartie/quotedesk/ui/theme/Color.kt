@@ -44,6 +44,18 @@ object SmartieColors {
     val DangerSoft = Color(0xFFFEE2E2)
     val DangerLine = Color(0xFFF3C9C4)
 
+    /**
+     * **Ordered** (N5.10b). The app had no blue — V8C4's palette is purple,
+     * green, amber and red — and the Owner chose blue on 2026-10-05 because
+     * green reads as "received". The same four roles as the green set; the
+     * tag's text, [BlueDeep] on [BlueSoft], is checked against WCAG AA in
+     * `TagContrastTest`.
+     */
+    val Blue = Color(0xFF1D4ED8)
+    val BlueSoft = Color(0xFFE8EFFD)
+    val BlueDeep = Color(0xFF1E40AF)
+    val BlueLine = Color(0xFFBFD3F6)
+
     /** Urgency colours: very urgent red, urgent yellow/amber, normal green. */
     val UrgencyCritical = Danger
     val UrgencyUrgent = Color(0xFFEAB308)

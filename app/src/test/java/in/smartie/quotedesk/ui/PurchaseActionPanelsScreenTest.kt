@@ -249,14 +249,15 @@ class PurchaseActionPanelsScreenTest {
     }
 
     @Test
-    fun `no panel offers to cancel a requirement`() {
+    fun `the remove panel speaks of removing, never of cancelling`() {
         compose.setContent { SmartieTheme { RemoveConfirmPanel(record = open) } }
-        // N4 has no Cancel action and no generic status setter. A `Cancelled`
-        // requirement written by the PWA still reads correctly; nothing here
-        // writes one, and nothing here offers to.
+        // This was "no panel offers to cancel a requirement" until N5.10b: N4
+        // had no cancel. The Owner's decision of 2026-10-05 added one, behind
+        // its own confirm (`PurchaseCancelPanelScreenTest`); removing is still
+        // a different thing and its panel must not read like a cancel.
         for (word in listOf("Cancel requirement", "Cancelled", "Mark as cancelled")) {
             assertTrue(
-                "no purchase panel may offer $word",
+                "the remove panel may not offer $word",
                 compose.onAllNodesWithText(word, substring = true)
                     .fetchSemanticsNodes().isEmpty()
             )

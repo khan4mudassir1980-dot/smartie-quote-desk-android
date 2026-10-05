@@ -74,6 +74,35 @@ class PurchaseHistoryScreenTest {
     }
 
     @Test
+    fun `a cancelled requirement says who cancelled it and when — never received, and no figure`() {
+        // N5.10b, the advisor's decisions 2 and 3 of 2026-10-05. The receipt
+        // here is one V8C4 reversed and left behind; a cancel needs nothing
+        // received, so none of it may show.
+        val cancelled = requirement("pr_cancelled", name = "Remote handsets", receivedQuantity = 4.0)
+            .copy(
+                status = "Cancelled",
+                byUid = purchaseWorker.uid,
+                receivedBy = "Sam",
+                cancelledBy = "Asha",
+                cancelledByUid = purchaseAdmin.uid,
+                cancelledAt = 9_000
+            )
+        history(listOf(cancelled))
+
+        val line = closingLine(cancelled)!!
+        assertTrue(line, line.startsWith("Cancelled by Asha · "))
+        compose.onNodeWithText(line).assertIsDisplayed()
+        assertTrue("never Received by", !shows("Received by"))
+        assertTrue("no figure on a cancelled row", !shows("4 in"))
+    }
+
+    @Test
+    fun `an old V8C4 cancel with no stamp says Cancelled and nothing it does not know`() {
+        val v8c4 = requirement("pr_old", name = "Remote handsets").copy(status = "Cancelled")
+        assertEquals("Cancelled", closingLine(v8c4))
+    }
+
+    @Test
     fun `removed requirements are folded away until somebody asks`() {
         history(listOf(received, removed))
 

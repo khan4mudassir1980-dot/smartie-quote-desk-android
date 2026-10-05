@@ -1,5 +1,6 @@
 package `in`.smartie.quotedesk.ui.purchase
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -37,19 +38,21 @@ class PurchaseSheetRulesTest {
     }
 
     @Test
-    fun `every sheet has a title, and none of them offers to cancel a requirement`() {
+    fun `every sheet has a title, and only the cancel confirm is named after a cancel`() {
         val titles = listOf(
             ADD_TITLE,
             EDIT_TITLE,
             URGENCY_TITLE,
             RECEIVE_TITLE,
             REOPEN_TITLE,
-            REMOVE_TITLE
+            REMOVE_TITLE,
+            SHORTFALL_TITLE,
+            CANCEL_TITLE
         )
         assertTrue(titles.all { it.isNotBlank() })
-        // N4 has no Cancel action and no generic status setter. A `Cancelled`
-        // requirement written by the PWA still reads correctly; nothing here
-        // writes one, and no sheet is named after one.
-        assertTrue(titles.none { it.contains("Cancel", ignoreCase = true) })
+        // This said no sheet offered a cancel until N5.10b: N4 had none. The
+        // Owner's decision of 2026-10-05 added one, behind its own confirm —
+        // and still no generic status setter, so no other sheet speaks of it.
+        assertEquals(listOf(CANCEL_TITLE), titles.filter { it.contains("Cancel", ignoreCase = true) })
     }
 }

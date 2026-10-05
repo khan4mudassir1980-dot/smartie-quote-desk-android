@@ -124,7 +124,11 @@ private fun HistoryRow(item: PurchaseRecord, members: Map<String, Member> = empt
             // C7: a removed requirement that had received something still
             // says so. Hiding it was treating "removed" as though it undid
             // the delivery, and it does not — the goods arrived.
-            if (item.receivedQuantity != null) {
+            //
+            // Never on a cancelled one (the advisor's decision 2 of
+            // 2026-10-05): a cancel needs nothing received, so a figure on
+            // one is a receipt V8C4 had reversed and left behind.
+            if (item.receivedQuantity != null && !item.isCancelled) {
                 Text(
                     "${Money.formatQuantity(item.receivedTotal)} in",
                     style = MaterialTheme.typography.labelMedium,
@@ -142,6 +146,10 @@ private fun HistoryRow(item: PurchaseRecord, members: Map<String, Member> = empt
  * removed it. A PWA removal wrote neither, so the name falls back to nothing
  * and the line reads simply "Removed"; a row is never dropped for want of a
  * stamp, and the screen never invents one.
+ *
+ * A **cancelled** row says "Cancelled by <who> · <date>" from V8C4's own
+ * `cancelledBy` / `cancelledUid` / `cancelledAt`, which this app now writes
+ * too — and never "Received by", whatever receipt V8C4 left on it (N5.10b).
  */
 internal fun closingLine(
     item: PurchaseRecord,
@@ -155,6 +163,14 @@ internal fun closingLine(
             remover.takeIf { it.isNotBlank() }?.let { "by $it" },
             item.removedAt.takeIf { it > 0L }?.let { "on ${formatDay(it)}" }
         ).joinToString(" ")
+
+        item.isCancelled -> {
+            val canceller = PurchasePeople.describe(item.cancelledBy, item.cancelledByUid, members)
+            listOfNotNull(
+                if (canceller.isNotBlank()) "$CANCELLED_TAG by $canceller" else CANCELLED_TAG,
+                item.cancelledAt.takeIf { it > 0L }?.let { formatDay(it) }
+            ).joinToString(" · ")
+        }
 
         receiver.isNotBlank() -> listOfNotNull(
             "Received by $receiver",
@@ -172,6 +188,7 @@ private fun formatDay(millis: Long): String =
 
 internal const val RECEIVED_SECTION: String = "Received"
 internal const val REMOVED_TAG: String = "Removed"
+internal const val CANCELLED_TAG: String = "Cancelled"
 internal const val NOTHING_RECEIVED: String = "Nothing has been received yet."
 internal const val LOADING_HISTORY: String = "Loading history…"
 

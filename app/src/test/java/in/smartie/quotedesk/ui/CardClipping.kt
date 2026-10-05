@@ -100,6 +100,30 @@ internal fun ComposeContentTestRule.assertPaintedIn(
 }
 
 /** One control against the tagged host, which is the common case. */
+/**
+ * The same three checks for a line of text — laid out, painted whole, and
+ * inside [card] — found by its words rather than a description. Added in
+ * N5.10b for the "Ordered by … · …" line under a card's title.
+ */
+internal fun ComposeContentTestRule.assertTextPaintedIn(text: String, card: Rect) {
+    val node = onNodeWithText(text).fetchSemanticsNode()
+    val whole = node.unclippedBounds()
+    val painted = node.boundsInRoot
+
+    assertTrue("$text was never laid out: $whole", whole.width > 0f && whole.height > 0f)
+    assertTrue(
+        "$text is clipped — $painted painted of $whole",
+        painted.width >= whole.width - EPSILON && painted.height >= whole.height - EPSILON
+    )
+    assertTrue(
+        "$text falls outside its card — $whole against $card",
+        whole.left >= card.left - EPSILON &&
+            whole.right <= card.right + EPSILON &&
+            whole.top >= card.top - EPSILON &&
+            whole.bottom <= card.bottom + EPSILON
+    )
+}
+
 internal fun ComposeContentTestRule.assertPaintedInsideCard(
     description: String,
     cardTag: String = CARD_HOST_TAG,

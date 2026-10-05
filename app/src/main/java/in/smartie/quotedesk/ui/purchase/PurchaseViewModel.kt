@@ -38,7 +38,12 @@ import kotlinx.coroutines.launch
 /** Which panel is open, and for which requirement. */
 data class PurchaseSheetState(
     val sheet: PurchaseSheet? = null,
-    val record: PurchaseRecord? = null
+    val record: PurchaseRecord? = null,
+    /**
+     * The Edit sheet's Ordered lock, decided when it opens: on an Ordered
+     * requirement only an Owner or Administrator changes what or how many.
+     */
+    val whatAndHowManyLocked: Boolean = false
 ) {
     val isOpen: Boolean get() = sheet != null
 }
@@ -48,10 +53,12 @@ data class PurchaseSheetState(
  * which requirements have a write in flight, and what to say about the one
  * that just finished.
  *
- * **Six operations and no more** — [add], [edit], [setUrgency], [markReceived],
- * [reopen] and [remove]. There is no cancel and no generic status setter: a
- * status is moved only by the operation that owns it, so no caller can invent
- * a state nobody designed.
+ * **Named operations and no more** — [add], [edit], [setUrgency],
+ * [markReceived], [reopen], [remove] and [closeShortfall], and since N5.10b
+ * (the Owner's decision of 2026-10-05, replacing "no cancel") [toggleOrdered]
+ * and [cancel]. There is still no generic status setter: a status is moved
+ * only by the operation that owns it, so no caller can invent a state nobody
+ * designed.
  *
  * **Firestore stays the source of truth.** Every list comes from the
  * listener; the one exception is a requirement this device has just created,
@@ -267,12 +274,19 @@ class PurchaseViewModel(
                 if (allowed.remove) null else PurchaseAccess.refusalFor(member, record)
             PurchaseSheet.SHORTFALL ->
                 if (allowed.shortfall) null else PurchaseAccess.deliveryRefusalFor(member, record)
+            PurchaseSheet.CANCEL ->
+                if (allowed.cancel) null else PurchaseAccess.cancelRefusalFor(member, record)
         }
         if (refusal != null) {
             emit(refusal)
             return
         }
-        _sheet.value = PurchaseSheetState(sheet, record)
+        _sheet.value = PurchaseSheetState(
+            sheet = sheet,
+            record = record,
+            whatAndHowManyLocked = sheet == PurchaseSheet.EDIT &&
+                !PurchaseAccess.canChangeWhatOrHowMany(member, record)
+        )
     }
 
     /** Cancel. Explicitly writes nothing, which is the point of the sheet. */
@@ -382,6 +396,31 @@ class PurchaseViewModel(
     fun closeShortfall(record: PurchaseRecord) {
         if (!requireOnline()) return
         write(record.id, CLOSED_SHORT) { writes.closeShortfall(member, record) }
+    }
+
+    /**
+     * The Owner's one Order / Not ordered button (N5.10b): no question, a
+     * snackbar. Which way it goes is what the card was showing — the
+     * repository writes that state against the stored row, so two
+     * Administrators tapping at once end where they meant rather than
+     * flipping it twice.
+     */
+    fun toggleOrdered(record: PurchaseRecord) {
+        if (!requireOnline()) return
+        if (!capabilities(record).order) {
+            emit(NOT_ALLOWED_ORDER)
+            return
+        }
+        val ordering = !record.isOrdered
+        write(record.id, if (ordering) MARKED_ORDERED else BACK_TO_NEEDED) {
+            writes.setOrdered(member, record, ordered = ordering)
+        }
+    }
+
+    /** Cancel, after the confirm. Nothing is marked as received. */
+    fun cancel(record: PurchaseRecord) {
+        if (!requireOnline()) return
+        write(record.id, CANCELLED) { writes.cancel(member, record) }
     }
 
     // --- plumbing ---------------------------------------------------------------
@@ -529,6 +568,12 @@ class PurchaseViewModel(
         const val SAVE_FAILED: String = "Could not save — try again"
 
         const val CLOSED_SHORT: String = "Closed at what arrived"
+
+        /** The Owner's own words for the toggle's snackbar, 2026-10-05. */
+        const val MARKED_ORDERED: String = "Marked as ordered"
+        const val BACK_TO_NEEDED: String = "Back to needed"
+        const val CANCELLED: String = "Requirement cancelled"
+        const val NOT_ALLOWED_ORDER: String = "Your account cannot mark a requirement ordered"
 
         const val NOT_ALLOWED_ADD: String = "Your account cannot add a requirement"
         const val NOT_ALLOWED_REOPEN: String = "Your account cannot reopen a requirement"

@@ -37,6 +37,9 @@ import `in`.smartie.quotedesk.ui.components.urgencyColour
 import `in`.smartie.quotedesk.ui.purchase.ADD_REQUIREMENT
 import `in`.smartie.quotedesk.ui.purchase.ADD_TITLE
 import `in`.smartie.quotedesk.ui.purchase.AddRequirementPanel
+import `in`.smartie.quotedesk.ui.purchase.CANCEL_TITLE
+import `in`.smartie.quotedesk.ui.purchase.CancelConfirmPanel
+import `in`.smartie.quotedesk.ui.purchase.ORDERED
 import `in`.smartie.quotedesk.ui.purchase.EDIT_TITLE
 import `in`.smartie.quotedesk.ui.purchase.EditRequirementPanel
 import `in`.smartie.quotedesk.ui.purchase.MarkReceivedPanel
@@ -96,6 +99,8 @@ fun PurchaseScreen(viewModel: PurchaseViewModel) {
         onReopen = viewModel::reopen,
         onRemove = viewModel::remove,
         onCloseShortfall = viewModel::closeShortfall,
+        onToggleOrdered = viewModel::toggleOrdered,
+        onCancel = viewModel::cancel,
         onOpen = viewModel::open,
         onDismiss = viewModel::dismiss
     )
@@ -309,7 +314,13 @@ internal fun PurchaseSheets(
 
         PurchaseSheet.EDIT -> record?.let {
             PurchaseSheetDialog(EDIT_TITLE, PURCHASE_FORM_PROPERTIES, actions) {
-                EditRequirementPanel(record = it, online = online, saving = busy, actions = actions)
+                EditRequirementPanel(
+                    record = it,
+                    online = online,
+                    saving = busy,
+                    actions = actions,
+                    whatAndHowManyLocked = sheet.whatAndHowManyLocked
+                )
             }
         }
 
@@ -340,6 +351,12 @@ internal fun PurchaseSheets(
         PurchaseSheet.SHORTFALL -> record?.let {
             PurchaseSheetDialog(SHORTFALL_TITLE, PURCHASE_CONFIRM_PROPERTIES, actions) {
                 CloseShortfallPanel(record = it, online = online, saving = busy, actions = actions)
+            }
+        }
+
+        PurchaseSheet.CANCEL -> record?.let {
+            PurchaseSheetDialog(CANCEL_TITLE, PURCHASE_CONFIRM_PROPERTIES, actions) {
+                CancelConfirmPanel(record = it, online = online, saving = busy, actions = actions)
             }
         }
     }
@@ -400,6 +417,9 @@ internal fun PurchaseRow(
         // A note is shown only when there is one: no empty placeholder.
         note = item.note.takeIf { it.isNotBlank() },
         meta = creatorLine(item, members),
+        // Ordered by whom and when — only while it **is** Ordered, never from
+        // a stamp left behind by an order taken back (N5.10b).
+        extraMeta = orderedLine(item, members),
         accent = urgencyColour(item.urgency),
         // C2, C3 and C4. The quantity line is what a person came to the card
         // to read, so it is the thing set large; the note is somebody's words,
@@ -411,7 +431,20 @@ internal fun PurchaseRow(
         tags = {
             // Filled, not toned: the accent bar alone was invisible in use.
             UrgencyTag(item.urgency)
-            Tag(item.status, if (item.isClosed) TagTone.NEUTRAL else TagTone.PURPLE)
+            if (item.isOrdered) {
+                // Blue, the Owner's choice: green reads as "received". Seen
+                // by everyone, Staff included. Described, so a test can find
+                // it and a screen reader says who ordered it.
+                Tag(
+                    ORDERED,
+                    TagTone.BLUE,
+                    modifier = Modifier.semantics {
+                        contentDescription = orderedTagDescription(item, members)
+                    }
+                )
+            } else {
+                Tag(item.status, if (item.isClosed) TagTone.NEUTRAL else TagTone.PURPLE)
+            }
         },
         trailing = {
             // Only on a card that is no longer open. On an open one the
@@ -424,7 +457,11 @@ internal fun PurchaseRow(
             // through when somebody took it off the list is neither open nor
             // closed — and what had already arrived against it is exactly
             // what a person looking at History wants to know.
-            if (!item.isOpen && item.receivedQuantity != null) {
+            //
+            // Never on a cancelled one (the advisor's decision 2 of
+            // 2026-10-05): a cancel needs nothing received, so any figure on
+            // one is V8C4's reversed receipt left behind.
+            if (!item.isOpen && item.receivedQuantity != null && !item.isCancelled) {
                 Text(
                     "${Money.formatQuantity(item.receivedTotal)} in",
                     style = MaterialTheme.typography.labelMedium,
@@ -449,6 +486,27 @@ internal fun PurchaseRow(
         }
     )
 }
+
+/**
+ * "Ordered by <name> · d MMM yyyy", only while the requirement **is** Ordered.
+ * An old V8C4 Ordered row carries no stamp, so it shows the tag alone.
+ */
+internal fun orderedLine(item: PurchaseRecord, members: Map<String, Member> = emptyMap()): String? {
+    if (!item.isOrdered) return null
+    val who = PurchasePeople.describe(item.orderedBy, item.orderedByUid, members)
+        .takeIf { it.isNotBlank() }
+    val day = item.orderedAt.takeIf { it > 0L }?.let { formatDate(it) }
+    return when {
+        who != null && day != null -> "Ordered by $who · $day"
+        who != null -> "Ordered by $who"
+        day != null -> "Ordered $day"
+        else -> null
+    }
+}
+
+/** What a screen reader says of the Ordered tag: the line, or the word alone. */
+internal fun orderedTagDescription(item: PurchaseRecord, members: Map<String, Member> = emptyMap()): String =
+    orderedLine(item, members) ?: ORDERED
 
 private fun creatorLine(item: PurchaseRecord, members: Map<String, Member>): String? {
     val who = PurchasePeople.describe(item.by, item.byUid, members).takeIf { it.isNotBlank() }

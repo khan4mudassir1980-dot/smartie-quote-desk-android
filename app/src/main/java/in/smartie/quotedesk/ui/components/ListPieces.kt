@@ -74,6 +74,12 @@ fun ListRow(
      */
     note: String? = null,
     meta: String? = null,
+    /**
+     * A second meta line, under [meta] and set the same way — on a
+     * requirement, "Ordered by … · …" under "Added by …". Null composes
+     * nothing, so every other row lays out as it always did.
+     */
+    extraMeta: String? = null,
     tags: @Composable () -> Unit = {},
     trailing: @Composable () -> Unit = {},
     /**
@@ -186,6 +192,15 @@ fun ListRow(
                     if (meta != null) {
                         Text(
                             meta,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = SmartieColors.Steel2,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (extraMeta != null) {
+                        Text(
+                            extraMeta,
                             style = MaterialTheme.typography.labelMedium,
                             color = SmartieColors.Steel2,
                             maxLines = 1,

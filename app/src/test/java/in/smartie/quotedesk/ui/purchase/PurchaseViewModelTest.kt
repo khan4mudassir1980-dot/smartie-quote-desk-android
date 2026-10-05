@@ -942,6 +942,114 @@ class PurchaseViewModelTest {
         assertNull("no update may add a del key", store.writes.single()["del"])
     }
 
+    // --- Ordered, and cancel (N5.10b) ----------------------------------------------
+
+    /** A stored row with its status replaced, and any extra fields. */
+    private fun rowAs(status: String, vararg extra: Pair<String, Any?>): Map<String, Any?> =
+        row() + mapOf("status" to status) + extra
+
+    @Test
+    fun `the toggle marks a Needed requirement ordered, with the Owner's words`() = runTest {
+        val store = Store(stored = rowAs("Needed"))
+        val model = viewModel(member = admin, store = store)
+        val messages = messagesOf(model)
+
+        model.toggleOrdered(record())
+
+        assertEquals(PurchaseWrite.STATUS_ORDERED, store.writes.single()["status"])
+        assertEquals(admin.uid, store.writes.single()["orderedUid"])
+        assertEquals(listOf(PurchaseViewModel.MARKED_ORDERED), messages)
+    }
+
+    @Test
+    fun `and tapped again takes it back to needed`() = runTest {
+        val store = Store(stored = rowAs("Ordered"))
+        val model = viewModel(member = owner, store = store)
+        val messages = messagesOf(model)
+
+        model.toggleOrdered(record().copy(status = "Ordered"))
+
+        assertEquals(PurchaseWrite.STATUS_NEEDED, store.writes.single()["status"])
+        assertEquals(listOf(PurchaseViewModel.BACK_TO_NEEDED), messages)
+    }
+
+    @Test
+    fun `a Manager or Staff tapping it writes nothing and is told why`() = runTest {
+        for (member in listOf(staff, worker)) {
+            val store = Store(stored = rowAs("Needed"))
+            val model = viewModel(member = member, store = store)
+            val messages = messagesOf(model)
+
+            model.toggleOrdered(record())
+
+            assertEquals(0, store.attempts)
+            assertEquals(listOf(PurchaseViewModel.NOT_ALLOWED_ORDER), messages)
+        }
+    }
+
+    @Test
+    fun `a Manager cancels after the confirm, and nothing is marked received`() = runTest {
+        val store = Store(stored = rowAs("Needed"))
+        val model = viewModel(member = staff, store = store)
+        val messages = messagesOf(model)
+
+        model.open(PurchaseSheet.CANCEL, record())
+        assertTrue("the confirm opens", model.sheet.value.isOpen)
+        model.cancel(record())
+
+        val written = store.writes.single()
+        assertEquals(PurchaseWrite.STATUS_CANCELLED, written["status"])
+        assertEquals(staff.uid, written["cancelledUid"])
+        assertFalse(written.containsKey("received"))
+        assertEquals(listOf(PurchaseViewModel.CANCELLED), messages)
+        assertFalse("a success closes the confirm", model.sheet.value.isOpen)
+    }
+
+    @Test
+    fun `the cancel confirm does not open where cancel is not allowed, and says why`() = runTest {
+        val model = viewModel(member = staff)
+        val messages = messagesOf(model)
+
+        model.open(PurchaseSheet.CANCEL, record().copy(status = "Ordered"))
+        model.open(PurchaseSheet.CANCEL, record().copy(receivedQuantity = 2.0, receivedBy = "Sam"))
+
+        assertFalse(model.sheet.value.isOpen)
+        assertEquals(
+            listOf(PurchaseAccess.ORDERED_CANCEL, PurchaseWrite.SOMETHING_ARRIVED),
+            messages
+        )
+
+        // Staff have no cancel at all, not even of their own.
+        val mine = record().copy(byUid = worker.uid)
+        val staffModel = viewModel(member = worker)
+        val staffMessages = messagesOf(staffModel)
+        staffModel.open(PurchaseSheet.CANCEL, mine)
+        assertFalse(staffModel.sheet.value.isOpen)
+        assertEquals(listOf(PurchaseAccess.NOT_YOURS_TO_CANCEL), staffMessages)
+    }
+
+    @Test
+    fun `the Edit sheet locks what and how many on an Ordered requirement for all but an Administrator`() = runTest {
+        val ordered = record().copy(status = "Ordered", byUid = worker.uid)
+
+        val manager = viewModel(member = staff)
+        manager.open(PurchaseSheet.EDIT, ordered)
+        assertTrue(manager.sheet.value.whatAndHowManyLocked)
+
+        val creator = viewModel(member = worker)
+        creator.open(PurchaseSheet.EDIT, ordered)
+        assertTrue(creator.sheet.value.whatAndHowManyLocked)
+
+        val administrator = viewModel(member = admin)
+        administrator.open(PurchaseSheet.EDIT, ordered)
+        assertTrue(administrator.sheet.value.isOpen)
+        assertFalse(administrator.sheet.value.whatAndHowManyLocked)
+
+        val needed = viewModel(member = staff)
+        needed.open(PurchaseSheet.EDIT, record())
+        assertFalse(needed.sheet.value.whatAndHowManyLocked)
+    }
+
     @Test
     fun `dismissing writes nothing at all`() = runTest {
         val store = Store(stored = row())

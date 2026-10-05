@@ -1,18 +1,18 @@
 # Project status
 
 **The single current-status record. Read this before planning or changing
-anything.** Last updated 2026-09-29.
+anything.** Last updated 2026-10-05.
 
 ## Where the work is
 
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `6fbc2bc` — [run #224](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36534098134), fully green (unit tests, lint, Firestore rules emulator, APK build). A docs-only commit: the last CI-verified **code** head is `4283ef2`, [run #222](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/36412046793). Later commits may sit above it. |
+| **Last CI-verified head** | `877701f` — [run #231](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/37270578300), fully green (unit tests, lint, Firestore rules emulator, APK build). N5.10b commit 6, a rules and tests commit, so it is also the last CI-verified **code** head. Later commits may sit above it. |
 | **APK to install** | The `smartie-native-apks` artifact **from the run that verified the head you intend to install** — never from whichever run this table happens to name. A build contains the commit it ran on and nothing above it, so a head hash and an APK go out of step the moment anything lands. Each run's job summary reports its head and the signing certificate; the app must show **Staging**. |
-| **Ruleset anchor** | `ff20dd4` (N5.10 commit 2) — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
-| **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **eight rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap), `ff20dd4` (N5.10 — edit, the creator's cancel, the cap only when raised); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
-| **To deploy next** | The **latest CI-verified head**, not a hash copied into this file. Check it before deploying: `git diff --quiet <head> ff20dd4 -- firestore/firestore.rules` — silence means that head carries the current ruleset. No index deploy: `firestore.indexes.json` is unchanged since `69d0fce`. |
+| **Ruleset anchor** | `877701f` (N5.10b commit 6) — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
+| **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **twelve rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap), `ff20dd4` (N5.10 — edit, the creator's cancel, the cap only when raised), `cff32be`, `6d2c25c`, `d59f1e6`, `877701f` (N5.10b — the expression limit, the status pin, a boolean `received`, the uid pin); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
+| **To deploy next** | The **latest CI-verified head**, not a hash copied into this file. Check it before deploying: `git diff --quiet <head> 877701f -- firestore/firestore.rules` — silence means that head carries the current ruleset. No index deploy: `firestore.indexes.json` is unchanged since `69d0fce`. |
 
 > **Three fields, three meanings — they were one field until 2026-09-24 and it
 > had gone wrong.** The table said `a849650` was "the commit to deploy the rules
@@ -50,7 +50,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
 | N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2, N4.3 and N4.4 are all code complete and CI-verified**, and both are waiting on the same Owner-run staging rules deployment paired with the APK rollout — they were never deployed separately and must not be. Purchase History is built and open to every role, so what was Batch 5 is done; the tab badge is Batch 6 |
-| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.10 are complete and CI-verified** — N5.9 (finalise) at `57d607a`, run #204, Part A of the Owner's review of it at `2848bb9`, run #208, and **N5.10** (edit, cancel, Duplicate, the party type) at `4283ef2`, run #222. The builder **issues quotations** and now **edits** them — the same number, saved over, stamped "Last edited" — while the creator, or an Owner or Administrator, may **cancel** one and anyone who quotes may **duplicate** one. **Not yet run on a phone** — T-Q1 to T-Q22 are owed. Rules deploy once, at the final staging pass, from the head named above; the ruleset anchor is now `ff20dd4`. The Quotation tab keeps its "Keep using the PWA to issue quotations" banner until N5.12. Next is planning N5.11, the PDF, Print and WhatsApp |
+| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.10 are complete and CI-verified** — N5.9 (finalise) at `57d607a`, run #204, Part A of the Owner's review of it at `2848bb9`, run #208, and **N5.10** (edit, cancel, Duplicate, the party type) at `4283ef2`, run #222. The builder **issues quotations** and now **edits** them — the same number, saved over, stamped "Last edited" — while the creator, or an Owner or Administrator, may **cancel** one and anyone who quotes may **duplicate** one. **Not yet run on a phone** — T-Q1 to T-Q22 are owed. Rules deploy once, at the final staging pass, from the head named above; the ruleset anchor is now `877701f`. The Quotation tab keeps its "Keep using the PWA to issue quotations" banner until N5.12. **N5.10b is in progress** — the rules' expression limit, then Purchase's Ordered and a Manager's cancel (commits 0 to 6 green, runs #225 to #231; 7 to 14 approved 2026-10-05). N5.11, the PDF, Print and WhatsApp, is planned only after it |
 | N6 Products & Categories | Not started. The Products & Categories editing screen, which T-P7 is blocked on. **Also owed here: read the company GST from `teamSettings/company.defaultGst`.** V8C4's `stSave` writes it there and the native app is already permitted to read that document. N5.8a resolves a quotation's GST from the rate its catalogue lines agree on, which is an honest stopgap and not the final answer — a quotation whose lines disagree, or which has only hand-typed lines, has nothing to agree on and currently refuses to finalise until somebody sets the rate |
 | N7 Calculators | Not started. Port the four V8C4 calculators — rolling shutter, high-speed door, garage door, glass door — whose output becomes ordinary quotation lines carrying the opening size in the line's spec text |
 | N8 Migration & cutover | Not started. **The production migration and cutover.** `docs/N2-delivery.md:40` calls N8 "the catalogue migration"; that line is the stale one and `docs/N3-plan.md:585` is right. **Read the blocking warning about `import-staging.mjs` under "Decisions that bind future work" before planning any part of this** — the importer carries seed rates in every payload and would destroy live pricing if pointed at production |
@@ -1361,17 +1361,22 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**N5.10b — build commits 0 to 6 of the plan the Owner approved on
-2026-09-29, each pushed alone with CI green before the next; then HOLD.**
-Once commit 6 is green on CI, stop and send the Owner the **commit-7
-design** (Ordered, and a Manager's cancel) by message. **No code for
-commit 7 until the Owner approves it.** The approval, the Owner's answers
-and the order are recorded below ("The Owner's approval of the N5.10b plan,
-2026-09-29"), and what step 1 and step 1b measured is recorded beside it.
+**N5.10b — build commits 7 to 14 as the Owner approved on 2026-10-05, each
+pushed alone with CI green before the next; then stop and report. Do NOT
+start N5.11.** Commit 7 is this record. Then: 8, the rules reorder for
+headroom (behaviour-preserving, proved by the replay, the suite and the
+ablations, costs before and after); 9, the rules for Ordered, cancel and the
+locks; 10, domain and data; 11, the screens; 12, witnesses; 13, the tools;
+14, docs. **Stop and report, without working round it, if** any valid write
+reaches 900, a test would have to be weakened, anything contradicts the
+repository or the rules file, or an Administrator's reopen or remove of the
+old V8C4 rows (the 16-write check) becomes refused. The approval, the
+Owner's answers and the advisor's ten decisions are recorded below ("The
+Owner's approval of the commit-7 design, 2026-10-05").
 
-**Then N5.11** — the PDF, Print and WhatsApp — planned only after N5.10b is
-approved and built, and after the Owner has supplied V8C4's PDF, Print and
-WhatsApp facts. It must carry what this file already owes N5.11: print
+**Then N5.11** — the PDF, Print and WhatsApp — planned only after N5.10b
+is built and the Owner says so, and after the Owner has supplied V8C4's PDF,
+Print and WhatsApp facts. It must carry what this file already owes N5.11: print
 "Last edited by <name>, <date time>" right after the date, its time **from
 the server's clock** and checked by the rule against the request time;
 Duplicate's message back to **V8C4's exact words**; the PDF's fallback to
@@ -1381,7 +1386,29 @@ calling the finalise gate first, as V8C4's do.
 N5.10 is complete and CI-verified at `4283ef2` (below). Its phone rows,
 T-Q11 to T-Q22, join T-Q1 to T-Q10 in `PHONE-TEST-CHECKLIST.md` and are run
 once, at the final staging pass, with the rules deployed from the head
-then current — the anchor is now `ff20dd4`.
+then current — the anchor is now `877701f`.
+
+### N5.10b so far — every commit pushed alone, CI green before the next
+
+From `git log --oneline 6fbc2bc..877701f`. Commits 0 to 5 landed on
+2026-09-29, before the Owner's pause; commit 6 on 2026-10-05, after the
+16-write check (both recorded below):
+
+| Commit | What | Run |
+|---|---|---|
+| `519b0ba` | 0 — the approval of the N5.10b plan recorded, before any code | #225 green |
+| `cff32be` | 1 — `/purchase` update restructured for the expression limit, the same decision for every write | #226 green |
+| `1d2f599` | 2 — `refused()` on every refusal test, project-wide | #227 green |
+| `0013364` | 3 — refusal tests aimed at their own clause | #228 green |
+| `6d2c25c` | 4 — `/stock` and `/stockMoves`: `admin()` asked once, the same decisions | #229 green |
+| `d59f1e6` | 5 — status moves only by close, cancel and reopen; `received` a boolean; closing short needs the write-off; `v8c4-purchase.test.js` | #230 green |
+| `877701f` | 6 — a uid a write sets is the caller's; the test fixture stamps the caller. **The ruleset anchor** | #231 green |
+
+The emulator suite at `877701f`: **311 tests, 311 passing**, from
+`firestore/` with the emulator running: `node --test --test-concurrency=1
+tests/*.test.js` (Node 22 does not expand `tests/` the way CI's Node 20
+does, so the glob is spelt out). The expression limit is reached by **no**
+test: `grep -c "maximum of 1000 expressions"` over that output gives 0.
 
 ### N5.10 — every commit pushed alone; one red run, fixed by its own commit
 
@@ -2840,8 +2867,9 @@ deploy, no `main`, no PR, no force-push, no amending pushed commits.
 ### What N5.10b step 1 and step 1b measured — accepted by the Owner, 2026-09-29
 
 Measured at `6fbc2bc` against the emulator, nothing committed. The scripts
-are scratch until N5.10b commit 9 puts them under `firestore/tools/`; every
-count below names what produced it.
+are scratch until N5.10b commit 13 (9 before the 2026-10-05 renumbering)
+puts them under `firestore/tools/`; every count below names what produced
+it.
 
 **The 58 limit hits are all `/purchase` update — none is in stock.** This
 file said "purchase and stock"; that was wrong. From `firestore/`:
@@ -2999,6 +3027,278 @@ guessing."**
 2. **`docs/N5-cutover.md` does not exist yet** — `N5-plan.md` schedules it
    for N5.12. The QZ item is recorded under "Owed in N5.12" below and in
    the plan's N5.12 row, to be written when that document is.
+
+### The Owner's pause, 2026-09-29 — recorded
+
+Rule 8, recorded late: it arrived while commit 5 was in CI and stood until
+2026-10-05. **"Pause after the current commit's CI is green. Do not start
+the next commit. Report exactly where you stopped (last commit hash, CI
+result, what is next). Wait for my message before continuing."** Work
+stopped at `d59f1e6` (commit 5, run #230 green), with commit 6's edits in
+the working tree and not committed.
+
+### The Owner's decisions on the commit-5 report, and the HOLD brief, 2026-10-05 — recorded
+
+Rule 8. **"Mode: normal. Continue N5.10b."** First, report git status and
+the head; rebuild commit 6 only if its edits were lost (they were not).
+
+**Decisions on the report:**
+
+1. **The status rule binding Administrators too: accepted.** "It follows the
+   Owner's write-off rule, and no native flow needs otherwise."
+2. **The 19 V8C4 writes still accepted: accepted for now.** "Correct the
+   N5.12 line so it lists exactly which PWA purchase writes are still
+   accepted (per `v8c4-purchase.test.js`), and says the cutover control is
+   staff stopping PWA Purchase use. Hard-blocking the PWA is revisited at
+   N5.12, not now." The line is corrected in commit 14, after commit 9 has
+   settled what is still accepted.
+3. **The commit-1 correction** (the limit hid *why* a write was refused; it
+   was not a regression): noted.
+4. **`firebase-debug.log`: never commit it**; add it to `.gitignore` — in
+   commit 10 as then numbered, **commit 14** now.
+
+**Before committing 6, one local check, no code change:** on the commit 5 +
+6 rules, can an Administrator still **(a) reopen** and **(b) remove** a row
+V8C4 closed short (status "Received", `received: 1`, `rcvQty` below `qty`, no
+write-off fields) and a row V8C4 cancelled with stale receipt fields? "Old
+data will contain both after cutover, so they must stay fixable." If all
+are accepted, commit 6 alone; if any is refused, stop.
+
+**Result: 16 of 16 accepted** — an Administrator and the Primary Owner, each
+in both access states (`primaryOwnerUid` recorded, and the transition state
+that still identifies the Owner by email), reopening and removing both rows, each write exactly what `PurchaseWrite.reopen` and
+`PurchaseWrite.softDelete` send. Command: `node admincheck.js` from the
+N5.10b scratch scripts, against the emulator; it moves to `firestore/tools/`
+in commit 13. **This check is re-run after commit 9; the Owner's stop line
+applies if any of the 16 becomes refused.**
+
+**Commit 6's headroom**, measured after it was pushed. Command:
+`n510b/budget.sh` (scratch, to `firestore/tools/` in commit 13), which runs
+`purch.js`, `users.js`, `quotes.js` and `stock.js` against the emulator with
+every rule padded by N always-true terms, or one match block for a
+per-document figure; cost ≈ (163 − N) × 1000 / 163, about ±6.
+
+| Valid write, per document | Cost |
+|---|---|
+| A Manager's write-off | **791**, the costliest (761 in the email-fallback state) |
+| A Manager's whole delivery | 730 |
+| A Staff creator's write-off on their own | 730 |
+| A `/users` change by an Administrator | 675 |
+| A quotation edit | 613 |
+| A Manager removing their own | 558 |
+| An Administrator's edit | 417 |
+
+| Per request | Cost |
+|---|---|
+| A stock movement | 650 (356 + 294) — 945 before commit 4 |
+| A photo | 675 (374 + 301) — 822 before commit 4 |
+| A finalise | 625 (423 + 202) |
+
+**The commit-7 design had to cover, besides the 2026-09-29 list:**
+
+- **Cancel is NEW in the native app.** A Manager may cancel anyone's
+  requirement that is not Ordered. Owner and Administrator may cancel any,
+  Ordered included. Staff get no cancel; they keep Remove on their own
+  untouched rows.
+- **The advisor's rule, enforcing the write-off rule: cancel only when
+  NOTHING has been received.** A part-received row is closed with "Close
+  with N received" and the write-off, never cancelled. **This binds
+  Administrators too.**
+- **Field names: V8C4's `cancelledBy` / `cancelledUid` / `cancelledAt`**,
+  never renamed, so old V8C4 cancelled rows still show "Cancelled by ·
+  when". The time stamped the way the app stamps `rcvAt`; the reader also
+  accepts V8C4's numeric times; the uid pinned to the caller. **The Ordered
+  fields follow the same pattern.**
+- **"Cancelled by · when" and "Ordered by · when" show only when the status
+  says so**, never from leftover fields. Say what reopen does to them.
+- **Cancel's confirm text in V8C4's words** (amended at the approval, below).
+- **Headroom: 791 today, stop line 900.** Any reorder in its own commit
+  **before** the feature, behaviour-preserving and proved by the
+  differential replay as in commit 1; the feature measured separately. "If
+  the feature cannot fit under 900, stop and bring options. Do not raise the
+  line."
+- Propose the split, and the renumbering of 8, 9 and 10.
+
+**"No code for commit 7 until I approve."**
+
+### The commit-7 design, as sent on 2026-10-05
+
+In short; the Owner approved it with the changes recorded in the next
+section, and those changes win wherever they differ.
+
+- **Rules.** `prOpen`, and `prShortfall`'s own status check, accept Needed
+  or **Ordered**: a part receipt leaves Ordered as it is, a full receipt or
+  a write-off closes it as Received. **Status may move only by** closing to
+  Received (from Needed or Ordered, `received: true`, the total met);
+  **cancel** (nothing received — no `rcvQty`, `rcvBy`, `rcvUid` or `rcvAt`
+  present, the test `prUntouched` uses — with the cancel stamp in the same
+  write; an Administrator from Needed or Ordered, a Manager from Needed
+  only); **reopen** (Administrator, Received or Cancelled back to Needed);
+  **order** (Administrator, Needed to Ordered, with the Ordered stamp); and
+  **undo** (Administrator, Ordered back to Needed).
+- **Stamps.** `cancelledBy` (a string, at most 80), `cancelledUid`,
+  `cancelledAt` (a number, epoch milliseconds, as `rcvAt`), and the same
+  pattern for `orderedBy`, `orderedUid`, `orderedAt`. The uid pin gains
+  `orderedUid`.
+- **A Manager's cancel branch**: role Manager, keys exactly `status`, the
+  three `cancelled*` fields and the stamp (`id`, `updated`, `rev`, `upBy`,
+  `upUid`, `serverAt`).
+- **Locks, each in the rules:** a non-Administrator's edit of an Ordered row
+  may not change `name` or `qty` (note and urgency as today); a creator's
+  removal is refused on an Ordered row; a Manager cancels from Needed only;
+  order and undo are Administrator only.
+- **The stamp fields over time:** undo deletes the three `ordered*` fields;
+  **reopen deletes `cancelled*` and `ordered*` as well as today's `rcv*`**,
+  so a reopened row is as good as new; close and cancel leave earlier
+  fields in place, and the screens read them only when status says so.
+- **One effect on old data:** a V8C4-restored row with stale receipt fields
+  counts as received, so it cannot be cancelled; an Administrator can
+  remove it, and the N8 cleanup clears those fields.
+- **Screens.** The card shows the "Ordered" tag beside the urgency tag, and
+  "Ordered by <name> · d MMM yyyy" under "Added by …", only when status is
+  Ordered; an old V8C4 Ordered row with no stamp shows the tag alone.
+  Everyone sees the tag, Staff included. Buttons in the order Received,
+  Edit, Urgency, Order, Close short, Cancel, Reopen, Remove. The Edit sheet
+  on an Ordered row disables name and quantity for a Manager or Staff with
+  the line "Ordered — only an Owner or Administrator can change what or how
+  many". History shows "Cancelled by <who> · <date>" on a cancelled row, and
+  never "Received by" from leftover fields.
+- **Domain.** `PurchaseRecord` gains the three ordered fields and
+  `isOrdered`; `PurchaseAccess` gains order, undo and cancel, the remove and
+  edit locks, and `isUntouched` accepts Ordered; `PurchaseWrite` gains
+  `order`, `unorder` and `cancel` (no `received` written), and `reopen`
+  clears the stamps. **The trap:** `markReceived` writes Needed on a part
+  receipt today, which on an Ordered row the rules would refuse; a part
+  receipt must write the **stored** status.
+- **Tests** for each clause with its ablation, `v8c4-purchase.test.js`
+  re-checked, JVM tests with ablations, Robolectric tests of the tag, the
+  line, the buttons per role, the cancel confirm, the Edit locks and History,
+  and the clipping of the tag, the line and the footer at 360dp. The four
+  tests that assert there is no native cancel (`PurchaseActionPanelsScreenTest`,
+  `PurchaseSheetRulesTest`, `PurchaseBoardTest`, `PurchaseWriteTest`) are
+  turned, each saying the 2026-10-05 decision replaced the "no cancel"
+  design.
+- **Headroom:** a reorder commit first — `prQtyKept()` before the document
+  reads in `prDelivery`'s receipt branch; the Manager and Administrator
+  roles asked through purchase-local checks on the `member()` already
+  asked; the unchanged-status and unchanged-`received` cases first in
+  `prStatusMoves` and `prClosesMet` — then the feature, measured on its own.
+- **The split:** 7 docs; 8 the reorder; 9 the rules for Ordered, cancel and
+  the locks; 10 domain and data; 11 the screens; 12 witnesses (was 8); 13
+  tools (was 9); 14 docs (was 10).
+
+### The Owner's approval of the commit-7 design, 2026-10-05 — recorded before acting
+
+Rule 8. **"Commit-7 design APPROVED with the changes below. Build commits 7
+to 14 in your proposed split, each pushed alone, CI green before the
+next."**
+
+**The Owner's answers:**
+
+- **The Ordered tag is BLUE, not green** — green reads as "received".
+- **Order / Not ordered is ONE toggle button, Owner and Administrator
+  only.** Tap: the requirement becomes Ordered, and the button and the tag
+  show blue. Tap again: undo, back to Needed. **No confirmation.** A short
+  snackbar — "Marked as ordered" / "Back to needed" — and **no separate
+  Undo action**. The button shows its state (selected while Ordered), and
+  **TalkBack reads that state**.
+
+**The advisor's decisions:**
+
+1. **Cancel's confirm text** — the native app has no badge: **"Cancel the
+   requirement for “X”? It moves to history and leaves the Open list.
+   Nothing is marked as received."** Buttons: **"Cancel requirement"**
+   (danger) and **"Keep it"**.
+2. **Hide "N in" on Cancelled rows**: yes.
+3. **Sort cancelled rows in History by `cancelledAt`**, falling back to
+   `updated` for old V8C4 rows that lack it.
+4. **Create:** confirm that create refuses any status other than Needed and
+   any `ordered*` / `cancelled*` key; add tests where not covered; say
+   whether the `orderedUid` pin on create is then moot.
+5. **Receipts on an Ordered row** (a part receipt keeps Ordered; a full
+   receipt and a write-off close it): tested for **both a Manager and the
+   Staff creator**.
+6. **Duplicate / top-up:** if native create offers to add to an existing
+   open requirement, it must not for an Ordered row; report what native
+   does today.
+7. **The action row:** report the most buttons any role sees on one card
+   and how they lay out at 360dp. Wrap if needed; the clipping test must
+   pass. **No overflow menu without asking.**
+8. **The N8 migration item:** the cleanup removes **every** field
+   `prUntouched` counts as a receipt (named, including `stocked`,
+   `stockedQty` and `received: 0` if counted), so a cleaned V8C4-restored
+   row can be edited and cancelled. **The N8 batch must test exactly that.**
+9. **Blue:** the app's existing blue token if there is one; check the tag
+   text's contrast.
+10. **Commit 7 records** the Owner's messages of 2026-09-29 and 2026-10-05,
+    this approval and the answers (Rule 8) — this section and the two
+    above.
+
+**Headroom:** "Commit 8 is the reorder: behaviour-preserving, proved by the
+replay, the suite and the ablations, with costs before and after. **The
+stop line stays 900.** After commits 8 and 9, report per-document and
+per-request costs, naming the command (Rule 5)."
+
+**STOP AND REPORT, do not work around, if:** any valid write reaches 900; a
+test would have to be weakened; anything here contradicts the repository or
+the rules file; an Administrator's reopen or remove of the old V8C4 rows
+(the 16-write check) becomes refused.
+
+**At the end:** the commits and their CI runs, the test counts with the
+command behind each, the headroom table, and what comes next. **Do NOT
+start N5.11.**
+
+**Always:** one commit per push, CI green before the next; this branch
+only; no `main`, no PR, no force-push, no amending pushed commits; never
+deploy Firebase.
+
+### What the repository says on the approval — found while recording it
+
+Nothing in the approval contradicts the repository or the rules file. What
+the questions asked, answered from the code at `877701f`:
+
+- **(4) Create.** The create rule asks `status == 'Needed'`, so every other
+  status — Ordered and Cancelled included — is already refused; a test
+  covers only `'Received'` ("a create may not claim somebody else, a
+  different status or a bad urgency"). It does **not** refuse the
+  `ordered*` and `cancelled*` keys: it pins `cancelledUid` to the caller and
+  accepts `cancelledBy`, `cancelledAt` and every `ordered*` key. **Commit 9
+  adds the refusal of all six keys, with tests for an Ordered and a
+  Cancelled create and for each key. The `orderedUid` create pin is then
+  moot** — a create carrying it is refused whatever its value — so none is
+  added. Commit 6's `cancelledUid` create pin becomes redundant the same
+  way; it stays as written. The `upUid` and `rcvUid` create pins stay.
+- **(6) Top-up.** **Native never offers it.** `PurchaseViewModel.add` calls
+  `PurchaseWriteRepository.create`, which always writes a new document under
+  an id the sheet keeps across retries (N4.4's B2: a retry lands on the same
+  document and `alreadyExists` refuses it, so a double tap never makes a
+  twin). Nothing reaches an existing requirement, so nothing needs blocking
+  for Ordered. V8C4's top-up is a PWA write and stops at cutover (QZ).
+- **(7) The action row, today and after.** `rowActionsFor`
+  (`PurchasePanels.kt`) puts every action on the card in a `FlowRow`; today
+  the most is **five** (an Owner on a part-delivered requirement: Received,
+  Edit, Urgency, Close short, Remove), which wraps to a second row at 360dp.
+  After commit 11 the most is **six**, for an Owner or Administrator on an
+  open requirement: Received, Edit, Urgency, Order, then Close short (part
+  received) **or** Cancel (nothing received) — never both — and Remove. A
+  Manager's most is five. Reopen shows only on closed rows. Commit 11
+  measures the layout at 360dp with the clipping test and reports it.
+- **(8) The receipt fields.** The rules' `prUntouched` counts exactly
+  **`rcvQty`, `rcvBy`, `rcvUid` and `rcvAt`**, by presence; the app's
+  `PurchaseRecord.hasReceipt` counts the same four. **`received: 0` is not
+  counted**: `prOpen` asks `received != true`, and the app reads 0 as false.
+  **`stocked` and `stockedQty` are counted by neither** — the app reads them
+  into `PurchaseRecord` and nothing else uses them. So the N8 cleanup
+  removes those four; the item below says so and says what the N8 batch
+  must test.
+- **(9) Blue.** **The app has no blue token.** `ui/theme/Color.kt`'s
+  `SmartieColors` is V8C4's palette — purple, ink, steel, rule, paper,
+  panel, and the success, warning, danger and urgency pairs — and
+  `TagTone` is NEUTRAL, GREEN, WARN, DANGER and PURPLE. Commit 11 adds a
+  blue pair and `TagTone.BLUE`, with a test that computes the tag text's
+  contrast against its fill.
+- **(1) "The Open list"** is the board's own word: the Purchase screen's
+  open section is headed "Open" (`OPEN_SECTION`, `PurchaseScreen.kt`).
 
 ### Owed in N6: the validators on the fields and on the company's own details
 
@@ -3579,7 +3879,7 @@ import is run.
 
 ## Deferred — known defects, recorded and not fixed
 
-### The rules' 1,000-expression limit is reached 58 times in the purchase emulator tests — pre-existing, being fixed in N5.10b
+### The rules' 1,000-expression limit was reached 58 times in the purchase emulator tests — CLOSED by N5.10b
 
 Found in N5.10 commit 2. The rules engine stops evaluating a request at
 1,000 expressions and **refuses** it. N5.10's own first draft hit that
@@ -3597,6 +3897,14 @@ rejects the limit's denial, then restructure whichever rules it catches.
 none is in stock** — "purchase and stock" above was wrong, and the title is
 corrected. N5.10b commits 1 and 2 are the fix; this entry closes when they
 are CI-verified.
+
+**Closed.** Commits 1 and 2 are CI-verified (`cff32be` run #226, `1d2f599`
+run #227), and at `877701f` the full suite reaches the limit **0** times:
+311 tests, 311 passing, and `grep -c "maximum of 1000 expressions"` over
+the output gives 0 (from `firestore/`, emulator running: `node --test
+--test-concurrency=1 tests/*.test.js`, re-run 2026-10-05). Every refusal
+goes through `refused()`, so a denial by the limit now fails its test. The
+headroom left is measured after every rules commit; the stop line is 900.
 
 ### A Manager's rename on the Parties screen is refused only after Save — accepted
 
@@ -3772,6 +4080,30 @@ present. A cancelled one shows "4 in" in History.
 is exact: the native app writes `received` as a boolean, and V8C4 never
 records a part receipt. It stays sufficient because the PWA stops writing
 Purchase at cutover (QZ).
+
+**Which fields, exactly — the advisor's decision 8 of 2026-10-05.** The
+cleanup removes **every** field the rules' `prUntouched` counts as a
+receipt, so a cleaned row can be edited and cancelled. At `877701f` that is
+exactly the four above, counted by presence, and the app's
+`PurchaseRecord.hasReceipt` counts the same four. **`received: 0`,
+`stocked` and `stockedQty` are not counted** — `prOpen` asks
+`received != true`, the app reads 0 as false, and nothing but the reader
+touches `stocked` or `stockedQty` — so the cleanup need not remove them for
+this purpose. If N5.10b commit 9 or anything later changes what
+`prUntouched` (or cancel's "nothing received") counts, this list changes
+with it. From commit 9 a row with stale receipt fields also **cannot be
+cancelled** (cancel needs nothing received); an Administrator can still
+remove it.
+
+**The N8 batch must test exactly that**, on the emulator, against a
+V8C4-restored row after the cleanup: a Manager's and the Staff creator's
+edit accepted, a Manager's cancel accepted, an Administrator's cancel
+accepted — each refused on the same row before the cleanup.
+
+Whether V8C4 can mark a restored row **Ordered**, which would leave the same
+fields under status Ordered, is a V8C4 fact: read it with
+`tools/catalogue-import/inspect-v8c4.mjs` before the N8 batch is written,
+and if it can, the shape includes Ordered.
 
 ### Owed in N5.12: the cutover document says the PWA stops writing Purchase
 

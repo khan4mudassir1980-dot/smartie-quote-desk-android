@@ -78,8 +78,91 @@ class PurchaseAccessTest {
         assertFalse(PurchaseAccess.isUntouched(requirement(deleted = true)))
         assertFalse(PurchaseAccess.isUntouched(requirement(received = true, status = "Received")))
         assertFalse(PurchaseAccess.isUntouched(requirement(status = "Cancelled")))
-        // A status nobody here writes is not the open state either.
-        assertFalse(PurchaseAccess.isUntouched(requirement(status = "Ordered")))
+        // A status nobody writes is not the open state either.
+        assertFalse(PurchaseAccess.isUntouched(requirement(status = "Archived")))
+    }
+
+    @Test
+    fun `an Ordered requirement nothing has arrived against is still untouched`() {
+        // This test said the opposite until N5.10b: "Ordered" was a status
+        // nothing here wrote. The Owner's design, approved 2026-10-05, makes
+        // Ordered open — as the rules' prOpen and prUntouched now say — and
+        // narrows only what may be done to it (below).
+        assertTrue(PurchaseAccess.isUntouched(requirement(status = "Ordered")))
+        assertFalse(PurchaseAccess.isUntouched(requirement(status = "Ordered", receivedQuantity = 4.0)))
+    }
+
+    // --- Ordered, and cancel (N5.10b) -----------------------------------------------
+
+    @Test
+    fun `only an Owner or Administrator orders, and takes it back, on an open requirement`() {
+        val needed = requirement()
+        val ordered = requirement(status = "Ordered")
+        val partly = requirement(receivedQuantity = 4.0, receivedBy = "Sam")
+        for (who in listOf(owner, admin)) {
+            assertTrue(PurchaseAccess.canToggleOrdered(who, needed))
+            assertTrue(PurchaseAccess.canToggleOrdered(who, ordered))
+            assertTrue("part-received counts as open", PurchaseAccess.canToggleOrdered(who, partly))
+            assertFalse(PurchaseAccess.canToggleOrdered(who, requirement(received = true, status = "Received")))
+            assertFalse(PurchaseAccess.canToggleOrdered(who, requirement(status = "Cancelled")))
+            assertFalse(PurchaseAccess.canToggleOrdered(who, requirement(deleted = true)))
+        }
+        for (who in listOf(manager, staff)) {
+            assertFalse(PurchaseAccess.canToggleOrdered(who, needed))
+            assertFalse(PurchaseAccess.canToggleOrdered(who, ordered))
+        }
+    }
+
+    @Test
+    fun `once Ordered, only an Owner or Administrator changes what or how many, or removes it`() {
+        val ordered = requirement(status = "Ordered")
+        val mine = requirement(status = "Ordered", byUid = manager.uid)
+        // Note and urgency are still theirs: the edit itself stays open.
+        assertTrue(PurchaseAccess.canEdit(manager, ordered))
+        assertTrue(PurchaseAccess.canEdit(staff, ordered))
+        assertFalse(PurchaseAccess.canChangeWhatOrHowMany(manager, ordered))
+        assertFalse(PurchaseAccess.canChangeWhatOrHowMany(staff, ordered))
+        assertFalse(PurchaseAccess.canRemove(staff, ordered))
+        assertFalse(PurchaseAccess.canRemove(manager, mine))
+        assertEquals(PurchaseAccess.ORDERED_REMOVE, PurchaseAccess.refusalFor(staff, ordered))
+        for (who in listOf(owner, admin)) {
+            assertTrue(PurchaseAccess.canChangeWhatOrHowMany(who, ordered))
+            assertTrue(PurchaseAccess.canRemove(who, ordered))
+        }
+        // Needed, nothing changes for anybody.
+        assertTrue(PurchaseAccess.canChangeWhatOrHowMany(staff, requirement()))
+        assertTrue(PurchaseAccess.canRemove(staff, requirement()))
+    }
+
+    @Test
+    fun `a Manager cancels anybody's requirement that is not Ordered, while nothing has arrived`() {
+        assertTrue(PurchaseAccess.canCancel(manager, requirement()))
+        assertTrue(PurchaseAccess.canCancel(manager, requirement(byUid = manager.uid)))
+        assertFalse(PurchaseAccess.canCancel(manager, requirement(status = "Ordered")))
+        assertEquals(PurchaseAccess.ORDERED_CANCEL,
+            PurchaseAccess.cancelRefusalFor(manager, requirement(status = "Ordered")))
+        assertFalse(PurchaseAccess.canCancel(manager, requirement(receivedQuantity = 4.0, receivedBy = "Sam")))
+    }
+
+    @Test
+    fun `an Owner or Administrator cancels any, Ordered included — never a part-received one`() {
+        for (who in listOf(owner, admin)) {
+            assertTrue(PurchaseAccess.canCancel(who, requirement()))
+            assertTrue(PurchaseAccess.canCancel(who, requirement(status = "Ordered")))
+            val partly = requirement(receivedQuantity = 4.0, receivedBy = "Sam")
+            assertFalse(PurchaseAccess.canCancel(who, partly))
+            assertEquals(PurchaseWrite.SOMETHING_ARRIVED, PurchaseAccess.cancelRefusalFor(who, partly))
+            assertFalse(PurchaseAccess.canCancel(who, requirement(status = "Cancelled")))
+            assertFalse(PurchaseAccess.canCancel(who, requirement(deleted = true)))
+        }
+    }
+
+    @Test
+    fun `Staff have no cancel, not even of their own — they remove it`() {
+        val mine = requirement(byUid = staff.uid)
+        assertFalse(PurchaseAccess.canCancel(staff, mine))
+        assertTrue(PurchaseAccess.canRemove(staff, mine))
+        assertEquals(PurchaseAccess.NOT_YOURS_TO_CANCEL, PurchaseAccess.cancelRefusalFor(staff, mine))
     }
 
     // --- ownership is a uid -----------------------------------------------------

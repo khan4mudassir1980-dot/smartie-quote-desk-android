@@ -163,7 +163,13 @@ class PurchaseWriteRepository(
     ): PurchaseWriteResult {
         require(Permissions.canAddPurchase(member)) { NOT_ALLOWED_EDIT }
         return update(member, record, PurchaseAccess::canEdit) { stored, author, at ->
-            PurchaseWrite.edit(stored, name, quantity, urgency, note, author, at)
+            // The Ordered lock, against the stored record: on an Ordered
+            // requirement only an Owner or Administrator changes what or how
+            // many. The note and the urgency stay the editor's.
+            PurchaseWrite.edit(
+                stored, name, quantity, urgency, note, author, at,
+                whatAndHowManyLocked = !PurchaseAccess.canChangeWhatOrHowMany(member, stored)
+            )
         }
     }
 
@@ -278,6 +284,49 @@ class PurchaseWriteRepository(
             refusal = PurchaseAccess::deliveryRefusalFor
         ) { stored, author, at ->
             PurchaseWrite.closeShortfall(stored, author, at)
+        }
+    }
+
+    /**
+     * The Order / Not ordered toggle. **Owner and Administrator only**; the
+     * rules agree.
+     *
+     * [ordered] is the state the person asked for, not "flip it": two
+     * Administrators tapping at once both end where they meant to, and the
+     * second write is no change rather than an undo nobody asked for. Whether
+     * the requirement can still be ordered — not received, not cancelled, not
+     * removed — is `PurchaseWrite`'s to say, by name.
+     */
+    suspend fun setOrdered(
+        member: Member,
+        record: PurchaseRecord,
+        ordered: Boolean
+    ): PurchaseWriteResult {
+        require(Permissions.isAdmin(member)) { NOT_ALLOWED_ORDER }
+        return update(member, record) { stored, author, at ->
+            if (ordered) PurchaseWrite.order(stored, author, at)
+            else PurchaseWrite.unorder(stored, author, at)
+        }
+    }
+
+    /**
+     * Cancel a requirement nothing has arrived against.
+     *
+     * Owner and Administrator on any, Ordered included; a Manager on
+     * anybody's that is not Ordered; never Staff. Decided against the stored
+     * record, so a delivery recorded since the card was drawn refuses the
+     * cancel with a sentence. A requirement already cancelled is no change,
+     * so a second tap writes nothing.
+     */
+    suspend fun cancel(member: Member, record: PurchaseRecord): PurchaseWriteResult {
+        require(Permissions.canCancelPurchase(member)) { NOT_ALLOWED_CANCEL }
+        return update(
+            member = member,
+            record = record,
+            permits = { who, stored -> stored.isCancelled || PurchaseAccess.canCancel(who, stored) },
+            refusal = PurchaseAccess::cancelRefusalFor
+        ) { stored, author, at ->
+            PurchaseWrite.cancel(stored, author, at)
         }
     }
 
@@ -405,6 +454,10 @@ class PurchaseWriteRepository(
         val NOT_ALLOWED_REOPEN = "Only $ADMINS can reopen a requirement"
 
         const val NOT_ALLOWED_DELETE = "Your account cannot remove a requirement"
+
+        val NOT_ALLOWED_ORDER = "Only $ADMINS can mark a requirement ordered"
+
+        val NOT_ALLOWED_CANCEL = PurchaseAccess.NOT_YOURS_TO_CANCEL
 
         val RECEIPT_NOT_NUMERIC =
             "The received quantity on this requirement was not stored as a number — " +

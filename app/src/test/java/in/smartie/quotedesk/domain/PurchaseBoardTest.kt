@@ -20,7 +20,8 @@ class PurchaseBoardTest {
         receivedQuantity: Double? = null,
         receivedAt: Long = 0L,
         deleted: Boolean = false,
-        byUid: String = ""
+        byUid: String = "",
+        cancelledAt: Long = 0L
     ) = PurchaseRecord(
         id = id,
         name = id,
@@ -33,7 +34,8 @@ class PurchaseBoardTest {
         received = received,
         receivedQuantity = receivedQuantity,
         receivedAt = receivedAt,
-        deleted = deleted
+        deleted = deleted,
+        cancelledAt = cancelledAt
     )
 
     @Test
@@ -85,12 +87,37 @@ class PurchaseBoardTest {
     }
 
     @Test
-    fun `a legacy Cancelled row is closed, and nothing here ever writes one`() {
-        // The PWA writes `Cancelled`; N4 has no Cancel action. Such a row must
-        // still read and display correctly.
+    fun `a Cancelled row is closed, whoever cancelled it`() {
+        // This said "nothing here ever writes one" until N5.10b: N4 had no
+        // cancel. The Owner's decision of 2026-10-05 added one, writing V8C4's
+        // own `Cancelled`, so a row cancelled here and one cancelled by the
+        // PWA are the same row to the board.
         val records = listOf(record("pr_cancelled", createdAt = 1_000, status = "Cancelled"))
         assertTrue(PurchaseBoard.active(records).isEmpty())
         assertEquals(listOf("pr_cancelled"), PurchaseBoard.closed(records).map { it.id })
+    }
+
+    @Test
+    fun `an Ordered row is open, on the active list`() {
+        val records = listOf(record("pr_ordered", createdAt = 1_000, status = "Ordered"))
+        assertEquals(listOf("pr_ordered"), PurchaseBoard.active(records).map { it.id })
+        assertTrue(PurchaseBoard.closed(records).isEmpty())
+    }
+
+    @Test
+    fun `History places a cancelled row by when it was cancelled, never by a stale receipt`() {
+        // The advisor's decision 3 of 2026-10-05: cancelledAt, falling back to
+        // updated for an old V8C4 row without one. A V8C4 cancelled row can
+        // carry a receipt V8C4 had reversed; its rcvAt is not when it closed.
+        val stale = record("pr_v8c4", status = "Cancelled", updatedAt = 5_000, receivedAt = 9_000,
+            receivedQuantity = 4.0)
+        assertEquals(5_000L, PurchaseBoard.closedAt(stale))
+        val cancelled = record("pr_native", status = "Cancelled", updatedAt = 8_000, cancelledAt = 7_000,
+            receivedAt = 9_000)
+        assertEquals(7_000L, PurchaseBoard.closedAt(cancelled))
+        val received = record("pr_in", status = "Received", received = true, receivedAt = 6_000, updatedAt = 8_000)
+        assertEquals(listOf("pr_native", "pr_in", "pr_v8c4"),
+            PurchaseBoard.closed(listOf(stale, cancelled, received)).map { it.id })
     }
 
     @Test

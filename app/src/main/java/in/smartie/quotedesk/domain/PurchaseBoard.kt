@@ -76,8 +76,17 @@ object PurchaseBoard {
      */
     fun addedAt(record: PurchaseRecord): Long = record.createdAt
 
-    /** When it stopped being active: received if known, else last touched. */
+    /**
+     * When it stopped being active: received if known, else last touched.
+     *
+     * A **cancelled** requirement goes by its `cancelledAt`, falling back to
+     * `updated` for an old V8C4 row without one — never by `rcvAt`, which on a
+     * V8C4 cancelled row is a receipt V8C4 had reversed and left behind (the
+     * advisor's decision 3 of 2026-10-05).
+     */
     fun closedAt(record: PurchaseRecord): Long = when {
+        record.isCancelled && record.cancelledAt > 0L -> record.cancelledAt
+        record.isCancelled && record.updatedAt > 0L -> record.updatedAt
         record.receivedAt > 0L -> record.receivedAt
         record.updatedAt > 0L -> record.updatedAt
         else -> record.createdAt

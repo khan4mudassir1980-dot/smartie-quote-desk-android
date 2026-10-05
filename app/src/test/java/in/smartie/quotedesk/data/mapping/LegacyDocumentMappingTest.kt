@@ -223,6 +223,32 @@ class LegacyDocumentMappingTest {
         assertFalse(record.received)
     }
 
+    @Test
+    fun `the cancel and Ordered stamps read V8C4's numeric times, whatever number type arrives`() {
+        // V8C4 stamps `cancelledAt` with Date.now(); Firestore hands it back as
+        // a Long, a Double after a JS round trip, or a numeric string from an
+        // older build. N5.10b writes `orderedAt` the same way.
+        val cancelled = DocData("pr_x", mapOf(
+            "status" to "Cancelled", "cancelledBy" to "Asha", "cancelledUid" to "uid_admin",
+            "cancelledAt" to 1712300000000L,
+            "orderedBy" to "Omar", "orderedUid" to "uid_owner", "orderedAt" to 1.7125E12
+        )).toPurchaseRecord()
+        assertEquals("Asha", cancelled.cancelledBy)
+        assertEquals("uid_admin", cancelled.cancelledByUid)
+        assertEquals(1712300000000L, cancelled.cancelledAt)
+        assertEquals("Omar", cancelled.orderedBy)
+        assertEquals("uid_owner", cancelled.orderedByUid)
+        assertEquals(1712500000000L, cancelled.orderedAt)
+        assertTrue(cancelled.isCancelled)
+        assertFalse("a leftover Ordered stamp does not make it Ordered", cancelled.isOrdered)
+
+        val ordered = DocData("pr_y", mapOf("status" to "Ordered", "orderedAt" to "1712500000000"))
+            .toPurchaseRecord()
+        assertEquals(1712500000000L, ordered.orderedAt)
+        assertTrue(ordered.isOrdered)
+        assertTrue("Ordered is open", ordered.isOpen)
+    }
+
     // --- parties -----------------------------------------------------------
 
     @Test

@@ -72,7 +72,10 @@ class PurchaseWriteTest {
         "reopen" to written(
             PurchaseWrite.reopen(record.copy(received = true, status = "Received"), author, at)
         ),
-        "softDelete" to written(PurchaseWrite.softDelete(record, author, at))
+        "softDelete" to written(PurchaseWrite.softDelete(record, author, at)),
+        "order" to written(PurchaseWrite.order(record, author, at)),
+        "unorder" to written(PurchaseWrite.unorder(record.copy(status = "Ordered"), author, at)),
+        "cancel" to written(PurchaseWrite.cancel(record, author, at))
     )
 
     // --- creating -------------------------------------------------------------
@@ -618,15 +621,18 @@ class PurchaseWriteTest {
 
     @Test
     fun `a status is only ever moved by the operation that owns it`() {
-        // There is no setStatus and no cancel: `Received` comes from a
-        // delivery and `Needed` from reopen, so no caller can invent a state
-        // nobody designed. A PWA-written `Cancelled` still reads fine.
+        // There is no setStatus: `Received` comes from a delivery and
+        // `Needed` from reopen, so no caller can invent a state nobody
+        // designed.
         //
-        // Three others write a status and each is a named thing somebody
-        // decided to do: `edit` finishes a requirement when the total needed
-        // is corrected down to what arrived, `closeShortfall` finishes one
-        // when the rest is not coming, and `reopen` returns it to Needed.
-        // All three are tested above. There is still no setter.
+        // Others write a status and each is a named thing somebody decided
+        // to do: `edit` finishes a requirement when the total needed is
+        // corrected down to what arrived, `closeShortfall` finishes one when
+        // the rest is not coming, and `reopen` returns it to Needed. Since
+        // N5.10b — the Owner's decision of 2026-10-05, which replaced the N4
+        // design with no cancel — `order` and `unorder` move between Needed
+        // and Ordered and `cancel` sets Cancelled, each tested below. There
+        // is still no setter.
         val received = written(PurchaseWrite.markReceived(stored(quantity = 6.0), 6.0, author, at))
         val reopened = written(
             PurchaseWrite.reopen(stored(received = true, status = "Received"), author, at)
@@ -635,9 +641,103 @@ class PurchaseWriteTest {
         assertEquals(PurchaseWrite.STATUS_NEEDED, reopened["status"])
 
         for ((name, data) in everyUpdate()) {
-            if (name !in listOf("markReceived", "reopen")) {
+            if (name !in listOf("markReceived", "reopen", "order", "unorder", "cancel")) {
                 assertFalse("$name must not move the status", data.containsKey("status"))
             }
         }
+        assertEquals(PurchaseWrite.STATUS_ORDERED, everyUpdate()["order"]!!["status"])
+        assertEquals(PurchaseWrite.STATUS_NEEDED, everyUpdate()["unorder"]!!["status"])
+        assertEquals(PurchaseWrite.STATUS_CANCELLED, everyUpdate()["cancel"]!!["status"])
+    }
+
+    // --- Ordered, and cancel (N5.10b) ---------------------------------------------------
+
+    @Test
+    fun `order stamps who and when, and taking it back removes the stamp`() {
+        val ordered = written(PurchaseWrite.order(stored(), author, at))
+        assertEquals("Ordered", ordered["status"])
+        assertEquals("Asha", ordered["orderedBy"])
+        assertEquals("uid_admin", ordered["orderedUid"])
+        assertEquals(at, ordered["orderedAt"])
+        assertFalse("ordering is not a receipt", ordered.containsKey("received"))
+
+        val back = written(PurchaseWrite.unorder(stored(status = "Ordered"), author, at))
+        assertEquals("Needed", back["status"])
+        for (key in listOf("orderedBy", "orderedUid", "orderedAt")) assertSame(key, DeleteField, back[key])
+    }
+
+    @Test
+    fun `order and back are no change when already there, and refused once closed`() {
+        assertEquals(PurchasePlan.NoChange, PurchaseWrite.order(stored(status = "Ordered"), author, at))
+        assertEquals(PurchasePlan.NoChange, PurchaseWrite.unorder(stored(), author, at))
+        assertEquals(PurchasePlan.Refused(PurchaseWrite.ALREADY_CANCELLED),
+            PurchaseWrite.order(stored(status = "Cancelled"), author, at))
+        assertEquals(PurchasePlan.Refused(PurchaseWrite.alreadyReceived("Sam")),
+            PurchaseWrite.order(stored(status = "Received", received = true, receivedBy = "Sam"), author, at))
+        assertEquals(PurchasePlan.Refused(PurchaseWrite.ALREADY_DELETED),
+            PurchaseWrite.order(stored(deleted = true), author, at))
+        // Part-received is open, so it may be ordered.
+        assertEquals("Ordered", written(PurchaseWrite.order(stored(receivedQuantity = 2.0), author, at))["status"])
+    }
+
+    @Test
+    fun `a part receipt keeps an Ordered requirement Ordered, and the whole of it closes it`() {
+        // The trap: the N4 receipt wrote Needed on a part delivery, which on an
+        // Ordered row would be a move only an Owner or Administrator may make.
+        val part = written(PurchaseWrite.markReceived(stored(status = "Ordered"), 2.0, author, at))
+        assertEquals("Ordered", part["status"])
+        assertEquals(false, part["received"])
+        val whole = written(PurchaseWrite.markReceived(stored(status = "Ordered"), 6.0, author, at))
+        assertEquals("Received", whole["status"])
+        val writeOff = written(PurchaseWrite.closeShortfall(stored(status = "Ordered", receivedQuantity = 2.0), author, at))
+        assertEquals("Received", writeOff["status"])
+        // And a Needed one stays Needed, as before.
+        assertEquals("Needed", written(PurchaseWrite.markReceived(stored(), 2.0, author, at))["status"])
+    }
+
+    @Test
+    fun `cancel writes V8C4's stamp and no received — and only while nothing has arrived`() {
+        val cancelled = written(PurchaseWrite.cancel(stored(status = "Ordered"), author, at))
+        assertEquals("Cancelled", cancelled["status"])
+        assertEquals("Asha", cancelled["cancelledBy"])
+        assertEquals("uid_admin", cancelled["cancelledUid"])
+        assertEquals(at, cancelled["cancelledAt"])
+        assertFalse("nothing is marked as received", cancelled.containsKey("received"))
+
+        assertEquals(PurchasePlan.Refused(PurchaseWrite.SOMETHING_ARRIVED),
+            PurchaseWrite.cancel(stored(receivedQuantity = 2.0), author, at))
+        assertEquals(PurchasePlan.Refused(PurchaseWrite.SOMETHING_ARRIVED),
+            PurchaseWrite.cancel(stored(receivedBy = "Sam"), author, at))
+        assertEquals(PurchasePlan.NoChange, PurchaseWrite.cancel(stored(status = "Cancelled"), author, at))
+        assertEquals(PurchasePlan.Refused(PurchaseWrite.ALREADY_DELETED),
+            PurchaseWrite.cancel(stored(deleted = true), author, at))
+    }
+
+    @Test
+    fun `reopen removes the cancel and Ordered stamps along with the receipt`() {
+        val reopened = written(PurchaseWrite.reopen(stored(status = "Cancelled"), author, at))
+        assertEquals("Needed", reopened["status"])
+        for (key in listOf("rcvQty", "rcvBy", "rcvUid", "rcvAt", "cancelledBy", "cancelledUid",
+            "cancelledAt", "orderedBy", "orderedUid", "orderedAt")) {
+            assertSame(key, DeleteField, reopened[key])
+        }
+    }
+
+    @Test
+    fun `on an Ordered requirement a locked edit keeps what and how many`() {
+        val ordered = stored(status = "Ordered")
+        assertEquals(PurchasePlan.Refused(PurchaseAccess.ORDERED_WHAT_AND_HOW_MANY),
+            PurchaseWrite.edit(ordered, "Something else", 6.0, UrgencyV2.URGENT, ordered.note, author, at,
+                whatAndHowManyLocked = true))
+        assertEquals(PurchasePlan.Refused(PurchaseAccess.ORDERED_WHAT_AND_HOW_MANY),
+            PurchaseWrite.edit(ordered, ordered.name, 9.0, UrgencyV2.URGENT, ordered.note, author, at,
+                whatAndHowManyLocked = true))
+        val noted = written(PurchaseWrite.edit(ordered, ordered.name, 6.0, UrgencyV2.CRITICAL, "Kandivali",
+            author, at, whatAndHowManyLocked = true))
+        assertEquals("Kandivali", noted["note"])
+        assertEquals("critical", noted["urgency"])
+        // Unlocked — an Owner or Administrator — it may change.
+        assertEquals("Something else", written(PurchaseWrite.edit(ordered, "Something else", 9.0,
+            UrgencyV2.URGENT, ordered.note, author, at))["name"])
     }
 }

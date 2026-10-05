@@ -106,14 +106,19 @@ data class PurchaseDraft(
  *
  * ## What is deliberately absent
  *
- * There is **no generic status setter and no cancel**. A status is moved only
- * by the operation that owns it — [markReceived] sets `Received` when the
- * running total meets the requirement, [closeShortfall] sets it when the rest
- * is not coming, [edit] sets it when the required total is corrected down to
- * what arrived, and [reopen] returns `Needed`. Each of those is a named thing
- * somebody decided to do, so no caller can invent a state nobody designed. A
- * `Cancelled` requirement written by the PWA still reads and displays
- * correctly; nothing here writes one.
+ * There is **no generic status setter**. A status is moved only by the
+ * operation that owns it — [markReceived] sets `Received` when the running
+ * total meets the requirement, [closeShortfall] sets it when the rest is not
+ * coming, [edit] sets it when the required total is corrected down to what
+ * arrived, [reopen] returns `Needed`, [order] and [unorder] move between
+ * `Needed` and `Ordered`, and [cancel] sets `Cancelled`. Each of those is a
+ * named thing somebody decided to do, so no caller can invent a state nobody
+ * designed.
+ *
+ * **Cancel and Ordered arrived in N5.10b** (the Owner's design, approved
+ * 2026-10-05), replacing the N4 design that had neither. Until then a
+ * requirement nobody had delivered against left the list only by being
+ * removed, and a `Cancelled` or `Ordered` row was only ever the PWA's.
  *
  * [closeShortfall] is the **seventh** operation and was added on purpose
  * rather than by relaxing the six: the received-record lock in
@@ -131,8 +136,17 @@ object PurchaseWrite {
     /** The only status a requirement may be created in; the rules insist. */
     const val STATUS_NEEDED: String = "Needed"
 
-    /** Set by [markReceived], and by nothing else. */
+    /** Set by [markReceived], [closeShortfall] and a finishing [edit]. */
     const val STATUS_RECEIVED: String = "Received"
+
+    /**
+     * Set by [order], taken back by [unorder]. V8C4's own stored value, never
+     * renamed. An Ordered requirement is **open**.
+     */
+    const val STATUS_ORDERED: String = "Ordered"
+
+    /** Set by [cancel]. V8C4's own stored value. */
+    const val STATUS_CANCELLED: String = "Cancelled"
 
     const val NO_NAME: String = "Type what is needed"
     const val NOT_POSITIVE: String = "The quantity must be more than zero"
@@ -189,6 +203,16 @@ object PurchaseWrite {
     /** Everything arrived, so it is not short of anything. */
     const val NOTHING_OUTSTANDING: String =
         "Everything asked for has arrived — there is nothing to write off"
+
+    /**
+     * Cancel is only for a requirement nothing has arrived against — an
+     * Administrator's included. A part-received one is closed with what
+     * arrived, and the rest written off; it is never cancelled.
+     */
+    const val SOMETHING_ARRIVED: String =
+        "Something has already arrived against this — close it with what arrived instead"
+
+    const val ALREADY_CANCELLED: String = "This requirement has already been cancelled"
 
     // --- creating -----------------------------------------------------------
 
@@ -269,13 +293,22 @@ object PurchaseWrite {
         urgency: UrgencyV2,
         note: String,
         author: PurchaseAuthor,
-        at: Long
+        at: Long,
+        /**
+         * The Ordered lock: true when this person may not change what or how
+         * many on [stored] — see `PurchaseAccess.canChangeWhatOrHowMany`. The
+         * note and the urgency stay theirs; the rules refuse the rest.
+         */
+        whatAndHowManyLocked: Boolean = false
     ): PurchasePlan {
         if (stored.deleted) return PurchasePlan.Refused(ALREADY_DELETED)
         val trimmedName = name.trim()
         val trimmedNote = note.trim()
         if (trimmedName.isBlank()) return PurchasePlan.Refused(NO_NAME)
         if (quantity <= 0.0) return PurchasePlan.Refused(NOT_POSITIVE)
+        if (whatAndHowManyLocked && (trimmedName != stored.name || quantity != stored.quantity)) {
+            return PurchasePlan.Refused(PurchaseAccess.ORDERED_WHAT_AND_HOW_MANY)
+        }
         val alreadyIn = stored.receivedTotal
         val counts = !stored.isClosed && alreadyIn > 0.0
         if (counts && quantity < alreadyIn - TOLERANCE) {
@@ -338,8 +371,11 @@ object PurchaseWrite {
      * A requirement is very often delivered in pieces, so `rcvQty` is a
      * **cumulative** total here: the stored figure plus what has just come.
      * The requirement closes only when that total reaches `qty`, and until
-     * then it keeps `received: false` and `status: "Needed"` and stays on the
-     * active list where the outstanding quantity can still be chased.
+     * then it keeps `received: false` and its open status — `Needed`, or
+     * `Ordered` if it was — and stays on the active list where the
+     * outstanding quantity can still be chased. **A part receipt never takes
+     * an Ordered requirement back to Needed**: that is an Owner's or an
+     * Administrator's move, and the rules refuse it from anybody else.
      *
      * That shape is safe to write because the PWA was asked, rather than
      * assumed about: it decides closure from `received`/`status` and never
@@ -379,7 +415,11 @@ object PurchaseWrite {
                 // Both written every time, and never left to be inferred: a
                 // V8C4 row may carry neither, and a partial receipt has to
                 // say out loud that it is not a finished one.
-                "status" to if (complete) STATUS_RECEIVED else STATUS_NEEDED,
+                "status" to when {
+                    complete -> STATUS_RECEIVED
+                    stored.isOrdered -> STATUS_ORDERED
+                    else -> STATUS_NEEDED
+                },
                 "received" to complete,
                 "rcvQty" to total,
                 "rcvBy" to author.name,
@@ -441,7 +481,9 @@ object PurchaseWrite {
      *
      * The four `rcv*` fields are **removed**, not blanked — see [DeleteField].
      * That is what resets the cumulative received total to zero: the whole
-     * requirement comes back, not the part of it nobody had delivered.
+     * requirement comes back, not the part of it nobody had delivered. Since
+     * N5.10b the cancel and Ordered stamps go too, so a reopened requirement
+     * is as good as new: Needed, nobody's order, nobody's cancel.
      * A requirement that is already open is left alone rather than rewritten,
      * so a double tap cannot burn a revision.
      *
@@ -466,9 +508,107 @@ object PurchaseWrite {
                 "rcvBy" to DeleteField,
                 "rcvUid" to DeleteField,
                 "rcvAt" to DeleteField
+            ) + CANCEL_STAMP_REMOVED + ORDERED_STAMP_REMOVED
+        )
+    }
+
+    // --- Ordered, and cancel (N5.10b) ------------------------------------------
+
+    /**
+     * Mark it Ordered: an Owner's or an Administrator's, on an open
+     * requirement — part-received counts. The stamp says who and when, the
+     * same pattern as the cancel stamp; the time is this device's clock, as
+     * `rcvAt` is. Already Ordered is no change, so a double tap writes once.
+     */
+    fun order(
+        stored: PurchaseRecord,
+        author: PurchaseAuthor,
+        at: Long
+    ): PurchasePlan {
+        closedRefusal(stored)?.let { return it }
+        if (stored.isOrdered) return PurchasePlan.NoChange
+        usableQuantity(stored)?.let { return it }
+        return PurchasePlan.Write(
+            docId = stored.id,
+            data = base(stored, stored.quantity, author, at) + mapOf(
+                "status" to STATUS_ORDERED,
+                "orderedBy" to author.name,
+                "orderedUid" to author.uid,
+                "orderedAt" to at
             )
         )
     }
+
+    /**
+     * Take the order back: Ordered to Needed, the stamp removed. Not Ordered
+     * is no change. The other half of one toggle, the Owner's design.
+     */
+    fun unorder(
+        stored: PurchaseRecord,
+        author: PurchaseAuthor,
+        at: Long
+    ): PurchasePlan {
+        closedRefusal(stored)?.let { return it }
+        if (!stored.isOrdered) return PurchasePlan.NoChange
+        usableQuantity(stored)?.let { return it }
+        return PurchasePlan.Write(
+            docId = stored.id,
+            data = base(stored, stored.quantity, author, at) +
+                mapOf("status" to STATUS_NEEDED) + ORDERED_STAMP_REMOVED
+        )
+    }
+
+    /**
+     * Cancel a requirement **nothing has arrived against**. It moves to
+     * History and leaves the Open list; nothing is marked as received —
+     * `received` is not written at all.
+     *
+     * V8C4's own field names, never renamed — `cancelledBy` a name,
+     * `cancelledUid`, `cancelledAt` this device's clock — so V8C4's cancelled
+     * rows and this app's read the same. Who may is `PurchaseAccess`'s
+     * question; this answers whether the requirement can be.
+     */
+    fun cancel(
+        stored: PurchaseRecord,
+        author: PurchaseAuthor,
+        at: Long
+    ): PurchasePlan {
+        if (stored.isCancelled && !stored.deleted) return PurchasePlan.NoChange
+        closedRefusal(stored)?.let { return it }
+        if (stored.hasReceipt || stored.receivedTotal > 0.0) {
+            return PurchasePlan.Refused(SOMETHING_ARRIVED)
+        }
+        usableQuantity(stored)?.let { return it }
+        return PurchasePlan.Write(
+            docId = stored.id,
+            data = base(stored, stored.quantity, author, at) + mapOf(
+                "status" to STATUS_CANCELLED,
+                "cancelledBy" to author.name,
+                "cancelledUid" to author.uid,
+                "cancelledAt" to at
+            )
+        )
+    }
+
+    /** Removed, received or cancelled: none of the three above applies. */
+    private fun closedRefusal(stored: PurchaseRecord): PurchasePlan.Refused? = when {
+        stored.deleted -> PurchasePlan.Refused(ALREADY_DELETED)
+        stored.isCancelled -> PurchasePlan.Refused(ALREADY_CANCELLED)
+        stored.isClosed -> PurchasePlan.Refused(alreadyReceived(stored.receivedBy))
+        else -> null
+    }
+
+    private val CANCEL_STAMP_REMOVED: Map<String, Any?> = mapOf(
+        "cancelledBy" to DeleteField,
+        "cancelledUid" to DeleteField,
+        "cancelledAt" to DeleteField
+    )
+
+    private val ORDERED_STAMP_REMOVED: Map<String, Any?> = mapOf(
+        "orderedBy" to DeleteField,
+        "orderedUid" to DeleteField,
+        "orderedAt" to DeleteField
+    )
 
     // --- removing -------------------------------------------------------------
 

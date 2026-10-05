@@ -723,6 +723,101 @@ class PurchaseWriteRepositoryTest {
         assertFalse("still never a del key on an update", data.containsKey("del"))
     }
 
+    // --- Ordered, and cancel (N5.10b) -------------------------------------------------
+
+    /** A stored row with its status and any extra fields, the PWA's names. */
+    private fun rowWith(status: String, vararg extra: Pair<String, Any?>): Map<String, Any?> =
+        row(byUid = "uid_worker") + mapOf("status" to status) + extra
+
+    @Test
+    fun `the toggle writes the state asked for, decided against the stored row`() = runTest {
+        val needed = FakeStore(stored = rowWith("Needed"))
+        assertEquals(PurchaseWriteResult.WRITTEN, repository(needed).setOrdered(admin, onScreen, ordered = true))
+        assertEquals("Ordered", needed.writes.single().data["status"])
+        assertEquals("uid_admin", needed.writes.single().data["orderedUid"])
+        assertEquals(4, needed.writes.single().data["rev"])
+
+        // Two Administrators tapping at once: the second asks for what is
+        // already stored, and writes nothing rather than undoing the first.
+        val already = FakeStore(stored = rowWith("Ordered"))
+        assertEquals(PurchaseWriteResult.NO_CHANGE, repository(already).setOrdered(owner, onScreen, ordered = true))
+        assertTrue(already.writes.isEmpty())
+
+        val back = FakeStore(stored = rowWith("Ordered"))
+        repository(back).setOrdered(admin, onScreen, ordered = false)
+        assertEquals("Needed", back.writes.single().data["status"])
+    }
+
+    @Test
+    fun `a Manager or Staff may not order`() = runTest {
+        for (who in listOf(staff, worker)) {
+            val store = FakeStore(stored = rowWith("Needed"))
+            val failure = runCatching { repository(store).setOrdered(who, onScreen, ordered = true) }.exceptionOrNull()
+            assertEquals(PurchaseWriteRepository.NOT_ALLOWED_ORDER, failure?.message)
+            assertTrue(store.writes.isEmpty())
+        }
+    }
+
+    @Test
+    fun `a Manager cancels a Needed requirement nothing has arrived against`() = runTest {
+        val store = FakeStore(stored = rowWith("Needed"))
+        assertEquals(PurchaseWriteResult.WRITTEN, repository(store).cancel(staff, onScreen))
+        val data = store.writes.single().data
+        assertEquals("Cancelled", data["status"])
+        assertEquals("Sam", data["cancelledBy"])
+        assertEquals("uid_staff", data["cancelledUid"])
+        assertEquals(at, data["cancelledAt"])
+        assertFalse(data.containsKey("received"))
+    }
+
+    @Test
+    fun `a cancel is refused by name against the stored row — Ordered, or something arrived`() = runTest {
+        val ordered = FakeStore(stored = rowWith("Ordered"))
+        assertEquals(PurchaseAccess.ORDERED_CANCEL,
+            runCatching { repository(ordered).cancel(staff, onScreen) }.exceptionOrNull()?.message)
+        assertTrue(ordered.writes.isEmpty())
+        // An Administrator may cancel the Ordered one…
+        repository(ordered).cancel(admin, onScreen)
+        assertEquals("Cancelled", ordered.writes.single().data["status"])
+        // …but nobody a part-received one: the screen may be a delivery behind.
+        for (who in listOf(staff, admin)) {
+            val partly = FakeStore(stored = rowWith("Needed", "rcvQty" to 2.0, "rcvBy" to "Sam"))
+            assertEquals(PurchaseWrite.SOMETHING_ARRIVED,
+                runCatching { repository(partly).cancel(who, onScreen) }.exceptionOrNull()?.message)
+            assertTrue(partly.writes.isEmpty())
+        }
+        // Staff never reach the transaction.
+        val store = FakeStore(stored = rowWith("Needed"))
+        assertEquals(PurchaseWriteRepository.NOT_ALLOWED_CANCEL,
+            runCatching { repository(store).cancel(worker, onScreen) }.exceptionOrNull()?.message)
+        assertEquals(0, store.bodyRuns)
+    }
+
+    @Test
+    fun `a second cancel writes nothing`() = runTest {
+        val store = FakeStore(stored = rowWith("Cancelled", "cancelledBy" to "Asha", "cancelledUid" to "uid_admin"))
+        assertEquals(PurchaseWriteResult.NO_CHANGE, repository(store).cancel(staff, onScreen))
+        assertTrue(store.writes.isEmpty())
+    }
+
+    @Test
+    fun `on an Ordered requirement the creator may change the note, not what or how many`() = runTest {
+        val store = FakeStore(stored = rowWith("Ordered"))
+        val failure = runCatching {
+            repository(store).edit(worker, onScreen, "Something else", 6.0, UrgencyV2.URGENT, "")
+        }.exceptionOrNull()
+        assertEquals(PurchaseAccess.ORDERED_WHAT_AND_HOW_MANY, failure?.message)
+        assertTrue(store.writes.isEmpty())
+
+        val noted = FakeStore(stored = rowWith("Ordered"))
+        repository(noted).edit(worker, onScreen, "Sliding gate rack", 6.0, UrgencyV2.URGENT, "Kandivali")
+        assertEquals("Kandivali", noted.writes.single().data["note"])
+
+        val removing = FakeStore(stored = rowWith("Ordered"))
+        assertEquals(PurchaseAccess.ORDERED_REMOVE,
+            runCatching { repository(removing).softDelete(worker, onScreen) }.exceptionOrNull()?.message)
+    }
+
     /** The three a creator may make on their own untouched requirement. */
     private fun creatorAttempts(): List<suspend (PurchaseWriteRepository, Member) -> Unit> = listOf(
         { repo, member -> repo.edit(member, onScreen, "X", 2.0, UrgencyV2.NORMAL, "") },

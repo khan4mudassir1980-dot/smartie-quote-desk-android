@@ -239,9 +239,18 @@ data class PurchaseRecord(
     val receivedAt: Long = 0L,
     val stocked: Boolean = false,
     val stockedQuantity: Double? = null,
+    /**
+     * V8C4's cancel stamp, and this app's since N5.10b. Read for display only
+     * while [isCancelled]: a reopen removes it, but a V8C4 restore left it
+     * behind, so a leftover must never be shown as though it were current.
+     */
     val cancelledBy: String = "",
     val cancelledByUid: String = "",
     val cancelledAt: Long = 0L,
+    /** Who marked it Ordered, and when — the same pattern; shown only while [isOrdered]. */
+    val orderedBy: String = "",
+    val orderedByUid: String = "",
+    val orderedAt: Long = 0L,
     /** PWA soft delete (`del:1`). Deleted items must never be shown. */
     val deleted: Boolean = false,
     /** Who removed it, by name, and when. Absent on a PWA removal. */
@@ -252,6 +261,16 @@ data class PurchaseRecord(
 ) {
     val isClosed: Boolean get() = received || status == "Received" || status == "Cancelled"
     val isOpen: Boolean get() = !deleted && !isClosed
+
+    /**
+     * Marked Ordered by an Owner or Administrator, and still open — V8C4's
+     * own stored value, so a V8C4 Ordered row reads the same. Ordered is
+     * **open**: it takes deliveries, and a part receipt keeps it Ordered.
+     */
+    val isOrdered: Boolean get() = status == "Ordered" && !isClosed
+
+    /** Cancelled, by this app or by V8C4. Closed, and never "received". */
+    val isCancelled: Boolean get() = status == "Cancelled"
 
     /**
      * How many have arrived so far, **across every delivery**.

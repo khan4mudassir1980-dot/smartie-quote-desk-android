@@ -130,6 +130,14 @@ object Permissions {
     fun canSetPurchaseStatus(member: Member): Boolean = canEditPurchase(member)
 
     /**
+     * The role floor for cancelling a purchase requirement: Owner,
+     * Administrator and Manager — never Staff, who remove their own instead.
+     * Which requirement is `PurchaseAccess.canCancel`'s answer (N5.10b, the
+     * Owner's decision of 2026-10-05).
+     */
+    fun canCancelPurchase(member: Member): Boolean = canEditPurchase(member)
+
+    /**
      * Reopening a received requirement.
      *
      * **The one purchase restriction the rules cannot express.** A reopen is

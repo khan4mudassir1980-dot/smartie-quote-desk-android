@@ -57,11 +57,16 @@ object PurchaseAccess {
      * row that has been reopened is meant to be as good as new. Recording
      * "was ever received" would need a field nobody stores; see
      * `docs/N4.2-plan.md`.
+     *
+     * **Ordered counts** (N5.10b): an ordered requirement nothing has arrived
+     * against is still untouched, as the rules' `prUntouched` says. What
+     * Ordered takes away is narrower — see [canChangeWhatOrHowMany] and
+     * [canRemove].
      */
     fun isUntouched(record: PurchaseRecord): Boolean =
         !record.deleted &&
             !record.isClosed &&
-            record.status == PurchaseWrite.STATUS_NEEDED &&
+            (record.status == PurchaseWrite.STATUS_NEEDED || record.isOrdered) &&
             record.receivedTotal == 0.0 &&
             !record.hasReceipt
 
@@ -105,16 +110,53 @@ object PurchaseAccess {
     fun canSetUrgency(member: Member, record: PurchaseRecord): Boolean = canEdit(member, record)
 
     /**
+     * The name and the quantity, inside an edit [canEdit] allows.
+     *
+     * Once a requirement is **Ordered**, only an Owner or Administrator
+     * changes what or how many — the Owner's design (QD4), enforced in the
+     * rules by `prOrderedKept`. The note and the urgency follow [canEdit].
+     */
+    fun canChangeWhatOrHowMany(member: Member, record: PurchaseRecord): Boolean =
+        Permissions.isAdmin(member) || !record.isOrdered
+
+    /**
      * Take it off the list. Always the soft delete, never a hard one.
      *
      * An Owner or Administrator may remove any requirement. Everybody else
      * may remove **their own**, and only while nothing has arrived — which is
-     * new for a Manager, who could not remove anything before.
+     * new for a Manager, who could not remove anything before — and, since
+     * N5.10b, only while it is not Ordered (the Owner's QD5).
      */
     fun canRemove(member: Member, record: PurchaseRecord): Boolean = when {
         record.deleted -> false
         Permissions.isAdmin(member) -> true
-        else -> canSelfServe(member, record)
+        else -> canSelfServe(member, record) && !record.isOrdered
+    }
+
+    /**
+     * The Order / Not ordered toggle: an Owner's or an Administrator's, on an
+     * open requirement — part-received counts. One button, both directions;
+     * which way it goes is the record's [PurchaseRecord.isOrdered].
+     */
+    fun canToggleOrdered(member: Member, record: PurchaseRecord): Boolean =
+        Permissions.isAdmin(member) && record.isOpen &&
+            (record.status == PurchaseWrite.STATUS_NEEDED || record.isOrdered)
+
+    /**
+     * Cancel: it moves to History and nothing is marked as received.
+     *
+     * **Only while nothing has arrived** — for everyone, an Owner or
+     * Administrator included; a part-received requirement is closed with
+     * what arrived instead. Then: an Owner or Administrator on any, Ordered
+     * included; a Manager on anybody's that is **not** Ordered; Staff never —
+     * they remove their own. The Owner's decision of 2026-10-05, replacing
+     * the N4 design that had no cancel.
+     */
+    fun canCancel(member: Member, record: PurchaseRecord): Boolean = when {
+        !isUntouched(record) -> false
+        Permissions.isAdmin(member) -> true
+        Permissions.canCancelPurchase(member) -> !record.isOrdered
+        else -> false
     }
 
     /**
@@ -185,7 +227,18 @@ object PurchaseAccess {
         !isUntouched(record) -> LOCKED_BY_RECEIPT
         record.byUid.isBlank() -> NO_KNOWN_CREATOR
         !isCreator(member, record) -> SOMEBODY_ELSES
+        record.isOrdered -> ORDERED_REMOVE
         else -> NOT_ALLOWED
+    }
+
+    /** Why this person may not cancel this requirement. */
+    fun cancelRefusalFor(member: Member, record: PurchaseRecord): String = when {
+        record.deleted -> ALREADY_REMOVED
+        record.isCancelled -> PurchaseWrite.ALREADY_CANCELLED
+        record.isClosed -> PurchaseWrite.alreadyReceived(record.receivedBy)
+        !isUntouched(record) -> PurchaseWrite.SOMETHING_ARRIVED
+        record.isOrdered && Permissions.canCancelPurchase(member) -> ORDERED_CANCEL
+        else -> NOT_YOURS_TO_CANCEL
     }
 
     /**
@@ -219,6 +272,18 @@ object PurchaseAccess {
 
     val LOCKED_BY_RECEIPT: String =
         "Something has already arrived against this — only $ADMINS can change it now"
+
+    /** The Edit sheet's line on an Ordered requirement, and the refusal if tried anyway. */
+    val ORDERED_WHAT_AND_HOW_MANY: String =
+        "Ordered — only $ADMINS can change what or how many"
+
+    val ORDERED_REMOVE: String = "Ordered — only $ADMINS can take it off the list"
+
+    val ORDERED_CANCEL: String = "Ordered — only $ADMINS can cancel it"
+
+    private val CANCELLERS: String = RoleTitles.anyOf(Role.OWNER, Role.ADMIN, Role.STAFF)
+
+    val NOT_YOURS_TO_CANCEL: String = "Only $CANCELLERS can cancel a requirement"
 
     const val NO_KNOWN_CREATOR: String =
         "This requirement does not record who raised it, so it cannot be corrected here"

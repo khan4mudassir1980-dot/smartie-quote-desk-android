@@ -46,7 +46,12 @@ fun DocData.toPurchaseRecord(): PurchaseRecord = PurchaseRecord(
     stockedQuantity = optionalDouble("stockedQty"),
     cancelledBy = string("cancelledBy"),
     cancelledByUid = string("cancelledUid"),
+    // V8C4 stamps `cancelledAt` with `Date.now()`, a number; `millis` also
+    // takes a Timestamp, a numeric string or a Date.
     cancelledAt = millis("cancelledAt"),
+    orderedBy = string("orderedBy"),
+    orderedByUid = string("orderedUid"),
+    orderedAt = millis("orderedAt"),
     // Soft delete: `del:1`. A hard delete would let PWA devices resurrect it.
     deleted = bool("del", "deleted"),
     // `delBy` and `delAt` are this app's; a PWA removal wrote neither, so

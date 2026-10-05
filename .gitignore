@@ -19,6 +19,9 @@ node_modules/
 
 # Written by `firebase emulators:exec` when the rules suite runs locally.
 firestore/firestore-debug.log
+# Written by the Firebase CLI when the emulator starts; never committed
+# (the Owner, 2026-10-05).
+firestore/firebase-debug.log
 
 # Catalogue import: seed, exports, staging backups and reports never ship,
 # and a service-account key never enters the working tree.

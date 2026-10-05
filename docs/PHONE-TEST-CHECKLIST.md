@@ -8,7 +8,7 @@ run once, at the end, against one staging APK and one staging rules
 deployment. That is why this file exists: nothing else carries the memory of
 what is owed.
 
-Last updated for **N5.10**.
+Last updated for **N5.10b**.
 
 ## How to use it
 
@@ -22,6 +22,30 @@ Last updated for **N5.10**.
 ---
 
 ## Owed now
+
+### N5.10b — Purchase: Ordered, and a Manager's cancel
+
+Against the rules at `85c4fb7` or later. Role mapping as above: **Manager** is
+stored `staff`, **Staff** is stored `worker`. V8C4's own purchase payloads are
+emulator-only (`firestore/tests/v8c4-purchase.test.js`) — no PWA build points
+at staging — so no row here sends one.
+
+| Row | Check |
+|---|---|
+| T-R19 | **Order, and back.** As the Owner or an Administrator, on an open requirement, tap **Order**: no question is asked, the snackbar says "Marked as ordered", the button reads **Ordered** in blue and stays pressed, and the card shows a blue **Ordered** tag beside the urgency and "Ordered by <your name> · <date>" under "Added by". In the console `status` is `Ordered`, `orderedBy` your name, `orderedUid` your uid, `orderedAt` a number. Tap **Ordered** again: "Back to needed", the tag and the line are gone, and in the console `status` is `Needed` and the three `ordered*` fields are **gone** |
+| T-R20 | **TalkBack reads the toggle's state.** With TalkBack on, the toggle is read as "Ordered: <name>", then its state — "Not ordered", or "Ordered" and **selected** — and the state changes when it is double-tapped |
+| T-R21 | **Everyone sees Ordered; only Owner and Administrator change it.** A Manager's and a Staff account's phones show the blue tag and the "Ordered by" line on the same requirement, and **no Order button** |
+| T-R22 | **Deliveries on an Ordered requirement — a Manager, and the Staff creator on their own.** A part delivery leaves it **Ordered** and open ("10 required · 4 received · 6 remaining", tag still blue); the rest of it, or **Close with 4 received**, closes it, and it moves to History as received |
+| T-R23 | **The Edit lock.** On an Ordered requirement, a Manager's (or the Staff creator's) **Edit** shows name and quantity greyed, with "Ordered — only an Owner or Administrator can change what or how many"; a changed note and urgency save. The Owner's Edit changes name and quantity as before. The Staff creator is offered no **Remove** on their own Ordered requirement |
+| T-R24 | **A Manager cancels.** On a requirement with nothing received and not ordered — somebody else's, or their own — **Cancel** asks "Cancel the requirement for “X”? It moves to history and leaves the Open list. Nothing is marked as received." **Keep it** changes nothing. **Cancel requirement**: "Requirement cancelled", it leaves Open, and History shows it tagged **Cancelled**, "Cancelled by <your name> · <date>", with **no** "N in" and no "Received by". In the console `status` is `Cancelled`, `cancelledBy` your name, `cancelledUid` your uid, `cancelledAt` a number, and **`received` is untouched** |
+| T-R25 | **When Cancel is not offered.** A Manager sees no Cancel on an **Ordered** requirement; nobody sees Cancel on a **part-received** one (Close short is offered instead); a **Staff** account never sees Cancel. The Owner or an Administrator **does** cancel an Ordered requirement with nothing received |
+| T-R26 | **Cancel and Order offline.** With flight mode on, **Order** and **Cancel** are greyed and do nothing — TalkBack adds "Internet required to change a requirement" — and nothing changes in the console |
+| T-R27 | **Reopen leaves nothing behind.** An Administrator reopens a cancelled requirement that had been ordered: it is back in Open as Needed with no blue tag, no "Ordered by" and no "Cancelled by"; in the console every `cancelled*`, `ordered*` and `rcv*` field is gone |
+| T-R28 | **Six controls at 360dp.** On a 360dp-wide phone (or display size set to make it so), the Owner's untouched open requirement shows **Received, Edit, Urgency, Order, Cancel, Remove** — on at most two rows, Received first, every button whole and tappable, nothing clipped and no dead space under them. A part-received one shows **Close short** where Cancel was |
+
+**P-B1a, P-C5a and P-C5b (N4.4) cover the same action row**, which N5.10b
+changed — up to six controls, wrapping to a second row. P-C5a and P-C5b are
+reworded for it below; all three are still owed.
 
 ### N5.10 — edit, cancel, Duplicate and the party type
 
@@ -102,8 +126,8 @@ closed. N5.9b added the rest (T-Q2 to T-Q10) when the Finalise control landed.
 | P-C2 | Cards are visibly tighter than the run #113 build; no wasted space |
 | P-C3 | The quantity line is bold and larger. `10 required · 4 received · 6 remaining` is fully readable at 360dp — not cut off, not ellipsized |
 | P-C4 | A note stands out in its own tinted box |
-| P-C5a | Row actions are one tidy row, the same shape for every role, with an overflow `⋯` where there are more |
-| P-C5b | Every action in the overflow opens the right sheet, and each is a real 48dp target |
+| P-C5a | **Reworded by N5.10b.** Row actions stand on the card, the same shape for every role, wrapping to a second row where there are more — at most two rows at 360dp, nothing clipped. There is no overflow `⋯`: N4.4 built one and took it out (`PROJECT-STATUS.md`) |
+| P-C5b | **Reworded by N5.10b.** Every action on the card opens the right sheet — Order changes at once, with no sheet — and each is a real 48dp target |
 | P-C6a | On an **Owner or Administrator** phone, a person's role shows beside their name — "Added by", "Received by", "Removed by" |
 | P-C6b | On a **Manager or Staff** phone the same lines show the **name alone**, and nothing is broken or blank by its absence |
 | P-C7 | A removed requirement that had received something still shows what arrived (e.g. "2 in") |

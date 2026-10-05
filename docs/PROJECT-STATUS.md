@@ -8,11 +8,11 @@ anything.** Last updated 2026-10-05.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `877701f` — [run #231](https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs/37270578300), fully green (unit tests, lint, Firestore rules emulator, APK build). N5.10b commit 6, a rules and tests commit, so it is also the last CI-verified **code** head. Later commits may sit above it. |
+| **Last CI-verified head** | `7a73e64` — run #240, fully green (unit tests, lint, Firestore rules emulator, APK build). N5.10b commit 13, the measurement tools; the last commit that changed app code is `5b50809` (run #238) and the last that changed the rules is `85c4fb7` (run #235). Later commits may sit above it. |
 | **APK to install** | The `smartie-native-apks` artifact **from the run that verified the head you intend to install** — never from whichever run this table happens to name. A build contains the commit it ran on and nothing above it, so a head hash and an APK go out of step the moment anything lands. Each run's job summary reports its head and the signing certificate; the app must show **Staging**. |
-| **Ruleset anchor** | `877701f` (N5.10b commit 6) — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
-| **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **twelve rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap), `ff20dd4` (N5.10 — edit, the creator's cancel, the cap only when raised), `cff32be`, `6d2c25c`, `d59f1e6`, `877701f` (N5.10b — the expression limit, the status pin, a boolean `received`, the uid pin); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
-| **To deploy next** | The **latest CI-verified head**, not a hash copied into this file. Check it before deploying: `git diff --quiet <head> 877701f -- firestore/firestore.rules` — silence means that head carries the current ruleset. No index deploy: `firestore.indexes.json` is unchanged since `69d0fce`. |
+| **Ruleset anchor** | `85c4fb7` (N5.10b commit 9) — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
+| **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **fifteen rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap), `ff20dd4` (N5.10 — edit, the creator's cancel, the cap only when raised), `cff32be`, `6d2c25c`, `d59f1e6`, `877701f`, `547d218`, `caa835e`, `85c4fb7` (N5.10b — the expression limit, the status pin, a boolean `received`, the uid pin, the headroom reorder and ternaries, Ordered and a Manager's cancel); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
+| **To deploy next** | The **latest CI-verified head**, not a hash copied into this file. Check it before deploying: `git diff --quiet <head> 85c4fb7 -- firestore/firestore.rules` — silence means that head carries the current ruleset. No index deploy: `firestore.indexes.json` is unchanged since `69d0fce`. |
 
 > **Three fields, three meanings — they were one field until 2026-09-24 and it
 > had gone wrong.** The table said `a849650` was "the commit to deploy the rules
@@ -50,7 +50,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
 | N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2, N4.3 and N4.4 are all code complete and CI-verified**, and both are waiting on the same Owner-run staging rules deployment paired with the APK rollout — they were never deployed separately and must not be. Purchase History is built and open to every role, so what was Batch 5 is done; the tab badge is Batch 6 |
-| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.10 are complete and CI-verified** — N5.9 (finalise) at `57d607a`, run #204, Part A of the Owner's review of it at `2848bb9`, run #208, and **N5.10** (edit, cancel, Duplicate, the party type) at `4283ef2`, run #222. The builder **issues quotations** and now **edits** them — the same number, saved over, stamped "Last edited" — while the creator, or an Owner or Administrator, may **cancel** one and anyone who quotes may **duplicate** one. **Not yet run on a phone** — T-Q1 to T-Q22 are owed. Rules deploy once, at the final staging pass, from the head named above; the ruleset anchor is now `877701f`. The Quotation tab keeps its "Keep using the PWA to issue quotations" banner until N5.12. **N5.10b is in progress** — the rules' expression limit, then Purchase's Ordered and a Manager's cancel (commits 0 to 6 green, runs #225 to #231; 7 to 14 approved 2026-10-05). N5.11, the PDF, Print and WhatsApp, is planned only after it |
+| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.10 are complete and CI-verified** — N5.9 (finalise) at `57d607a`, run #204, Part A of the Owner's review of it at `2848bb9`, run #208, and **N5.10** (edit, cancel, Duplicate, the party type) at `4283ef2`, run #222. The builder **issues quotations** and now **edits** them — the same number, saved over, stamped "Last edited" — while the creator, or an Owner or Administrator, may **cancel** one and anyone who quotes may **duplicate** one. **Not yet run on a phone** — T-Q1 to T-Q22 are owed. Rules deploy once, at the final staging pass, from the head named above; the ruleset anchor is now `85c4fb7`. The Quotation tab keeps its "Keep using the PWA to issue quotations" banner until N5.12. **N5.10b is complete and CI-verified** — the rules' expression limit, then Purchase's **Ordered** and **a Manager's cancel**: commits 0 to 13, runs #225 to #240, each pushed alone, one red run (#237) fixed by its own commit; commit 14 is the record. **Not yet run on a phone** — T-R19 to T-R28 are owed. **Waiting on the Owner's review**; N5.11, the PDF, Print and WhatsApp, is planned only after it |
 | N6 Products & Categories | Not started. The Products & Categories editing screen, which T-P7 is blocked on. **Also owed here: read the company GST from `teamSettings/company.defaultGst`.** V8C4's `stSave` writes it there and the native app is already permitted to read that document. N5.8a resolves a quotation's GST from the rate its catalogue lines agree on, which is an honest stopgap and not the final answer — a quotation whose lines disagree, or which has only hand-typed lines, has nothing to agree on and currently refuses to finalise until somebody sets the rate |
 | N7 Calculators | Not started. Port the four V8C4 calculators — rolling shutter, high-speed door, garage door, glass door — whose output becomes ordinary quotation lines carrying the opening size in the line's spec text |
 | N8 Migration & cutover | Not started. **The production migration and cutover.** `docs/N2-delivery.md:40` calls N8 "the catalogue migration"; that line is the stale one and `docs/N3-plan.md:585` is right. **Read the blocking warning about `import-staging.mjs` under "Decisions that bind future work" before planning any part of this** — the importer carries seed rates in every payload and would destroy live pricing if pointed at production |
@@ -1361,18 +1361,18 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**N5.10b — build commits 7 to 14 as the Owner approved on 2026-10-05, each
-pushed alone with CI green before the next; then stop and report. Do NOT
-start N5.11.** Commit 7 is this record. Then: 8, the rules reorder for
-headroom (behaviour-preserving, proved by the replay, the suite and the
-ablations, costs before and after); 9, the rules for Ordered, cancel and the
-locks; 10, domain and data; 11, the screens; 12, witnesses; 13, the tools;
-14, docs. **Stop and report, without working round it, if** any valid write
-reaches 900, a test would have to be weakened, anything contradicts the
-repository or the rules file, or an Administrator's reopen or remove of the
-old V8C4 rows (the 16-write check) becomes refused. The approval, the
-Owner's answers and the advisor's ten decisions are recorded below ("The
-Owner's approval of the commit-7 design, 2026-10-05").
+**The Owner reviews N5.10b. Wait for the Owner's message; do NOT start
+N5.11.** N5.10b is built: commits 0 to 13 each pushed alone with CI green
+before the next, CI-verified to `7a73e64` (run #240), and this record is commit
+14 — the table, the test counts, the headroom and the findings are below
+("N5.10b — every commit pushed alone"). **None of the Owner's stop
+conditions was met:** the dearest valid write is a Manager's cancel at
+**755**, under the 900 stop line; no test was weakened (three were turned,
+each saying why); nothing contradicted the repository or the rules file; and
+the Administrator's reopen and removal of the old V8C4 rows is **24 of 24
+accepted**. Its phone rows, T-R19 to T-R28, join the checklist and are run
+at the final staging pass, with the rules deployed from the head then
+current — the ruleset anchor is now `85c4fb7`.
 
 **Then N5.11** — the PDF, Print and WhatsApp — planned only after N5.10b
 is built and the Owner says so, and after the Owner has supplied V8C4's PDF,
@@ -1386,13 +1386,15 @@ calling the finalise gate first, as V8C4's do.
 N5.10 is complete and CI-verified at `4283ef2` (below). Its phone rows,
 T-Q11 to T-Q22, join T-Q1 to T-Q10 in `PHONE-TEST-CHECKLIST.md` and are run
 once, at the final staging pass, with the rules deployed from the head
-then current — the anchor is now `877701f`.
+then current — the anchor is now `85c4fb7`.
 
-### N5.10b so far — every commit pushed alone, CI green before the next
+### N5.10b — every commit pushed alone, CI green before the next; one red run, fixed by its own commit
 
-From `git log --oneline 6fbc2bc..877701f`. Commits 0 to 5 landed on
-2026-09-29, before the Owner's pause; commit 6 on 2026-10-05, after the
-16-write check (both recorded below):
+From `git log --oneline 6fbc2bc..7a73e64`. Commits 0 to 5 landed on
+2026-09-29, before the Owner's pause; 6 to 13 on 2026-10-05, after it
+(both recorded below). Commit 14 is this record. Nothing was pushed on top
+of a head until CI had passed it, and commit 11's red run was followed only
+by its own fix:
 
 | Commit | What | Run |
 |---|---|---|
@@ -1402,13 +1404,182 @@ From `git log --oneline 6fbc2bc..877701f`. Commits 0 to 5 landed on
 | `0013364` | 3 — refusal tests aimed at their own clause | #228 green |
 | `6d2c25c` | 4 — `/stock` and `/stockMoves`: `admin()` asked once, the same decisions | #229 green |
 | `d59f1e6` | 5 — status moves only by close, cancel and reopen; `received` a boolean; closing short needs the write-off; `v8c4-purchase.test.js` | #230 green |
-| `877701f` | 6 — a uid a write sets is the caller's; the test fixture stamps the caller. **The ruleset anchor** | #231 green |
+| `877701f` | 6 — a uid a write sets is the caller's; the test fixture stamps the caller | #231 green |
+| `d598ac7` | 7 — the Owner's pause, the decisions of 2026-10-05 and the commit-7 design's approval recorded, before any code | #232 green |
+| `547d218` | 8 — `/purchase` update reordered for headroom, the same decision for every write | #233 green |
+| `caa835e` | 8b — ternaries at `/purchase`'s branch points, so a refusal stays under the limit; the same decision for every write | #234 green |
+| `85c4fb7` | 9 — the rules: Ordered, a Manager's cancel, the Ordered locks, a create that carries neither stamp. **The ruleset anchor** | #235 green |
+| `a3f102e` | 10 — domain and data: Ordered, cancel, the locks, History by `cancelledAt` | #236 green |
+| `dfd226b` | 11 — the screens: the blue Ordered tag and toggle, the cancel and its confirm, the Edit lock, History's cancelled line | **#237 red**: one test's lookup |
+| `5b50809` | fix — the Edit-lock test finds a locked field by its disabled input | #238 green |
+| `927178c` | 12 — witnesses: the dearest valid purchase writes, in both access states; the two V8C4 decisions commit 9 moved | #239 green |
+| `7a73e64` | 13 — the measurement tools, to `firestore/tools/` | #240 green |
 
-The emulator suite at `877701f`: **311 tests, 311 passing**, from
-`firestore/` with the emulator running: `node --test --test-concurrency=1
-tests/*.test.js` (Node 22 does not expand `tests/` the way CI's Node 20
-does, so the glob is spelt out). The expression limit is reached by **no**
-test: `grep -c "maximum of 1000 expressions"` over that output gives 0.
+**Run #237 was red, and it was the test.** 1,854 tests ran and one failed:
+`PurchaseEditLockScreenTest` looked a locked field up by its SetText action,
+which a disabled text field does not offer. `5b50809` asks instead that the
+input under the label is disabled **and** that nothing there takes typing,
+two assertions where there was one, and its own commit. Nothing was amended
+or force-pushed. Robolectric runs only on CI, so a screen test's first run
+is CI's.
+
+**Commit 8b was added between 8 and 9**, under the Owner's rule that a
+reordering goes in its own behaviour-preserving commit before the feature;
+9 to 14 kept their numbers. Why is under "What N5.10b found" below.
+
+**A correction to commit 8b's message, recorded in commit 9's:** "a
+Manager's edit 485 → 466" was the wrong measure. 466 was `refcost.js`'s
+Manager edit; the same path in `purch.js` went 485 → **497**. Every valid
+purchase path rose by 12 to 24 in 8b, as its own table says (650 → 669 at
+the top). Not amended, per the Owner's rule.
+
+#### What N5.10b built, as the Owner approved it
+
+- **Ordered**, V8C4's own wire value. An Owner or Administrator taps one
+  toggle — **Order**, and **Ordered** in blue and selected while it is —
+  with no confirmation; the snackbar says "Marked as ordered" or "Back to
+  needed", and TalkBack reads the state. Everyone, Staff included, sees the
+  blue **Ordered** tag and "Ordered by <name> · <date>", **only while the
+  status is Ordered**; an old V8C4 Ordered row shows the tag alone. Ordered
+  is open: a part delivery keeps it Ordered, the whole of it or a write-off
+  closes it. On an Ordered requirement only an Owner or Administrator may
+  change what or how many, remove it, or cancel it — each in the rules
+  **and** the app.
+- **A Manager's cancel**, new in the native app: a Manager cancels anyone's
+  requirement that is not Ordered, an Owner or Administrator any; Staff
+  never. **Only when nothing has been received** — no `rcvQty`, `rcvBy`,
+  `rcvUid` or `rcvAt` stored, and none written — which binds an
+  Administrator too. V8C4's `cancelledBy` / `cancelledUid` /
+  `cancelledAt`, the uid the caller's. The confirm is the advisor's words,
+  answered **Cancel requirement** or **Keep it**. History shows "Cancelled
+  by <who> · <date>", no "N in", sorted by `cancelledAt`.
+- **Reopen deletes every stamp** — `rcv*`, `cancelled*` and `ordered*` — so
+  a reopened requirement is as good as new. Undo deletes the `ordered*`
+  three.
+- **Create refuses** any status but Needed and all six `ordered*` and
+  `cancelled*` keys. The `orderedUid` create pin is therefore moot; commit
+  6's `cancelledUid` create pin is redundant and stays as written.
+- **The action row**: the most on one card is **six** — an Owner or
+  Administrator on an open requirement: Received, Edit, Urgency, Order,
+  then Close short (part received) or Cancel (nothing received), never both,
+  and Remove. A Manager's most is five. Four fit a row at 360dp, so six take
+  two, every one painted whole — tested. No overflow menu.
+- **Blue**: the app had none. `SmartieColors.Blue`, `BlueSoft`, `BlueDeep`
+  and `BlueLine`, and `TagTone.BLUE`; the tag's words are 7.56:1 on its fill
+  and 8.72:1 on the card (`TagContrastTest`).
+- **Native Add never tops up** an existing requirement (the advisor's
+  decision 6): create always writes a new document under the sheet's own
+  id, so nothing needed blocking for Ordered.
+
+#### Test counts, each with its command
+
+| What | Count | Command |
+|---|---|---|
+| Emulator suite, at `927178c` | **344 tests, 344 passing**; the limit reached **0** times | from `firestore/`, emulator running: `node --test --test-concurrency=1 tests/*.test.js`, then `grep -c "maximum of 1000 expressions"` over its output |
+| Margin, every purchase write the purchase-side tests make | **144 tests — purchase, data, V8C4, Ordered and witnesses — 0 fail, 0 limit lines** | `firestore/tools/margin.sh ../firestore.rules 16 <suite copy>` — the `/purchase` block padded by 16 terms (about 98 expressions), so a write survives only under about 900 |
+| The Administrator's check | **24 of 24 accepted** — the 16, and the 8 again with commit 10's reopen | `node firestore/tools/admincheck.js` |
+| Replay, commit 8b's rules against commit 9's | 308 cases: **exactly 3 decisions change**, each intended (below) | `diffrules.js`, `OLD_WHOLE=1` |
+| Role replay, error-field replay, commit 8b against 9 | 1,680 and 1,620 cases, **0 differ** | `rolecases.js`, `fieldcases.js` |
+| Kotlin tests in the tree | **1,854** | `git grep -h -o '@Test' 7a73e64 -- app/src/test \| wc -l` |
+| CI's unit-test task | **1,854 tests** at `dfd226b` | Gradle's own count in run #237's log ("1854 tests completed, 1 failed"); Gradle prints it only when something fails |
+| Local JVM sweep | **62 classes, 1,006 tests, OK, at `5b50809`** | the scratch sweep with the purchase repository and a Firebase-free `PurchaseStore` stub; pure Kotlin only, Robolectric is CI's |
+
+**Ablations, each in its commit's message:** commit 8 and 8b, 31 each, the
+red set identical on both sides; commit 9, 24 — 22 turn their tests red, and
+two cannot (below); commit 10, 14 of 14. The screens were not ablated: a
+deliberately red push is not allowed on this branch.
+
+#### The headroom — per document and per request
+
+Measured with `firestore/tools/budget.sh` (every rule padded by N
+always-true terms, or one match block for a per-block figure; cost ≈
+(163 − N) × 1000 / 163, about ±6), and the Ordered and cancel paths with
+`SCEN=./scenarios-ordered.js node purch.js`, from `firestore/tools/`, the
+emulator running. Re-run on the final rules (`85c4fb7`, unchanged since) on
+2026-10-05, the figures identical to commit 9's message. With
+`primaryOwnerUid` recorded; the email-fallback transition state is 24 to 31
+cheaper on every purchase path. **The stop line for any valid write is
+900.**
+
+**Per document — `/purchase`**, the costliest paths, at commit 6 → 8 → 8b
+→ 9:
+
+| Valid write | 6 `877701f` | 8 `547d218` | 8b `caa835e` | 9 `85c4fb7`, final |
+|---|---|---|---|---|
+| **A Manager cancels somebody's** — new | — | — | — | **755**, the dearest valid write anywhere |
+| A Manager cancels their own — new | — | — | — | 730 |
+| A Manager's write-off | **791** | 650 | 669 | 687 |
+| A Manager's whole delivery | 730 | 650 | 669 | 687 |
+| The same two on an Ordered requirement — new | — | — | — | 687 |
+| A Staff creator's write-off, or whole delivery, on their own (Ordered or not) | 730 write-off, 663 whole | 626 | 644 | 663 |
+| A Manager's part delivery on somebody's (Ordered or not) | 663 | 589 | 607 | 626 |
+| A Manager or the Staff creator removes their own | 558 | 521 | 534 | 571 |
+| A Manager edits somebody's untouched requirement | 558 | 485 | 497 | 534 |
+| An Administrator cancels an Ordered requirement — new | — | — | — | 589 |
+| An Administrator orders — new | — | — | — | 558 |
+| An Administrator reopens (every stamp removed) | 491 | 448 | 460 | 479 |
+| An Administrator takes the order back — new | — | — | — | 472 |
+| An Administrator's edit | 417 | 380 | 399 | 411 |
+
+**A refused write** — the one that showed the problem, a Staff account's
+edit of a Manager's requirement (`RULES=<file> node refcost.js`): about
+**908** at commit 8, **411** at 8b. And the margin test says no purchase
+write the suite makes, refusals included, reaches 900 at the final rules
+(the test counts above).
+
+**Per document — elsewhere**, unchanged through N5.10b's commits 7 to 13
+(the rules outside `/purchase` did not change): a `/users` change by an
+Administrator **675**; a quotation edit **613**.
+
+**Per request** — the multi-document commits, each block padded on its own
+and summed; production's counting is not confirmed, so the sum is the
+safe figure. Unchanged since commit 4:
+
+| Request | Cost |
+|---|---|
+| A photo (`/stock` + `/stockPhotos`, one batch) | **675** (374 + 301) — 822 before commit 4 |
+| A stock movement (`/stock` + `/stockMoves`, one transaction) | **650** (356 + 294) — 945 before commit 4 |
+| A finalise (`/quotations` + `/teamSettings/numbering`, one batch) | **625** (423 + 202) |
+
+A `/purchase` write is one document per request, so its per-request cost is
+its per-document cost: **755** at the most.
+
+#### What N5.10b found
+
+- **A refused write was dearer than a valid one, and that is what
+  ternaries fix.** In the emulator, on a **refused** write, `a && b` and
+  `a || b` inside the purchase functions went on to evaluate `b` after `a`
+  had decided; `a ? b : false` did not. A Staff account's refused edit of a
+  Manager's requirement cost about **908** at commit 8, against 448 for a
+  Manager's valid edit in the same script. Commit 8b made every branch point a ternary:
+  **908 → 411** (`RULES=<file> node firestore/tools/refcost.js`). A denied
+  write is evaluated once (`probe-deny-once.js`), so this is cost, not double
+  counting. It is now a binding decision (below).
+- **A ternary does not absorb an error the way `||` does.** 8b's first draft
+  changed 30 decisions in the role replay: an active profile with no `role`
+  field had kept its creator rights through `error || true`. The role is
+  now read `profile().get('role', '')`.
+- **Commit 9 moved exactly three replay decisions**, each intended: commit
+  6's unstamped Administrator cancel is refused (a cancel needs the stamp);
+  an Administrator taking a **V8C4 Ordered row back to Needed** is accepted;
+  an Administrator's **V8C4 cancel of a restored row with stale receipt
+  fields** is refused (nothing received binds an Administrator; they can
+  still remove it, and the N8 cleanup clears it). The two V8C4 ones are
+  pinned in `v8c4-purchase.test.js` (commit 12). **V8C4 writes still
+  accepted: 19**, the same number as at commit 6 — listed under "Owed in
+  N5.12" below.
+- **Two of commit 9's clauses cannot be turned red, and are kept as
+  statements of the rule:** the Administrator check on the order move (no
+  non-Administrator role branch admits an `ordered*` key) and
+  `status == 'Cancelled'` in the Manager's cancel keys (`prStatusMoves`
+  lets a Manager's status move only to Cancelled).
+- **`prRcvNumeric` and `prClosesOnlyWhenMet` turn no test red** when
+  neutralised — on commit 6's rules and on every later one. Pre-existing,
+  reported at commit 8, not fixed here: each is either covered by another
+  clause or untested, and finding which is its own task.
+- **The witnesses' margin:** with the `/purchase` block padded by 37 terms
+  the suite still passes; at 41 only a Manager's cancel fails — the
+  dearest valid write, as `purch.js` measures it.
 
 ### N5.10 — every commit pushed alone; one red run, fixed by its own commit
 
@@ -3544,6 +3715,19 @@ simultaneous issues surface as a permission error. **N5.9 must catch
 bounded.** Any later batch that touches finalise inherits this; it is not an
 implementation detail of one commit.
 
+**The rules have a 1,000-expression budget, and the stop line for any valid
+write is 900** (the Owner, 2026-10-05). After every rules commit, measure the
+per-document and per-request costs with `firestore/tools/budget.sh` and name
+the command (Rule 5). Every refusal test goes through `refused()`, which
+fails when the denial was the limit's. **In `/purchase`, a branch point
+where a cheap test decides whether a dear one matters is written
+`a ? b : false`, never `a && b`**: on a refused write the emulator went on
+to evaluate `b` after `a` had decided, and a refusal cost 908 before N5.10b
+commit 8b and 411 after. A ternary does not absorb an error the way `||`
+does, so what it reads is read with `.get(…, default)`. A reorder goes in its
+own behaviour-preserving commit, proved by `diffrules.js`, `rolecases.js`,
+`fieldcases.js`, the suite and the ablations (`firestore/tools/README.md`).
+
 **Purchase History is filtered in the app, not in the rules, and that is
 deliberate.** The Owner decided it after seeing why: Firestore evaluates a
 list query against its *constraints* rather than document by document, so the
@@ -3905,6 +4089,8 @@ the output gives 0 (from `firestore/`, emulator running: `node --test
 --test-concurrency=1 tests/*.test.js`, re-run 2026-10-05). Every refusal
 goes through `refused()`, so a denial by the limit now fails its test. The
 headroom left is measured after every rules commit; the stop line is 900.
+**Still 0 at the end of N5.10b**: 344 tests, 344 passing, the same command,
+with the rules at `85c4fb7` and the witnesses of commit 12.
 
 ### A Manager's rename on the Parties screen is refused only after Save — accepted
 
@@ -4089,11 +4275,14 @@ exactly the four above, counted by presence, and the app's
 `stocked` and `stockedQty` are not counted** — `prOpen` asks
 `received != true`, the app reads 0 as false, and nothing but the reader
 touches `stocked` or `stockedQty` — so the cleanup need not remove them for
-this purpose. If N5.10b commit 9 or anything later changes what
-`prUntouched` (or cancel's "nothing received") counts, this list changes
-with it. From commit 9 a row with stale receipt fields also **cannot be
-cancelled** (cancel needs nothing received); an Administrator can still
-remove it.
+this purpose. **Commit 9 did not change the list:** cancel's "nothing
+received" is `prUntouched` — the same four, by presence — and none of them
+written in the same request (`prCancelMove`). If anything later changes what
+either counts, this list changes with it. From commit 9 a row with stale
+receipt fields **cannot be cancelled**, an Administrator's cancel included —
+pinned in `v8c4-purchase.test.js` ("since commit 9, an Administrator's V8C4
+cancel of a restored row with stale receipt fields is refused") — and an
+Administrator can still remove it.
 
 **The N8 batch must test exactly that**, on the emulator, against a
 V8C4-restored row after the cleanup: a Manager's and the Staff creator's
@@ -4107,11 +4296,44 @@ and if it can, the shape includes Ordered.
 
 ### Owed in N5.12: the cutover document says the PWA stops writing Purchase
 
-Recorded 2026-09-29 (QZ). `docs/N5-cutover.md`, written in N5.12, must say:
-**the PWA's Purchase writing stops at cutover; everyone uses the native app
-for Purchase from cutover day; the PWA's purchase writes will be refused by
-the rules.** N5.10b's `firestore/tests/v8c4-purchase.test.js` records which
-V8C4 shapes are refused and by which clause.
+Recorded 2026-09-29 (QZ); **corrected 2026-10-05 by the Owner's decision 2**,
+because "the PWA's purchase writes will be refused by the rules" was not
+true. `docs/N5-cutover.md`, written in N5.12, must say:
+
+- **The PWA's Purchase writing stops at cutover**; everyone uses the native
+  app for Purchase from cutover day.
+- **The control is staff stopping PWA Purchase use** — not the rules.
+- **These PWA purchase writes are still accepted**, all on a requirement the
+  native app has never written. Counted by the replay of V8C4's payloads
+  (`firestore/tools/diffrules.js`, the `v8c4` cases, at commit 9): **19**,
+  the same number as at commit 6 —
+  1. a **create** — by an Administrator, a Manager or Staff (3);
+  2. a **top-up**, the quantity raised — an Administrator or a Manager on
+     their own, the Staff creator on theirs, a Manager or an Administrator
+     on a Staff account's (5);
+  3. an **edit** of name, quantity, urgency and note — an Administrator, a
+     Manager or the Staff creator on a Staff account's open requirement; an
+     Administrator on a V8C4 Ordered one, and on a V8C4-restored one with
+     stale receipt fields (5);
+  4. an **Administrator's restore** of a cancelled requirement, stale
+     receipt fields or not (2);
+  5. an **Administrator's delete** (`del: 1`) — open, received or cancelled
+     (3);
+  6. since commit 9, an **Administrator taking a V8C4 Ordered row back to
+     Needed** (1).
+
+  And one the replay's rows do not reach, pinned in
+  `firestore/tests/v8c4-purchase.test.js`: an **Administrator's cancel where
+  `received` is already the number 0** and nothing was received — V8C4's
+  cancel carries a whole stamp, the caller's. Each category has its test in
+  that file ("still accepted …", "since commit 9 …").
+
+  Lost at commit 9: an Administrator's V8C4 cancel of a restored row with
+  stale receipt fields — nothing may have been received, an Administrator
+  included. **Every V8C4 update to a row the native app has written is
+  refused** (it carries no `rev`), an Administrator's included.
+- **Hard-blocking the PWA is revisited at N5.12**, not before (the Owner,
+  2026-10-05).
 
 ### Owed in N8: normalise the products no edit ever reaches
 

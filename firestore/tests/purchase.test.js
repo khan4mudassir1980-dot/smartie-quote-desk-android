@@ -953,8 +953,9 @@ test('the reopen payload deletes the received fields rather than blanking them',
 //
 // The Owner's rules of 2026-09-29, for everyone, an Owner or Administrator
 // included: status moves only by closing to Received (met, or written off),
-// cancel (Owner and Administrator — a Manager's is commit 7's), or reopen
-// (Owner and Administrator); a write that sets `received` sets a boolean; and
+// cancel (Owner and Administrator, and since commit 9 a Manager — with its
+// stamp, and only while nothing has arrived; purchase-ordered.test.js), or
+// reopen (Owner and Administrator); a write that sets `received` sets a boolean; and
 // whatever closes a requirement meets its total. Found in N5.10b step 1: a
 // delivery could write any status beside `received: false`, and the app
 // counts "Received" and "Cancelled" as closed.
@@ -1002,12 +1003,15 @@ test('received is a boolean whenever a write sets it — an Administrator\'s too
   await given('pr_healthy', { ...HEALTHY, qty: 10 });
   const manager = as(testEnv, UIDS.staff).collection('purchase').doc('pr_healthy');
   const admin = as(testEnv, UIDS.admin).collection('purchase').doc('pr_healthy');
+  // Since N5.10b commit 9 a cancel carries its stamp; it is here so the
+  // number is the only thing wrong with the refused one.
+  const stamp = () => ({ cancelledBy: 'Administrator', cancelledUid: UIDS.admin, cancelledAt: Date.now() });
 
   await refused(manager.update({ ...base('pr_healthy', 1, 10, UIDS.staff), ...receipt(UIDS.staff, 4), received: 0 }));
-  await refused(admin.update({ ...base('pr_healthy', 1, 10, UIDS.admin), received: 0, status: 'Cancelled' }));
+  await refused(admin.update({ ...base('pr_healthy', 1, 10, UIDS.admin), received: 0, status: 'Cancelled', ...stamp() }));
   await refused(admin.update({ ...base('pr_healthy', 1, 10, UIDS.admin), ...receipt(UIDS.admin, 10), received: 1, status: 'Received' }));
   // A boolean, the same writes otherwise, is accepted.
-  await assertSucceeds(admin.update({ ...base('pr_healthy', 1, 10, UIDS.admin), received: false, status: 'Cancelled' }));
+  await assertSucceeds(admin.update({ ...base('pr_healthy', 1, 10, UIDS.admin), received: false, status: 'Cancelled', ...stamp() }));
 });
 
 test('a stored number is left alone: only a write that sets received must send a boolean', async () => {
@@ -1044,15 +1048,18 @@ test('status moves to nothing else — not for an Administrator either', async (
   await given('pr_healthy', { ...HEALTHY, qty: 10 });
   const admin = as(testEnv, UIDS.admin).collection('purchase').doc('pr_healthy');
 
-  // "Ordered" is the Owner's own design, and arrives with N5.10b commit 7.
+  // "Ordered" arrived with N5.10b commit 9, and only with its stamp; this is
+  // V8C4's bare one. The stamped order is purchase-ordered.test.js's.
   await refused(admin.update({ ...base('pr_healthy', 1, 10, UIDS.admin), status: 'Ordered' }));
   await refused(admin.update({ ...base('pr_healthy', 1, 10, UIDS.admin), status: 'Archived' }));
 
   await given('pr_done', { ...HEALTHY, id: 'pr_done', qty: 10, status: 'Received', received: true,
     rcvQty: 10, rcvBy: 'Someone', rcvUid: UIDS.staff, rcvAt: 1712600000000 });
   const adminDone = as(testEnv, UIDS.admin).collection('purchase').doc('pr_done');
-  // Cancel is from an open requirement, and a reopen is not still received.
-  await refused(adminDone.update({ ...base('pr_done', 1, 10, UIDS.admin), status: 'Cancelled', received: false }));
+  // Cancel is from an open requirement — stamped, so that is what refuses
+  // it — and a reopen is not still received.
+  await refused(adminDone.update({ ...base('pr_done', 1, 10, UIDS.admin), status: 'Cancelled', received: false,
+    cancelledBy: 'Administrator', cancelledUid: UIDS.admin, cancelledAt: Date.now() }));
   await refused(adminDone.update({ ...base('pr_done', 1, 10, UIDS.admin), status: 'Needed' }));
 });
 

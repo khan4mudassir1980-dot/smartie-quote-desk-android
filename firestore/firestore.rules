@@ -503,11 +503,18 @@ service cloud.firestore {
      * admits one. The four rcv fields are checked by PRESENCE: the app
      * writes them together and a reopen removes them together, so any one of
      * them means a delivery was recorded, whatever the number says.
+     *
+     * **Ordered is open** (N5.10b commit 9, the Owner's design QD of
+     * 2026-09-29): an ordered requirement is still waiting to arrive, so it
+     * takes deliveries, edits and a write-off exactly as a Needed one does —
+     * with the locks `prOrderedKept` adds for everybody but an Owner or
+     * Administrator. `"Ordered"` is V8C4's own stored value, never renamed, so
+     * V8C4's Ordered rows are open here too.
      */
     function prOpen() {
       return resource.data.get('received', false) != true
         && resource.data.get('del', false) != true
-        && resource.data.get('status', 'Needed') == 'Needed';
+        && resource.data.get('status', 'Needed') in ['Needed', 'Ordered'];
     }
 
     function prUntouched() {
@@ -628,7 +635,7 @@ service cloud.firestore {
         && resource.data.rcvQty < resource.data.qty
         && resource.data.get('received', false) != true
         && resource.data.get('del', false) != true
-        && resource.data.get('status', 'Needed') == 'Needed'
+        && resource.data.get('status', 'Needed') in ['Needed', 'Ordered']
         && request.resource.data.qty == resource.data.rcvQty
         && request.resource.data.received == true
         && request.resource.data.status == 'Received';
@@ -706,7 +713,7 @@ service cloud.firestore {
      */
     function prPermitted(changed, isAdmin) {
       return prReceivedIsBoolean(changed)
-        && prStatusMoves(isAdmin)
+        && prStatusMoves(changed, isAdmin)
         && prClosesMet(changed)
         && prStampsAreCaller(changed)
         && (isAdmin ? true : prRaiserOrManager(changed, prCreator()));
@@ -724,12 +731,13 @@ service cloud.firestore {
      * stays allowed (QG) — the Administrator's reopen deletes `rcvUid` — and
      * one carried unchanged is not in the diff, which is what V8C4 did after
      * its first write. `deletedBy` already had the same pin, in
-     * `prRemovalStamp`. N5.10b commit 7 adds the Ordered uid.
+     * `prRemovalStamp`. N5.10b commit 9 added `orderedUid`.
      */
     function prStampsAreCaller(changed) {
       return prSetUidIsCaller(changed, 'upUid')
         && prSetUidIsCaller(changed, 'rcvUid')
-        && prSetUidIsCaller(changed, 'cancelledUid');
+        && prSetUidIsCaller(changed, 'cancelledUid')
+        && prSetUidIsCaller(changed, 'orderedUid');
     }
 
     function prSetUidIsCaller(changed, field) {
@@ -764,29 +772,70 @@ service cloud.firestore {
      * (QB, variant B adapted), for everyone:
      *
      * - **closing to Received** — `received: true` with the total met, or
-     *   written off first (`prClosesMet`), from an open requirement;
-     * - **cancel** — from an open requirement, by an Owner or Administrator
-     *   (the privileged branch is the only cancel the native app has ever
-     *   had; a Manager's is N5.10b commit 7's, held for the Owner);
-     * - **reopen** — back to Needed from Received or Cancelled, by an Owner or
-     *   Administrator, and not while `received` stays true.
+     *   written off first (`prClosesMet`), from an open requirement — Needed
+     *   or Ordered;
+     * - **cancel** — only when **nothing has been received**, before or in
+     *   this write, with the cancel stamp written now: from Needed by a
+     *   Manager (whose own branch is `prCancelKeys`), from Needed or Ordered
+     *   by an Owner or Administrator. This binds an Administrator too: a
+     *   part-received requirement is closed by the write-off, never
+     *   cancelled (the advisor's rule, 2026-10-05);
+     * - **order** — Needed to Ordered, by an Owner or Administrator, on an
+     *   open requirement (part-received counts), with the Ordered stamp;
+     * - **back to Needed** — by an Owner or Administrator, and not while
+     *   `received` stays true: reopen from Received or Cancelled, and undo
+     *   from Ordered.
      *
      * So a delivery that does not close leaves the status alone, and nobody —
      * an Administrator included — may invent one. Before this, a delivery
      * could write any status: a Manager recording 4 of 10 could store
      * "Received" or "Cancelled" beside `received: false`, and the app counts
-     * either as closed. Found in N5.10b step 1.
-     *
-     * N5.10b commit 7 adds Needed ↔ Ordered, by Owner and Administrator.
+     * either as closed. Found in N5.10b step 1. Order, undo and the
+     * Manager's cancel are N5.10b commit 9's, the Owner's design approved on
+     * 2026-10-05.
      */
-    function prStatusMoves(isAdmin) {
+    function prStatusMoves(changed, isAdmin) {
       let before = resource.data.get('status', 'Needed');
       let after = request.resource.data.get('status', 'Needed');
       let receivedAfter = request.resource.data.get('received', false);
-      return after == before ? true :
-        (before == 'Needed' && after == 'Received' && receivedAfter == true)
-        || (isAdmin && before == 'Needed' && after == 'Cancelled' && receivedAfter != true)
-        || (isAdmin && before in ['Received', 'Cancelled'] && after == 'Needed' && receivedAfter != true);
+      // One branch per target status, chosen by ternaries as commit 8b's
+      // are, so a refused write asks only the branch it names.
+      return after == before ? true
+        : after == 'Received' ? before in ['Needed', 'Ordered'] && receivedAfter == true
+        : after == 'Cancelled' ? prCancelMove(changed, isAdmin, before, receivedAfter)
+        : after == 'Ordered' ? (isAdmin && before == 'Needed' && receivedAfter != true
+            ? prOpen() && prStampedNow(changed, 'orderedBy', 'orderedUid', 'orderedAt')
+            : false)
+        : after == 'Needed' ? isAdmin && before in ['Received', 'Cancelled', 'Ordered'] && receivedAfter != true
+        : false;
+    }
+
+    /** Cancel: from Needed (anybody `prStatusMoves` reaches), or Ordered (an Administrator). */
+    function prCancelMove(changed, isAdmin, before, receivedAfter) {
+      return receivedAfter != true && (before == 'Needed' || (isAdmin && before == 'Ordered'))
+        ? prUntouched()
+          && !request.resource.data.keys().hasAny(['rcvQty','rcvBy','rcvUid','rcvAt'])
+          && prStampedNow(changed, 'cancelledBy', 'cancelledUid', 'cancelledAt')
+        : false;
+    }
+
+    /**
+     * Who did it and when, written in this write: V8C4's `cancelledBy` /
+     * `cancelledUid` / `cancelledAt`, never renamed, and the same pattern for
+     * `orderedBy` / `orderedUid` / `orderedAt`. The time is the device's epoch
+     * milliseconds, stamped the way the app stamps `rcvAt` — a number, with no
+     * server-time bound, so an offline-queued write is not refused. The uid is
+     * the caller's **whether or not it changed**, so a stale one left by an
+     * earlier cancel cannot stand for this one; the time must change, so a
+     * stale stamp is never re-used.
+     */
+    function prStampedNow(changed, by, uid, at) {
+      return changed.hasAny([at])
+        ? request.resource.data.get(at, null) is number
+          && request.resource.data.get(uid, '') == mine()
+          && request.resource.data.get(by, null) is string
+          && request.resource.data.get(by, '').size() <= 80
+        : false;
     }
 
     /**
@@ -826,11 +875,47 @@ service cloud.firestore {
      * else's requirement** — the removal list is reached only through
      * `isCreator` — and everything else is unchanged. Key lists come before
      * the document reads because they are the cheaper test.
+     *
+     * N5.10b commit 9 added two things, the Owner's design approved on
+     * 2026-10-05: the Ordered locks (`prOrderedKept`) on a correction or a
+     * removal, and **a Manager's cancel** (`prCancelKeys`) of anyone's
+     * requirement — which `prStatusMoves` allows only from Needed with
+     * nothing received. Staff have no cancel; they keep removing their own.
      */
     function prRaiserOrManager(changed, isCreator) {
       return (isCreator || prManager())
-        ? ((prEditKeys(changed) || (isCreator ? prRemoveKeys(changed) : false)) ? prUntouched() : false)
+        ? ((prEditKeys(changed) || (isCreator ? prRemoveKeys(changed) : false))
+             ? prUntouched() && prOrderedKept(changed) : false)
             || prDelivery(changed)
+            || (prCancelKeys(changed) ? prManager() : false)
+        : false;
+    }
+
+    /**
+     * Once a requirement is Ordered, only an Owner or Administrator changes
+     * what or how many, or takes it off the list (the Owner's QD4 and QD5).
+     * Note and urgency follow the ordinary rules; deliveries and the
+     * write-off are untouched by this — they are `prDelivery`'s.
+     */
+    function prOrderedKept(changed) {
+      return resource.data.get('status', 'Needed') == 'Ordered'
+        ? !changed.hasAny(['name', 'qty', 'del'])
+        : true;
+    }
+
+    /**
+     * A Manager's cancel: the status, the cancel stamp and the ordinary update
+     * stamp, nothing else — no `received`, no receipt, no edit riding along.
+     * The status must move to Cancelled in this write; how it may move is
+     * `prStatusMoves`'s.
+     */
+    function prCancelKeys(changed) {
+      return changed.hasAll(['status', 'cancelledAt'])
+        ? changed.hasOnly([
+            'id','status','cancelledBy','cancelledUid','cancelledAt',
+            'updated','rev','upBy','upUid','serverAt'
+          ])
+          && request.resource.data.status == 'Cancelled'
         : false;
     }
 
@@ -846,6 +931,12 @@ service cloud.firestore {
                     && (!request.resource.data.keys().hasAny(['del']) || request.resource.data.del == false)
                     && request.resource.data.urgency in ['critical','urgent','normal']
                     && request.resource.data.updated is number
+                    // A new requirement is neither ordered nor cancelled, so it
+                    // carries no stamp of either (N5.10b commit 9). This makes a
+                    // pin on `orderedUid` here moot, and `cancelledUid`'s below
+                    // redundant; that one stays as commit 6 wrote it.
+                    && !request.resource.data.keys().hasAny(['orderedBy','orderedUid','orderedAt',
+                                                             'cancelledBy','cancelledUid','cancelledAt'])
                     // A new requirement names nobody else either (Q1b).
                     && prNewUidIsCaller('upUid')
                     && prNewUidIsCaller('rcvUid')
@@ -856,18 +947,24 @@ service cloud.firestore {
       // raised itself, and `staff` may no longer change one a delivery has
       // reached. Everything common to every branch stays at the top.
       //
-      // Who may do what is unchanged since N4.3:
+      // Who may do what — as in N4.3, with N5.10b commit 9's Ordered and
+      // cancel (the Owner's design, approved 2026-10-05):
       //
-      // - **An Owner or Administrator** — anything the three rules for
-      //   everyone allow (below), including the privileged correction of a
-      //   received requirement and the rescue of a row the PWA stored badly.
+      // - **An Owner or Administrator** — anything the rules for everyone
+      //   allow (below), including the privileged correction of a received
+      //   requirement and the rescue of a row the PWA stored badly; and
+      //   Order / back to Needed, and cancel, Ordered included.
       // - **The displayed Manager** — anybody's requirement while nothing has
-      //   arrived, or a delivery against anybody's. A reopen matches neither:
-      //   it removes rcvQty, and no branch here lets a received total fall.
+      //   arrived, or a delivery against anybody's; and cancel anybody's that
+      //   is not Ordered while nothing has arrived. A reopen matches none of
+      //   it: it removes rcvQty, and no branch here lets a received total fall.
       // - **The person who raised it**, whatever their role — the same, plus
       //   taking their own untouched requirement off the list. This is what
       //   lets a Manager withdraw their own requirement, which the Manager
-      //   rights alone do not, and lets a Staff account finish one.
+      //   rights alone do not, and lets a Staff account finish one. No cancel
+      //   for a Staff account: they remove their own.
+      // - **Once Ordered**, only an Owner or Administrator changes the name or
+      //   quantity, or takes it off the list; deliveries go on as before.
       //
       // N5.10b changed the shape, for the 1,000-expression limit: the checks
       // on the request come first, `member()` after them, and the diff and
@@ -875,7 +972,8 @@ service cloud.firestore {
       // as `prAdmin()`, which does not ask `member()` again (commit 8). It also
       // added three rules for everyone, an Owner or Administrator included:
       // `received` is a boolean when set, `status` moves only by closing,
-      // cancel or reopen, and closing short needs the write-off.
+      // cancel, reopen and — commit 9 — order and back, and closing short
+      // needs the write-off. Commit 8b wrote the branch points as ternaries.
       allow update: if request.resource.data.id == id
                     && request.resource.data.qty is number && request.resource.data.qty > 0
                     && request.resource.data.updated is number

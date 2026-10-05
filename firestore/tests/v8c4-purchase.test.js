@@ -104,13 +104,19 @@ test('V8C4\'s cancel and restore write received: 0, and are refused — an Admin
 
 // --- refused: how status may move ---------------------------------------------------
 
-test('V8C4\'s "Ordered" is refused — the Owner\'s own Ordered is N5.10b commit 7\'s', async () => {
+test('V8C4\'s "Ordered" is refused — it carries no Ordered stamp, and a Manager may not order at all', async () => {
+  // The Owner's own Ordered, N5.10b commit 9, is an Owner's or an
+  // Administrator's, with `orderedBy` / `orderedUid` / `orderedAt` written
+  // in the same write. V8C4 sends the status alone.
   await given(pwaRow());
   await refused(pwaPush(UIDS.admin, pwaRow({ status: 'Ordered' })));
   await refused(pwaPush(UIDS.staff, pwaRow({ status: 'Ordered' })));
 });
 
-test('a Manager\'s V8C4 cancel is refused — a Manager\'s cancel is N5.10b commit 7\'s', async () => {
+test('a Manager\'s V8C4 cancel stays refused — it writes received, which a Manager\'s cancel does not', async () => {
+  // A Manager may cancel since N5.10b commit 9: the status, the cancel stamp
+  // and the update stamp, nothing else. V8C4's merge adds `received: false`
+  // to a row that had none, and that one key refuses it.
   await given(pwaRow());
   await refused(pwaPush(UIDS.staff, pwaRow({ cancelledBy: name(UIDS.staff), cancelledUid: UIDS.staff,
     cancelledAt: Date.now(), received: false, status: 'Cancelled' })));
@@ -152,7 +158,8 @@ test('still accepted on a row the native app never wrote: create, top-up, edit, 
 
 test('still accepted: an Administrator\'s cancel or restore where received is already 0', async () => {
   // `received` does not change, so no boolean is asked for; an Administrator
-  // may cancel an open requirement and reopen a cancelled one.
+  // may cancel an open requirement nothing has arrived against — V8C4's
+  // cancel carries a whole stamp, the caller's — and reopen a cancelled one.
   await given(pwaRow({ received: 0 }));
   await assertSucceeds(pwaPush(UIDS.admin, pwaRow({ cancelledBy: name(UIDS.admin), cancelledUid: UIDS.admin,
     cancelledAt: 1712700000000, received: 0, status: 'Cancelled' })));

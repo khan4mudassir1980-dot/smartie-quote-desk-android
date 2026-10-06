@@ -1361,12 +1361,14 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**The Owner approves the N5.11 plan — PDF, Print and WhatsApp — sent by
-message on 2026-10-06. No code until it is approved.** The Owner's brief —
-three Owner decisions, the advisor's decisions and V8C4's output facts — is
-recorded below ("The Owner's N5.11 brief, 2026-10-06"), with what the
-repository says against it. The review of N5.10b before it is closed out, to
-`907a660` (run #245), docs `b2cf4f3` (run #246).
+**N5.11 — build commits 1 to 11 as the Owner approved on 2026-10-06, each
+pushed alone with CI green before the next; then stop and report. Do NOT
+start N5.12.** The approval, V8C4's facts a to e, the decisions and the
+additions are recorded below ("The Owner's approval of the N5.11 plan,
+2026-10-06"), with the plan as approved. **Stop and report, without working
+round it, if** any valid write reaches 900, a test would have to be
+weakened, `PdfDocument` cannot be smoke-tested on CI **and** the bitmap
+fallback also fails, or anything contradicts the repository.
 
 N5.10b itself is complete and CI-verified; its record is below ("N5.10b —
 every commit pushed alone"). Its phone rows, T-R19 to T-R28, are run at the
@@ -3845,6 +3847,195 @@ deploy Firebase.
    proposes.
 7. **Staff see no quotation and no company settings** — both are `member()
    && !worker()` in the rules — so no Staff account reaches a PDF.
+
+### The Owner's approval of the N5.11 plan, 2026-10-06 — recorded before acting
+
+Rule 8. **"N5.11 plan APPROVED with the answers and additions below. Build
+commits 1 to 11 as proposed, each pushed alone, CI green before the next."**
+The plan was sent by message; what was approved is summarised after the
+decisions.
+
+**V8C4's facts (advisor-read):**
+
+- **a.** `logo` and `qr` are **base64 PNG data URLs**
+  (`data:image/png;base64,…`). V8C4's settings downscale each upload to at
+  most **420 px** on the longest side and refuse files over **1.5 MB**.
+- **b.** `terms` and `notes` are **lists of strings**, edited one per line.
+  Null or empty means V8C4's built-in standard wording, **which is not
+  copied**: an empty list means the section is omitted.
+- **c.** The QR is a **stored image**, never generated from the UPI id;
+  V8C4 has no QR encoder, and none is needed here: no `qr` image, no SCAN TO
+  PAY block.
+- **d.** "Price list" is **not** the tier: it is the price book's revision
+  label (for example "2026-27"), which V8C4 does not store on the quotation
+  — it prints the device's current label, wrong on any re-issue. **The
+  Price list row is omitted.** If N6 brings a price-book revision, it is
+  stored at finalise and printed then.
+- **e.** V8C4's finalise writes `serverAt: serverTimestamp()` and
+  `at: Date.now()` on the quotation, inside the transaction.
+
+**Decisions on the approval list:**
+
+- **1.1 approved:** finalise writes `serverAt` from the server, and the
+  create rule checks `serverAt == request.time` **when present**. V8C4's
+  payload stays accepted, pinned by a test. **The printed date is
+  `serverAt`, else `at`.**
+- **1.2:** keep the recorded form — **"Last edited by <name>, <date
+  time>"**.
+- **1.4:** omit the Price list row (fact d).
+- The signature field's name, **`signature`**: approved.
+- The WhatsApp **"Send with" choice** when both apps are installed:
+  approved.
+- **"finalise" added** to the Duplicate and builder messages, as worded:
+  approved — "Copied into a new draft — it takes a new number when you
+  finalise, download, print or share", and "A number is taken from the
+  shared counter when you finalise, download, print or share — it needs an
+  internet connection."
+- The button placement and the commit split: approved.
+
+**Additions:**
+
+- **The cached PDF holds client data.** Before a new file is written, the
+  older files in `cacheDir/quotations` are cleared, keeping only the file in
+  use. Tested.
+- **Fixtures are synthetic only** — no V8C4 company data, images or terms.
+- Facts a to e and these decisions recorded at the first docs touch — this
+  section.
+- **Risk 1** (staging has no company document): the docs list the exact
+  fields with **synthetic** test values the Owner can enter in the
+  **staging** console before the phone pass — below, "Synthetic company
+  settings for the staging pass". Nothing on production.
+
+**Stop and report if:** any valid write reaches 900; a test would have to
+be weakened; `PdfDocument` cannot be smoke-tested on CI **and** the bitmap
+fallback also fails; anything contradicts the repository. **At the end:**
+the commits with their CI runs, the test counts with the command behind
+each, the headroom table, the phone rows, and what comes next. **Do NOT
+start N5.12.** Always: one commit per push, CI green before the next; this
+branch only; no `main`, no PR, no force-push, no amending pushed commits;
+never deploy Firebase.
+
+#### The plan as approved
+
+**The printed order** — V8C4's with this app's money rows, and the agreed
+order of `docs/N5-plan.md`:
+
+1. **Letterhead**, field by field from `snap` then the live settings, empty
+   lines omitted: logo · firm name · tagline · address · phones · "email |
+   web" · "GSTIN … PAN …" · a rule.
+2. **CANCELLED**, on a cancelled quotation: under the title, and across
+   every page.
+3. **"QUOTATION"**.
+4. Two panels, empty rows skipped — **BILL TO (CUSTOMER)**: Customer,
+   Contact, Phone, Email, Address (with the city), GSTIN; **QUOTATION
+   DETAILS**: Quotation no, Date (the **issue** date — `serverAt`, else
+   `at` — never today), **Last edited by <name>, <date time>** (only when
+   edited), Site, Rate basis, Valid for N days. No Price list row.
+5. **The item table** — `# | MODEL / PRODUCT | DESCRIPTION | QTY | RATE |
+   AMOUNT`, the header repeated on every page; a catalogue line's model and
+   name from its product key, else the title split on " — "; "Manual" on a
+   manual line; the Transportation line moves to the totals.
+6. **Totals**, the stored figures, never recomputed: Products subtotal ·
+   Installation (or "Installation extra") · Discount (when there is one) ·
+   Transportation and its note (when there is transport) · Subtotal · "GST
+   p%" or "GST — Not included" · Grand total.
+7. **Amount in words.**
+8. "Rates hold for N days from the date of this quotation." · Payment terms ·
+   Warranty.
+9. **NOTES | TERMS & CONDITIONS**, side by side — each omitted when its list
+   is empty.
+10. **BANK DETAILS**, and **SCAN TO PAY** with "PhonePe / GPay / Paytm / any
+    UPI app" only when a `qr` image exists.
+11. The signature image when there is one, and "Authorised signatory for
+    <firm>".
+12. "Accepted for <client>" and a "Signature & date" line.
+13. **Every page:** "pdfFooter | web" (empty parts dropped) · "Page p of n".
+
+Money: "₹" and whole rupees, Indian grouping.
+
+**The buttons.** The draft screen: one compact row, **Download · Print ·
+WhatsApp**, under Finalise, which stays; each runs `ensureFinalised` first
+and then renders the issued record, the draft retiring as Finalise retires
+it; a shared busy state ("Taking a number…", then "Preparing the PDF…").
+**Edit mode:** none of the three — "Save changes, then download it from the
+quotation". **The detail screen**, More → Quotation history included:
+Download · Print · WhatsApp at the top of the actions block, replacing the
+"arrive with the rest of the Quotation phase" note; already issued, so it
+renders at once and keeps its number; cancelled ones offered and marked; not
+on the old beta records.
+
+**The mechanics.** One renderer, A4, the platform's `PdfDocument` and Inter
+(which has ₹ and the em dash), to `cacheDir/quotations/<file name>` through
+the existing FileProvider path — older files cleared first. **Download on
+API 29+**: MediaStore Downloads, `Downloads/SMARTIE`, no permission; **API
+23-28**: the system "Save as" picker (`ACTION_CREATE_DOCUMENT`), no
+permission prompt. **Print**: `PrintManager`, A4, streaming the same file.
+**Share**: `ACTION_SEND`, `application/pdf`, `EXTRA_STREAM` through the
+FileProvider, a read grant, **no text**; one WhatsApp app → it directly;
+both → "Send with" (WhatsApp / WhatsApp Business / Cancel), nothing
+remembered; neither, or any failure → the share sheet. `<queries>` for
+`com.whatsapp` and `com.whatsapp.w4b`. **Images**: data URLs only, never
+the network, decoded with bounds and downsampled (logo and QR to at most
+512 px, the signature 600 px), fitted into boxes (logo 48 pt high, QR
+96 × 96 pt, signature 150 × 50 pt); an unreadable one is omitted and named
+in the notice. **The notice**: non-blocking, after the output, naming what
+printed without; and if company settings have **never loaded** on the
+device, the PDF is refused ("Company details have not loaded yet — connect
+and try again"), so a blank letterhead is never produced by accident.
+
+**The rules.** An edit's `lastEditedAt == request.time`; a create's
+`serverAt == request.time` when present. Headroom measured with
+`PAD_MATCH='/quotations/{id}' node quotes.js` (edit 613, finalise 625 per
+request today); the stop line stays 900.
+
+**The commits:** 1 amount in words and the file name; 2 company settings —
+model, reader, read-only repository, letterhead resolution; 3 rules; 4 the
+app's server stamps and the issue date; 5 the document model and builder; 6
+page layout; 7 renderer and images; 8 outputs; 9 the gate and the view
+models, notices and the two messages; 10 screens; 11 docs. This record is
+the first docs touch, ahead of commit 1.
+
+#### Synthetic company settings for the staging pass
+
+Staging has no `teamSettings/company` document, and there is no N6 screen
+to make one, so before the phone pass the Owner creates it **in the staging
+console only** — never production — with **synthetic** values. Every field
+the PDF reads, with its Firestore type:
+
+| Field | Type | Synthetic value |
+|---|---|---|
+| `name` | string | `Test Gates & Shutters` |
+| `tagline` | string | `Synthetic test data — not a real firm` |
+| `address` | string | `1 Test Road, Test City 400001` |
+| `phone` | string | `+91 90000 00001 · +91 90000 00002` |
+| `email` | string | `quotes@example.invalid` |
+| `web` | string | `example.invalid` |
+| `gstin` | string | `27AAAAA0000A1Z5` |
+| `pan` | string | `AAAAA0000A` |
+| `bankName` | string | `Test Bank` |
+| `bankBranch` | string | `Test Branch` |
+| `bankAcc` | string | `000000000000` |
+| `bankIfsc` | string | `TEST0000000` |
+| `upi` | string | `test-only@invalid` |
+| `validityDays` | number | `15` |
+| `payTerms` | string | `50% advance, balance on delivery (test)` |
+| `warranty` | string | `12 months (test)` |
+| `pdfFooter` | string | `Synthetic test footer` |
+| `defaultGst` | number | `18` |
+| `terms` | array of strings | `Test term one.`, `Test term two.` |
+| `notes` | array of strings | `Test note one.` |
+| `logo` | string | the synthetic data URL below |
+| `qr` | string | the synthetic data URL below (a plain square — it does not scan) |
+| `signature` | string | the synthetic data URL below |
+
+Three plain coloured squares, generated for this — no image of anything:
+
+- `logo`: `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAIAAADYYG7QAAAAOklEQVR42u3OQQ0AAAgEoItjCMMa1RbOBxsBSPW8EiEhISEhISEhISEhISEhISEhISEhISEhISGhOwuLLCSIuUCuZwAAAABJRU5ErkJggg==`
+- `qr`: `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAIAAADYYG7QAAAANklEQVR42u3OQREAAAwCIEPYP6stdntAAtJnIiQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCR0Z2liHB9QAXLVAAAAAElFTkSuQmCC`
+- `signature`: `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAAAgCAIAAABiouoDAAAARElEQVR42u3QQQkAAAgEsEtywewfxAb+hcESLO1wiAJBggQJEiRIkCAECRIkSJAgQYIQJEiQIEGCBAlCkCBBggQJ+msBRWsIanFzrOUAAAAASUVORK5CYII=`
+
+To test the incomplete-letterhead notice, delete `gstin` and `bankAcc`
+afterwards and print again: the PDF omits them and the notice names them.
 
 ### Owed in N6: the validators on the fields and on the company's own details
 

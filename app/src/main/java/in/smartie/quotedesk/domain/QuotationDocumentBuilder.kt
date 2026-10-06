@@ -56,7 +56,8 @@ object QuotationDocumentBuilder {
     const val UPI_ID = "UPI ID"
     const val NOT_RECORDED = "Not recorded"
     const val SIGNATORY = "Authorised signatory"
-    const val THE_CUSTOMER = "the customer"
+    /** V8C4's words when the quotation names nobody (the Owner's review of 2026-10-06). */
+    const val THE_CLIENT = "the client"
     private const val CANCELLED_STATUS = "Cancelled"
     private const val TITLE_SPLIT = " — "
     private val LOCALE: Locale = Locale.forLanguageTag("en-IN")
@@ -104,7 +105,7 @@ object QuotationDocumentBuilder {
             qr = firm.qr.trim(),
             signature = firm.signature.trim(),
             signatory = if (firm.name.isBlank()) SIGNATORY else "$SIGNATORY for ${firm.name.trim()}",
-            acceptance = "Accepted for ${party.name.trim().ifEmpty { THE_CUSTOMER }}",
+            acceptance = "Accepted for ${party.name.trim().ifEmpty { THE_CLIENT }}",
             footer = joined(" | ", firm.pdfFooter, firm.web),
             fileName = QuotationFileName.of(record.number, party.name),
             missing = Letterhead.missing(firm)

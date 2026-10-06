@@ -524,9 +524,13 @@ class QuotationDocumentBuilderTest {
     }
 
     @Test
-    fun `the acceptance names the customer, or the customer in words when there is no name`() {
+    fun `the acceptance names the customer, or "the client" when there is no name, as V8C4 prints it`() {
         assertEquals("Accepted for Test Customer & Sons", build().acceptance)
-        assertEquals("Accepted for the customer", build(record.copy(party = QuotationPartySnapshot())).acceptance)
+        assertEquals("Accepted for the client", build(record.copy(party = QuotationPartySnapshot())).acceptance)
+        assertEquals(
+            "Accepted for the client",
+            build(record.copy(party = QuotationPartySnapshot(name = "   "))).acceptance
+        )
     }
 
     @Test

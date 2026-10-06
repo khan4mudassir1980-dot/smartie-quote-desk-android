@@ -195,8 +195,8 @@ class QuotationDocumentBuilderTest {
         assertEquals(listOf("Test term one.", "Test term two."), doc.terms)
         assertEquals(
             listOf(
-                DocRow(B.BANK_NAME, "Test Gates & Shutters"),
-                DocRow(B.BANK, "Test Bank, Test Branch"),
+                DocRow(B.BANK_NAME, "Test Bank"),
+                DocRow(B.BANK, "Test Branch"),
                 DocRow(B.ACCOUNT_NO, "000000000000"),
                 DocRow(B.IFSC_CODE, "TEST0000000"),
                 DocRow(B.UPI_ID, "test-only@invalid")
@@ -463,18 +463,42 @@ class QuotationDocumentBuilderTest {
     }
 
     @Test
-    fun `a UPI id alone still prints the block, with the firm's name and the UPI id`() {
+    fun `a UPI id alone still prints the block, with the UPI id alone`() {
         val upiOnly = company.copy(bankName = "", bankBranch = "", bankAcc = "", bankIfsc = "")
-        assertEquals(
-            listOf(DocRow(B.BANK_NAME, "Test Gates & Shutters"), DocRow(B.UPI_ID, "test-only@invalid")),
-            build(settings = upiOnly).bank
-        )
+        assertEquals(listOf(DocRow(B.UPI_ID, "test-only@invalid")), build(settings = upiOnly).bank)
     }
 
     @Test
-    fun `the bank is printed without a branch when there is none`() {
-        val noBranch = company.copy(bankBranch = "")
-        assertEquals("Test Bank", build(settings = noBranch).bank.single { it.label == B.BANK }.value)
+    fun `Name is bankName and Bank is bankBranch, as V8C4 prints them`() {
+        // The Owner's review of 2026-10-06: V8C4's Name row is the settings'
+        // bankName and its Bank row is bankBranch, each alone.
+        val bank = build(settings = company.copy(bankName = "Other Test Bank", bankBranch = "Other Test Branch")).bank
+        assertEquals("Other Test Bank", bank.single { it.label == B.BANK_NAME }.value)
+        assertEquals("Other Test Branch", bank.single { it.label == B.BANK }.value)
+    }
+
+    @Test
+    fun `the firm's name is never printed in the bank block, even when bankName is empty`() {
+        // Never invented: no bankName, no Name row — not the firm's name in its place.
+        val noBankName = build(settings = company.copy(bankName = "")).bank
+        assertEquals(listOf(B.BANK, B.ACCOUNT_NO, B.IFSC_CODE, B.UPI_ID), noBankName.map { it.label })
+        assertTrue(noBankName.none { "Test Gates" in it.value })
+        assertTrue(build().bank.none { "Test Gates" in it.value })
+    }
+
+    @Test
+    fun `no branch, no Bank row`() {
+        val bank = build(settings = company.copy(bankBranch = "")).bank
+        assertEquals(listOf(B.BANK_NAME, B.ACCOUNT_NO, B.IFSC_CODE, B.UPI_ID), bank.map { it.label })
+        assertEquals("Test Bank", bank.single { it.label == B.BANK_NAME }.value)
+    }
+
+    @Test
+    fun `snap's bank name and branch print as Name and Bank`() {
+        val snap = mapOf<String, Any?>("bank" to mapOf("name" to "Snap Test Bank", "branch" to "Snap Test Branch"))
+        val bank = build(record.copy(snapshot = snap)).bank
+        assertEquals("Snap Test Bank", bank.single { it.label == B.BANK_NAME }.value)
+        assertEquals("Snap Test Branch", bank.single { it.label == B.BANK }.value)
     }
 
     @Test
@@ -535,7 +559,9 @@ class QuotationDocumentBuilderTest {
             doc.letterhead.lines
         )
         assertEquals("111111111111", doc.bank.single { it.label == B.ACCOUNT_NO }.value)
-        assertEquals("Snap Test Firm", doc.bank.single { it.label == B.BANK_NAME }.value)
+        // snap names its own firm but not its bank: Name falls back, field by
+        // field, to the live bankName — never the firm's name.
+        assertEquals("Test Bank", doc.bank.single { it.label == B.BANK_NAME }.value)
         assertEquals("Authorised signatory for Snap Test Firm", doc.signatory)
     }
 

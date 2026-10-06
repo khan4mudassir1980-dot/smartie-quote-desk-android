@@ -213,15 +213,18 @@ object QuotationDocumentBuilder {
     fun gstLabel(percent: Double): String = "GST ${Money.formatQuantity(percent)}%"
 
     /**
-     * Name, Bank, Account no, IFSC code, UPI ID (V8C4's labels). "Name" is
-     * the account's name — the firm's — and "Bank" the bank with its branch.
-     * Omitted whole when there are no bank details at all.
+     * Name, Bank, Account no, IFSC code, UPI ID — V8C4's rows exactly (the
+     * Owner's review of 2026-10-06): **Name is `bankName`** (`snap`
+     * `bank.name`) and **Bank is `bankBranch`** (`snap` `bank.branch`). The
+     * firm's own name is never printed here. A row with nothing stored is
+     * omitted, never invented. Omitted whole when there are no bank details
+     * at all.
      */
     private fun bank(firm: CompanyDetails): List<DocRow> {
         if (listOf(firm.bankName, firm.bankAcc, firm.bankIfsc, firm.upi).all { it.isBlank() }) return emptyList()
         return listOf(
-            DocRow(BANK_NAME, firm.name.trim()),
-            DocRow(BANK, joined(", ", firm.bankName, firm.bankBranch)),
+            DocRow(BANK_NAME, firm.bankName.trim()),
+            DocRow(BANK, firm.bankBranch.trim()),
             DocRow(ACCOUNT_NO, firm.bankAcc.trim()),
             DocRow(IFSC_CODE, firm.bankIfsc.trim()),
             DocRow(UPI_ID, firm.upi.trim())

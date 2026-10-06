@@ -1047,7 +1047,11 @@ service cloud.firestore {
       return changed.hasAll(['rev', 'lastEditedAt'])
         && request.resource.data.get('lastEditedByUid', '') == mine()
         && request.resource.data.get('lastEditedBy', null) is string
-        && request.resource.data.get('lastEditedAt', null) is number
+        // N5.11 (the Owner's requirement of 2026-09-28): the edit time is the
+        // server's, not the phone's — `serverTimestamp()`, which the rule
+        // sees as the request time. A phone with a wrong clock would print a
+        // wrong "Last edited" on a customer's document.
+        && request.resource.data.get('lastEditedAt', null) == request.time
         && request.resource.data.get('rev', -1) == resource.data.get('rev', 0) + 1;
     }
 
@@ -1109,6 +1113,14 @@ service cloud.firestore {
                     && request.resource.data.no is string
                     && request.resource.data.byUid == mine()
                     && request.resource.data.at is number
+                    // N5.11 (the Owner's decision 1.1 of 2026-10-06): the
+                    // issue time from the server, which the PDF prints. V8C4's
+                    // finalise writes `serverAt: serverTimestamp()` (fact e),
+                    // and so does this app's now; when present it must be the
+                    // request time, so neither a phone's clock nor an old
+                    // stamp passes for it.
+                    && (!request.resource.data.keys().hasAny(['serverAt'])
+                        || request.resource.data.serverAt == request.time)
                     && request.resource.data.total is number
                     && discountOk();
 

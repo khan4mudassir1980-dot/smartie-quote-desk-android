@@ -1,7 +1,10 @@
 // Valid /quotations writes at their heaviest, both access states, every rule padded.
 process.env.PAD_ALL = '1';
 const h = require('./headroom.js');
-const { UIDS, as } = h;
+const { UIDS, as, firebase } = h;
+// N5.11: the stamps are the server's — an edit's `lastEditedAt` and a finalise's
+// `serverAt` are `serverTimestamp()`, as the app sends them.
+const serverTime = () => firebase.firestore.FieldValue.serverTimestamp();
 const quotation = (id, uid, extra = {}) => ({
   id, no: 'SIE/QD/2025-26/009', at: Date.now(), by: 'Manager Person', byUid: uid, tier: 'client', tierName: 'Client',
   partyId: 'c_1', party: { name: 'Sunrise Constructions', city: 'Mumbai' },
@@ -10,8 +13,7 @@ const quotation = (id, uid, extra = {}) => ({
 const disc = (base, amt, kind = 'pct', value = 10) => ({
   lines: [{ t: 'Sliding gate motor', u: 'each', qty: 1, rate: base, amt: base }],
   disc: { kind, value, amt }, discBase: base, subtotal: base - amt, total: Math.round((base - amt) * 1.18) });
-let clock = 1_760_000_000_000;
-const edit = (uid, rev, fields) => ({ ...fields, lastEditedBy: 'Editor Person', lastEditedByUid: uid, lastEditedAt: ++clock, rev });
+const edit = (uid, rev, fields) => ({ ...fields, lastEditedBy: 'Editor Person', lastEditedByUid: uid, lastEditedAt: serverTime(), rev });
 const withUid = { secondOwnerUid: UIDS.additionalOwner, updatedAt: 1, updatedBy: UIDS.primaryOwner, primaryOwnerUid: UIDS.primaryOwner };
 const transition = { secondOwnerUid: UIDS.additionalOwner, updatedAt: 1, updatedBy: UIDS.primaryOwner };
 
@@ -42,7 +44,7 @@ for (const [label, access] of [['uid set', withUid], ['transition', transition]]
       const db = as(e, UIDS.staff);
       const id = `q_new_${label.length}_${++fresh}`;
       const b = db.batch();
-      b.set(db.collection('quotations').doc(id), quotation(id, UIDS.staff, disc(44400, 2220, 'pct', 5)));
+      b.set(db.collection('quotations').doc(id), quotation(id, UIDS.staff, { ...disc(44400, 2220, 'pct', 5), serverAt: serverTime() }));
       b.update(db.collection('teamSettings').doc('numbering'), { next: 10, lastIssued: { no: 'SIE/QD/2025-26/009', at: Date.now(), by: 'Manager Person', uid: UIDS.staff, src: 'android' } });
       await b.commit();
     } });

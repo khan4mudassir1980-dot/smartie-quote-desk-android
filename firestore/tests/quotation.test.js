@@ -38,6 +38,8 @@ test.beforeEach(async () => { await seed(testEnv); });
 const quotations = (db) => db.collection('quotations');
 const customers = (db) => db.collection('customers');
 const numbering = (db) => db.collection('teamSettings').doc('numbering');
+/** The server's clock, as the app sends it (N5.11). */
+const serverTime = () => firebase.firestore.FieldValue.serverTimestamp();
 
 /** The counter as V8C4 seeds it, planted with the rules disabled. */
 async function givenCounter(fields = {}) {
@@ -597,6 +599,37 @@ test('a quotation with no snap at all is accepted - what N5.9b writes until N6',
   await assertSucceeds(quotations(db).doc('q_nosnap').set(unfrozen));
 });
 
+// --- N5.11: the issue time from the server -----------------------------------
+//
+// The Owner's decision 1.1 of 2026-10-06: finalise writes `serverAt` from the
+// server, as V8C4's does (fact e), and the PDF prints it. The create rule
+// checks it when present.
+
+test('a quotation issued with serverAt from the server is accepted — V8C4\'s finalise payload included', async () => {
+  // V8C4: `Object.assign({}, draft, {no, serverAt: serverTimestamp()})`, with
+  // `at: Date.now()` — accepted unchanged.
+  const db = as(testEnv, UIDS.staff);
+  await assertSucceeds(quotations(db).doc('q_srv_v8').set(quotation('q_srv_v8', UIDS.staff, {
+    at: Date.now(), serverAt: serverTime(),
+  })));
+  const saved = await stored('q_srv_v8');
+  assert.ok(saved.serverAt instanceof firebase.firestore.Timestamp);
+});
+
+test('a serverAt that is not the server\'s time is refused', async () => {
+  const db = as(testEnv, UIDS.staff);
+  await refused(quotations(db).doc('q_srv_num').set(quotation('q_srv_num', UIDS.staff, { serverAt: Date.now() })));
+  await refused(quotations(db).doc('q_srv_old').set(quotation('q_srv_old', UIDS.staff, {
+    serverAt: firebase.firestore.Timestamp.fromMillis(Date.now() - 60_000),
+  })));
+  await refused(quotations(db).doc('q_srv_str').set(quotation('q_srv_str', UIDS.staff, { serverAt: 'now' })));
+});
+
+test('a quotation with no serverAt is still accepted — the check is when present', async () => {
+  const db = as(testEnv, UIDS.staff);
+  await assertSucceeds(quotations(db).doc('q_srv_none').set(quotation('q_srv_none', UIDS.staff)));
+});
+
 test('an unstamped change is refused, even from the person who wrote it, and nobody deletes one', async () => {
   // **Renamed in N5.10.** It read "a quotation is never edited or deleted by
   // the person who wrote it" — true until N5.10 let the creator edit. The
@@ -627,18 +660,17 @@ test('an unstamped change is refused, even from the person who wrote it, and nob
 // anyone's; the same number overwritten; no revision copy; a stamp; `snap`
 // never re-frozen. What an edit may touch is the Owner's list (Q3).
 
-/** Edit times, strictly increasing, so no two edits in a test share one. */
-let editClock = 1_760_000_000_000;
-
 /**
  * What an edit sends through `update()`: the changed fields, the stamp and
- * the next revision — the shape `QuotationEdit` builds.
+ * the next revision — the shape `QuotationEdit` builds. Since N5.11 the edit
+ * time is the server's (`serverTimestamp()`); until then it was a number from
+ * the phone, which the rule now refuses.
  */
 const edit = (uid, rev, fields = {}) => ({
   ...fields,
   lastEditedBy: 'Editor Person',
   lastEditedByUid: uid,
-  lastEditedAt: ++editClock,
+  lastEditedAt: serverTime(),
   rev,
 });
 
@@ -730,8 +762,9 @@ for (const [key, value] of Object.entries(IMMUTABLE)) {
 }
 
 test('an edit cannot touch a stored serverAt either', async () => {
-  // Nothing this app writes carries one; whether V8C4 does is not in this
-  // repository. The key list pins it present or absent — here, present.
+  // V8C4's finalise writes one (fact e, recorded 2026-10-06), and since N5.11
+  // this app's does too. The key list pins it present or absent — here,
+  // present.
   await givenIssued('q_srv', UIDS.staff, { serverAt: 1_712_000_000_000 });
   const db = as(testEnv, UIDS.staff);
   await refused(quotations(db).doc('q_srv')
@@ -759,13 +792,23 @@ test('an edit stamped with somebody else\'s uid is refused', async () => {
   await refused(quotations(db).doc('q_uid').update(noUid));
 });
 
-test('an edit whose name is not text or whose time is not a number is refused', async () => {
+test('an edit whose name is not text or whose time is not the server\'s is refused', async () => {
+  // Turned, not weakened, in N5.11: the time was any number, and is now the
+  // server's own. A number — the phone's clock, which is what N5.10 sent — is
+  // refused with the rest, and so is a stamp from any other moment.
   await givenIssued('q_types');
   const db = as(testEnv, UIDS.staff);
   await refused(quotations(db).doc('q_types')
     .update({ ...edit(UIDS.staff, 1, twoMotors), lastEditedBy: 42 }));
   await refused(quotations(db).doc('q_types')
     .update({ ...edit(UIDS.staff, 1, twoMotors), lastEditedAt: 'just now' }));
+  await refused(quotations(db).doc('q_types')
+    .update({ ...edit(UIDS.staff, 1, twoMotors), lastEditedAt: Date.now() }));
+  await refused(quotations(db).doc('q_types').update({
+    ...edit(UIDS.staff, 1, twoMotors),
+    lastEditedAt: firebase.firestore.Timestamp.fromMillis(Date.now() - 60_000),
+  }));
+  await assertSucceeds(quotations(db).doc('q_types').update(edit(UIDS.staff, 1, twoMotors)));
 });
 
 test('an edit that leaves the previous edit\'s time in place is refused', async () => {

@@ -1361,7 +1361,7 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**Report N5.11 to the Owner and wait for the review — do NOT start N5.12.** N5.11 is built, every commit pushed alone with CI green before the next; its record is below ("N5.11 — every commit pushed alone"), with the choices to confirm. Its phone rows, T-Q23 to T-Q38, join T-Q1 to T-Q22 and T-R19 to T-R28 at the final staging pass, with the rules deployed from the head then current — the ruleset anchor is now `5b03d57` — after the Owner enters the synthetic company settings ("Synthetic company settings for the staging pass") in the **staging** console only.
+**Fix the four V8C4-parity points of the Owner's N5.11 review — the bank rows, "the client", the file name, and one issue date for the history's order — each pushed alone with CI green before the next; record the outcome; then send the N5.12 plan by message. Do NOT start N5.12 code until the Owner approves.** The review is recorded below ("The Owner's review of N5.11, 2026-10-06"), with what the repository says against it. N5.11's record follows; its phone rows, T-Q23 to T-Q38, join T-Q1 to T-Q22 and T-R19 to T-R28 at the final staging pass, with the rules deployed from the head then current — the ruleset anchor is `5b03d57` — after the Owner enters the synthetic company settings ("Synthetic company settings for the staging pass") in the **staging** console only.
 
 ### N5.11 — every commit pushed alone, CI green before the next; one red run, fixed by its own commit
 
@@ -4129,6 +4129,88 @@ Three plain coloured squares, generated for this — no image of anything:
 
 To test the incomplete-letterhead notice, delete `gstin` and `bankAcc`
 afterwards and print again: the PDF omits them and the notice names them.
+
+### The Owner's review of N5.11, 2026-10-06 — recorded before acting
+
+Rule 8. **"Mode: normal. N5.11 REVIEW."** The review of the N5.11 report
+(its nine choices to confirm are listed in the N5.11 record, under "Current
+next action").
+
+**A. Accepted as built:** choice 3 (the letterhead's "GSTIN … · PAN …"
+separator), 4 (the signatory and the acceptance side by side — **V8C4 does
+the same**), 6 ("One rupees only"), 7 (the notice's wording) and 8
+("absent" company settings believed only from the server).
+
+**B. Fix, for V8C4 parity.** The Owner: **"My brief paraphrased V8C4 too
+loosely; these are its exact behaviours"**:
+
+1. **The bank block.** V8C4 prints **Name = the settings' `bankName`**
+   (`snap` `bank.name`) and **Bank = `bankBranch`** (`snap` `bank.branch`).
+   It never prints the firm's name there. Use `bankName`; if it is empty,
+   omit the row — never invent.
+2. **No customer name:** V8C4 prints **"Accepted for the client"**. Use "the
+   client".
+3. **The file name, exactly as V8C4 does it:**
+   `clean(s) = s.replace(/[^A-Za-z0-9]+/g, "-")`, then a leading and a
+   trailing "-" stripped. Runs **collapse** to one "-": "M/s. A & B" becomes
+   `M-s-A-B`. `no = clean(number)`, or "Draft" if that comes out empty.
+   `client = clean(name)` cut to 36 characters, or "Client" if empty.
+4. **The issue date (choice 9):** the history list must **sort** by the same
+   date it shows (`serverAt`, else `at`). **One definition, not two.**
+
+Each fix gets tests and ablations. One commit per fix or a single review-fix
+commit, the advisor's call; each pushed alone, CI green.
+
+**C. Record the review outcome in the docs** (Rule 8). **Advisor error
+#11:** the brief paraphrased V8C4's file-name regex and its bank rows.
+**Lesson: quote V8C4 expressions exactly.**
+
+**D. Then plan N5.12 by message — no code.** From `N5-plan.md`'s N5.12 scope
+(the cutover document, the banner, the fixture scrub), adding:
+
+- **`docs/N5-cutover.md`:** the 19 PWA purchase writes still accepted, with
+  the cutover control being that staff stop using PWA Purchase; the
+  hard-block options, each with its cost; every N8 checklist item recorded
+  so far, including the stale receipt fields cleanup, production
+  `teamSettings/company` complete for every PDF field, and that native
+  finalise writes no `snap` (the N6 hard blocker).
+- **The fixture scrub:** confirm no real rates, names or company data remain
+  in fixtures, and list what changes.
+- **The first phone pass's preparation, as exact steps for the Owner:** the
+  staging rules deploy (`firebase.cmd`, run from `firestore\`,
+  `--project smartie-quote-desk-staging`, from a fresh branch source at or
+  after the ruleset anchor); which APK to install; the synthetic
+  `teamSettings/company` values to enter in the **staging** console; the
+  full list of phone rows now due.
+- **Should N6 (Settings) come before the first phone pass**, so the settings
+  are entered in the app instead of the console? The trade-offs.
+
+**Do not start N5.12 code until the Owner approves.** Always: one commit per
+push, CI green before the next; this branch only; no `main`, no PR, no
+force-push, no amending pushed commits; never deploy Firebase.
+
+**What the repository says against it — found while recording it:**
+
+1. **Advisor errors 1 to 7 and 10 are not in this repository's record** —
+   only 8 and 9 are ("Advisor errors 8 and 9, numbered by the Owner for the
+   pattern list", in the 9b answers). Error 11 is recorded here under the
+   Owner's number.
+2. **The bank block's "Bank" row prints `bankName, bankBranch` today**
+   (`QuotationDocumentBuilder.bank`), not `bankBranch` alone: fix 1 changes
+   both rows.
+3. **The history list's order is decided in two places.** The listener
+   fetches the newest 200 by `at` (`OperationsReadRepository
+   .observeQuotations`, `orderBy("at")`); `QuotationHistory` orders what
+   arrives, by its own `issuedAt(record) = record.at` — the second
+   definition fix 4 removes. **The fetch stays on `at`**: Firestore's
+   `orderBy` leaves out every document that lacks the field, and no native
+   quotation before N5.11 carries `serverAt`, so ordering the query by it
+   would hide them all. The window is chosen by `at`; the order shown is
+   `issuedAt`.
+4. **A third place shows a quotation's date:** a Duplicate's "Rates as
+   quoted on X, <date>" takes the original's `at`
+   (`QuotationCopy.kt:102`). Fix 4 makes it `issuedAt` as well — one
+   definition — and says so in the report.
 
 ### Owed in N6: the validators on the fields and on the company's own details
 

@@ -60,15 +60,14 @@ object QuotationHistory {
         viewer.uid.isNotBlank() && record.byUid.isNotBlank() && viewer.uid == record.byUid
 
     /**
-     * When a quotation was issued, for ordering only.
+     * Newest first by the **issue date the row shows** —
+     * [QuotationRecord.issuedAt], the server's `serverAt`, else the device's
+     * `at`. One definition, not two (the Owner's review of 2026-10-06).
      *
-     * `at` is what the issue itself recorded. A row carrying nothing sorts
-     * last and is still **shown**; dropping it is the one thing that must
-     * never happen, because a quotation with a bad timestamp is still a
-     * quotation somebody sent a customer.
+     * A row carrying neither sorts last and is still **shown**; dropping it
+     * is the one thing that must never happen, because a quotation with a bad
+     * timestamp is still a quotation somebody sent a customer.
      */
-    fun issuedAt(record: QuotationRecord): Long = record.at
-
     private val NEWEST_FIRST: Comparator<QuotationRecord> =
-        compareByDescending<QuotationRecord> { issuedAt(it) }.thenByDescending { it.id }
+        compareByDescending<QuotationRecord> { it.issuedAt }.thenByDescending { it.id }
 }

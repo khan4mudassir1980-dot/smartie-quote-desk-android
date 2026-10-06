@@ -99,7 +99,8 @@ object QuotationCopy {
             // Installation and the discount are not copied, so neither is a
             // fault in reading them; an unreadable tier still is.
             faults = rebuilt.faults.filter { it == DraftFault.TIER }.toSet(),
-            copiedFrom = CopyOrigin(number = record.number, at = record.at)
+            // The original's issue date — the one its detail and its PDF show.
+            copiedFrom = CopyOrigin(number = record.number, at = record.issuedAt)
         )
     }
 

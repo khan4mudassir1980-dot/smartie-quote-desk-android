@@ -113,6 +113,22 @@ class QuotationHistoryTest {
     }
 
     @Test
+    fun `the list is ordered by the issue date it shows - the server's, else the device's`() {
+        // The Owner's review of 2026-10-06: one definition. A phone whose clock
+        // ran fast stamped q_fast later than q_true by `at`; the server's
+        // `serverAt` — the date the row and the PDF show — says otherwise.
+        val fast = quotation("q_fast", owner.uid, at = 9_000L).copy(serverAt = 2_000L)
+        val trueTime = quotation("q_true", owner.uid, at = 3_000L).copy(serverAt = 3_000L)
+        val native = quotation("q_no_server_time", owner.uid, at = 2_500L)
+
+        assertEquals(
+            listOf("q_true", "q_no_server_time", "q_fast"),
+            QuotationHistory.visibleTo(listOf(fast, native, trueTime), owner).map { it.id }
+        )
+        assertEquals(listOf(3_000L, 2_500L, 2_000L), QuotationHistory.visibleTo(listOf(fast, native, trueTime), owner).map { it.issuedAt })
+    }
+
+    @Test
     fun `two quotations issued in the same millisecond still order predictably`() {
         val a = quotation("q_a", owner.uid, at = 5_000L)
         val b = quotation("q_b", owner.uid, at = 5_000L)

@@ -143,6 +143,18 @@ class QuotationCopyTest {
         assertTrue(copied.ratesAsQuoted)
     }
 
+    @Test
+    fun `the copy's "rates as quoted" date is the original's issue date - the server's, else the device's`() {
+        // The Owner's review of 2026-10-06: one definition of a quotation's
+        // date. The server's serverAt wins over a phone clock that ran fast.
+        val serverTime = issuedAt - 86_400_000L
+        assertEquals(
+            CopyOrigin("SIE/QD/2025-26/009", serverTime),
+            copy(record.copy(serverAt = serverTime)).copiedFrom
+        )
+        assertEquals(CopyOrigin("SIE/QD/2025-26/009", issuedAt), copy(record.copy(serverAt = 0L)).copiedFrom)
+    }
+
     // --- rates: what reprices, and when ----------------------------------------------------
 
     @Test

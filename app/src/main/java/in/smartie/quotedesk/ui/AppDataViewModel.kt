@@ -7,6 +7,7 @@ import `in`.smartie.quotedesk.core.AppContainer
 import `in`.smartie.quotedesk.core.AppError
 import `in`.smartie.quotedesk.core.toAppError
 import `in`.smartie.quotedesk.data.retryingListener
+import `in`.smartie.quotedesk.data.model.CompanySettings
 import `in`.smartie.quotedesk.data.model.PartyRecord
 import `in`.smartie.quotedesk.data.model.ProductCategoryRecord
 import `in`.smartie.quotedesk.data.model.ProductRecord
@@ -15,6 +16,7 @@ import `in`.smartie.quotedesk.data.model.QuotationRecord
 import `in`.smartie.quotedesk.data.model.StockMove
 import `in`.smartie.quotedesk.data.model.StockRecord
 import `in`.smartie.quotedesk.data.model.StoppedStockRecord
+import `in`.smartie.quotedesk.domain.CompanyState
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.domain.TeamRoles
@@ -159,6 +161,25 @@ class AppDataViewModel(
      */
     val parties = quotingOnly(container.operationsRepository.observeParties())
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList<PartyRecord>())
+
+    /**
+     * `teamSettings/company`, for the quotation PDF (N5.11 commit 9):
+     * [CompanyState.NotLoaded] until the server has answered — and so the PDF
+     * is refused rather than printed with a blank letterhead — then the
+     * settings, or null when there is no document. Attached at once and kept,
+     * so a press never waits on it; quoting roles only, as the rules allow.
+     */
+    val company: StateFlow<CompanyState> =
+        (
+            if (Permissions.canQuote(member)) {
+                container.companySettingsRepository.observe()
+                    .map<CompanySettings?, CompanyState> { CompanyState.Loaded(it) }
+            } else {
+                flowOf(CompanyState.NotLoaded)
+            }
+            )
+            .guarded("company details")
+            .stateIn(viewModelScope, SharingStarted.Eagerly, CompanyState.NotLoaded)
 
     /** Data only quoting roles may read; a Worker gets an empty list. */
     private fun <T> quotingOnly(source: Flow<List<T>>): Flow<List<T>> =

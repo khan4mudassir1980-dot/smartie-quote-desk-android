@@ -60,11 +60,11 @@ object QuotationCopy {
     const val REPLACE_QUESTION = "Replace the quotation you are working on with a copy of this one?"
 
     /**
-     * Until N5.11. V8C4 says "…it takes a new number when you download, print
-     * or share", which this app cannot do yet; its words come back with
-     * N5.11 (recorded in `docs/PROJECT-STATUS.md`).
+     * V8C4's words with "finalise" added, since this app keeps a Finalise
+     * button — the Owner's approval of 2026-10-06. Until N5.11 it said only
+     * "…when it is finalised", as there was no download, print or share.
      */
-    const val COPIED = "Copied into a new draft — it takes a new number when it is finalised"
+    const val COPIED = "Copied into a new draft — it takes a new number when you finalise, download, print or share"
 
     /**
      * Offered on every quotation the person can see — cancelled ones

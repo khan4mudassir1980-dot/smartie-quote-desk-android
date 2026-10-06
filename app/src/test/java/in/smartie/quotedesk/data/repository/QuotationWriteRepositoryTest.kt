@@ -103,6 +103,27 @@ class QuotationWriteRepositoryTest {
         }
 
     @Test
+    fun `a fresh finalise's own record holds no server time, so the PDF reads the quotation back from the server`() =
+        runBlocking {
+            // N5.11 commit 9: the first PDF after Finalise must print the
+            // server's issue date, and only a read from the server has it.
+            val store = FakeQuotationStore(seeded())
+            val repository = repository(store)
+            val issued = repository.finalise(manager, draft, customers = emptyList(), snap = null)
+                as FinaliseOutcome.Issued
+            assertEquals("the placeholder, not a time", 0L, issued.record.serverAt)
+            val writesBefore = store.docs.toMap()
+
+            val stored = repository.stored(issued.quotationId)!!
+
+            assertEquals(SERVER_TIME, stored.serverAt)
+            assertEquals(SERVER_TIME, stored.issuedAt)
+            assertEquals(issued.number, stored.number)
+            assertEquals("a read writes nothing", writesBefore, store.docs.toMap())
+            assertEquals(null, repository.stored("qd_none"))
+        }
+
+    @Test
     fun `until N6 the caller passes no snap, and the stored quotation has no snap key`() = runBlocking {
         val store = FakeQuotationStore(seeded())
         repository(store).finalise(manager, draft, customers = emptyList(), snap = null)

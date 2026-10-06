@@ -3,10 +3,19 @@ package `in`.smartie.quotedesk.ui.quotations
 import `in`.smartie.quotedesk.data.model.QuotationRecord
 import `in`.smartie.quotedesk.data.repository.CancelOutcome
 import `in`.smartie.quotedesk.data.repository.QuotationWriteRepository
+import `in`.smartie.quotedesk.domain.CompanyState
 import `in`.smartie.quotedesk.domain.CopyStart
 import `in`.smartie.quotedesk.domain.EditOrigin
+import `in`.smartie.quotedesk.domain.PdfAction
+import `in`.smartie.quotedesk.domain.PdfNotice
+import `in`.smartie.quotedesk.domain.PdfReady
+import `in`.smartie.quotedesk.domain.QuotationDocument
+import `in`.smartie.quotedesk.domain.QuotationPdfMaker
 import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.QuoteDrafts
+import `in`.smartie.quotedesk.domain.Rendered
+import java.io.File
+import java.io.IOException
 import `in`.smartie.quotedesk.ui.products.QuoteFinaliser
 import `in`.smartie.quotedesk.ui.products.QuoteRequest
 import `in`.smartie.quotedesk.ui.products.QuoteRequests
@@ -52,6 +61,10 @@ class QuotationsViewModelTest {
 
     private val drafts = MutableStateFlow(QuoteDrafts())
 
+    private val rendered = mutableListOf<QuotationDocument>()
+    private var renderGate: CompletableDeferred<Unit>? = null
+    private var renderFailure: Throwable? = null
+
     private fun viewModel(
         capMillis: Long = QuoteFinaliser.CAP_MILLIS,
         write: suspend (String, String) -> CancelOutcome = { _, number -> CancelOutcome.Cancelled(number) }
@@ -63,7 +76,13 @@ class QuotationsViewModelTest {
         describe = { it.message ?: "Something went wrong" },
         log = { logged += it },
         capMillis = capMillis,
-        drafts = drafts
+        drafts = drafts,
+        render = { document ->
+            renderGate?.await()
+            renderFailure?.let { throw it }
+            rendered += document
+            Rendered(File("cache/${document.fileName}"), emptyList())
+        }
     )
 
     @Test
@@ -185,5 +204,76 @@ class QuotationsViewModelTest {
         viewModel().edit(nine)
 
         assertEquals(QuoteRequest.Edit(nine, requestedBy = "u_m"), requests.pending.value)
+    }
+
+    // --- Download, Print and WhatsApp (N5.11 commit 9) ---------------------------
+
+    private val loaded = CompanyState.Loaded(null)
+
+    @Test
+    fun `an issued quotation's PDF is made at once and handed to the screen, with what it lacked`() = runTest {
+        val model = viewModel()
+
+        model.output(nine, PdfAction.SHARE, loaded, emptyList())
+
+        val ready = model.pdfReady.first()
+        assertEquals(PdfAction.SHARE, ready.action)
+        assertEquals(File("cache/Quotation-SIE-QD-2025-26-009-Client.pdf"), ready.file)
+        assertEquals("SIE/QD/2025-26/009", ready.number)
+        assertTrue(ready.notice!!.startsWith("Made without the firm name"))
+        assertEquals(1, rendered.size)
+        assertNull(model.preparing.value)
+        assertNull(model.pdfFailure.value)
+    }
+
+    @Test
+    fun `settings never loaded refuse, and nothing is drawn`() = runTest {
+        val model = viewModel()
+
+        model.output(nine, PdfAction.DOWNLOAD, CompanyState.NotLoaded, emptyList())
+
+        assertEquals(PdfFailure("qd_9", PdfNotice.NOT_LOADED), model.pdfFailure.value)
+        assertTrue(rendered.isEmpty())
+        assertNull(model.preparing.value)
+    }
+
+    @Test
+    fun `a render that fails is said in words, logged, and the quotation named`() = runTest {
+        renderFailure = IOException("No space left on the phone")
+        val model = viewModel()
+
+        model.output(nine, PdfAction.PRINT, loaded, emptyList())
+
+        assertEquals(
+            PdfFailure("qd_9", QuotationPdfMaker.notMade("No space left on the phone")),
+            model.pdfFailure.value
+        )
+        assertEquals(1, logged.size)
+        assertNull(model.preparing.value)
+    }
+
+    @Test
+    fun `one PDF at a time - a second press while one is made does nothing`() = runTest {
+        renderGate = CompletableDeferred()
+        val model = viewModel()
+
+        model.output(nine, PdfAction.SHARE, loaded, emptyList())
+        assertEquals("qd_9", model.preparing.value)
+        model.output(nine.copy(id = "qd_10", number = "SIE/QD/2025-26/010"), PdfAction.PRINT, loaded, emptyList())
+        renderGate!!.complete(Unit)
+
+        assertEquals(PdfAction.SHARE, model.pdfReady.first().action)
+        assertEquals(1, rendered.size)
+        assertNull(model.preparing.value)
+    }
+
+    @Test
+    fun `the native beta's records are not made`() = runTest {
+        val model = viewModel()
+
+        model.output(nine.copy(legacyBetaShape = true), PdfAction.SHARE, loaded, emptyList())
+
+        assertTrue(rendered.isEmpty())
+        assertNull(model.pdfFailure.value)
     }
 }

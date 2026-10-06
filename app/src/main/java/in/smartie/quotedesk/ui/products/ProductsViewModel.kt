@@ -14,6 +14,7 @@ import `in`.smartie.quotedesk.data.model.QuotingRecord
 import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.data.repository.PartyWriteResult
 import `in`.smartie.quotedesk.domain.AreaEntry
+import `in`.smartie.quotedesk.domain.CompanyState
 import `in`.smartie.quotedesk.domain.CopyOpening
 import `in`.smartie.quotedesk.domain.Discount
 import `in`.smartie.quotedesk.domain.DraftLine
@@ -22,6 +23,8 @@ import `in`.smartie.quotedesk.domain.Installation
 import `in`.smartie.quotedesk.domain.ManualEntry
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.PartyWrite
+import `in`.smartie.quotedesk.domain.PdfAction
+import `in`.smartie.quotedesk.domain.PdfReady
 import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.domain.PinChange
 import `in`.smartie.quotedesk.domain.ProductDraft
@@ -29,6 +32,7 @@ import `in`.smartie.quotedesk.domain.ProductPins
 import `in`.smartie.quotedesk.domain.ProductWrite
 import `in`.smartie.quotedesk.domain.QuotationCopy
 import `in`.smartie.quotedesk.domain.QuotationEdit
+import `in`.smartie.quotedesk.domain.QuotationPdfMaker
 import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.QuoteDrafts
 import `in`.smartie.quotedesk.domain.QuoteParty
@@ -545,6 +549,75 @@ class ProductsViewModel(
                 // An edit's outcomes; `ensureFinalised` never answers either.
                 is GateOutcome.Saved, is GateOutcome.NotSaved,
                 GateOutcome.Cancelled, GateOutcome.AlreadyRunning -> Unit
+            }
+        }
+    }
+
+    // --- Download, Print and WhatsApp (N5.11) -------------------------------
+
+    private val pdfMaker = QuotationPdfMaker(
+        render = container::renderQuotation,
+        describe = { it.toAppError().message },
+        log = { container.errorReporter.report(it) }
+    )
+
+    private val _preparingPdf = MutableStateFlow(false)
+
+    /** From the number in hand until the PDF is ready: the buttons say "Preparing the PDF…". */
+    val preparingPdf: StateFlow<Boolean> = _preparingPdf.asStateFlow()
+
+    private val _pdfReady = Channel<PdfReady>(Channel.BUFFERED)
+
+    /**
+     * Each PDF made, once, for the screen to download, print or share —
+     * buffered, like [messages], so one finished after a tab switch is not
+     * lost.
+     */
+    val pdfReady: Flow<PdfReady> = _pdfReady.receiveAsFlow()
+
+    /**
+     * **Download, Print or WhatsApp** — the gate's other callers (V8C4's
+     * `ensureFinalised` in front of every action that issues). [PdfPress]
+     * decides every branch: settings never loaded are refused before a number
+     * is taken; a draft is finalised as Finalise would finalise it; the PDF is
+     * made from the quotation read back from the server. A failure after the
+     * number is taken says the quotation is issued, on the panel, where
+     * Finalise's own failures go.
+     */
+    fun output(
+        action: PdfAction,
+        company: CompanyState,
+        products: List<ProductRecord>,
+        customers: List<PartyRecord>,
+        capPercent: Double?
+    ) {
+        if (finaliser.phase.value != GatePhase.IDLE || _preparingPdf.value) return
+        if (_savingParty.value || _mergeQuestion.value != null) return
+        _finaliseFailure.value = null
+        pressCustomers = customers
+        val press = PdfPress(
+            maker = pdfMaker,
+            gate = { draft -> finaliser.ensureFinalised(draft, capPercent) },
+            stored = { id -> container.quotationWriteRepository.stored(id) },
+            log = { container.errorReporter.report(it) }
+        )
+        viewModelScope.launch {
+            try {
+                when (val pressed = press.press(_draft.value, company, products, onIssued = { _preparingPdf.value = true })) {
+                    is PdfPress.Pressed.Ready -> {
+                        emit(pressed.finalised)
+                        val pdf = pressed.pdf
+                        _pdfReady.send(PdfReady(action, pdf.output, pdf.number, pdf.fileName, pdf.notice))
+                    }
+                    is PdfPress.Pressed.NotIssued -> _finaliseFailure.value = pressed.message
+                    is PdfPress.Pressed.IssuedWithoutPdf -> {
+                        emit(pressed.finalised)
+                        _finaliseFailure.value = pressed.message
+                    }
+                    PdfPress.Pressed.Quiet -> Unit
+                }
+            } finally {
+                _preparingPdf.value = false
             }
         }
     }

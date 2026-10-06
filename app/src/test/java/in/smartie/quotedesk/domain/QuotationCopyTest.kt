@@ -267,4 +267,13 @@ class QuotationCopyTest {
         assertTrue(QuotationCopy.offered(manager))
         assertFalse(QuotationCopy.offered(staff))
     }
+
+    @Test
+    fun `the copy's message is V8C4's, with finalise added - word for word`() {
+        // The Owner's approval of 2026-10-06 (N5.11).
+        assertEquals(
+            "Copied into a new draft — it takes a new number when you finalise, download, print or share",
+            QuotationCopy.COPIED
+        )
+    }
 }

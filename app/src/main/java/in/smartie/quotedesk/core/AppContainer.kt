@@ -25,8 +25,13 @@ import `in`.smartie.quotedesk.data.repository.QuotationWriteRepository
 import `in`.smartie.quotedesk.data.repository.StockPhotoRepository
 import `in`.smartie.quotedesk.data.repository.StockWriteRepository
 import `in`.smartie.quotedesk.data.repository.StoppedStockRepository
+import `in`.smartie.quotedesk.domain.QuotationDocument
+import `in`.smartie.quotedesk.domain.Rendered
 import `in`.smartie.quotedesk.ui.products.QuoteRequests
+import `in`.smartie.quotedesk.util.QuotationOutputs
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class AppContainer(
     context: Context,
@@ -80,6 +85,18 @@ class AppContainer(
      * terms, notes and images the quotation PDF prints. N6 writes it.
      */
     val companySettingsRepository = CompanySettingsRepository(firestore)
+
+    private val appContext: Context = context.applicationContext
+
+    /**
+     * N5.11: a quotation's PDF written into `cacheDir/quotations` by the one
+     * renderer — the older files there cleared first — off the main thread.
+     * Download, Print and the WhatsApp share all take the file from here.
+     */
+    suspend fun renderQuotation(document: QuotationDocument): Rendered<File> = withContext(Dispatchers.IO) {
+        val cached = QuotationOutputs.cache(appContext, document)
+        Rendered(cached.file, cached.written.unreadable)
+    }
 
     /** Clearing stopped-item history; the only write it has. */
     val stoppedStockRepository = StoppedStockRepository(firestore)

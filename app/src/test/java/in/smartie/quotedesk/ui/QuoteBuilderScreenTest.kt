@@ -306,6 +306,16 @@ class QuoteBuilderScreenTest {
     }
 
     @Test
+    fun `the issuing note names all four ways a number is taken - the approved words`() {
+        // The Owner's approval of 2026-10-06 (N5.11): "finalise" added.
+        assertEquals(
+            "A number is taken from the shared counter when you finalise, download, print or share — " +
+                "it needs an internet connection.",
+            ISSUING_NOTE
+        )
+    }
+
+    @Test
     fun `taking a number, the control says so and is disabled, and a press does nothing`() {
         render(oneLine(), gatePhase = GatePhase.TAKING_NUMBER)
         scrollTo(BUILDER_FINALISE_KEY)

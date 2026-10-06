@@ -1682,13 +1682,14 @@ internal const val GST_UNSET = "rate not set"
 internal const val TOTAL_UNSET = "set the GST rate"
 internal const val NOTHING_ON_IT = "Nothing on this quotation yet. Go back and add a product."
 /**
- * True since N5.9b: the stand-alone Finalise control takes the number. When
- * N5.11 makes PDF, Print and WhatsApp the gate's callers, this goes back to
- * saying so — it read "A number is issued when this is downloaded, printed or
- * shared", which was V8C4's truth before there was anything to press.
+ * N5.11: Download, Print and WhatsApp are the gate's callers beside
+ * Finalise, so the note names all four — the Owner's approved words of
+ * 2026-10-06. (N5.9b to N5.10 said "Finalising takes the next number …",
+ * when Finalise was the only caller.)
  */
 internal const val ISSUING_NOTE =
-    "Finalising takes the next number from the shared counter, and needs an internet connection."
+    "A number is taken from the shared counter when you finalise, download, print or share — " +
+        "it needs an internet connection."
 internal const val FINALISE = "Finalise"
 internal const val TAKING_A_NUMBER = "Taking a number…"
 internal const val CONTINUE_ANYWAY = "Continue anyway"

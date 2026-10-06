@@ -311,6 +311,17 @@ class QuotationWriteRepository(
     }
 
     /**
+     * The quotation **as the server holds it now** (N5.11 commit 9), or null
+     * when there is none — read inside a transaction, which always reads from
+     * the server and writes nothing. After a finalise the PDF prints the
+     * server's `serverAt`, which [FinaliseOutcome.Issued]'s record cannot
+     * hold: it is read back from what was sent, where the time is still the
+     * placeholder the server fills in.
+     */
+    suspend fun stored(quotationId: String): QuotationRecord? =
+        store.transaction { transaction -> transaction.readQuotation(quotationId)?.toQuotationRecord() }
+
+    /**
      * Cancels a finalised quotation — **remote-first**. A transaction, so the
      * cancel reaches no listener until the server has accepted it, and there
      * is never a quotation this device shows as cancelled that the team does

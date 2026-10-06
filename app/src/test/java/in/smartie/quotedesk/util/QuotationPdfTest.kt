@@ -20,11 +20,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeNoException
 import org.junit.Assume.assumeTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowBitmapFactory
 
 /**
  * The renderer's smoke tests (N5.11 commit 7), on CI under Robolectric.
@@ -46,6 +48,19 @@ import org.robolectric.annotation.GraphicsMode
 class QuotationPdfTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
+
+    /**
+     * Decode as a phone does: bytes that are not an image give no bitmap.
+     * Robolectric's legacy default instead invents a placeholder for them —
+     * "to preserve legacy behavior", its source says, the default due to
+     * become false "consistent with real Android" — under which "not an
+     * image" decoded and the unreadable-image test failed on CI (run #255).
+     * Reset after every test by Robolectric itself.
+     */
+    @Before
+    fun decodeAsAPhoneDoes() {
+        ShadowBitmapFactory.setAllowInvalidImageData(false)
+    }
 
     /** 48 × 48. */
     private val logo = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAIAAADYYG7QAAAAOklEQVR42u3OQQ0AAAgEoItjCMMa1RbOBxsBSPW8EiEhISEhISEhISEhISEhISEhISEhISEhISGhOwuLLCSIuUCuZwAAAABJRU5ErkJggg=="

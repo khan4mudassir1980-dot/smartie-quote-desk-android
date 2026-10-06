@@ -61,6 +61,7 @@ import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 import `in`.smartie.quotedesk.data.model.RateTierV2
 import `in`.smartie.quotedesk.data.model.StockRecord
 import `in`.smartie.quotedesk.domain.Catalogue
+import `in`.smartie.quotedesk.domain.PdfAction
 import `in`.smartie.quotedesk.domain.CatalogueEntry
 import `in`.smartie.quotedesk.domain.CatalogueView
 import `in`.smartie.quotedesk.domain.Permissions
@@ -163,6 +164,8 @@ data class ProductsActions(
     val onSaveEdit: () -> Unit = {},
     /** Discards the edit open in the builder, once the person has confirmed. */
     val onDiscardEdit: () -> Unit = {},
+    /** Download, Print or WhatsApp on the draft (N5.11): the gate, then the PDF. */
+    val onOutput: (PdfAction) -> Unit = {},
     /** Save one product's corrections. The draft is what the sheet showed. */
     val onSaveProduct: (ProductRecord, ProductDraft) -> Unit = { _, _ -> },
 )
@@ -190,6 +193,8 @@ fun ProductsScreen(
     val gatePhase by viewModel.gatePhase.collectAsStateWithLifecycle()
     val finaliseFailure by viewModel.finaliseFailure.collectAsStateWithLifecycle()
     val zeroRateQuestion by viewModel.zeroRateQuestion.collectAsStateWithLifecycle()
+    val preparingPdf by viewModel.preparingPdf.collectAsStateWithLifecycle()
+    val company by data.company.collectAsStateWithLifecycle()
     val builderRequested by viewModel.builderRequested.collectAsStateWithLifecycle()
     val quoting by viewModel.quoting.collectAsStateWithLifecycle()
     // Null while the settings document has not arrived OR does not exist.
@@ -244,6 +249,7 @@ fun ProductsScreen(
         gatePhase = gatePhase,
         finaliseFailure = finaliseFailure,
         zeroRateQuestion = zeroRateQuestion,
+        preparingPdf = preparingPdf,
         builderRequested = builderRequested,
         onBuilderShown = viewModel::builderShown,
         newPartyId = viewModel::mintPartyId,
@@ -285,6 +291,9 @@ fun ProductsScreen(
             // when an edit puts the discount up (`QuotationEdit.screenCap`).
             onSaveEdit = { viewModel.saveEdit(parties, discountCap) },
             onDiscardEdit = viewModel::discardEdit,
+            // The same customers and cap as Finalise, with the company
+            // settings and the catalogue the PDF is made from.
+            onOutput = { action -> viewModel.output(action, company, products, parties, discountCap) },
             onSaveProduct = viewModel::saveProduct,
         ),
     )
@@ -322,6 +331,8 @@ fun ProductsCatalogue(
     gatePhase: GatePhase = GatePhase.IDLE,
     finaliseFailure: String? = null,
     zeroRateQuestion: String? = null,
+    /** From the number in hand until the PDF is ready (N5.11). */
+    preparingPdf: Boolean = false,
     /**
      * True when something asked for the builder — an edit requested from the
      * Quotations tab (N5.10). It opens, and [onBuilderShown] says so.
@@ -429,6 +440,8 @@ fun ProductsCatalogue(
                 onAnswerZeroRates = actions.onAnswerZeroRates,
                 onSaveEdit = actions.onSaveEdit,
                 onDiscardEdit = actions.onDiscardEdit,
+                onOutput = actions.onOutput,
+                preparingPdf = preparingPdf,
             )
         }
         BackHandler { showDraft = false }

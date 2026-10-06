@@ -37,7 +37,12 @@ import `in`.smartie.quotedesk.ui.quotations.QuotationActions
 import `in`.smartie.quotedesk.ui.quotations.QuotationDetail
 import `in`.smartie.quotedesk.ui.quotations.QuotationListScreen
 import `in`.smartie.quotedesk.ui.quotations.REPLACE_IT
-import `in`.smartie.quotedesk.ui.quotations.SHARING_NOTE
+import `in`.smartie.quotedesk.ui.quotations.DETAIL_END_TAG
+import `in`.smartie.quotedesk.ui.quotations.DOWNLOAD
+import `in`.smartie.quotedesk.ui.quotations.PREPARING_PDF
+import `in`.smartie.quotedesk.ui.quotations.PRINT
+import `in`.smartie.quotedesk.ui.quotations.WHATSAPP
+import `in`.smartie.quotedesk.domain.PdfAction
 import `in`.smartie.quotedesk.ui.quotations.openQuotationLabel
 import `in`.smartie.quotedesk.ui.theme.SmartieTheme
 import org.junit.Assert.assertEquals
@@ -57,8 +62,9 @@ import org.robolectric.annotation.Config
  * another's sent anyway — is refused by the rules (`quotation.test.js`) and
  * by `QuotationCancel.plan` inside the transaction.
  *
- * Every absence check scrolls to the last item and finds the sharing note
- * there, so "not offered" never means "not composed yet".
+ * Every absence check scrolls to the last item and finds it there — the
+ * sharing note until N5.11, its tag since — so "not offered" never means "not
+ * composed yet".
  */
 @RunWith(AndroidJUnit4::class)
 @Config(application = Application::class, qualifiers = "w412dp-h915dp")
@@ -87,10 +93,12 @@ class QuotationActionsScreenTest {
     private val edited = mutableListOf<QuotationRecord>()
     private val cancelled = mutableListOf<QuotationRecord>()
     private val duplicated = mutableListOf<QuotationRecord>()
+    private val outputs = mutableListOf<Pair<QuotationRecord, PdfAction>>()
     private val actions = QuotationActions(
         onEdit = { edited += it },
         onCancel = { cancelled += it },
-        onDuplicate = { duplicated += it }
+        onDuplicate = { duplicated += it },
+        onOutput = { record, action -> outputs += record to action }
     )
 
     private fun detail(
@@ -98,7 +106,9 @@ class QuotationActionsScreenTest {
         viewer: Member = manager,
         cancelling: Boolean = false,
         cancelFailure: String? = null,
-        copyStart: CopyStart = CopyStart.Go
+        copyStart: CopyStart = CopyStart.Go,
+        preparing: Boolean = false,
+        pdfFailure: String? = null
     ) {
         compose.setContent {
             SmartieTheme {
@@ -109,7 +119,9 @@ class QuotationActionsScreenTest {
                     actions = actions,
                     cancelling = cancelling,
                     cancelFailure = cancelFailure,
-                    copyStart = copyStart
+                    copyStart = copyStart,
+                    preparing = preparing,
+                    pdfFailure = pdfFailure
                 )
             }
         }
@@ -128,7 +140,7 @@ class QuotationActionsScreenTest {
     /** Neither control, with the reach proved by the note after them. */
     private fun offersNeitherEditNorCancel() {
         toEnd()
-        compose.onNodeWithText(SHARING_NOTE).assertExists()
+        compose.onNodeWithTag(DETAIL_END_TAG).assertExists()
         assertEquals(0, count(EDIT_QUOTATION))
         assertEquals(0, count(CANCEL_QUOTATION))
     }
@@ -293,10 +305,11 @@ class QuotationActionsScreenTest {
     fun `Staff are offered nothing at all`() {
         detail(viewer = Member(uid = "u_m", name = "Manager Person", role = Role.WORKER))
         toEnd()
-        compose.onNodeWithText(SHARING_NOTE).assertExists()
+        compose.onNodeWithTag(DETAIL_END_TAG).assertExists()
         assertEquals(0, count(DUPLICATE))
         assertEquals(0, count(EDIT_QUOTATION))
         assertEquals(0, count(CANCEL_QUOTATION))
+        assertEquals(0, count(DOWNLOAD))
     }
 
     // --- the list's tag -----------------------------------------------------------------
@@ -321,5 +334,72 @@ class QuotationActionsScreenTest {
         }
         assertTrue(shows(nine.number))
         assertTrue("never edited", !shows(EDITED))
+    }
+
+    // --- Download, Print and WhatsApp (N5.11 commit 10) --------------------------
+
+    @Test
+    fun `an issued quotation offers Download, Print and WhatsApp at the top of its actions, each handing it over`() {
+        detail()
+        toActions()
+        compose.onNodeWithContentDescription(DOWNLOAD).performClick()
+        compose.onNodeWithContentDescription(PRINT).performClick()
+        compose.onNodeWithContentDescription(WHATSAPP).performClick()
+
+        assertEquals(listOf(nine to PdfAction.DOWNLOAD, nine to PdfAction.PRINT, nine to PdfAction.SHARE), outputs)
+    }
+
+    @Test
+    fun `a cancelled quotation is offered them too - it prints marked CANCELLED`() {
+        detail(quotation = nine.copy(status = "Cancelled"), viewer = owner)
+        toActions()
+        assertEquals(1, count(DOWNLOAD))
+        assertEquals(1, count(WHATSAPP))
+    }
+
+    @Test
+    fun `the native beta's records are not offered a PDF`() {
+        detail(quotation = nine.copy(legacyBetaShape = true), viewer = owner)
+        toEnd()
+        compose.onNodeWithTag(DETAIL_END_TAG).assertExists()
+        assertEquals(0, count(DOWNLOAD))
+        assertEquals(0, count(PRINT))
+        assertEquals(0, count(WHATSAPP))
+    }
+
+    @Test
+    fun `while its PDF is made the row says so, and nothing is pressed`() {
+        detail(preparing = true)
+        toActions()
+        compose.onNodeWithContentDescription(PREPARING_PDF).assertExists()
+        assertEquals(0, count(DOWNLOAD))
+        assertTrue(outputs.isEmpty())
+    }
+
+    @Test
+    fun `why the PDF was not made is shown under the row`() {
+        detail(pdfFailure = "The PDF was not made — test.")
+        toActions()
+        compose.onNodeWithText("The PDF was not made — test.").assertExists()
+    }
+
+    @Test
+    fun `while its cancel is out the PDF buttons do nothing`() {
+        detail(viewer = owner, cancelling = true)
+        toActions()
+        compose.onNodeWithContentDescription(DOWNLOAD).assertIsNotEnabled()
+        compose.onNodeWithContentDescription(DOWNLOAD).performClick()
+        assertTrue(outputs.isEmpty())
+    }
+
+    @Test
+    fun `the old note that these were still to come is gone`() {
+        detail()
+        toEnd()
+        assertEquals(
+            0,
+            compose.onAllNodesWithText("arrive with the rest of the Quotation phase", substring = true)
+                .fetchSemanticsNodes().size
+        )
     }
 }

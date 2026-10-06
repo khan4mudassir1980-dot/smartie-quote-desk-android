@@ -34,6 +34,10 @@ fun QuotationsScreen(
     val cancelling by viewModel.cancelling.collectAsStateWithLifecycle()
     val cancelFailure by viewModel.failure.collectAsStateWithLifecycle()
     val copyStart by viewModel.copyStart.collectAsStateWithLifecycle()
+    val preparing by viewModel.preparing.collectAsStateWithLifecycle()
+    val pdfFailure by viewModel.pdfFailure.collectAsStateWithLifecycle()
+    val company by data.company.collectAsStateWithLifecycle()
+    val products by data.products.collectAsStateWithLifecycle()
 
     QuotationListScreen(
         records = quotations,
@@ -43,6 +47,15 @@ fun QuotationsScreen(
         cancelling = cancelling,
         cancelFailure = cancelFailure,
         copyStart = copyStart,
-        actions = QuotationActions(onEdit = onEdit, onCancel = viewModel::cancel, onDuplicate = onDuplicate)
+        preparing = preparing,
+        pdfFailure = pdfFailure,
+        actions = QuotationActions(
+            onEdit = onEdit,
+            onCancel = viewModel::cancel,
+            onDuplicate = onDuplicate,
+            // N5.11: issued already, so straight to the PDF, with the company
+            // settings and the catalogue it is made from.
+            onOutput = { record, action -> viewModel.output(record, action, company, products) }
+        )
     )
 }

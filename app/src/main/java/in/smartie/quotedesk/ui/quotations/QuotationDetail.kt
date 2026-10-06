@@ -4,8 +4,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
@@ -20,12 +22,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import `in`.smartie.quotedesk.data.mapping.Money
 import `in`.smartie.quotedesk.data.model.QuotationLineRecord
 import `in`.smartie.quotedesk.data.model.QuotationRecord
 import `in`.smartie.quotedesk.domain.CopyStart
 import `in`.smartie.quotedesk.domain.Member
+import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.domain.QuotationCancel
 import `in`.smartie.quotedesk.domain.QuotationCopy
 import `in`.smartie.quotedesk.domain.QuotationEdit
@@ -90,9 +92,17 @@ internal fun QuotationDetail(
     /** Why this quotation's last cancel did not happen. */
     cancelFailure: String? = null,
     /** What Duplicate would come to on this device now (`QuotationCopy.start`). */
-    copyStart: CopyStart = CopyStart.Go
+    copyStart: CopyStart = CopyStart.Go,
+    /** True while this quotation's PDF is being made (N5.11). */
+    preparing: Boolean = false,
+    /** Why this quotation's last PDF was not made. */
+    pdfFailure: String? = null
 ) {
     val dimens = LocalSmartieDimens.current
+    // N5.11: anyone who may quote, on any issued quotation — a cancelled one
+    // included, which prints marked CANCELLED — but not the native beta's
+    // records, whose shape the PDF does not know.
+    val offersPdf = Permissions.canQuote(viewer) && !quotation.legacyBetaShape
     val offersEdit = QuotationEdit.refusalToOpen(viewer, quotation) == null
     val offersCancel = QuotationCancel.offered(viewer, quotation)
     val offersCopy = QuotationCopy.offered(viewer)
@@ -220,9 +230,25 @@ internal fun QuotationDetail(
             }
         }
 
-        if (offersEdit || offersCancel || offersCopy) {
+        if (offersPdf || offersEdit || offersCancel || offersCopy) {
             item(key = DETAIL_ACTIONS_KEY) {
                 Column(verticalArrangement = Arrangement.spacedBy(dimens.gapS)) {
+                    // At the top of the actions, in place of the note that said
+                    // these would come with the rest of the Quotation phase.
+                    if (offersPdf) {
+                        PdfButtons(
+                            onOutput = { action -> actions.onOutput(quotation, action) },
+                            enabled = !cancelling,
+                            preparing = preparing
+                        )
+                        if (pdfFailure != null) {
+                            Text(
+                                pdfFailure,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = SmartieColors.Danger
+                            )
+                        }
+                    }
                     if (offersEdit) {
                         SmartiePrimaryButton(
                             text = EDIT_QUOTATION,
@@ -267,15 +293,11 @@ internal fun QuotationDetail(
             }
         }
 
-        // The last item: an absence check scrolls here first.
+        // The last item: an absence check scrolls here first. It held the
+        // note that Download, Print and WhatsApp were still to come (until
+        // N5.11); now only the tag that proves the list was reached.
         item(key = DETAIL_END_KEY) {
-            Text(
-                SHARING_NOTE,
-                style = MaterialTheme.typography.bodySmall,
-                color = SmartieColors.Steel,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
+            Spacer(Modifier.fillMaxWidth().height(dimens.gapS).testTag(DETAIL_END_TAG))
         }
     }
 }
@@ -502,14 +524,9 @@ internal const val MANUAL_LINE = "Typed by hand"
 internal const val BETA_RECORD = "Beta record"
 internal const val NO_LINES = "This quotation stored no item lines."
 internal const val NOT_RECORDED = "Not recorded"
-/**
- * Replaced N5.4's "Quotations are read-only in the app…", which N5.10 made
- * false. Downloading, printing and sharing are N5.11's.
- */
-internal const val SHARING_NOTE =
-    "Downloading, printing and sharing a quotation arrive with the rest of the Quotation phase."
 internal const val DETAIL_ACTIONS_KEY = "detail-actions"
 internal const val DETAIL_END_KEY = "detail-end"
+internal const val DETAIL_END_TAG = "detail-end"
 internal const val CANCEL_QUESTION_TAG = "cancel-question"
 internal const val EDIT_QUOTATION = "Edit"
 internal const val CANCEL_QUOTATION = "Cancel this quotation"

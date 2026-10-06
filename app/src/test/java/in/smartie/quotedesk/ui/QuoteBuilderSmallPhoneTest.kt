@@ -12,6 +12,10 @@ import `in`.smartie.quotedesk.domain.Installation
 import `in`.smartie.quotedesk.domain.InstallationMode
 import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.ui.products.BUILDER_INSTALLATION_KEY
+import `in`.smartie.quotedesk.ui.products.BUILDER_OUTPUTS_KEY
+import `in`.smartie.quotedesk.ui.quotations.DOWNLOAD
+import `in`.smartie.quotedesk.ui.quotations.PRINT
+import `in`.smartie.quotedesk.ui.quotations.WHATSAPP
 import `in`.smartie.quotedesk.ui.products.INSTALLATION_LABEL
 import `in`.smartie.quotedesk.ui.products.QUOTE_BUILDER_TAG
 import `in`.smartie.quotedesk.ui.products.QuoteBuilderPanel
@@ -42,7 +46,7 @@ class QuoteBuilderSmallPhoneTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private fun render(draft: QuoteDraft) {
+    private fun render(draft: QuoteDraft, canFinalise: Boolean = false) {
         compose.setContent {
             SmartieTheme {
                 QuoteBuilderPanel(
@@ -51,7 +55,8 @@ class QuoteBuilderSmallPhoneTest {
                     onTierChange = {},
                     onChangeLineQuantity = { _, _ -> },
                     onRemoveLine = {},
-                    onClear = {}
+                    onClear = {},
+                    canFinalise = canFinalise
                 )
             }
         }
@@ -89,6 +94,29 @@ class QuoteBuilderSmallPhoneTest {
                 whole.left >= card.left - 0.5f && whole.right <= card.right + 0.5f
             )
         }
+    }
+
+    @Test
+    fun `Download, Print and WhatsApp share one row whole at 360dp`() {
+        // N5.11: "one compact row" under Finalise (the approved placement).
+        render(charging(), canFinalise = true)
+        compose.onNodeWithTag(QUOTE_BUILDER_TAG).performScrollToKey(BUILDER_OUTPUTS_KEY)
+
+        val card = compose.onNodeWithTag(QUOTE_BUILDER_TAG).fetchSemanticsNode().boundsInRoot
+        val tops = listOf(DOWNLOAD, PRINT, WHATSAPP).map { label ->
+            compose.onNodeWithText(label).assertExists()
+            val node = compose.onNodeWithText(label).fetchSemanticsNode()
+            val whole = node.unclippedBounds()
+            val painted = node.boundsInRoot
+            assertTrue("$label was never laid out: $whole", whole.width > 0f)
+            assertTrue("$label is clipped — $painted painted of $whole", painted.width >= whole.width - 0.5f)
+            assertTrue(
+                "$label falls outside the panel — $whole against $card",
+                whole.left >= card.left - 0.5f && whole.right <= card.right + 0.5f
+            )
+            whole.top
+        }
+        assertTrue("one row: $tops", tops.maxOrNull()!! - tops.minOrNull()!! < 1f)
     }
 
     @Test

@@ -84,6 +84,7 @@ import `in`.smartie.quotedesk.ui.products.ProductsViewModel
 import `in`.smartie.quotedesk.ui.purchase.PurchaseHistoryScreen
 import `in`.smartie.quotedesk.ui.purchase.PurchaseViewModel
 import `in`.smartie.quotedesk.ui.quotations.QuotationActions
+import `in`.smartie.quotedesk.ui.quotations.PdfOutputs
 import `in`.smartie.quotedesk.ui.quotations.QuotationListScreen
 import `in`.smartie.quotedesk.ui.quotations.QuotationsViewModel
 import `in`.smartie.quotedesk.ui.screens.PurchaseScreen
@@ -217,6 +218,9 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
                     LaunchedEffect(productsViewModel) {
                         productsViewModel.messages.collect { snackbar.showSnackbar(it) }
                     }
+                    // N5.11: each PDF the builder makes, out to Download, Print
+                    // or WhatsApp, and what it was made without.
+                    PdfOutputs(productsViewModel.pdfReady) { snackbar.showSnackbar(it) }
                     ProductsScreen(data = data, viewModel = productsViewModel)
                 }
                 composable("stock") {
@@ -255,6 +259,7 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
                     LaunchedEffect(quotationsViewModel) {
                         quotationsViewModel.messages.collect { snackbar.showSnackbar(it) }
                     }
+                    PdfOutputs(quotationsViewModel.pdfReady) { snackbar.showSnackbar(it) }
                     QuotationsScreen(
                         data = data,
                         viewModel = quotationsViewModel,
@@ -343,9 +348,14 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
                     LaunchedEffect(quotationsViewModel) {
                         quotationsViewModel.messages.collect { snackbar.showSnackbar(it) }
                     }
+                    PdfOutputs(quotationsViewModel.pdfReady) { snackbar.showSnackbar(it) }
                     val cancelling by quotationsViewModel.cancelling.collectAsStateWithLifecycle()
                     val cancelFailure by quotationsViewModel.failure.collectAsStateWithLifecycle()
                     val copyStart by quotationsViewModel.copyStart.collectAsStateWithLifecycle()
+                    val preparing by quotationsViewModel.preparing.collectAsStateWithLifecycle()
+                    val pdfFailure by quotationsViewModel.pdfFailure.collectAsStateWithLifecycle()
+                    val company by data.company.collectAsStateWithLifecycle()
+                    val products by data.products.collectAsStateWithLifecycle()
                     QuotationListScreen(
                         records = quotations,
                         viewer = member,
@@ -353,6 +363,8 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
                         cancelling = cancelling,
                         cancelFailure = cancelFailure,
                         copyStart = copyStart,
+                        preparing = preparing,
+                        pdfFailure = pdfFailure,
                         actions = QuotationActions(
                             onEdit = { record ->
                                 quotationsViewModel.edit(record)
@@ -362,6 +374,9 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
                             onDuplicate = { record ->
                                 quotationsViewModel.duplicate(record)
                                 openBuilder()
+                            },
+                            onOutput = { record, action ->
+                                quotationsViewModel.output(record, action, company, products)
                             },
                         ),
                     )

@@ -18,6 +18,7 @@ import androidx.compose.ui.semantics.semantics
 import `in`.smartie.quotedesk.data.mapping.Money
 import `in`.smartie.quotedesk.data.model.QuotationRecord
 import `in`.smartie.quotedesk.domain.CopyStart
+import `in`.smartie.quotedesk.domain.PdfAction
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.QuotationHistory
 import `in`.smartie.quotedesk.ui.components.EmptyState
@@ -39,6 +40,8 @@ data class QuotationActions(
      * nothing to lose; the caller moves to the Products tab.
      */
     val onDuplicate: (QuotationRecord) -> Unit = {},
+    /** Download, Print or WhatsApp (N5.11): it keeps its number, straight to the PDF. */
+    val onOutput: (QuotationRecord, PdfAction) -> Unit = { _, _ -> },
 )
 
 /**
@@ -69,6 +72,10 @@ internal fun QuotationListScreen(
     cancelFailure: CancelFailure? = null,
     /** What Duplicate would come to on this device now. */
     copyStart: CopyStart = CopyStart.Go,
+    /** The id of the quotation whose PDF is being made, if any (N5.11). */
+    preparing: String? = null,
+    /** Why the last PDF was not made, and on which quotation. */
+    pdfFailure: PdfFailure? = null,
     actions: QuotationActions = QuotationActions()
 ) {
     val dimens = LocalSmartieDimens.current
@@ -86,7 +93,9 @@ internal fun QuotationListScreen(
             cancelling = cancelling == open.id,
             // Only this quotation's: a failure on another is not about this one.
             cancelFailure = cancelFailure?.takeIf { it.quotationId == open.id }?.message,
-            copyStart = copyStart
+            copyStart = copyStart,
+            preparing = preparing == open.id,
+            pdfFailure = pdfFailure?.takeIf { it.quotationId == open.id }?.message
         )
         return
     }

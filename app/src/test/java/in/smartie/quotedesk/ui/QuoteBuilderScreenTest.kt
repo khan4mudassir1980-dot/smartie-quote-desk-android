@@ -101,6 +101,12 @@ import `in`.smartie.quotedesk.ui.products.noSavedParty
 import `in`.smartie.quotedesk.ui.products.BUILDER_EMPTY_KEY
 import `in`.smartie.quotedesk.ui.products.CLEAR_LINES
 import `in`.smartie.quotedesk.ui.products.ISSUING_NOTE
+import `in`.smartie.quotedesk.ui.products.BUILDER_OUTPUTS_KEY
+import `in`.smartie.quotedesk.ui.quotations.DOWNLOAD
+import `in`.smartie.quotedesk.ui.quotations.PREPARING_PDF
+import `in`.smartie.quotedesk.ui.quotations.PRINT
+import `in`.smartie.quotedesk.ui.quotations.WHATSAPP
+import `in`.smartie.quotedesk.domain.PdfAction
 import `in`.smartie.quotedesk.ui.products.BUILDER_FINALISE_FAILURE_KEY
 import `in`.smartie.quotedesk.ui.products.BUILDER_FINALISE_KEY
 import `in`.smartie.quotedesk.ui.products.BUILDER_LOCK_TAG
@@ -199,6 +205,7 @@ class QuoteBuilderScreenTest {
     private val answers = mutableListOf<Boolean>()
     private var finalised = 0
     private val zeroAnswers = mutableListOf<Boolean>()
+    private val outputs = mutableListOf<PdfAction>()
 
     /** A draft holding one priced line, the way a catalogue tap leaves it. */
     private fun oneLine() = QuoteDraft(id = "qd_1").add(motor, quantity = 2.0, id = "ln_1")
@@ -214,7 +221,10 @@ class QuoteBuilderScreenTest {
         gatePhase: GatePhase = GatePhase.IDLE,
         finaliseFailure: String? = null,
         zeroRateQuestion: String? = null,
-        savingCustomer: Boolean = false
+        savingCustomer: Boolean = false,
+        preparingPdf: Boolean = false,
+        /** Opens the builder as a request does — an empty draft cannot be opened from the bar. */
+        requested: Boolean = false
     ) {
         val view = Catalogue.build(listOf(motor, unpriced), emptyList(), emptyList(), "")
         compose.setContent {
@@ -231,6 +241,8 @@ class QuoteBuilderScreenTest {
                     finaliseFailure = finaliseFailure,
                     zeroRateQuestion = zeroRateQuestion,
                     savingCustomer = savingCustomer,
+                    preparingPdf = preparingPdf,
+                    builderRequested = requested,
                     gstOf = { key -> mapOf("gate|SIE1000" to 18.0)[key] },
                     discountCap = discountCap,
                     // A different id on every call, so a test can prove the
@@ -256,12 +268,68 @@ class QuoteBuilderScreenTest {
                         onDiscountChange = { discount = it to true },
                         onClearDraft = { cleared++ },
                         onFinalise = { finalised++ },
-                        onAnswerZeroRates = { zeroAnswers += it }
+                        onAnswerZeroRates = { zeroAnswers += it },
+                        onOutput = { outputs += it }
                     )
                 )
             }
         }
-        if (open) compose.onNodeWithText("View quote").performClick()
+        if (open && !requested) compose.onNodeWithText("View quote").performClick()
+    }
+
+    // --- Download, Print and WhatsApp under Finalise (N5.11 commit 10) ------------
+
+    @Test
+    fun `Download, Print and WhatsApp sit under Finalise, and each press asks for its output`() {
+        render(oneLine())
+        scrollTo(BUILDER_OUTPUTS_KEY)
+        compose.onNodeWithContentDescription(DOWNLOAD).assertIsEnabled().performClick()
+        compose.onNodeWithContentDescription(PRINT).performClick()
+        compose.onNodeWithContentDescription(WHATSAPP).performClick()
+
+        assertEquals(listOf(PdfAction.DOWNLOAD, PdfAction.PRINT, PdfAction.SHARE), outputs)
+        // Finalise stays (the Owner's approval), above them.
+        scrollTo(BUILDER_FINALISE_KEY)
+        compose.onNodeWithContentDescription(FINALISE).assertExists()
+    }
+
+    @Test
+    fun `an empty quotation is offered none of them`() {
+        render(QuoteDraft(id = "qd_1"), requested = true)
+        scrollTo(BUILDER_TAIL_KEY)
+        assertEquals(0, compose.onAllNodesWithContentDescription(DOWNLOAD).fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun `an account that may not quote is offered none of them`() {
+        render(oneLine(), canFinalise = false)
+        scrollTo(BUILDER_TAIL_KEY)
+        assertEquals(0, compose.onAllNodesWithContentDescription(WHATSAPP).fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun `taking a number, the three wait with Finalise and a press does nothing`() {
+        render(oneLine(), gatePhase = GatePhase.TAKING_NUMBER)
+        scrollTo(BUILDER_OUTPUTS_KEY)
+        compose.onNodeWithContentDescription(PRINT).assertIsNotEnabled()
+        compose.onNodeWithContentDescription(PRINT).performClick()
+        assertTrue(outputs.isEmpty())
+    }
+
+    @Test
+    fun `while the PDF is made the row says so - even on the empty builder the issued draft left`() {
+        render(QuoteDraft(id = "qd_2"), preparingPdf = true, requested = true)
+        scrollTo(BUILDER_OUTPUTS_KEY)
+        compose.onNodeWithContentDescription(PREPARING_PDF).assertExists()
+        assertEquals(0, compose.onAllNodesWithContentDescription(DOWNLOAD).fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun `a PDF that failed after its number was taken is said on the empty builder`() {
+        val message = "The PDF was not made — test. SIE/QD/2025-26/009 is issued — download, print or share it from Quotations."
+        render(QuoteDraft(id = "qd_2"), finaliseFailure = message, requested = true)
+        scrollTo(BUILDER_FINALISE_FAILURE_KEY)
+        compose.onNodeWithText(message).assertExists()
     }
 
     // --- the Finalise control (N5.9b) --------------------------------------------

@@ -36,6 +36,9 @@ import `in`.smartie.quotedesk.ui.products.DISCARD_CONFIRM
 import `in`.smartie.quotedesk.ui.products.FINALISE
 import `in`.smartie.quotedesk.ui.products.GatePhase
 import `in`.smartie.quotedesk.ui.products.ISSUING_NOTE
+import `in`.smartie.quotedesk.ui.quotations.DOWNLOAD
+import `in`.smartie.quotedesk.ui.quotations.PRINT
+import `in`.smartie.quotedesk.ui.quotations.WHATSAPP
 import `in`.smartie.quotedesk.ui.products.KEEP_EDITING
 import `in`.smartie.quotedesk.ui.products.ProductsActions
 import `in`.smartie.quotedesk.ui.products.ProductsCatalogue
@@ -172,6 +175,16 @@ class QuoteBuilderEditScreenTest {
         compose.onNodeWithText(editNote(number)).assertExists()
         assertEquals(0, count(FINALISE))
         assertEquals(0, finalised)
+    }
+
+    @Test
+    fun `an edit offers no Download, Print or WhatsApp - save it, then take the PDF from the quotation`() {
+        // N5.11, the approved placement: none of the three in edit mode.
+        render()
+        scrollTo(BUILDER_TAIL_KEY)
+        assertEquals(0, count(DOWNLOAD))
+        assertEquals(0, count(PRINT))
+        assertEquals(0, count(WHATSAPP))
     }
 
     @Test

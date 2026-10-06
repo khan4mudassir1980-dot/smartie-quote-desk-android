@@ -45,12 +45,14 @@ import `in`.smartie.quotedesk.domain.ManualEntry
 import `in`.smartie.quotedesk.domain.Parties
 import `in`.smartie.quotedesk.domain.QuoteArea
 import `in`.smartie.quotedesk.domain.QuoteDiscount
+import `in`.smartie.quotedesk.domain.PdfAction
 import `in`.smartie.quotedesk.domain.QuoteDraft
 import `in`.smartie.quotedesk.domain.QuoteGst
 import `in`.smartie.quotedesk.domain.QuoteLineEntry
 import `in`.smartie.quotedesk.domain.QuoteParty
 import `in`.smartie.quotedesk.domain.QuoteTier
 import `in`.smartie.quotedesk.ui.components.CompactStepper
+import `in`.smartie.quotedesk.ui.quotations.PdfButtons
 import `in`.smartie.quotedesk.ui.components.EmptyState
 import `in`.smartie.quotedesk.ui.components.ListRow
 import `in`.smartie.quotedesk.ui.components.SegmentedChoice
@@ -145,7 +147,11 @@ internal fun QuoteBuilderPanel(
     /** **Save changes** on an edit of an issued quotation (N5.10). */
     onSaveEdit: () -> Unit = {},
     /** Discards the edit, once the person has answered the question. */
-    onDiscardEdit: () -> Unit = {}
+    onDiscardEdit: () -> Unit = {},
+    /** Download, Print or WhatsApp (N5.11): the gate's other callers. */
+    onOutput: (PdfAction) -> Unit = {},
+    /** From the number in hand until the PDF is ready. */
+    preparingPdf: Boolean = false
 ) {
     // Which saved customer the picker is showing, and what is typed into its
     // search box. The panel's own state: nothing about it belongs on a draft
@@ -641,8 +647,10 @@ internal fun QuoteBuilderPanel(
                 )
             }
 
-            // The finalise gate's first caller. N5.11's PDF, Print and WhatsApp
-            // become the others (V8C4 has no Finalise button, only the gate).
+            // The finalise gate's first caller; Download, Print and WhatsApp
+            // are the others (N5.11 — V8C4 has no Finalise button, only the
+            // gate). None of them on an edit: "Save changes, then download it
+            // from the quotation".
             if (editOf == null && canFinalise && !draft.isEmpty) {
                 item(key = BUILDER_FINALISE_KEY) {
                     val taking = gatePhase == GatePhase.TAKING_NUMBER
@@ -661,14 +669,27 @@ internal fun QuoteBuilderPanel(
                             .fillMaxWidth()
                     )
                 }
-                if (finaliseFailure != null) {
-                    item(key = BUILDER_FINALISE_FAILURE_KEY) {
-                        Text(
-                            finaliseFailure,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = SmartieColors.Danger
-                        )
-                    }
+            }
+            // Under Finalise. Kept while a PDF is being made, though the
+            // finalised draft has already retired and the builder is empty.
+            if (editOf == null && canFinalise && (!draft.isEmpty || preparingPdf)) {
+                item(key = BUILDER_OUTPUTS_KEY) {
+                    PdfButtons(
+                        onOutput = onOutput,
+                        enabled = gatePhase == GatePhase.IDLE && !savingCustomer && mergeQuestion == null,
+                        preparing = preparingPdf
+                    )
+                }
+            }
+            // Shown whatever the draft: a PDF that failed after its number was
+            // taken says so on the empty builder the issued draft left behind.
+            if (editOf == null && canFinalise && finaliseFailure != null) {
+                item(key = BUILDER_FINALISE_FAILURE_KEY) {
+                    Text(
+                        finaliseFailure,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SmartieColors.Danger
+                    )
                 }
             }
 
@@ -1591,6 +1612,7 @@ internal const val BUILDER_NEEDS_RATE_KEY = "builder-needs-rate"
 internal const val BUILDER_CLEAR_KEY = "builder-clear"
 internal const val BUILDER_FINALISE_KEY = "builder-finalise"
 internal const val BUILDER_FINALISE_FAILURE_KEY = "builder-finalise-failure"
+internal const val BUILDER_OUTPUTS_KEY = "builder-outputs"
 internal const val BUILDER_RATES_NOTE_KEY = "builder-rates-note"
 internal const val BUILDER_TYPE_QUESTION_KEY = "builder-type-question"
 internal const val BUILDER_TYPE_ANSWERS_KEY = "builder-type-answers"

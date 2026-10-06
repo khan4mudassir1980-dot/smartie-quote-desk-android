@@ -285,7 +285,6 @@ class QuotationWriteRepository(
     suspend fun edit(member: Member, draft: QuoteDraft, customers: List<PartyRecord>): EditOutcome {
         if (!Permissions.canQuote(member)) return EditOutcome.Refused(QuotationWrite.NOT_ALLOWED)
         val origin = draft.editOf ?: return EditOutcome.Refused(QuotationEdit.NOT_AN_EDIT)
-        val at = now()
         return try {
             store.transaction { transaction ->
                 val stored = transaction.readQuotation(origin.quotationId)?.toQuotationRecord()
@@ -294,7 +293,7 @@ class QuotationWriteRepository(
                 } else {
                     null
                 }
-                when (val plan = QuotationEdit.plan(draft, member, quoting, stored, customers, at)) {
+                when (val plan = QuotationEdit.plan(draft, member, quoting, stored, customers)) {
                     is EditPlan.Update -> {
                         transaction.updateQuotation(plan.quotationId, plan.fields)
                         EditOutcome.Saved(plan.number)

@@ -164,6 +164,7 @@ fun DocData.toQuotationRecord(): QuotationRecord {
         id = string("id", default = id),
         number = string("no", "number"),
         at = millis("at", "createdAt", "serverAt"),
+        serverAt = millis("serverAt"),
         by = string("by", "createdBy"),
         byUid = string("byUid"),
         tier = RateTierV2.from(stringOrNull("tier")),

@@ -481,8 +481,21 @@ data class QuotationRecord(
     val lastEditedByUid: String = "",
     val lastEditedAt: Long = 0L,
     /** `rev`: one more on every edit, 0 when never edited. */
-    val revision: Int = 0
-)
+    val revision: Int = 0,
+    /**
+     * `serverAt`: when the server issued it — V8C4's finalise writes it
+     * (fact e of 2026-10-06) and, since N5.11, so does this app's. 0 when
+     * absent (every native quotation before N5.11). [at] is the device's.
+     */
+    val serverAt: Long = 0L
+) {
+    /**
+     * **The issue date the PDF prints** (the Owner's decision 1.1 of
+     * 2026-10-06): the server's `serverAt`, else the device's `at`. Never
+     * today — V8C4 prints today on a re-issue, a bug not copied.
+     */
+    val issuedAt: Long get() = if (serverAt > 0L) serverAt else at
+}
 
 data class ProductCategoryRecord(
     val id: String,

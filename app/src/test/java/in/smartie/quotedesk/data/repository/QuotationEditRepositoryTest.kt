@@ -15,6 +15,7 @@ import `in`.smartie.quotedesk.domain.Role
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -87,7 +88,9 @@ class QuotationEditRepositoryTest {
             assertFalse("the counter is never read", NUMBERING in store.reads)
             assertEquals(1, store.stored().revision)
             assertEquals("Manager Person", store.stored().lastEditedBy)
-            assertEquals(clock, store.stored().lastEditedAt)
+            // The server's time, never the phone's (N5.11).
+            assertEquals(SERVER_TIME, store.stored().lastEditedAt)
+            assertNotEquals(clock, store.stored().lastEditedAt)
         }
 
     @Test
@@ -137,7 +140,9 @@ class QuotationEditRepositoryTest {
         val first = store.opened().let { d -> d.setQuantity(d.lines.single().id, 2.0) }
         val second = store.opened().let { d -> d.setQuantity(d.lines.single().id, 5.0) }
         clock += 60_000
-        val firstAt = clock
+        // The "when" is the first edit's stored stamp, which the server now
+        // sets (N5.11) — never either phone's clock.
+        val firstAt = SERVER_TIME
 
         assertTrue(repository(store).edit(manager, first, emptyList()) is EditOutcome.Saved)
         clock += 60_000
@@ -147,6 +152,7 @@ class QuotationEditRepositoryTest {
             EditOutcome.Conflict(EditConflict.Changed("SIE/QD/2025-26/009", "Manager Person", firstAt)),
             outcome
         )
+        assertNotEquals(clock - 60_000, firstAt)
         assertEquals(2.0, store.storedLines().single()["qty"])
     }
 

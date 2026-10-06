@@ -140,7 +140,9 @@ internal fun QuotationDetail(
                         }
                         if (quotation.legacyBetaShape) Tag(BETA_RECORD, TagTone.WARN)
                     }
-                    Fact("Issued", quotation.at.takeIf { it > 0 }?.let(::formatDate).orEmpty())
+                    // The date the PDF prints: the server's, else the phone's
+                    // (the Owner's decision 1.1 of 2026-10-06).
+                    Fact("Issued", quotation.issuedAt.takeIf { it > 0 }?.let(::formatDate).orEmpty())
                     if (quotation.lastEditedAt > 0) {
                         Fact(LAST_EDITED, lastEditedText(quotation))
                     }

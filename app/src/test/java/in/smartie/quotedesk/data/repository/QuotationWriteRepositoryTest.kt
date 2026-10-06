@@ -13,9 +13,11 @@ import `in`.smartie.quotedesk.domain.Role
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
+import java.util.Date
 
 /**
  * The finalise transaction, against a store that behaves as Firestore does
@@ -80,6 +82,25 @@ class QuotationWriteRepositoryTest {
         // The counter's configuration is untouched, as the issue rule requires.
         assertEquals("SIE/QD", store.doc(NUMBERING)["prefix"])
     }
+
+    @Test
+    fun `a finalise stores serverAt from the server beside the device's at, and the issue date is the server's`() =
+        runBlocking {
+            // N5.11, the Owner's decision 1.1: the issue time from the server,
+            // as V8C4's finalise writes it (fact e). The fake stores the
+            // server's time, as Firestore does, far from the phone's `at`.
+            val store = FakeQuotationStore(seeded())
+            val repository = repository(store)
+            repository.finalise(manager, draft, customers = emptyList(), snap = null)
+
+            val stored = store.doc("quotations/qd_1")
+            assertEquals(Date(SERVER_TIME), stored["serverAt"])
+            assertNotEquals(SERVER_TIME, stored["at"])
+            // Read back — as the gate's answer to a second press is — the
+            // printed date is the server's.
+            val again = repository.finalise(manager, draft, customers = emptyList(), snap = null)
+            assertEquals(SERVER_TIME, (again as FinaliseOutcome.AlreadyIssued).record.issuedAt)
+        }
 
     @Test
     fun `until N6 the caller passes no snap, and the stored quotation has no snap key`() = runBlocking {

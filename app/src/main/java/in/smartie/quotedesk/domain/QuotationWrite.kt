@@ -261,6 +261,10 @@ object QuotationWrite {
         put("id", draft.id)
         put("no", number)
         put("at", at)
+        // N5.11 (the Owner's decision 1.1 of 2026-10-06): the issue time from
+        // the server as well, as V8C4's finalise writes it (fact e). The rule
+        // checks it is the request time; the PDF prints it.
+        put("serverAt", ServerTimestamp)
         put("by", member.name)
         put("byUid", member.uid)
         put("tier", draft.tier.wireValue)

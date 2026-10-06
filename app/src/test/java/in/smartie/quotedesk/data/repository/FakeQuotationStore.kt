@@ -2,6 +2,8 @@ package `in`.smartie.quotedesk.data.repository
 
 import `in`.smartie.quotedesk.data.mapping.DocData
 import `in`.smartie.quotedesk.domain.DeleteField
+import `in`.smartie.quotedesk.domain.ServerTimestamp
+import java.util.Date
 
 internal const val NUMBERING = "teamSettings/numbering"
 
@@ -46,6 +48,16 @@ internal class FakeQuotationStore(
      */
     var refuseCommitWhen: (staged: Map<String, Map<String, Any?>>) -> Boolean = { false }
 
+    /**
+     * The **server's** clock (N5.11). A `ServerTimestamp` is stored as this
+     * time, as Firestore stores the request time and the adapter reads it back
+     * as a `Date` — and deliberately not the repository's `now`, so a test can
+     * tell the server's time from the phone's.
+     */
+    var serverTime: Long = SERVER_TIME
+
+    private fun resolved(value: Any?): Any? = if (value === ServerTimestamp) Date(serverTime) else value
+
     override fun isRefusal(error: Throwable): Boolean = error is Refusal
 
     override suspend fun <T> transaction(body: (QuotationTransaction) -> T): T {
@@ -68,7 +80,7 @@ internal class FakeQuotationStore(
                 override fun readQuoting() = read("teamSettings/quoting")
 
                 override fun writeQuotation(id: String, data: Map<String, Any?>) {
-                    staged += "quotations/$id" to data
+                    staged += "quotations/$id" to data.mapValues { (_, value) -> resolved(value) }
                 }
 
                 override fun updateQuotation(id: String, fields: Map<String, Any?>) {
@@ -79,7 +91,7 @@ internal class FakeQuotationStore(
                     val path = "quotations/$id"
                     val merged = docs.getValue(path).toMutableMap()
                     fields.forEach { (field, value) ->
-                        if (value === DeleteField) merged.remove(field) else merged[field] = value
+                        if (value === DeleteField) merged.remove(field) else merged[field] = resolved(value)
                     }
                     staged += path to merged
                 }
@@ -113,6 +125,9 @@ internal class FakeQuotationStore(
 
     fun quotations(): List<String> = docs.keys.filter { it.startsWith("quotations/") }
 }
+
+/** The fake server's clock, far from any test's phone clock. */
+internal const val SERVER_TIME = 1_800_000_000_000L
 
 /** Stands in for `PERMISSION_DENIED`, which names no document. */
 internal class Refusal : RuntimeException("PERMISSION_DENIED")

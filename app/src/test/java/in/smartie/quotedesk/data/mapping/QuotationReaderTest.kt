@@ -6,6 +6,7 @@ import `in`.smartie.quotedesk.data.model.RateTierV2
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import java.util.Date
 
 /**
  * What N5.10 needs from a stored quotation that N5.4's reader never read.
@@ -87,6 +88,27 @@ class QuotationReaderTest {
         assertEquals("u_manager", record.lastEditedByUid)
         assertEquals(1_760_000_000_000L, record.lastEditedAt)
         assertEquals(3, record.revision)
+    }
+
+    @Test
+    fun `the server's issue time is read, and the issue date prefers it to the device's`() {
+        // N5.11: V8C4's finalise writes `serverAt` (fact e), and so does this
+        // app's now. Firestore hands back a Timestamp, which the adapter turns
+        // into a Date.
+        val issued = quotation("serverAt" to Date(1_750_000_123_000L))
+        assertEquals(1_750_000_123_000L, issued.serverAt)
+        assertEquals(1_750_000_123_000L, issued.issuedAt)
+
+        // A native quotation from before N5.11 has none: the device's `at`.
+        val before = quotation()
+        assertEquals(0L, before.serverAt)
+        assertEquals(1_750_000_000_000L, before.issuedAt)
+    }
+
+    @Test
+    fun `an edit stamped by the server is read as its time`() {
+        val record = quotation("lastEditedAt" to Date(1_760_000_456_000L))
+        assertEquals(1_760_000_456_000L, record.lastEditedAt)
     }
 
     @Test

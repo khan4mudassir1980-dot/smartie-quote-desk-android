@@ -7,6 +7,7 @@ import com.google.firebase.firestore.Transaction
 import `in`.smartie.quotedesk.data.mapping.DocData
 import `in`.smartie.quotedesk.data.mapping.toDocData
 import `in`.smartie.quotedesk.domain.DeleteField
+import `in`.smartie.quotedesk.domain.ServerTimestamp
 import kotlinx.coroutines.tasks.await
 
 /** The real [QuotationStore]. */
@@ -25,9 +26,13 @@ class FirestoreQuotationStore(private val firestore: FirebaseFirestore) : Quotat
                         transaction.read(firestore.collection(TEAM_SETTINGS).document(QUOTING))
 
                     override fun writeQuotation(id: String, data: Map<String, Any?>) {
+                        // `ServerTimestamp` becomes the real sentinel (N5.11's
+                        // `serverAt`), as the purchase and stock stores do.
                         transaction.set(
                             firestore.collection(QUOTATIONS).document(id),
-                            data.filterValues { it != null }.mapValues { it.value!! }
+                            data.filterValues { it != null }.mapValues { (_, value) ->
+                                if (value === ServerTimestamp) FieldValue.serverTimestamp() else value!!
+                            }
                         )
                     }
 
@@ -38,6 +43,7 @@ class FirestoreQuotationStore(private val firestore: FirebaseFirestore) : Quotat
                         for ((field, value) in fields) {
                             when {
                                 value === DeleteField -> resolved[field] = FieldValue.delete()
+                                value === ServerTimestamp -> resolved[field] = FieldValue.serverTimestamp()
                                 value != null -> resolved[field] = value
                             }
                         }

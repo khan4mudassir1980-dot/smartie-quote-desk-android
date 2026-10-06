@@ -193,8 +193,7 @@ object QuotationEdit {
         member: Member,
         quoting: QuotingRecord?,
         stored: QuotationRecord?,
-        customers: List<PartyRecord>,
-        at: Long
+        customers: List<PartyRecord>
     ): EditPlan {
         val origin = edited.editOf ?: return EditPlan.Refused(NOT_AN_EDIT)
         if (stored == null) return EditPlan.Conflict(EditConflict.Gone(origin.number))
@@ -261,7 +260,10 @@ object QuotationEdit {
             }
             put("lastEditedBy", member.name)
             put("lastEditedByUid", member.uid)
-            put("lastEditedAt", at)
+            // The server's clock, not the phone's (N5.11; the Owner's
+            // requirement of 2026-09-28): the rule checks it is the request
+            // time, and the PDF prints it as "Last edited by …".
+            put("lastEditedAt", ServerTimestamp)
             put("rev", origin.revision + 1)
         }
         return EditPlan.Update(stored.id, stored.number, fields)

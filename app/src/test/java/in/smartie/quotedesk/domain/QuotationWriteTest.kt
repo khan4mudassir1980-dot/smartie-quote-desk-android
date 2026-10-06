@@ -12,6 +12,7 @@ import `in`.smartie.quotedesk.data.model.RateTierV2
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -114,6 +115,9 @@ class QuotationWriteTest {
         assertEquals(manager.uid, write.quotation["byUid"])
         assertEquals(at, write.quotation["at"])
         assertTrue(write.quotation["total"] is Double)
+        // N5.11: the issue time from the server as well — the rule checks it
+        // is the request time, and the PDF prints it.
+        assertSame(ServerTimestamp, write.quotation["serverAt"])
 
         assertEquals("Manager Person", write.quotation["by"])
         assertEquals("client", write.quotation["tier"])

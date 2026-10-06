@@ -13,6 +13,7 @@ import `in`.smartie.quotedesk.data.model.RateTierV2
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -78,7 +79,7 @@ class QuotationEditTest {
         member: Member = manager,
         quoting: QuotingRecord? = capOfTen,
         customers: List<PartyRecord> = emptyList()
-    ): EditPlan = QuotationEdit.plan(edited, member, quoting, stored, customers, editedAt)
+    ): EditPlan = QuotationEdit.plan(edited, member, quoting, stored, customers)
 
     private fun fieldsOf(plan: EditPlan): Map<String, Any?> = (plan as EditPlan.Update).fields
 
@@ -369,13 +370,15 @@ class QuotationEditTest {
     }
 
     @Test
-    fun `the stamp names the editor, and the revision moves by exactly one`() {
+    fun `the stamp names the editor, takes the server's clock, and the revision moves by exactly one`() {
+        // Turned, not weakened, in N5.11: the time was the phone's `at`; it is
+        // now the server's, which the rule checks against the request time.
         val record = read(issued()).copy(revision = 3)
         val fields = fieldsOf(save(open(record), record, member = owner))
 
         assertEquals("Owner Person", fields["lastEditedBy"])
         assertEquals("u_o", fields["lastEditedByUid"])
-        assertEquals(editedAt, fields["lastEditedAt"])
+        assertSame(ServerTimestamp, fields["lastEditedAt"])
         assertEquals(4, fields["rev"])
     }
 

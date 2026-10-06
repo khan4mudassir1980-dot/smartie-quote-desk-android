@@ -127,7 +127,7 @@ private fun QuotationRow(quotation: QuotationRecord, onOpen: () -> Unit) {
         modifier = Modifier.semantics { contentDescription = openQuotationLabel(number) },
         title = number,
         secondary = quotation.party.name.ifBlank { PARTY_NOT_RECORDED },
-        meta = quotation.at.takeIf { it > 0 }?.let(::formatDate),
+        meta = quotation.issuedAt.takeIf { it > 0 }?.let(::formatDate),
         tags = {
             Tag(quotation.status.ifBlank { "Finalised" }, statusTone(quotation.status))
             if (quotation.lastEditedAt > 0) Tag(EDITED, TagTone.NEUTRAL)

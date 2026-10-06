@@ -28,9 +28,11 @@ import `in`.smartie.quotedesk.ui.quotations.LAST_EDITED
 import `in`.smartie.quotedesk.ui.quotations.NO_QUOTATIONS
 import `in`.smartie.quotedesk.ui.quotations.QuotationListScreen
 import `in`.smartie.quotedesk.ui.quotations.TOTALS_KEY
+import `in`.smartie.quotedesk.ui.quotations.formatDate
 import `in`.smartie.quotedesk.ui.quotations.lastEditedText
 import `in`.smartie.quotedesk.ui.quotations.openQuotationLabel
 import `in`.smartie.quotedesk.ui.theme.SmartieTheme
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -188,6 +190,23 @@ class QuotationListScreenTest {
         assertTrue(shows(LAST_EDITED))
         assertTrue(shows(lastEditedText(edited)))
         assertTrue("the name is in it", lastEditedText(edited).startsWith("Ravi Kulkarni, "))
+    }
+
+    @Test
+    fun `the issue date shown is the server's when the quotation has one, on the row and the detail`() {
+        // N5.11, the Owner's decision 1.1: the date the PDF prints. A phone
+        // whose clock was out would otherwise show one date and print another.
+        val phone = 1_735_732_800_000L // 1 Jan 2025, midday UTC
+        val server = 1_742_040_000_000L // 15 Mar 2025, midday UTC
+        val issued = byId("q_pwa_finalised").copy(at = phone, serverAt = server)
+        screen(records = listOf(issued))
+
+        assertTrue("the row", shows(formatDate(server)))
+        assertFalse(shows(formatDate(phone)))
+
+        open("SIE/QD/2025-26/007")
+        assertTrue("the detail", shows(formatDate(server)))
+        assertFalse(shows(formatDate(phone)))
     }
 
     @Test

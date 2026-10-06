@@ -8,11 +8,11 @@ anything.** Last updated 2026-10-06.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `907a660` — run #245, fully green (unit tests, lint, Firestore rules emulator, APK build). The second of the review's two rules commits, so it is also the last CI-verified **code** head and the ruleset anchor; the last commit that changed app code is `105e8cc` (run #243). Later commits may sit above it. |
+| **Last CI-verified head** | `9985c70` — run #259, fully green (unit tests, lint, Firestore rules emulator, APK build). N5.11's commit 10, the last commit that changed app code. Later commits may sit above it. |
 | **APK to install** | The `smartie-native-apks` artifact **from the run that verified the head you intend to install** — never from whichever run this table happens to name. A build contains the commit it ran on and nothing above it, so a head hash and an APK go out of step the moment anything lands. Each run's job summary reports its head and the signing certificate; the app must show **Staging**. |
-| **Ruleset anchor** | `907a660` (the Owner's N5.10b review, `prClosesOnlyWhenMet` removed) — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
-| **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **seventeen rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap), `ff20dd4` (N5.10 — edit, the creator's cancel, the cap only when raised), `cff32be`, `6d2c25c`, `d59f1e6`, `877701f`, `547d218`, `caa835e`, `85c4fb7` (N5.10b — the expression limit, the status pin, a boolean `received`, the uid pin, the headroom reorder and ternaries, Ordered and a Manager's cancel), `0bf1dfe`, `907a660` (the review — two second definitions removed, the same decisions); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
-| **To deploy next** | The **latest CI-verified head**, not a hash copied into this file. Check it before deploying: `git diff --quiet <head> 907a660 -- firestore/firestore.rules` — silence means that head carries the current ruleset. No index deploy: `firestore.indexes.json` is unchanged since `69d0fce`. |
+| **Ruleset anchor** | `5b03d57` (N5.11 commit 3 — an edit's `lastEditedAt` and a create's `serverAt` are the server's time) — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
+| **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **eighteen rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap), `ff20dd4` (N5.10 — edit, the creator's cancel, the cap only when raised), `cff32be`, `6d2c25c`, `d59f1e6`, `877701f`, `547d218`, `caa835e`, `85c4fb7` (N5.10b — the expression limit, the status pin, a boolean `received`, the uid pin, the headroom reorder and ternaries, Ordered and a Manager's cancel), `0bf1dfe`, `907a660` (the review — two second definitions removed, the same decisions), `5b03d57` (N5.11 — the server's clock on an edit and on an issue); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
+| **To deploy next** | The **latest CI-verified head**, not a hash copied into this file. Check it before deploying: `git diff --quiet <head> 5b03d57 -- firestore/firestore.rules` — silence means that head carries the current ruleset. No index deploy: `firestore.indexes.json` is unchanged since `69d0fce`. |
 
 > **Three fields, three meanings — they were one field until 2026-09-24 and it
 > had gone wrong.** The table said `a849650` was "the commit to deploy the rules
@@ -50,7 +50,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
 | N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2, N4.3 and N4.4 are all code complete and CI-verified**, and both are waiting on the same Owner-run staging rules deployment paired with the APK rollout — they were never deployed separately and must not be. Purchase History is built and open to every role, so what was Batch 5 is done; the tab badge is Batch 6 |
-| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.10 are complete and CI-verified** — N5.9 (finalise) at `57d607a`, run #204, Part A of the Owner's review of it at `2848bb9`, run #208, and **N5.10** (edit, cancel, Duplicate, the party type) at `4283ef2`, run #222. The builder **issues quotations** and now **edits** them — the same number, saved over, stamped "Last edited" — while the creator, or an Owner or Administrator, may **cancel** one and anyone who quotes may **duplicate** one. **Not yet run on a phone** — T-Q1 to T-Q22 are owed. Rules deploy once, at the final staging pass, from the head named above; the ruleset anchor is now `907a660`. The Quotation tab keeps its "Keep using the PWA to issue quotations" banner until N5.12. **N5.10b is complete and CI-verified** — the rules' expression limit, then Purchase's **Ordered** and **a Manager's cancel**: commits 0 to 13, runs #225 to #240, each pushed alone, one red run (#237) fixed by its own commit; commit 14 is the record. **Not yet run on a phone** — T-R19 to T-R28 are owed. **The Owner's review of it is closed out** (2026-10-06: one app-side gap fixed, two second definitions removed from the rules, the N5.11 survey done); N5.11, the PDF, Print and WhatsApp, waits on V8C4's output facts from the Owner |
+| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.10 are complete and CI-verified** — N5.9 (finalise) at `57d607a`, run #204, Part A of the Owner's review of it at `2848bb9`, run #208, and **N5.10** (edit, cancel, Duplicate, the party type) at `4283ef2`, run #222. The builder **issues quotations** and now **edits** them — the same number, saved over, stamped "Last edited" — while the creator, or an Owner or Administrator, may **cancel** one and anyone who quotes may **duplicate** one. **Not yet run on a phone** — T-Q1 to T-Q22 are owed. Rules deploy once, at the final staging pass, from the head named above; the ruleset anchor is now `907a660`. The Quotation tab keeps its "Keep using the PWA to issue quotations" banner until N5.12. **N5.10b is complete and CI-verified** — the rules' expression limit, then Purchase's **Ordered** and **a Manager's cancel**: commits 0 to 13, runs #225 to #240, each pushed alone, one red run (#237) fixed by its own commit; commit 14 is the record. **Not yet run on a phone** — T-R19 to T-R28 are owed. **The Owner's review of it is closed out** (2026-10-06: one app-side gap fixed, two second definitions removed from the rules, the N5.11 survey done). **N5.11 is complete and CI-verified** — the PDF, Print and WhatsApp, behind the finalise gate; the edit and issue times from the server's clock: `3cab563`..`9985c70`, runs #249 to #259, each pushed alone, one red run (#255) fixed by its own commit; the ruleset anchor is now `5b03d57`. **Not yet run on a phone** — T-Q23 to T-Q38 are owed, after the synthetic company settings are entered on staging |
 | N6 Products & Categories | Not started. The Products & Categories editing screen, which T-P7 is blocked on. **Also owed here: read the company GST from `teamSettings/company.defaultGst`.** V8C4's `stSave` writes it there and the native app is already permitted to read that document. N5.8a resolves a quotation's GST from the rate its catalogue lines agree on, which is an honest stopgap and not the final answer — a quotation whose lines disagree, or which has only hand-typed lines, has nothing to agree on and currently refuses to finalise until somebody sets the rate |
 | N7 Calculators | Not started. Port the four V8C4 calculators — rolling shutter, high-speed door, garage door, glass door — whose output becomes ordinary quotation lines carrying the opening size in the line's spec text |
 | N8 Migration & cutover | Not started. **The production migration and cutover.** `docs/N2-delivery.md:40` calls N8 "the catalogue migration"; that line is the stale one and `docs/N3-plan.md:585` is right. **Read the blocking warning about `import-staging.mjs` under "Decisions that bind future work" before planning any part of this** — the importer carries seed rates in every payload and would destroy live pricing if pointed at production |
@@ -1361,33 +1361,126 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**N5.11 — build commits 1 to 11 as the Owner approved on 2026-10-06, each
-pushed alone with CI green before the next; then stop and report. Do NOT
-start N5.12.** The approval, V8C4's facts a to e, the decisions and the
-additions are recorded below ("The Owner's approval of the N5.11 plan,
-2026-10-06"), with the plan as approved. **Stop and report, without working
-round it, if** any valid write reaches 900, a test would have to be
-weakened, `PdfDocument` cannot be smoke-tested on CI **and** the bitmap
-fallback also fails, or anything contradicts the repository.
+**Report N5.11 to the Owner and wait for the review — do NOT start N5.12.** N5.11 is built, every commit pushed alone with CI green before the next; its record is below ("N5.11 — every commit pushed alone"), with the choices to confirm. Its phone rows, T-Q23 to T-Q38, join T-Q1 to T-Q22 and T-R19 to T-R28 at the final staging pass, with the rules deployed from the head then current — the ruleset anchor is now `5b03d57` — after the Owner enters the synthetic company settings ("Synthetic company settings for the staging pass") in the **staging** console only.
 
-N5.10b itself is complete and CI-verified; its record is below ("N5.10b —
-every commit pushed alone"). Its phone rows, T-R19 to T-R28, are run at the
-final staging pass, with the rules deployed from the head then current —
-the ruleset anchor is now `907a660`.
+### N5.11 — every commit pushed alone, CI green before the next; one red run, fixed by its own commit
 
-**Then N5.11** — the PDF, Print and WhatsApp — planned only after N5.10b
-is built and the Owner says so, and after the Owner has supplied V8C4's PDF,
-Print and WhatsApp facts. It must carry what this file already owes N5.11: print
-"Last edited by <name>, <date time>" right after the date, its time **from
-the server's clock** and checked by the rule against the request time;
-Duplicate's message back to **V8C4's exact words**; the PDF's fallback to
-the live company settings while `snap` is absent; and each of the three
-calling the finalise gate first, as V8C4's do.
+From `git log --oneline b2cf4f3..9985c70` and
+`gh api "repos/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs?branch=claude/trusting-hamilton-z12eer"`.
+All on 2026-10-06, after the Owner's approval. Nothing was pushed on top of a
+head until CI had passed it; commit 7's red run was followed only by its own
+fix:
 
-N5.10 is complete and CI-verified at `4283ef2` (below). Its phone rows,
-T-Q11 to T-Q22, join T-Q1 to T-Q10 in `PHONE-TEST-CHECKLIST.md` and are run
-once, at the final staging pass, with the rules deployed from the head
-then current — the anchor is now `907a660`.
+| Commit | What | Run |
+|---|---|---|
+| `2448a7f` | Docs — the Owner's N5.11 brief recorded before acting | #247 green |
+| `a427bb2` | Docs — the approval, facts a to e, the decisions, synthetic staging values | #248 green |
+| `3cab563` | 1 — the amount in words (Indian system) and the PDF's file name | #249 green |
+| `ba5e705` | 2 — company settings: model, reader under V8C4's names, read-only repository, the letterhead from `snap` then live | #250 green |
+| `5b03d57` | 3 — **rules**: an edit's `lastEditedAt == request.time`; a create's `serverAt == request.time` when present | #251 green |
+| `a481d9c` | 4 — the app writes `serverAt` and `lastEditedAt` as server timestamps; `issuedAt`; the detail and row show it | #252 green |
+| `d9a941e` | 5 — the document model and builder | #253 green |
+| `57e5bd3` | 6 — the page layout, pure | #254 green |
+| `83de1bb` | 7 — the renderer (`PdfDocument`, Inter) and bounded image decoding | **#255 red** |
+| `88b1196` | 7b — the PDF test decodes images as a phone does | #256 green |
+| `c931e94` | 8 — the outputs: the cache (older files cleared), Download, Print, the WhatsApp share, `<queries>` | #257 green |
+| `6cec902` | 9 — the gate and the view models, the notice, the approved words, the server read-back | #258 green |
+| `9985c70` | 10 — the screens: the row under Finalise and on the detail, "Send with" | #259 green |
+
+**The red run, #255.** One test: "an image that cannot be read is left out
+and named" expected `[LOGO, QR, SIGNATURE]` and got `[LOGO, SIGNATURE]` —
+under Robolectric's legacy graphics `BitmapFactory` invents a placeholder for
+bytes that are not an image (`allowInvalidImageData`, true by default "to
+preserve legacy behavior"), where a phone returns null. Commit 7b sets it
+false before each test; the renderer and the expectation are unchanged.
+**Lesson, for every image test here: set
+`ShadowBitmapFactory.setAllowInvalidImageData(false)`, or a broken image
+decodes.**
+
+**`PdfDocument` on CI: not smoke-tested — the bitmap fallback is, and
+passed.** Robolectric has no `PdfDocument`; its native calls are stubbed, so
+a page cannot be started. `QuotationPdfTest`'s `PdfDocument` test runs and
+**skips** (the logs of #255 and #256, read for this record, report it SKIPPED); the fallback — every
+page of a 40-item cancelled quotation drawn onto a bitmap canvas, every word
+and the stamp recorded where the layout put them — **passed** from #256 on.
+That is the approved plan's fallback, not its stop condition. The real file
+is a phone row (T-Q23 to T-Q26).
+
+**Tests, with the command behind each:**
+
+- **The local JVM sweep** (pure Kotlin, the scratch sweep script — kotlinc
+  and JUnit over `domain/`, `data/model`, `data/mapping` and the named
+  repository and gate files): **73 classes, 1,122 tests, OK** at commit 9, up
+  (its output: `classes: 73` / `OK (1122
+  tests)`), against 1,018 after commit 1 (64 classes). Commit 10 changed no
+  pure code.
+- **The emulator suite** (`cd firestore && npm test` under the emulator):
+  **347 tests, 347 pass, 0 "maximum of 1000 expressions" lines** at commit 3
+  (its own `# tests 347 / # pass 347`).
+- **CI's Gradle unit tests** (`./gradlew testStagingDebugUnitTest`): Gradle
+  prints a total only when something fails — **#255: "1952 tests completed,
+  1 failed, 1 skipped"**. The green runs print no total; their only skip is
+  the `PdfDocument` test above.
+
+**Ablations, 102, each one mutation and the tests again, every one red in
+the end:** commit 1, 12; commit 2, 12; commit 3, 5 on the emulator; commit
+4, 5; commit 5, 26; commit 6, 16; commit 7, 7; commit 8, 5; commit 9, 14
+(each listed in its commit message). **Two came back with nothing red first**
+— commit 6's "no footer reserve" and "notes and terms always halved" — and
+the tests were made to see them before commit 6 was pushed: the footer's top
+is now taken from its own page number, and a lone terms list must print an
+80-character term on one line. Not measured locally: everything Android —
+the renderer, the outputs, the view models, the screens — which run on CI
+only.
+
+**Headroom — the stop line stays 900.** `cd firestore &&
+PAD_MATCH='/quotations/{id}' node tools/quotes.js` and
+`PAD_MATCH='/teamSettings/numbering' node tools/quotes.js`, ±6, uid set
+(transition in brackets), before → after commit 3:
+
+| Valid write | Before | After |
+|---|---|---|
+| A Manager's edit, flat discount raised in rate | 613 (589) | 620 (589) |
+| A Manager's edit, percentage raised | 601 (571) | 601 (571) |
+| A Manager cancels their own | 337 (307) | 337 (307) |
+| A Manager finalises — the quotation | 423 (393) | 442 (417) |
+| — the counter | 202 | 202 |
+| — the batch | 625 (595) | 644 (619) |
+
+The dearest valid write in the ruleset is still a Manager's purchase cancel at
+755 (N5.10b). Nothing reaches 900.
+
+**To confirm with the Owner — choices made where V8C4's wording was not
+known, each pinned by a test and easy to change:**
+
+1. The bank block's **"Name"** row prints the **firm's name** as the account
+   name.
+2. A quotation with no customer name prints **"Accepted for the customer"**.
+3. The letterhead's **"GSTIN … · PAN …"** separator.
+4. **The signatory and the acceptance share the closing band** — the
+   customer's on the left, the firm's on the right — rather than stacking as
+   items 11 and 12 of the approved order: stacked, a three-item quotation ran
+   to a second page for the acceptance alone.
+5. **The file name** turns each non-alphanumeric character into "-", one for
+   one, as the fact reads — "M/s. A & B" is `M-s--A---B`; runs are not
+   collapsed.
+6. **"One rupees only"** — V8C4's, kept: the phrase always ends "rupees
+   only".
+7. **The notice's words** — "Made without the GSTIN and bank details — they
+   are not in company settings." and "The logo could not be read and was left
+   out." — and the fields it names: firm name, address, phone, email, GSTIN,
+   PAN, bank details (a tagline, website, logo, terms and notes are simply
+   omitted when absent).
+8. **"Absent" company settings are believed only from the server.** A phone
+   that never synced the document sees nothing in its cache, which is not an
+   answer; the PDF is refused ("Company details have not loaded yet — connect
+   and try again") until the server says what is there.
+9. **The detail's "Issued" date and the history row** now show the issue date
+   the PDF prints (`serverAt`, else `at`); the list is still ordered by `at`.
+
+**Phone rows T-Q23 to T-Q38** are in `PHONE-TEST-CHECKLIST.md`, after the
+Owner enters the synthetic company settings below in the **staging** console.
+None has been run.
 
 ### N5.10b — every commit pushed alone, CI green before the next; one red run, fixed by its own commit
 
@@ -4790,6 +4883,8 @@ Recorded 2026-09-28 at the Owner's instruction, as a **requirement**. N5.10
 puts the stamp on the quotation card; the printed page must carry it too,
 immediately after the date, in the printed order `docs/N5-plan.md` sets out.
 
+**Done in N5.11** — `QuotationDocumentBuilder` (`d9a941e`): "Last edited by <name>, <date time>" directly after Date, only when edited (the Owner's decision 1.2).
+
 ### Owed in N5.11: the "Last edited" time from the server's clock
 
 Recorded 2026-09-28 at the Owner's instruction, as a **requirement**, not
@@ -4799,12 +4894,16 @@ against the request time. N5.10 stamps `lastEditedAt` from the device, as
 `at` is today; a phone with a wrong clock would print a wrong edit time on a
 customer document.
 
+**Done in N5.11** — the rule (`5b03d57`: `lastEditedAt == request.time`, and a create's `serverAt` when present) and the app (`a481d9c`: both written as server timestamps).
+
 ### Owed in N5.11: Duplicate's message in V8C4's exact words
 
 Recorded 2026-09-28 at the Owner's instruction. Until the PDF, Print and
 WhatsApp callers exist, a copy says "Copied into a new draft — it takes a new
 number when it is finalised". N5.11 restores V8C4's words: "Copied into a new
 draft — it takes a new number when you download, print or share".
+
+**Done in N5.11** (`6cec902`) — with "finalise" added, as the Owner approved on 2026-10-06 because this app keeps a Finalise button: "Copied into a new draft — it takes a new number when you finalise, download, print or share".
 
 ### Owed in N5.11: the PDF falls back to the LIVE company settings when `snap` is absent
 
@@ -4813,6 +4912,8 @@ app's own PDF must fall back to the **live** company settings for any field
 `snap` does not carry — and must **not** copy V8C4's blank assignment.
 Otherwise every quotation issued between 9b and N6 prints blank from this
 app too.
+
+**Done in N5.11** — `Letterhead.resolve` (`ba5e705`): `snap` field by field, then the live settings; never blank; the images always live.
 
 ### Owed before the N8 cutover: counter contention in the live PWA
 

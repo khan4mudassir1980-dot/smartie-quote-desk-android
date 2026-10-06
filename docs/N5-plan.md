@@ -283,6 +283,8 @@ decided WhatsApp shares the PDF only, with no text.)
 12. **Grand total**
 13. Validity days, payment terms, warranty, notes, terms, bank details, footer
 
+N5.11 prints the full order the Owner approved on 2026-10-06 — recorded in `PROJECT-STATUS.md` ("The plan as approved"). One layout choice there, to confirm: the signatory and the customer's acceptance share the closing band.
+
 ---
 
 ## What N5.1 found, and which batch answers it
@@ -835,7 +837,7 @@ of 0.5 must not be lifted to 80.5.
 | **N5.9** | Finalise — one transaction, idempotent retry, `src`, `snap`, party snapshot; **9b:** the finalise gate (V8C4's `ensureFinalised`) and a stand-alone Finalise as its first caller | **Yes** | 9a done and CI-verified; 9b code complete — its CI state is `PROJECT-STATUS.md`'s |
 | **N5.10** | Edit and cancel, with the last-edited stamp; **Duplicate**; **the party type** (pick sets the rate on an empty quotation, a new customer's type always chosen, the Parties screen's checks) — all approved 2026-09-28 | **Yes** | **Done**, `0e9d0b8`..`4283ef2`, CI #211-#222; ruleset anchor `ff20dd4` |
 | **N5.10b** | The 1,000-expression limit: `/purchase` update and the stock rules restructured, `refused()` on every refusal test, tests aimed at their own clause; **the status pin** (status moves only by closing, cancel, reopen and — commit 9 — Ordered), **`received` boolean when set** (the write-off enforced), **the uid pin**; then **Ordered** and **a Manager's cancel** (commits 8 to 11: the reorder, the rules, domain and data, the screens) — approved 2026-09-29, the Ordered and cancel design 2026-10-05 | **Yes** | **Done**, `519b0ba`..`7a73e64`, CI #225-#240 (one red run, #237, fixed by its own commit); ruleset anchor `85c4fb7` |
-| **N5.11** | PDF, WhatsApp and Print in the printed order above — each **calls the finalise gate first**, as V8C4's do; the PDF falls back to the **live** company settings when `snap` is absent; prints **"Last edited by"** right after the date, its time **from the server's clock**, checked by the rule against the request time; Duplicate's message returns to **V8C4's exact words** | Yes (the edit time) | To do |
+| **N5.11** | PDF, WhatsApp and Print in the printed order above — each **calls the finalise gate first**, as V8C4's do; the PDF falls back to the **live** company settings when `snap` is absent; prints **"Last edited by"** right after the date, its time **from the server's clock**, checked by the rule against the request time; Duplicate's message returns to **V8C4's exact words** (with "finalise" added, approved 2026-10-06) | Yes (the edit time and the issue time) | **Done**, `3cab563`..`9985c70`, CI #249-#259 (one red run, #255, fixed by its own commit); ruleset anchor `5b03d57` |
 | **N5.12** | `docs/N5-cutover.md`, and **only here** does the banner come out. It also records the Owner's QZ decision of 2026-09-29, as corrected on 2026-10-05: **the PWA's Purchase writing stops at cutover**, and **the control is staff stopping PWA Purchase use** — not the rules, which still accept the 19 V8C4 purchase writes `PROJECT-STATUS.md` lists ("Owed in N5.12"). Hard-blocking the PWA is revisited here | No | To do |
 
 Rules deploy **once**, at the final staging pass, with one APK — not per batch.

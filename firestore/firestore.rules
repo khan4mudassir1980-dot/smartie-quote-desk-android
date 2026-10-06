@@ -573,19 +573,20 @@ service cloud.firestore {
     }
 
     /**
-     * A stored receipt total this rule is willing to reason about.
+     * A received total may only grow. This is also what refuses a `staff` reopen.
      *
-     * The PWA has written strings into this collection — `pr_received_legacy`
-     * holds `"qty": "10"` — and comparing a string to a number here raises an
-     * error rather than coercing. So a non-numeric stored total fails closed
-     * for `staff`, and an Administrator rescues the row through the
-     * privileged branch, exactly as they rescue a string `qty`.
+     * **And it is what refuses a stored total this rule cannot reason
+     * about.** The PWA has written strings into this collection —
+     * `pr_received_legacy` holds `"qty": "10"` — and a stored `rcvQty` of
+     * `"4"` or null makes the comparison below an **error** rather than a
+     * coercion, which refuses; one carried unchanged is not a number, which
+     * refuses too. So a non-numeric stored total fails closed for a Manager
+     * and a creator, and an Administrator rescues the row through the
+     * privileged branch, as they rescue a string `qty`. Until the Owner's
+     * N5.10b review (2026-10-06) `prRcvNumeric` said the same thing first;
+     * the differential replay showed it never decided a write this did not,
+     * and it was removed.
      */
-    function prRcvNumeric() {
-      return !resource.data.keys().hasAny(['rcvQty']) || resource.data.rcvQty is number;
-    }
-
-    /** A received total may only grow. This is also what refuses a `staff` reopen. */
     function prRcvNotReduced() {
       return request.resource.data.get('rcvQty', 0) is number
         && request.resource.data.rcvQty >= resource.data.get('rcvQty', 0);
@@ -629,8 +630,7 @@ service cloud.firestore {
      * neither cancel an untouched requirement nor re-close a finished one.
      */
     function prShortfall() {
-      return prRcvNumeric()
-        && resource.data.get('rcvQty', 0) is number
+      return resource.data.get('rcvQty', 0) is number
         && resource.data.rcvQty > 0
         && resource.data.rcvQty < resource.data.qty
         && resource.data.get('received', false) != true
@@ -656,7 +656,7 @@ service cloud.firestore {
      */
     function prDelivery(changed) {
       return (prReceiptKeys(changed)
-              ? prQtyKept() && prOpen() && prRcvNumeric() && prRcvNotReduced() && prClosesOnlyWhenMet()
+              ? prQtyKept() && prOpen() && prRcvNotReduced() && prClosesOnlyWhenMet()
               : false)
         || (prShortfallKeys(changed) ? prShortfall() : false);
     }

@@ -1,14 +1,14 @@
 # Project status
 
 **The single current-status record. Read this before planning or changing
-anything.** Last updated 2026-10-05.
+anything.** Last updated 2026-10-06.
 
 ## Where the work is
 
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `7a73e64` — run #240, fully green (unit tests, lint, Firestore rules emulator, APK build). N5.10b commit 13, the measurement tools; the last commit that changed app code is `5b50809` (run #238) and the last that changed the rules is `85c4fb7` (run #235). Later commits may sit above it. |
+| **Last CI-verified head** | `91ccc01` — run #241, fully green (unit tests, lint, Firestore rules emulator, APK build). N5.10b commit 14, its record; the last commit that changed app code is `5b50809` (run #238) and the last that changed the rules is `85c4fb7` (run #235). Later commits may sit above it. |
 | **APK to install** | The `smartie-native-apks` artifact **from the run that verified the head you intend to install** — never from whichever run this table happens to name. A build contains the commit it ran on and nothing above it, so a head hash and an APK go out of step the moment anything lands. Each run's job summary reports its head and the signing certificate; the app must show **Staging**. |
 | **Ruleset anchor** | `85c4fb7` (N5.10b commit 9) — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
 | **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **fifteen rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap), `ff20dd4` (N5.10 — edit, the creator's cancel, the cap only when raised), `cff32be`, `6d2c25c`, `d59f1e6`, `877701f`, `547d218`, `caa835e`, `85c4fb7` (N5.10b — the expression limit, the status pin, a boolean `received`, the uid pin, the headroom reorder and ternaries, Ordered and a Manager's cancel); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
@@ -1361,18 +1361,22 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**The Owner reviews N5.10b. Wait for the Owner's message; do NOT start
-N5.11.** N5.10b is built: commits 0 to 13 each pushed alone with CI green
-before the next, CI-verified to `7a73e64` (run #240), and this record is commit
-14 — the table, the test counts, the headroom and the findings are below
-("N5.10b — every commit pushed alone"). **None of the Owner's stop
-conditions was met:** the dearest valid write is a Manager's cancel at
-**755**, under the 900 stop line; no test was weakened (three were turned,
-each saying why); nothing contradicted the repository or the rules file; and
-the Administrator's reopen and removal of the old V8C4 rows is **24 of 24
-accepted**. Its phone rows, T-R19 to T-R28, join the checklist and are run
-at the final staging pass, with the rules deployed from the head then
-current — the ruleset anchor is now `85c4fb7`.
+**Close out the Owner's review of N5.10b (2026-10-06), then report and
+wait. Do NOT start N5.11 code.** The review is recorded below ("The Owner's
+review of N5.10b, 2026-10-06"): A, seven answers with `file:line`, and any
+gap they reveal fixed in its own commit; B, the two clauses no test turns
+red — `prRcvNumeric` and `prClosesOnlyWhenMet` — each either removed as a
+second definition of a rule another clause enforces (proved by the
+differential replay, headroom reported) or given the test that turns red
+without it, one commit per clause; C, a read-only survey of what the app
+has for the PDF, Print and WhatsApp. Each commit pushed alone, CI green
+before the next. The Owner then sends V8C4's output facts for the N5.11
+plan.
+
+N5.10b itself is complete and CI-verified to `7a73e64` (run #240), its
+record commit `91ccc01` green on run #241; the record is below ("N5.10b —
+every commit pushed alone"). Its phone rows, T-R19 to T-R28, are run at the
+final staging pass, with the rules deployed from the head then current.
 
 **Then N5.11** — the PDF, Print and WhatsApp — planned only after N5.10b
 is built and the Owner says so, and after the Owner has supplied V8C4's PDF,
@@ -3471,6 +3475,57 @@ the questions asked, answered from the code at `877701f`:
 - **(1) "The Open list"** is the board's own word: the Purchase screen's
   open section is headed "Open" (`OPEN_SECTION`, `PurchaseScreen.kt`).
 
+### The Owner's review of N5.10b, 2026-10-06 — recorded before acting
+
+Rule 8. **"N5.10b REVIEW: good work. Close-out below, then a read-only
+survey for N5.11. Do NOT start N5.11 code."**
+
+**A. Answer each, with `file:line` or the test name** — no new work unless
+a gap is found, and a gap is fixed in its own commit:
+
+1. Create: does it refuse any status other than Needed, and any `ordered*`
+   / `cancelled*` key? Which tests prove it? Was the `orderedUid` create pin
+   moot?
+2. Receipts on an Ordered row (a part keeps Ordered; a full receipt and a
+   write-off close it): the tests for a Manager and for the Staff creator.
+3. Duplicate / top-up: what native create does when an open requirement for
+   the same item exists, and when that one is Ordered.
+4. The action row: the most buttons any role sees on one card, how they lay
+   out at 360dp, and the test that proves they paint inside the card.
+5. Blue: which colour token, and the tag text's contrast ratio.
+6. The N8 migration item: quote the line as recorded, with the exact field
+   list `prUntouched` counts as a receipt.
+7. Commit 8b was not in the approved split: its proof (the replay command
+   and count, the same decisions), and why commit 8 made a refused write
+   cost about 908.
+
+**B. The two clauses that turn no test red, `prRcvNumeric` and
+`prClosesOnlyWhenMet`.** "`prClosesOnlyWhenMet` carries the Owner's
+write-off rule, so this is not left open." For each: **if another clause
+already refuses every write it refuses** (two definitions of one rule),
+name that clause, prove it with the differential replay — zero decision
+change with the clause removed — then remove the redundant one and report
+the headroom saved. **If it is not redundant**, add the test that turns red
+when it is removed (Rule 7). One commit per clause, each pushed alone, CI
+green. **If the answer is unclear, stop and report.**
+
+**C. A read-only survey for N5.11** (PDF, Print, WhatsApp share). No plan,
+no code. With `file:line` for each: what the app has today for building a
+quotation PDF, printing, sharing to WhatsApp and other apps, the amount in
+words, the letterhead (`snap{}` and the live company settings), the "Last
+edited" stamp, and the issue gate (the `ensureFinalised` equivalent) and its
+callers; and which libraries are already in the build for PDF, print and
+share. "I will send V8C4's output facts for the plan after that."
+
+**The lesson, for the defect list** — recorded there ("A lock tested by
+looking up SetText"): a disabled Compose text field has no SetText action.
+Test a lock by "not enabled" plus "takes no text", never by looking up
+SetText.
+
+**Always:** one commit per push, CI green before the next; this branch
+only; no `main`, no PR, no force-push, no amending pushed commits; never
+deploy Firebase.
+
 ### Owed in N6: the validators on the fields and on the company's own details
 
 Recorded 2026-09-26. V8C4 runs `gstinProblem`, `phoneProblem` and
@@ -4062,6 +4117,24 @@ This is why the N5.7 unit correction is done **by hand in the editor** and no
 import is run.
 
 ## Deferred — known defects, recorded and not fixed
+
+### A lock tested by looking up SetText — CLOSED by `5b50809`, and a rule for every lock test
+
+N5.10b commit 11 (`dfd226b`, run #237 red, 1 of 1,854):
+`PurchaseEditLockScreenTest` found the locked name and quantity fields with
+`field(label)`, which matches an input by its **SetText** action. **A
+disabled Compose text field has no SetText action**, so the lookup could not
+find the very field the test locks, and the test failed on a lock that was
+working. Robolectric runs only on CI, so CI was its first run. Fixed in its
+own commit, `5b50809` (run #238).
+
+**The lesson, the Owner's of 2026-10-06: test a lock by "not enabled" plus
+"takes no text", never by looking up SetText** — the disabled input under
+the field's label (`isNotEnabled()` with `hasAnyAncestor(hasContentDescription(label))`),
+and no node under that label with a SetText action. Its unlocked witness
+asks the reverse with the same two lookups, so neither can pass vacuously.
+`PurchaseEditLockScreenTest` is the pattern; `QuoteBuilderScreenTest.disabledIn`
+(CI #207) the earlier half of it.
 
 ### The rules' 1,000-expression limit was reached 58 times in the purchase emulator tests — CLOSED by N5.10b
 

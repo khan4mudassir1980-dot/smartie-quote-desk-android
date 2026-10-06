@@ -208,7 +208,7 @@ class QuotationDocumentBuilderTest {
         assertEquals("Authorised signatory for Test Gates & Shutters", doc.signatory)
         assertEquals("Accepted for Test Customer & Sons", doc.acceptance)
         assertEquals("Synthetic test footer | example.invalid", doc.footer)
-        assertEquals("Quotation-TEST-QD-2026-27-001-Test-Customer---Sons.pdf", doc.fileName)
+        assertEquals("Quotation-TEST-QD-2026-27-001-Test-Customer-Sons.pdf", doc.fileName)
         assertEquals(emptyList<String>(), doc.missing)
     }
 

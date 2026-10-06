@@ -1,15 +1,18 @@
 package `in`.smartie.quotedesk.domain
 
 /**
- * The PDF's file name — V8C4's: `Quotation-<no>-<client>.pdf`. Every
- * character that is not an ASCII letter or digit becomes "-", the client part
- * is at most [MAX_CLIENT] characters, and the fallbacks are "Draft" for a
- * missing number and "Client" for a missing name (V8C4's output facts,
- * recorded 2026-10-06). The same name is used for Download, Print's job, the
- * share and the cached file.
+ * The PDF's file name — V8C4's: `Quotation-<no>-<client>.pdf`, built exactly
+ * as V8C4 builds it (the Owner's review of 2026-10-06, quoting V8C4):
  *
- * Character by character, as the fact reads: "M/s. A & B" is `M-s--A---B`.
- * A run of them is not collapsed.
+ * ```
+ * clean(s) = s.replace(/[^A-Za-z0-9]+/g, "-"), then a leading and a trailing "-" stripped
+ * no       = clean(number), or "Draft" if that comes out empty
+ * client   = clean(name) cut to 36 characters, or "Client" if empty
+ * ```
+ *
+ * A run of other characters collapses to one "-": "M/s. A & B" is `M-s-A-B`.
+ * The cut comes after the clean, as V8C4's does. The same name is used for
+ * Download, Print's job, the share and the cached file.
  */
 object QuotationFileName {
 
@@ -26,7 +29,9 @@ object QuotationFileName {
     /** The print job's name: the file name without `.pdf`. */
     fun jobName(number: String, client: String): String = of(number, client).removeSuffix(".pdf")
 
+    /** V8C4's `/[^A-Za-z0-9]+/g` — ASCII letters and digits only, a run at a time. */
+    private val OTHERS = Regex("[^A-Za-z0-9]+")
+
     private fun clean(text: String): String =
-        text.trim().map { if (it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9') it else '-' }
-            .joinToString("")
+        text.replace(OTHERS, "-").removePrefix("-").removeSuffix("-")
 }

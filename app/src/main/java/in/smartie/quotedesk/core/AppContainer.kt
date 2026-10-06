@@ -7,6 +7,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import `in`.smartie.quotedesk.data.repository.AuthRepository
 import `in`.smartie.quotedesk.data.repository.PeopleRepository
 import `in`.smartie.quotedesk.data.repository.CatalogueReadRepository
+import `in`.smartie.quotedesk.data.repository.CompanySettingsRepository
 import `in`.smartie.quotedesk.data.repository.OperationsReadRepository
 import `in`.smartie.quotedesk.data.repository.FirestoreStockPhotoStore
 import `in`.smartie.quotedesk.data.repository.DiskStockPhotoFiles
@@ -73,6 +74,12 @@ class AppContainer(
      * side needs: `/teamSettings/numbering` and `/teamSettings/quoting`.
      */
     val settingsRepository = SettingsRepository(firestore)
+
+    /**
+     * N5.11: `/teamSettings/company`, read-only — the firm's details, bank,
+     * terms, notes and images the quotation PDF prints. N6 writes it.
+     */
+    val companySettingsRepository = CompanySettingsRepository(firestore)
 
     /** Clearing stopped-item history; the only write it has. */
     val stoppedStockRepository = StoppedStockRepository(firestore)

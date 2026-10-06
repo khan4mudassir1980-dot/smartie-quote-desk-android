@@ -608,20 +608,6 @@ service cloud.firestore {
     }
 
     /**
-     * A delivery may only close a requirement it has actually completed.
-     *
-     * Without this, marking `received: true` beside a receipt that falls
-     * short of the total would close a requirement at a figure nobody
-     * delivered. Writing off that difference is a different thing, with its
-     * own branch and its own confirmation.
-     */
-    function prClosesOnlyWhenMet() {
-      return request.resource.data.get('received', false) != true
-        || (request.resource.data.get('rcvQty', 0) is number
-            && request.resource.data.rcvQty >= request.resource.data.qty);
-    }
-
-    /**
      * The shortfall, and the only quantity it may write.
      *
      * `qty` must land on exactly the stored receipt: not a figure the caller
@@ -656,7 +642,7 @@ service cloud.firestore {
      */
     function prDelivery(changed) {
       return (prReceiptKeys(changed)
-              ? prQtyKept() && prOpen() && prRcvNotReduced() && prClosesOnlyWhenMet()
+              ? prQtyKept() && prOpen() && prRcvNotReduced()
               : false)
         || (prShortfallKeys(changed) ? prShortfall() : false);
     }
@@ -756,9 +742,10 @@ service cloud.firestore {
      * (QA).
      *
      * V8C4 writes `received` as the number 1 (and 0). A 1 is not `true`, so
-     * `prClosesOnlyWhenMet` never saw it, and V8C4's all-or-nothing receipt
-     * could close a requirement short with no write-off — as could anybody
-     * else who wrote a 1. Refusing the number closes that for every writer.
+     * the check that a close meets its total never saw it, and V8C4's
+     * all-or-nothing receipt could close a requirement short with no
+     * write-off — as could anybody else who wrote a 1. Refusing the number
+     * closes that for every writer.
      * A stored number is left alone, and the readers still tolerate one; only
      * a write that sets the field must send a boolean.
      */
@@ -845,10 +832,15 @@ service cloud.firestore {
      * number at least the total. The write-off meets it by setting the total
      * to the receipt, which is what `prShortfall` insists on.
      *
-     * `prClosesOnlyWhenMet` says the same for a Manager's or a creator's
-     * delivery; this says it for an Owner or Administrator too, and for a
-     * status move. An Administrator may still correct a closed requirement —
-     * a write that leaves `received` and `status` alone is not a close.
+     * **The one statement of the Owner's write-off rule**, for a Manager's
+     * and a creator's delivery as much as for an Owner or Administrator and
+     * for a status move. Until the Owner's N5.10b review (2026-10-06)
+     * `prClosesOnlyWhenMet` said it a second time inside the delivery branch;
+     * the differential replay showed it never decided a write this did not —
+     * a delivery may only set `received: true` on an open row, so the flag
+     * is always in the diff here — and it was removed. An Administrator may
+     * still correct a closed requirement — a write that leaves `received` and
+     * `status` alone is not a close.
      */
     function prClosesMet(changed) {
       let closes = (changed.hasAny(['received']) && request.resource.data.received == true)

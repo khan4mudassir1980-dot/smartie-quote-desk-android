@@ -265,8 +265,9 @@ retry still works, and no half-built quotation appears to anybody else.
 
 ## The printed order
 
-Screen, PDF and the WhatsApp text all follow this sequence. V8C4's order with
-the new money lines inserted:
+Screen and PDF follow this sequence. V8C4's order with the new money lines
+inserted. (It said "and the WhatsApp text" until 2026-10-06, when the Owner
+decided WhatsApp shares the PDF only, with no text.)
 
 1. Quotation no
 2. Date

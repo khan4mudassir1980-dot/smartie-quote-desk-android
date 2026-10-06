@@ -1361,12 +1361,12 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**Wait for the Owner's message with V8C4's PDF, Print and WhatsApp output
-facts. Do NOT start N5.11 code.** The Owner's review of N5.10b is closed
-out, each commit pushed alone with CI green before the next, to `907a660`
-(run #245): the answers, the gap fixed, the two clauses removed and the
-survey are below ("The Owner's review of N5.10b — what it found and what
-was done" and "What the app has for N5.11 today").
+**The Owner approves the N5.11 plan — PDF, Print and WhatsApp — sent by
+message on 2026-10-06. No code until it is approved.** The Owner's brief —
+three Owner decisions, the advisor's decisions and V8C4's output facts — is
+recorded below ("The Owner's N5.11 brief, 2026-10-06"), with what the
+repository says against it. The review of N5.10b before it is closed out, to
+`907a660` (run #245), docs `b2cf4f3` (run #246).
 
 N5.10b itself is complete and CI-verified; its record is below ("N5.10b —
 every commit pushed alone"). Its phone rows, T-R19 to T-R28, are run at the
@@ -3712,6 +3712,140 @@ Read at `91ccc01`; nothing was changed by it.
   platform's `android.graphics.pdf.PdfDocument` and `android.print` are
   available without one.
 
+### The Owner's N5.11 brief, 2026-10-06 — recorded before acting
+
+Rule 8. **"N5.11 (PDF, Print, WhatsApp): send the PLAN by message. No code
+until I approve."**
+
+**The Owner's decisions (2026-10-06):**
+
+1. **The WhatsApp button shares the quotation PDF ONLY** — no text — by the
+   share intent through the existing FileProvider. If WhatsApp is not
+   installed, the normal share sheet opens. The plan proposes what happens
+   when WhatsApp and WhatsApp Business are both installed.
+2. **A signature image on the PDF: yes**, read from company settings — a new
+   field, uploaded by the Owner in N6 — never in code or the repository. If
+   absent, the PDF prints "Authorised signatory for <firm>" with no image.
+3. **Company details and standard terms come from company settings ONLY.**
+   No V8C4 built-in default is copied — firm details, bank, UPI, terms,
+   notes, images. Empty fields are omitted, never invented. When the
+   letterhead is incomplete, a **non-blocking notice**. An N8 checklist item:
+   verify production `teamSettings/company` has every field the PDF uses
+   (recorded under "Owed in N8" below).
+
+**The advisor's decisions:**
+
+- A cancelled quotation's PDF carries a clear **CANCELLED** mark. V8C4
+  re-issues them unmarked; that is not copied.
+- The printed date is the quotation's **issue date**, never today. V8C4
+  prints today even on a re-issue — a bug, not copied. A "Last edited"
+  line when the quotation was edited.
+- "Last edited" comes from the **server clock**, checked in the rule —
+  today it is the phone's (`QuotationEdit.kt:262-265`). Measure the
+  quotation edit's headroom (613 today).
+- Letterhead: the quotation's `snap{}` when present (V8C4-issued ones),
+  falling back **field by field** to the live settings; the live settings
+  when `snap` is absent. **Never a blank letterhead** (V8C4's bug).
+- A read-only reader for `teamSettings/company` with V8C4's own field names:
+  `name, tagline, address, phone, email, web, gstin, pan, bankName,
+  bankBranch, bankAcc, bankIfsc, upi, validityDays, payTerms, warranty,
+  pdfFooter, defaultGst, logo, qr, terms, notes`. The plan proposes the
+  signature field's name. Stored values are never renamed.
+- A **pure document model** — every string, row, total and section, in
+  order — separate from the drawing, tested exhaustively in the JVM; the
+  renderer thin and smoke-tested on CI.
+- **One renderer** serves Download, Print (Android `PrintManager` on the
+  same PDF), the WhatsApp share and re-issue from History and the detail.
+- **The gate:** Download, Print and WhatsApp each go through
+  `ensureFinalised` first — a draft finalises; an issued quotation keeps its
+  number. The Finalise button stays. The plan proposes where the buttons sit
+  on the draft screen and the detail screen.
+- Duplicate's message goes back to V8C4's words: "Copied into a new draft —
+  it takes a new number when you download, print or share". The plan says
+  whether "finalise" must be added, since this app has a Finalise button.
+- Synthetic fixtures only; no real company data.
+
+**V8C4's output facts** (for the layout; the native app adds the
+installation and discount rows):
+
+- **Order.** Letterhead: logo, firm name, tagline, address, phones, "email
+  | web", "GSTIN … PAN …", a rule. "QUOTATION". Two panels, empty rows
+  skipped — "BILL TO (CUSTOMER)": Customer, Contact, Phone, Email, Address,
+  GSTIN; "QUOTATION DETAILS": Quotation no, Date, Site, Rate basis
+  (Dealer/Client), Price list, Valid for N days. The table: `# | MODEL /
+  PRODUCT | DESCRIPTION (spec, small) | QTY | RATE | AMOUNT`, the header
+  repeated on each page; a catalogue line takes its model and name from the
+  product key, otherwise the title is split on " — "; a manual line shows
+  "Manual". Totals: Items total and Transportation (with its note) only when
+  there is transport; Subtotal; "GST p%" or "GST — Not included"; Grand
+  total. An AMOUNT IN WORDS box. Validity "Rates hold for N days from the
+  date of this quotation.", then Payment terms, then Warranty. NOTES and
+  TERMS & CONDITIONS side by side. BANK DETAILS (Name, Bank, Account no,
+  IFSC code, UPI ID) with a SCAN TO PAY QR and "PhonePe / GPay / Paytm /
+  any UPI app". The signature and "Authorised signatory for <firm>".
+  "Accepted for <client>" with a "Signature & date" line. On every page a
+  footer "pdfFooter | web" and "Page p of n".
+- **Money:** "₹" and whole rupees with Indian grouping.
+- **File name:** `Quotation-<no>-<client>.pdf` — non-alphanumerics become
+  "-", the client part at most 36 characters, fallbacks "Draft" and
+  "Client".
+- **Amount in words, Indian system:** crore, lakh, thousand, hundred; "and"
+  after hundred; hyphenated tens ("twenty-one"); rounded to the rupee; "Zero
+  rupees only"; the first letter capitalised; ending "rupees only". V8C4
+  breaks at 1000 crore or more — handle it. Test 0, 1, 19, 20, 21, 100,
+  101, 999, 1000, 1,00,000, 1,00,00,000 and 1000 crore.
+- The plan proposes the final printed order, merging this with the agreed
+  one (`docs/N5-plan.md`, "The printed order").
+
+**The plan must cover:** the commit split; the files touched; how Download
+saves on API 23-28 and on 29+ (no new permission prompt if possible); the
+share intent; image decoding and size limits for the logo, the QR and the
+signature; the rules change with its headroom; tests with ablations,
+Robolectric for the buttons and the gate included; phone rows; risks. "If
+anything here contradicts the repo, say so instead of guessing."
+
+**Always:** one commit per push, CI green before the next; this branch
+only; no `main`, no PR, no force-push, no amending pushed commits; never
+deploy Firebase.
+
+### What the repository says against the N5.11 brief — found while recording it
+
+1. **Finalise writes no `serverAt`.** The recorded requirement — "Last
+   edited" from the server clock "as finalise's `serverAt` does" (below,
+   "Owed in N5.11: the 'Last edited' time from the server's clock") —
+   assumes one. V8C4's finalise writes `serverAt: serverTimestamp()` on the
+   quotation (its transaction, recorded above under the N5.9a re-read), but
+   this app's does not: `QuotationWrite.kt:261-283` writes `at` from the
+   phone, and the create rule (`firestore.rules`, `/quotations` create) asks
+   only `at is number`. So **a native quotation's issue date is the phone's
+   clock too.** The plan proposes the fix and asks.
+2. **"The WhatsApp text"** — `docs/N5-plan.md`'s printed order says
+   "Screen, PDF and the WhatsApp text all follow this sequence". Decision 1
+   (the PDF only) supersedes the WhatsApp text; that line is corrected in
+   this commit.
+3. **"Last edited" wording.** The recorded requirement of 2026-09-28 is
+   "Last edited by <name>, <date time>" right after the date (`N5-plan.md`
+   item 3); the brief says a "Last edited <date>" line. The plan keeps the
+   recorded form and asks.
+4. **`snap` does not use the settings' names.** V8C4's `snap` is `name, tag,
+   addr, phones, email, web, gstin, pan, bank{name, branch, acc, ifsc, upi},
+   terms, notes` (lists), `validityDays, gstPct, payTerms, warranty,
+   pdfFooter` — text only, **no logo and no QR** — and V8C4's reader maps
+   `tag → tagline`, `addr → address`, `phones → phone`, `bank.* →
+   bankName…upi` (both recorded above under the N5.9a answers). The field-
+   by-field fallback maps them the same way; the images always come from
+   the live settings.
+5. **"Price list" equals "Rate basis" in this app.** Finalise stores
+   `tierName` as the tier's own label (`QuotationWrite.kt:267`), so the two
+   rows would print the same word. What V8C4 prints for "Price list" is a
+   question for the plan.
+6. **An edit draft never goes through the gate** — `ensureFinalised`
+   refuses one (`QuoteFinaliser.kt:157`) — so the builder in edit mode
+   cannot offer Download, Print or WhatsApp without saving first. The plan
+   proposes.
+7. **Staff see no quotation and no company settings** — both are `member()
+   && !worker()` in the rules — so no Staff account reaches a PDF.
+
 ### Owed in N6: the validators on the fields and on the company's own details
 
 Recorded 2026-09-26. V8C4 runs `gstinProblem`, `phoneProblem` and
@@ -4593,6 +4727,18 @@ true. `docs/N5-cutover.md`, written in N5.12, must say:
   refused** (it carries no `rev`), an Administrator's included.
 - **Hard-blocking the PWA is revisited at N5.12**, not before (the Owner,
   2026-10-05).
+
+### Owed in N8: verify production `teamSettings/company` has every field the PDF uses
+
+Recorded 2026-10-06 at the Owner's instruction (the N5.11 brief, decision
+3). The PDF takes company details and standard terms from company settings
+**only**, omits what is empty and never invents it — so before cutover,
+**read production `teamSettings/company` through a viewer-only credential**
+and check it carries every field the PDF prints: `name, tagline, address,
+phone, email, web, gstin, pan, bankName, bankBranch, bankAcc, bankIfsc,
+upi, validityDays, payTerms, warranty, pdfFooter, logo, qr, terms, notes`,
+and the signature field N6 adds. A missing one prints as missing on every
+quotation from cutover day.
 
 ### Owed in N8: normalise the products no edit ever reaches
 

@@ -135,6 +135,24 @@ class PurchaseAccessTest {
     }
 
     @Test
+    fun `once Ordered, a Manager and the Staff creator still receive it, and close it short`() {
+        // The advisor's decision 5 of 2026-10-05, on the app's side: Ordered is
+        // open, so the delivery goes on for both exactly as on a Needed one. The
+        // rules' side is purchase-ordered.test.js ("Ordered stays open for …"),
+        // for the same two. Found missing in the Owner's N5.10b review: making
+        // these false for both left every JVM test green.
+        val ordered = requirement(status = "Ordered", byUid = staff.uid)
+        val orderedPartly = requirement(
+            status = "Ordered", byUid = staff.uid, receivedQuantity = 4.0, receivedBy = "Sam"
+        )
+        for (who in listOf(manager, staff)) {
+            assertTrue(PurchaseAccess.canReceive(who, ordered))
+            assertTrue(PurchaseAccess.canReceive(who, orderedPartly))
+            assertTrue(PurchaseAccess.canCloseShortfall(who, orderedPartly))
+        }
+    }
+
+    @Test
     fun `a Manager cancels anybody's requirement that is not Ordered, while nothing has arrived`() {
         assertTrue(PurchaseAccess.canCancel(manager, requirement()))
         assertTrue(PurchaseAccess.canCancel(manager, requirement(byUid = manager.uid)))

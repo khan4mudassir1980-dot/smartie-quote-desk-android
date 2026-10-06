@@ -8,11 +8,11 @@ anything.** Last updated 2026-10-06.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `91ccc01` — run #241, fully green (unit tests, lint, Firestore rules emulator, APK build). N5.10b commit 14, its record; the last commit that changed app code is `5b50809` (run #238) and the last that changed the rules is `85c4fb7` (run #235). Later commits may sit above it. |
+| **Last CI-verified head** | `907a660` — run #245, fully green (unit tests, lint, Firestore rules emulator, APK build). The second of the review's two rules commits, so it is also the last CI-verified **code** head and the ruleset anchor; the last commit that changed app code is `105e8cc` (run #243). Later commits may sit above it. |
 | **APK to install** | The `smartie-native-apks` artifact **from the run that verified the head you intend to install** — never from whichever run this table happens to name. A build contains the commit it ran on and nothing above it, so a head hash and an APK go out of step the moment anything lands. Each run's job summary reports its head and the signing certificate; the app must show **Staging**. |
-| **Ruleset anchor** | `85c4fb7` (N5.10b commit 9) — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
-| **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **fifteen rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap), `ff20dd4` (N5.10 — edit, the creator's cancel, the cap only when raised), `cff32be`, `6d2c25c`, `d59f1e6`, `877701f`, `547d218`, `caa835e`, `85c4fb7` (N5.10b — the expression limit, the status pin, a boolean `received`, the uid pin, the headroom reorder and ternaries, Ordered and a Manager's cancel); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
-| **To deploy next** | The **latest CI-verified head**, not a hash copied into this file. Check it before deploying: `git diff --quiet <head> 85c4fb7 -- firestore/firestore.rules` — silence means that head carries the current ruleset. No index deploy: `firestore.indexes.json` is unchanged since `69d0fce`. |
+| **Ruleset anchor** | `907a660` (the Owner's N5.10b review, `prClosesOnlyWhenMet` removed) — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
+| **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **seventeen rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap), `ff20dd4` (N5.10 — edit, the creator's cancel, the cap only when raised), `cff32be`, `6d2c25c`, `d59f1e6`, `877701f`, `547d218`, `caa835e`, `85c4fb7` (N5.10b — the expression limit, the status pin, a boolean `received`, the uid pin, the headroom reorder and ternaries, Ordered and a Manager's cancel), `0bf1dfe`, `907a660` (the review — two second definitions removed, the same decisions); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
+| **To deploy next** | The **latest CI-verified head**, not a hash copied into this file. Check it before deploying: `git diff --quiet <head> 907a660 -- firestore/firestore.rules` — silence means that head carries the current ruleset. No index deploy: `firestore.indexes.json` is unchanged since `69d0fce`. |
 
 > **Three fields, three meanings — they were one field until 2026-09-24 and it
 > had gone wrong.** The table said `a849650` was "the commit to deploy the rules
@@ -50,7 +50,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
 | N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2, N4.3 and N4.4 are all code complete and CI-verified**, and both are waiting on the same Owner-run staging rules deployment paired with the APK rollout — they were never deployed separately and must not be. Purchase History is built and open to every role, so what was Batch 5 is done; the tab badge is Batch 6 |
-| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.10 are complete and CI-verified** — N5.9 (finalise) at `57d607a`, run #204, Part A of the Owner's review of it at `2848bb9`, run #208, and **N5.10** (edit, cancel, Duplicate, the party type) at `4283ef2`, run #222. The builder **issues quotations** and now **edits** them — the same number, saved over, stamped "Last edited" — while the creator, or an Owner or Administrator, may **cancel** one and anyone who quotes may **duplicate** one. **Not yet run on a phone** — T-Q1 to T-Q22 are owed. Rules deploy once, at the final staging pass, from the head named above; the ruleset anchor is now `85c4fb7`. The Quotation tab keeps its "Keep using the PWA to issue quotations" banner until N5.12. **N5.10b is complete and CI-verified** — the rules' expression limit, then Purchase's **Ordered** and **a Manager's cancel**: commits 0 to 13, runs #225 to #240, each pushed alone, one red run (#237) fixed by its own commit; commit 14 is the record. **Not yet run on a phone** — T-R19 to T-R28 are owed. **Waiting on the Owner's review**; N5.11, the PDF, Print and WhatsApp, is planned only after it |
+| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.10 are complete and CI-verified** — N5.9 (finalise) at `57d607a`, run #204, Part A of the Owner's review of it at `2848bb9`, run #208, and **N5.10** (edit, cancel, Duplicate, the party type) at `4283ef2`, run #222. The builder **issues quotations** and now **edits** them — the same number, saved over, stamped "Last edited" — while the creator, or an Owner or Administrator, may **cancel** one and anyone who quotes may **duplicate** one. **Not yet run on a phone** — T-Q1 to T-Q22 are owed. Rules deploy once, at the final staging pass, from the head named above; the ruleset anchor is now `907a660`. The Quotation tab keeps its "Keep using the PWA to issue quotations" banner until N5.12. **N5.10b is complete and CI-verified** — the rules' expression limit, then Purchase's **Ordered** and **a Manager's cancel**: commits 0 to 13, runs #225 to #240, each pushed alone, one red run (#237) fixed by its own commit; commit 14 is the record. **Not yet run on a phone** — T-R19 to T-R28 are owed. **The Owner's review of it is closed out** (2026-10-06: one app-side gap fixed, two second definitions removed from the rules, the N5.11 survey done); N5.11, the PDF, Print and WhatsApp, waits on V8C4's output facts from the Owner |
 | N6 Products & Categories | Not started. The Products & Categories editing screen, which T-P7 is blocked on. **Also owed here: read the company GST from `teamSettings/company.defaultGst`.** V8C4's `stSave` writes it there and the native app is already permitted to read that document. N5.8a resolves a quotation's GST from the rate its catalogue lines agree on, which is an honest stopgap and not the final answer — a quotation whose lines disagree, or which has only hand-typed lines, has nothing to agree on and currently refuses to finalise until somebody sets the rate |
 | N7 Calculators | Not started. Port the four V8C4 calculators — rolling shutter, high-speed door, garage door, glass door — whose output becomes ordinary quotation lines carrying the opening size in the line's spec text |
 | N8 Migration & cutover | Not started. **The production migration and cutover.** `docs/N2-delivery.md:40` calls N8 "the catalogue migration"; that line is the stale one and `docs/N3-plan.md:585` is right. **Read the blocking warning about `import-staging.mjs` under "Decisions that bind future work" before planning any part of this** — the importer carries seed rates in every payload and would destroy live pricing if pointed at production |
@@ -1361,22 +1361,17 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**Close out the Owner's review of N5.10b (2026-10-06), then report and
-wait. Do NOT start N5.11 code.** The review is recorded below ("The Owner's
-review of N5.10b, 2026-10-06"): A, seven answers with `file:line`, and any
-gap they reveal fixed in its own commit; B, the two clauses no test turns
-red — `prRcvNumeric` and `prClosesOnlyWhenMet` — each either removed as a
-second definition of a rule another clause enforces (proved by the
-differential replay, headroom reported) or given the test that turns red
-without it, one commit per clause; C, a read-only survey of what the app
-has for the PDF, Print and WhatsApp. Each commit pushed alone, CI green
-before the next. The Owner then sends V8C4's output facts for the N5.11
-plan.
+**Wait for the Owner's message with V8C4's PDF, Print and WhatsApp output
+facts. Do NOT start N5.11 code.** The Owner's review of N5.10b is closed
+out, each commit pushed alone with CI green before the next, to `907a660`
+(run #245): the answers, the gap fixed, the two clauses removed and the
+survey are below ("The Owner's review of N5.10b — what it found and what
+was done" and "What the app has for N5.11 today").
 
-N5.10b itself is complete and CI-verified to `7a73e64` (run #240), its
-record commit `91ccc01` green on run #241; the record is below ("N5.10b —
+N5.10b itself is complete and CI-verified; its record is below ("N5.10b —
 every commit pushed alone"). Its phone rows, T-R19 to T-R28, are run at the
-final staging pass, with the rules deployed from the head then current.
+final staging pass, with the rules deployed from the head then current —
+the ruleset anchor is now `907a660`.
 
 **Then N5.11** — the PDF, Print and WhatsApp — planned only after N5.10b
 is built and the Owner says so, and after the Owner has supplied V8C4's PDF,
@@ -1390,7 +1385,7 @@ calling the finalise gate first, as V8C4's do.
 N5.10 is complete and CI-verified at `4283ef2` (below). Its phone rows,
 T-Q11 to T-Q22, join T-Q1 to T-Q10 in `PHONE-TEST-CHECKLIST.md` and are run
 once, at the final staging pass, with the rules deployed from the head
-then current — the anchor is now `85c4fb7`.
+then current — the anchor is now `907a660`.
 
 ### N5.10b — every commit pushed alone, CI green before the next; one red run, fixed by its own commit
 
@@ -1554,9 +1549,10 @@ its per-document cost: **755** at the most.
   ternaries fix.** In the emulator, on a **refused** write, `a && b` and
   `a || b` inside the purchase functions went on to evaluate `b` after `a`
   had decided; `a ? b : false` did not. A Staff account's refused edit of a
-  Manager's requirement cost about **908** at commit 8, against 448 for a
-  Manager's valid edit in the same script. Commit 8b made every branch point a ternary:
-  **908 → 411** (`RULES=<file> node firestore/tools/refcost.js`). A denied
+  Manager's requirement cost about **908** at commit 8 — down from **988**
+  at commit 6, the review found — against 448 for a Manager's valid edit in
+  the same script. Commit 8b made every branch point a ternary: **908 →
+  411** (`RULES=<file> node firestore/tools/refcost.js`). A denied
   write is evaluated once (`probe-deny-once.js`), so this is cost, not double
   counting. It is now a binding decision (below).
 - **A ternary does not absorb an error the way `||` does.** 8b's first draft
@@ -1578,9 +1574,10 @@ its per-document cost: **755** at the most.
   `status == 'Cancelled'` in the Manager's cancel keys (`prStatusMoves`
   lets a Manager's status move only to Cancelled).
 - **`prRcvNumeric` and `prClosesOnlyWhenMet` turn no test red** when
-  neutralised — on commit 6's rules and on every later one. Pre-existing,
-  reported at commit 8, not fixed here: each is either covered by another
-  clause or untested, and finding which is its own task.
+  neutralised — on commit 6's rules and on every later one. **Answered by
+  the Owner's review:** both were second definitions, and both are removed
+  (`0bf1dfe`, `907a660`), with the same decision for every write — see "The
+  Owner's review of N5.10b — what it found and what was done".
 - **The witnesses' margin:** with the `/purchase` block padded by 37 terms
   the suite still passes; at 41 only a Manager's cancel fails — the
   dearest valid write, as `purch.js` measures it.
@@ -3525,6 +3522,195 @@ SetText.
 **Always:** one commit per push, CI green before the next; this branch
 only; no `main`, no PR, no force-push, no amending pushed commits; never
 deploy Firebase.
+
+### The Owner's review of N5.10b — what it found and what was done, 2026-10-06
+
+Every commit pushed alone, CI green before the next: `5b5fe68` (the review
+recorded, #242), `105e8cc` (A2's gap, #243), `0bf1dfe` (`prRcvNumeric`,
+#244), `907a660` (`prClosesOnlyWhenMet`, #245). Line numbers are at
+`907a660`.
+
+**A — the seven answers.**
+
+1. **Create refuses any status but Needed and all six `ordered*` /
+   `cancelled*` keys** — `firestore/firestore.rules:917-935`
+   (`status == 'Needed'` at 921; the six keys at 930-931). Tests:
+   `purchase-ordered.test.js` "a new requirement is neither Ordered nor
+   Cancelled, and carries neither stamp" (an Ordered create, a Cancelled
+   create, and each of the six keys alone, refused; the clean create
+   accepted) and `purchase.test.js` "a create may not claim somebody else, a
+   different status or a bad urgency" (`'Received'`). **The `orderedUid`
+   create pin is moot** — a create carrying the key is refused whatever its
+   value — so none was added; commit 6's `cancelledUid` pin (935) is
+   redundant the same way and stays as written (the comment at 926-929 says
+   so).
+2. **Receipts on an Ordered row, a Manager and the Staff creator** — the
+   rules: `purchase-ordered.test.js` "Ordered stays open for a Manager, on
+   somebody's: a part keeps it Ordered; the whole, or a write-off, closes
+   it", the same "for the Staff creator, on their own", and "a part receipt
+   does not take an Ordered requirement back to Needed — " for each;
+   `purchase-witnesses.test.js` "a Manager's whole delivery and write-off, on
+   an Ordered row and on a Needed one" and "the Staff creator's whole
+   delivery and write-off on their own Ordered row", both access states. The
+   plan the app writes: `PurchaseWriteTest` "a part receipt keeps an Ordered
+   requirement Ordered, and the whole of it closes it". **A gap, fixed:**
+   nothing pinned the app *offering* Received and Close short to those two
+   on an Ordered card — with `PurchaseAccess.canReceive` and
+   `canCloseShortfall` made false for them, all 1,006 JVM tests passed.
+   `105e8cc` adds `PurchaseAccessTest` "once Ordered, a Manager and the
+   Staff creator still receive it, and close it short"; each ablation alone
+   turns exactly it red (1 of 1,007).
+3. **Native create never tops up.** `PurchaseViewModel.add`
+   (`ui/purchase/PurchaseViewModel.kt:311-334`) keeps one id across retries
+   (317) and calls `PurchaseWriteRepository.create`
+   (`data/repository/PurchaseWriteRepository.kt:122-146`), which reads only
+   that id and writes a new document; `PurchaseWrite.create`
+   (`domain/PurchaseWrite.kt:227-246`) refuses a taken id (235) and writes
+   status Needed (246). An open requirement for the same item — Ordered or
+   not — is never read or touched; the new one stands beside it. Pinned by
+   `PurchaseWriteRepositoryTest` "creating reads the id back before it uses
+   it" (the only read is that id) and `PurchaseWriteTest` "a colliding id is
+   refused rather than quietly overwriting somebody else".
+4. **The action row: six at most** — an Owner or Administrator on an open
+   requirement: Received, Edit, Urgency, Order, then Close short (part
+   received) or Cancel (nothing received), and Remove; a Manager's most is
+   five. `rowActionsFor`, `ui/purchase/PurchasePanels.kt:679-712` (KDoc
+   672-677), in a `FlowRow` (633). At 360dp four fit a row, so six take two.
+   Tests, `PurchaseOrderedClippingScreenTest` at `w360dp-h640dp` (40): "an
+   Administrator's six controls on an untouched card are all painted", "and
+   they take two rows at most, Received first", "on an Ordered,
+   part-received card the tag, the line and the six controls are all
+   painted", "a Manager's own untouched card paints its five" — each through
+   `assertFooterPaintedInsideCard`, every control a 48dp target inside the
+   card.
+5. **Blue:** the app had none; `SmartieColors.Blue` #1D4ED8, `BlueSoft`
+   #E8EFFD, `BlueDeep` #1E40AF, `BlueLine` #BFD3F6
+   (`ui/theme/Color.kt:54-57`), as `TagTone.BLUE` (`ui/components/Tags.kt:35`):
+   the tag's words, BlueDeep on BlueSoft, **7.56:1**, and **8.72:1** on the
+   card (#FFFFFF) — `TagContrastTest`, against WCAG AA's 4.5.
+6. **The N8 item, as recorded** (under "Owed in N8: remove the receipt
+   fields a V8C4 restore leaves behind"): "**The migration removes `rcvQty`,
+   `rcvBy`, `rcvUid` and `rcvAt` where `received` is the number 0 and status
+   is Needed or Cancelled.**" and "The cleanup removes **every** field the
+   rules' `prUntouched` counts as a receipt … exactly the four above, counted
+   by presence". `prUntouched`, `firestore/firestore.rules:520-523`:
+   `prOpen() && !resource.data.keys().hasAny(['rcvQty','rcvBy','rcvUid','rcvAt'])`.
+7. **Commit 8b's proof** (its message): commit 8's rules against 8b's —
+   `OLD_WHOLE=1 CAPTURED=all_writes_c6.jsonl node diffrules.js`, 308 cases,
+   0 differ; `node rolecases.js`, 1,680, 0 differ; `node fieldcases.js`,
+   1,620, 0 differ; the suite 311 of 311 with the limit reached 0 times; the
+   same 31 ablations, identical red sets; the 16-write check 16 of 16.
+   **And a correction: commit 8 did not make a refused write cost about
+   908 — it lowered it.** The same refused write, a Staff account's edit of
+   a Manager's quantity (`data.test.js`), measured on each commit's rules
+   with `RULES=<file> node firestore/tools/refcost.js`:
+
+   | Rules | Cost of the refusal |
+   |---|---|
+   | `6fbc2bc`, before N5.10b | refused **by the limit itself**, unpadded — one of the 58 |
+   | `877701f`, commit 6 | **988** — 12 to spare |
+   | `547d218`, commit 8 | **908** |
+   | `caa835e`, commit 8b | **411** |
+   | `85c4fb7`, commit 9 | 429 |
+
+   Why so dear: on a **refused** write, `a && b` and `a || b` inside the
+   purchase functions went on to evaluate `b` after `a` had decided, so a
+   refusal paid for every branch of the role part in full. Commit 8 took
+   `member()` (an `exists` and a `get`) out of the role checks it repeated —
+   988 → 908 — and 8b made the branch points ternaries, which stop: 908 →
+   411. Commit 9's draft, built on commit 8, added branches and sent 128
+   refusals over the limit; that is what 8b was added for, under the Owner's
+   rule that a reordering goes in its own behaviour-preserving commit.
+
+**B — the two clauses no test turned red: both were second definitions,
+and both are removed**, each proved by the differential replay with zero
+decision change, the surviving clause shown to carry the tests (Rule 7),
+and the headroom measured (`RULES=<file> node purch.js`, with
+`SCEN=./scenarios-ordered.js`; ±6):
+
+- **`prRcvNumeric`** (`0bf1dfe`) — that a stored `rcvQty` be a number. In
+  the delivery branch `prRcvNotReduced` already refuses every such write (a
+  stored string or null makes its comparison an error; one carried unchanged
+  is not a number); in `prShortfall` its very next line was the same test.
+  Replay of `85c4fb7` against it: `diffrules.js` 433 cases (a fresh capture
+  of 253 writes from 144 tests), `rolecases.js` 1,680, `fieldcases.js`
+  1,620, and the new `clausecases.js` 15,300 — **0 differ**. Neutralising
+  `prRcvNotReduced` now turns 3 tests red, among them "a string receipt
+  total fails closed for a Manager, both ways" (2 before). **Saved 6 to 19
+  on a delivery or a write-off** — a Manager's write-off 687 → 669.
+- **`prClosesOnlyWhenMet`** (`907a660`) — the Owner's write-off rule, said a
+  second time inside the delivery branch. `prClosesMet` says it for every
+  update; in the delivery branch `prOpen()` needs the stored `received` not
+  true, so a write that has it true has changed it and `prClosesMet`
+  applies. Replay of `0bf1dfe`'s rules against it: 433, 1,680, 1,620 and
+  15,300 cases — **0 differ**. Neutralising `prClosesMet` now turns 3 tests
+  red, among them "and at no other quantity whatsoever" — a Manager closing
+  7 of 10 at the full 10 through the delivery branch the creator shares (2
+  before). **The write-off rule is now stated once, by `prClosesMet`.
+  Saved 12 on a part delivery and 30 to 37 on a whole one** — a Manager's
+  whole delivery 675 → 638.
+
+Together: a Manager's whole delivery 687 → 638, write-off 687 → 669. The
+dearest valid write is unchanged, a Manager's cancel at 755. The suite is
+344 of 344 with the limit reached 0 times, and the margin test (N = 16)
+144 tests, 0 fail. **Found on the way, not changed:** `prShortfall`'s own
+`is number` line turns no test red either — without it a stored string's
+write-off is still refused, by `rcvQty > 0` erroring — so, like commit 9's
+two, it stays as the statement of the rule.
+
+**C — the read-only survey for N5.11.** Recorded next ("What the app has
+for N5.11 today").
+
+### What the app has for N5.11 today — the read-only survey of 2026-10-06
+
+Read at `91ccc01`; nothing was changed by it.
+
+- **A quotation PDF: nothing.** No `PdfDocument`, `PdfRenderer` or PDF
+  library anywhere in `app/`. The beta's `util/QuotationPdf.kt` (a
+  `PdfDocument` drawn on a `Canvas`, written to `cacheDir/quotations`, shared
+  through `FileProvider`) was deleted in N5.0 (`ccb4a25`) and not replaced.
+  Fonts exist (`res/font/inter_*.ttf`); there are no image assets but the
+  launcher icon.
+- **Printing: nothing, ever** — no `PrintManager`, `PrintDocumentAdapter`,
+  `androidx.print` or `WebView` (`git log --all -S PrintManager` is empty).
+- **Sharing:** no WhatsApp or file share. The one share is the Team
+  invite, plain text through a chooser (`ui/SmartieApp.kt:450-461`). The
+  `FileProvider` is declared (`AndroidManifest.xml:25-33`, authority
+  `${applicationId}.files`) with a `quotations/` cache path left from the
+  beta (`res/xml/file_paths.xml:3`) — nothing writes there now; its one
+  user is the stock camera (`util/StockImage.kt:40`).
+- **Amount in words: nothing, ever** — no lakh / crore / "Rupees … Only"
+  function. `data/mapping/Money.kt` has Indian grouping (`groupIndian`,
+  `formatRupees`).
+- **The letterhead:** `QuotationRecord.snapshot` is an untyped map
+  (`data/model/Records.kt:457`) read from `snap`
+  (`data/mapping/OperationsReaders.kt:182`) and used by nothing. **There is
+  no reader or model for `teamSettings/company`** (the rules already allow
+  a member who is not Staff to read it, `firestore.rules:1257-1261`).
+  Finalise writes no `snap` (`ui/products/ProductsViewModel.kt:135-138`,
+  `domain/QuotationWrite.kt:277`), pinned by `QuotationWriteRepositoryTest`.
+  The party snapshot is typed (`QuotationPartySnapshot`, `Records.kt:358-367`).
+- **"Last edited":** written by `QuotationEdit` (`domain/QuotationEdit.kt:262-265`)
+  with the **device clock** (`QuotationWriteRepository.kt:191`,
+  `System::currentTimeMillis`); the rule checks only `is number`. Shown on
+  the detail after Issued (`ui/quotations/QuotationDetail.kt:144-146`,
+  "d MMM yyyy, h:mm a") and as the list's "Edited" tag. The server-clock
+  requirement is already owed to N5.11 (below).
+- **The issue gate:** `QuoteFinaliser.ensureFinalised`
+  (`ui/products/QuoteFinaliser.kt:153`; phases IDLE → CHECKING →
+  TAKING_NUMBER, outcomes Finalised / NotFinalised / Cancelled /
+  AlreadyRunning), with `saveEdit` beside it for an edit. **One production
+  caller**: `ProductsViewModel.finalise` (`ProductsViewModel.kt:542`), from
+  the builder's Finalise button (`QuoteBuilderPanel.kt:646-663`). N5.11's
+  PDF, Print and WhatsApp are to be the others; the detail screen's actions
+  block (`QuotationDetail.kt:221-266`: Edit, Duplicate, Cancel) is where
+  they would sit, beside `SHARING_NOTE` (507-508).
+- **Libraries:** no version catalog; `app/build.gradle.kts:183-219`. For
+  share and files, `androidx.core:core-ktx:1.16.0` (192 — `FileProvider`,
+  `ShareCompat`); for images, `exifinterface` (196) and `coil-compose` (206).
+  **No PDF library and no `androidx.print`.** `minSdk` 23 (41), so the
+  platform's `android.graphics.pdf.PdfDocument` and `android.print` are
+  available without one.
 
 ### Owed in N6: the validators on the fields and on the company's own details
 

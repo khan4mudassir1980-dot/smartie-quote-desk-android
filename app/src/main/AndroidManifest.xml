@@ -3,6 +3,13 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- N5.11: the WhatsApp button checks which WhatsApp is installed, and
+         from Android 11 a package is visible only when named here. -->
+    <queries>
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+    </queries>
+
     <application
         android:name=".SmartieApplication"
         android:allowBackup="true"

@@ -44,7 +44,10 @@ source of these rules is `domain/Permissions.kt`, with a test per row in `Permis
 
 ## Required Firebase setup
 
-The project contains `app/google-services.placeholder.json` for source checks only. Before a real build, replace the ignored `app/google-services.json` file:
+The project contains `app/google-services.placeholder.json` for source checks only. Its identifiers and key are
+zeroed, as the staging placeholder's are (N5.12): CI builds from the `FIREBASE_GOOGLE_SERVICES_JSON` and
+`FIREBASE_GOOGLE_SERVICES_JSON_STAGING` secrets (`scripts/configure-firebase.sh`), and a build that falls back
+to a placeholder configures but cannot sign in. Before a real build, replace the ignored `app/google-services.json` file:
 
 1. Open Firebase Console → Project settings → Your apps → Add app → Android.
 2. Enter package name `in.smartie.quotedesk`.

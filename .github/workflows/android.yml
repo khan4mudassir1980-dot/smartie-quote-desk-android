@@ -43,6 +43,7 @@ jobs:
             app/build/reports/lint-results-*.html
             app/build/reports/lint-results-*.xml
           if-no-files-found: ignore
+          retention-days: 30
 
   rules:
     name: Firestore rules (emulator)
@@ -117,3 +118,4 @@ jobs:
           name: smartie-native-apks
           path: app/build/outputs/apk/**/*.apk
           if-no-files-found: error
+          retention-days: 30

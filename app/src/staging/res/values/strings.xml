@@ -1,0 +1,9 @@
+<resources>
+    <!--
+        The staging build's launcher label (the Owner, 2026-10-07), so a test
+        build can never be mistaken for the real one on the home screen. It
+        overrides main's "Quote Desk" for the staging flavour only; production
+        keeps main's. AppNameTest pins both.
+    -->
+    <string name="app_name">Quote Desk Staging</string>
+</resources>

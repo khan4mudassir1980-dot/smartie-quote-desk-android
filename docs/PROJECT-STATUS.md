@@ -1368,7 +1368,191 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**Wait for the Owner's N5.12b prompt — the app icon and the opening intro — and do nothing until it comes.** The Owner is uploading four brand PNGs to `branding/` on this branch through GitHub's web page; the folder and its `README.md` were added at the Owner's instruction of 2026-10-07 so there is somewhere to upload into. **Add no image to it** and do not start N5.12b before the prompt. **N6 and the first phone pass are not started**; the pass's rows are in `docs/PHONE-TEST-CHECKLIST.md`, and the pack sent on 2026-10-07 names a head that N5.12b will move on.
+**Build N5.12b as recorded below ("The Owner's N5.12b prompt, 2026-10-07") — commits 1, 2, 3 and 4, in that order, each pushed alone with CI green before the next — then report, and stop. Do NOT start N6 or the phone pass.** Step 1, the check of the four brand files, passed; the launcher label is **"SMARTIE Quote Desk"**, not "Quote Desk", and is **not changed** — the Owner asked to be told first, and is. The first phone pass's rows are in `docs/PHONE-TEST-CHECKLIST.md`; N5.12b adds its own there and moves the head the pack of 2026-10-07 names.
+
+### The Owner's N5.12b prompt, 2026-10-07 — recorded before acting
+
+Rule 8. **"Mode: normal. N5.12b: the app icon and the opening intro."** In
+the Owner's words where quoted:
+
+- **Step 1, before anything else** — verify the uploaded files: `branding/`
+  should hold `README.md` and four PNGs, `QD_icon_mark_1024.png`,
+  `QD_icon_monochrome_1024.png`, `QD_full_colour_1024.png` and
+  `QD_full_whitetext_1024.png`, each 1024 × 1024 with an alpha channel.
+  "If any is missing, the wrong size, or has no transparency, STOP and tell
+  me. Do not guess or redraw anything."
+- **Step 2, build it.** "Plan the commit split yourself; one commit per
+  push, CI green before the next."
+- **The brand colours**, to be recorded in the docs:
+
+  | Colour | Hex |
+  |---|---|
+  | Primary purple | `#581FEB` |
+  | Deep indigo | `#3212BD` |
+  | Light violet | `#A138FC` |
+  | Navy | `#08162C` |
+  | Icon background | `#F7F4FF` |
+
+- **A. App icon.** Adaptive: foreground `QD_icon_mark`, background a solid
+  `#F7F4FF`. "Scale the mark inside the adaptive safe zone, so it is not
+  clipped by a circle, rounded square or squircle." Monochrome layer
+  `QD_icon_monochrome`, for Android 13+ themed icons. "Generate every density
+  from the 1024 PNGs. Keep the originals in branding/ untouched." Launcher
+  label: "report what it is today. If it is not 'Quote Desk', tell me before
+  changing it." Remove the old SIE launcher PNG if nothing else uses it, and
+  say what was removed.
+- **B. Splash and intro.** The Android 12+ system splash: the icon on
+  `#F7F4FF`. Then an in-app intro: `QD_full_colour` centred on `#F7F4FF`,
+  "shown ONLY while the app is loading. No fixed delay, no minimum time, no
+  'continue' tap." Optional, "my call": a small "by Smart India Enterprises"
+  line. The sign-in screen shows the same logo above its button. Intro and
+  sign-in always use the light background, even in dark mode.
+  `QD_full_whitetext` is committed for later — say where, if anywhere, it is
+  used now.
+- **C. Theme.** Primary becomes `#581FEB`, with `#3212BD` for pressed and
+  `#A138FC` as the highlight. "Colours only: do not change fonts, spacing or
+  layout." Check text contrast everywhere the new colour lands; report any
+  failing pair.
+- **D. Tests, each with its ablation:** the intro shows while loading and
+  disappears when ready — it never holds the app back; the logo paints fully
+  inside the screen at 360dp and at font scale 1.3; sign-in shows the logo;
+  the intro and sign-in backgrounds stay light in dark mode; and whatever
+  can be checked for the icon and the manifest.
+- **E. Docs.** Record the prompt (Rule 8), the brand colours, which file
+  feeds which asset, and that `branding/` holds the sources. Phone rows: the
+  icon on the home screen (round and squircle); the themed icon on Android
+  13+; the splash → intro → sign-in flow with no visible wait; the intro in
+  dark mode.
+- **Stop and report if** a file in `branding/` is wrong; the launcher label
+  would change; the mark cannot sit in the safe zone without redrawing; a
+  contrast pair fails. "Do not redraw, recolour or crop the artwork yourself
+  — bring it to me instead."
+- **At the end:** list the commits and runs, and the test counts with the
+  command behind each; say what the icon looks like at each shape; list the
+  new phone rows. "Then STOP. Do not start N6 or the phone pass."
+- **Always:** one commit per push, CI green before the next. This branch
+  only. No `main`, no PR, no force-push, no amending pushed commits. Never
+  deploy Firebase.
+
+**Step 1 — the four files, checked; all pass.** The Owner's upload is
+`c9b2e3c` ("Add files via upload"), run #281 green. Measured with Pillow
+12.3.0 — `Image.open`, its `size` and `mode`, the alpha channel's histogram
+and `getbbox()`:
+
+| File | Bytes | Size | Mode | Alpha: clear / opaque / partial | Visible box |
+|---|---|---|---|---|---|
+| `QD_icon_mark_1024.png` | 489,206 | 1024 × 1024 | RGBA | 33.4% / 64.9% / 1.7% | (36, 35)–(988, 989) |
+| `QD_icon_monochrome_1024.png` | 72,277 | 1024 × 1024 | RGBA | 52.1% / 41.9% / 6.0% | (35, 36)–(989, 987) |
+| `QD_full_colour_1024.png` | 482,813 | 1024 × 1024 | RGBA | 50.7% / 45.8% / 3.5% | (35, 37)–(989, 986) |
+| `QD_full_whitetext_1024.png` | 456,339 | 1024 × 1024 | RGBA | 50.7% / 45.8% / 3.5% | (35, 37)–(989, 986) |
+
+All four are 8-bit RGBA, so the transparency is a real alpha channel, and a
+third to a half of every image is fully clear. `README.md` is the one added
+at `7623061`. **What each shows:** the mark is a purple-gradient Q ring
+holding a white document with the SIE gear logo and lavender lines, its
+tail running to the bottom-right corner; the monochrome is the same shape
+in solid black; the two full logos are the mark above the words "Quote
+Desk" — "Quote" navy and "Desk" purple in `full_colour`, "Quote" white in
+`full_whitetext`.
+
+**What the repository says, before any change:**
+
+1. **The launcher label is "SMARTIE Quote Desk"**, not "Quote Desk" —
+   `app_name` in `app/src/main/res/values/strings.xml`, with no flavour
+   override, read by the manifest's `android:label`. **Not changed**: the
+   Owner asked to be told first. The app's own header for an unknown screen
+   says the same.
+2. **The old SIE launcher PNG** is `app/src/main/res/drawable/ic_launcher.png`
+   — 192 × 192, RGB, no alpha, there since `017ad1c`. Four uses: the
+   manifest's `android:icon` and `android:roundIcon`, the loading screen
+   (`SmartieApp.kt`, `LoadingScreen`) and sign-in (`SignInScreen.kt`).
+   Nothing else. It goes in commit 2, once all four have moved.
+3. **The app has no dark theme.** `SmartieTheme` always uses the light
+   scheme, and the launch theme's parent is `Theme.Material.Light`. The
+   loading and sign-in screens draw no background of their own — the
+   window's, `#F8F7FC`, shows through.
+4. **The safe zone.** An adaptive icon's layers are 108dp square; a launcher
+   shows the middle 72dp through its mask, and only a 66dp circle in the
+   middle is safe from every mask. The mark's farthest visible pixel — the
+   tip of the Q's tail — is 671.8 px from the centre of the 1024 image,
+   **65.6% of its width**. Drawn at 48dp, a faint pixel of the resampling's
+   fringe reached 33.01dp at hdpi, past the 33dp radius by a hundredth;
+   **drawn at 44dp the tail ends 28.9dp out and every pixel, the faintest
+   included, is within 30.2dp at every density** — 2.8dp to spare. That is
+   scaling only: no redraw, no crop, so not a stop.
+5. **Contrast — every pair the new colours land on passes WCAG AA** (4.5:1
+   for text, 3:1 for non-text), by the WCAG 2 formula:
+
+   | Pair | Ratio | Needs |
+   |---|---|---|
+   | White on `#581FEB` (the primary button, a switch's track) | 7.47 | 4.5 |
+   | White on `#3212BD` (the pressed button) | 10.73 | 4.5 |
+   | `#581FEB` text on the card, `#FFFFFF` | 7.47 | 4.5 |
+   | `#581FEB` on the page, `#F8F7FC` | 7.01 | 4.5 |
+   | `#581FEB` on `Panel2`, `#F6F4FC` | 6.85 | 4.5 |
+   | `#581FEB` on the pinned wash, `#F5F2FE` | 6.77 | 4.5 |
+   | `#581FEB` on `PurpleLight`, `#EDE9FE` | 6.29 | 4.5 |
+   | `#581FEB` on its own 12% wash (a chosen segment), `#EBE4FD` | 6.07 | 4.5 |
+   | `#3212BD` text on `PurpleLight` (the purple tag, the busy chip) | 9.04 | 4.5 |
+   | `#3212BD` on the card (sign-in's note) | 10.73 | 4.5 |
+   | `#A138FC` as a line on the card | 4.68 | 3 |
+   | `#A138FC` as a line on the page | 4.39 | 3 |
+   | `#A138FC` as a line on the pinned wash | 4.24 | 3 |
+   | Navy `#08162C` text on `#F7F4FF` (the intro's line) | 16.65 | 4.5 |
+
+   **Two pairs fail, and neither is used:** `#A138FC` **as text** on the page
+   (4.39 < 4.5), so the highlight is only ever a line; and the app's grey
+   `Steel`, `#6B7280`, as text on `#F7F4FF` (4.45 < 4.5), so the intro's
+   line is navy. For comparison, the old purple `#6D28D9` gave white 7.10.
+
+**Decisions taken here — the Owner's "my call", and what the prompt left
+open.** Each is reported at the end, and each is one line to change:
+
+- **The byline: yes** — "by Smart India Enterprises", small, in navy, at the
+  foot of the intro, so the logo itself stays exactly centred.
+- **The intro is the logo and that line, nothing else.** The old loading
+  screen's spinner and its "Opening SMARTIE Quote Desk…" line go: a spinner
+  is a visible wait. The logo is read aloud as "Quote Desk".
+- **The highlight, `#A138FC`, marks a highlighted thing — never text:** the
+  outline of the field being typed in, the border of a stepper holding a
+  change, and the border of a product card being dragged. **The header
+  rule stays the primary purple.**
+- **Pressed, `#3212BD`, is also the old dark purple's role.** `PurpleDark`,
+  `#4C1D95`, becomes `#3212BD` everywhere it was used — the pressed primary
+  button, the purple tag's text, sign-in's note — rather than leaving one
+  pre-brand purple behind. Contrast above.
+- **The light lavenders stay** — `PurpleLight`, `PurpleLine`, `PurpleTint`:
+  they are not among the five, and they still sit with the new purple.
+- **`QD_full_whitetext` is used nowhere now.** Intro and sign-in are always
+  light, so the navy-text logo is the one; the white-text file stays in
+  `branding/` only, for later.
+- **Dark mode.** The intro and sign-in paint `#F7F4FF` themselves rather
+  than showing the window, and the launch theme refuses Android's Force
+  Dark (`android:forceDarkAllowed`, Android 10+), which can otherwise darken
+  a light app's window when the phone is in dark mode.
+- **How the files are made.** `tools/branding/make-assets.py` (Pillow)
+  generates every density from the 1024 originals, which it only reads.
+  The legacy icon for Android 6 to 7.1 — there is no adaptive icon before
+  Android 8 — is the mark at 28dp on a 44dp `#F7F4FF` rounded square, and a
+  circle for the round one.
+
+**The commits, each pushed alone with CI green before the next:**
+
+- **0 — this record.**
+- **1 — the launcher icon:** the generator; the adaptive icon, foreground
+  and monochrome at five densities on `#F7F4FF`; the legacy icons; the
+  manifest on the new mipmaps. Tests: the files' sizes and safe zone (JVM),
+  and the adaptive icon with its monochrome layer (Robolectric).
+- **2 — the splash, the intro and sign-in:** the Android 12+ splash
+  background; the intro in place of the loading screen; sign-in's logo and
+  background; the logo at five densities from `QD_full_colour`; the old
+  `ic_launcher.png` deleted. Tests: the intro only while loading, gone on
+  the next frame; the logo inside a 360dp screen at font scale 1.3; sign-in's
+  logo; light backgrounds in dark mode; the splash and window colours.
+- **3 — the theme:** the purples, the pressed button and the highlight;
+  `colors.xml` to match. Test: the contrast table above.
+- **4 — docs:** which file feeds which asset (`branding/README.md`), the
+  phone rows, and this file after CI.
 
 ### The Owner's acceptance of N5.12, 2026-10-07 — recorded before acting
 

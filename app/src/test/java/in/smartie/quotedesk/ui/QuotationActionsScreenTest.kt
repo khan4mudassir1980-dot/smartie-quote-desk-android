@@ -85,8 +85,8 @@ class QuotationActionsScreenTest {
         byUid = "u_m",
         status = "Finalised",
         party = QuotationPartySnapshot(name = "Walk-in Builders"),
-        subtotal = 44_400.0,
-        total = 52_392.0
+        subtotal = 34_000.0,
+        total = 40_120.0
     )
     private val ten = nine.copy(id = "qd_10", number = "SIE/QD/2025-26/010", party = QuotationPartySnapshot(name = "Harbour Interiors"))
 

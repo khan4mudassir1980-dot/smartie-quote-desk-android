@@ -47,7 +47,7 @@ class ProductsPinDragTest {
         model = seedModel,
         name = "Sliding gate motor $seedModel",
         categoryId = "cat-sliding",
-        client = 25_900.0,
+        client = 23_000.0,
         seeded = true,
     )
 

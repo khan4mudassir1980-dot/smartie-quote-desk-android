@@ -83,19 +83,19 @@ class QuoteBuilderEditScreenTest {
         seedModel = "SIE1000",
         model = "SIE1000",
         categoryId = "cat-sliding",
-        client = 22_200.0
+        client = 17_000.0
     )
 
     private val number = "SIE/QD/2025-26/009"
 
-    /** Issued at 10% off 44,400 — 4,440 — before the Owner lowered the cap to 5%. */
+    /** Issued at 10% off 34,000 — 3,400 — before the Owner lowered the cap to 5%. */
     private val editing: QuoteDraft = QuoteDraft(
         id = "qd_9",
         tier = RateTierV2.CLIENT,
         party = QuotationPartySnapshot(name = "Walk-in Builders"),
         discount = Discount(DiscountKind.PERCENT, 10.0),
         gstPercent = 18.0,
-        editOf = EditOrigin("qd_9", number, 0, RateTierV2.CLIENT, 4_440.0, 44_400.0)
+        editOf = EditOrigin("qd_9", number, 0, RateTierV2.CLIENT, 3_400.0, 34_000.0)
     ).add(motor, quantity = 2.0, id = "ln_1")
 
     private var saved = 0
@@ -238,7 +238,7 @@ class QuoteBuilderEditScreenTest {
         render()
         scrollTo(BUILDER_DISCOUNT_KEY)
 
-        val overCap = QuoteDiscount.refusal(Discount(DiscountKind.PERCENT, 10.0), 44_400.0, 5.0)!!
+        val overCap = QuoteDiscount.refusal(Discount(DiscountKind.PERCENT, 10.0), 34_000.0, 5.0)!!
         assertTrue(!shows(overCap))
     }
 
@@ -247,7 +247,7 @@ class QuoteBuilderEditScreenTest {
         render(draft = editing.copy(editOf = null))
         scrollTo(BUILDER_DISCOUNT_KEY)
 
-        assertTrue(shows(QuoteDiscount.refusal(Discount(DiscountKind.PERCENT, 10.0), 44_400.0, 5.0)!!))
+        assertTrue(shows(QuoteDiscount.refusal(Discount(DiscountKind.PERCENT, 10.0), 34_000.0, 5.0)!!))
     }
 
     @Test
@@ -255,7 +255,7 @@ class QuoteBuilderEditScreenTest {
         render(draft = editing.copy(discount = Discount(DiscountKind.PERCENT, 12.0)))
         scrollTo(BUILDER_DISCOUNT_KEY)
 
-        assertTrue(shows(QuoteDiscount.refusal(Discount(DiscountKind.PERCENT, 12.0), 44_400.0, 5.0)!!))
+        assertTrue(shows(QuoteDiscount.refusal(Discount(DiscountKind.PERCENT, 12.0), 34_000.0, 5.0)!!))
     }
 
     // --- a Duplicate's copy (N5.10 commit 8) -------------------------------------------------

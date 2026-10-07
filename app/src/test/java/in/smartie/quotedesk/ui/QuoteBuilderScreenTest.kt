@@ -160,7 +160,7 @@ class QuoteBuilderScreenTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private fun product(seedModel: String, client: Double? = 22200.0) = ProductRecord(
+    private fun product(seedModel: String, client: Double? = 17000.0) = ProductRecord(
         documentId = Keys.productDocId("gate", seedModel),
         key = Keys.productKey("gate", seedModel),
         group = "gate",
@@ -675,8 +675,8 @@ class QuoteBuilderScreenTest {
         // The working in the meta line, and the answer as the trailing figure
         // — `QuotationDetail`'s shape, so a draft and a finalised quotation
         // read alike.
-        compose.onNodeWithText("2 each × ₹22,200").assertExists()
-        compose.onNodeWithText("₹44,400").assertExists()
+        compose.onNodeWithText("2 each × ₹17,000").assertExists()
+        compose.onNodeWithText("₹34,000").assertExists()
     }
 
     @Test
@@ -964,7 +964,7 @@ class QuoteBuilderScreenTest {
             QuoteDraft(id = "qd_1").addArea(
                 id = "ln_a",
                 area = AreaLine(width = 3000.0, height = 3500.0, count = 2.0),
-                rate = 450.0,
+                rate = 350.0,
                 title = "Rolling shutter",
                 key = "rs|RS500"
             )
@@ -972,7 +972,7 @@ class QuoteBuilderScreenTest {
         scrollTo("ln_a")
 
         // `QuoteArea.describe`, which already produces exactly this.
-        compose.onNodeWithText("3000 × 3500 mm = 113.5 sq ft × ₹450 × 2 nos").assertExists()
+        compose.onNodeWithText("3000 × 3500 mm = 113.5 sq ft × ₹350 × 2 nos").assertExists()
         compose.onNodeWithText(AREA_LINE).assertExists()
 
         // No stepper: the quantity IS the chargeable area, recomputed from the
@@ -1100,7 +1100,7 @@ class QuoteBuilderScreenTest {
             QuoteDraft(id = "qd_1").addArea(
                 id = "ln_a",
                 area = AreaLine(width = 3000.0, height = 3500.0, count = 2.0),
-                rate = 450.0,
+                rate = 350.0,
                 title = "Rolling shutter"
             )
         )
@@ -1139,13 +1139,13 @@ class QuoteBuilderScreenTest {
         render(oneLine().copy(gstPercent = 18.0))
         scrollTo(BUILDER_TOTALS_KEY)
 
-        // 2 x 22,200 = 44,400, 18% of which is 7,992. The figure appears on
+        // 2 x 17,000 = 34,000, 18% of which is 6,120. The figure appears on
         // the line, on Products and on Subtotal, which is three nodes and not
         // an ambiguity to assert around.
-        assertTrue(compose.onAllNodesWithText("₹44,400").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(compose.onAllNodesWithText("₹34,000").fetchSemanticsNodes().isNotEmpty())
         compose.onNodeWithText("GST 18%").assertExists()
-        compose.onNodeWithText("₹7,992").assertExists()
-        compose.onNodeWithText("₹52,392").assertExists()
+        compose.onNodeWithText("₹6,120").assertExists()
+        compose.onNodeWithText("₹40,120").assertExists()
     }
 
     @Test
@@ -1199,10 +1199,10 @@ class QuoteBuilderScreenTest {
         render(oneLine().copy(gstPercent = 18.0, transport = 2500.0))
         scrollTo(BUILDER_TOTALS_KEY)
 
-        // 44,400 + 2,500 = 46,900 subtotal; 18% of that is 8,442.
-        compose.onNodeWithText("₹46,900").assertExists()
-        compose.onNodeWithText("₹8,442").assertExists()
-        compose.onNodeWithText("₹55,342").assertExists()
+        // 34,000 + 2,500 = 36,500 subtotal; 18% of that is 6,570.
+        compose.onNodeWithText("₹36,500").assertExists()
+        compose.onNodeWithText("₹6,570").assertExists()
+        compose.onNodeWithText("₹43,070").assertExists()
     }
 
     // --- installation and the discount (8b-2) -----------------------------------
@@ -1304,8 +1304,8 @@ class QuoteBuilderScreenTest {
         )
         scrollTo(BUILDER_DISCOUNT_KEY)
 
-        // 5% of 44,400 is 2,220.
-        compose.onNodeWithText(QuoteMath.overTheCap(5.0, 2220.0)).assertExists()
+        // 5% of 34,000 is 1,700.
+        compose.onNodeWithText(QuoteMath.overTheCap(5.0, 1700.0)).assertExists()
     }
 
     @Test
@@ -1346,8 +1346,8 @@ class QuoteBuilderScreenTest {
         )
         scrollTo(BUILDER_TOTALS_KEY)
 
-        // 5% of 44,400 is 2,220, leaving a subtotal of 42,180.
-        compose.onNodeWithText("- ₹2,220").assertExists()
-        compose.onNodeWithText("₹42,180").assertExists()
+        // 5% of 34,000 is 1,700, leaving a subtotal of 32,300.
+        compose.onNodeWithText("- ₹1,700").assertExists()
+        compose.onNodeWithText("₹32,300").assertExists()
     }
 }

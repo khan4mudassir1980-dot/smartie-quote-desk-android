@@ -54,7 +54,7 @@ class ProductsBackToTopScreenTest {
             model = "SIE$number",
             name = "Sliding gate motor $number",
             categoryId = "cat-sliding",
-            client = 25_900.0,
+            client = 23_000.0,
             seeded = true,
         )
     }

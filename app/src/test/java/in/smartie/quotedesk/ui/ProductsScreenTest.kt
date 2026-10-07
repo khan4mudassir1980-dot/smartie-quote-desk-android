@@ -32,7 +32,7 @@ class ProductsScreenTest {
         seedModel: String,
         name: String = "",
         categoryId: String = "cat-sliding",
-        client: Double? = 25900.0,
+        client: Double? = 23000.0,
         kg: Double? = null,
     ) = ProductRecord(
         documentId = Keys.productDocId("gate", seedModel),
@@ -162,7 +162,7 @@ class ProductsScreenTest {
     fun `the quote bar totals what the draft holds`() {
         render(draft = QuoteDraft().add(motor, quantity = 2.0))
         compose.onNodeWithText("1 in the quotation").assertExists()
-        compose.onNodeWithText("₹51,800").assertExists()
+        compose.onNodeWithText("₹46,000").assertExists()
     }
 
     @Test

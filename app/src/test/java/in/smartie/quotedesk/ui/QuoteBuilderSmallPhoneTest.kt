@@ -63,8 +63,8 @@ class QuoteBuilderSmallPhoneTest {
     }
 
     private fun charging() = QuoteDraft(id = "qd_1")
-        .addManual("ln_1", "Motor", rate = 22_200.0)
-        .copy(installation = Installation(InstallationMode.PERCENT, 8.0, 22_200.0))
+        .addManual("ln_1", "Motor", rate = 17_000.0)
+        .copy(installation = Installation(InstallationMode.PERCENT, 8.0, 17_000.0))
 
     @Test
     fun `every installation mode is readable whole at 360dp`() {

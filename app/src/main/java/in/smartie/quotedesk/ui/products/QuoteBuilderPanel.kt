@@ -1527,7 +1527,7 @@ internal fun removeLabel(title: String): String = "Remove $title"
  * The line under the title: the opening's own working for an area line, and
  * whatever spec the product carries for every other kind.
  *
- * `QuoteArea.describe` is `3000 × 3500 mm = 113.5 sq ft × ₹450 × 2 nos` — the
+ * `QuoteArea.describe` is `3000 × 3500 mm = 113.5 sq ft × ₹350 × 2 nos` — the
  * rate included, because this is the card and not the stored `s` field.
  * `describeGeometry` is the rate-free one that goes on the wire, so a later
  * correction to the rate cannot leave a stored sentence contradicting the
@@ -1539,7 +1539,7 @@ internal fun lineSecondary(line: DraftLine): String? {
     return QuoteArea.describe(area, rate)
 }
 
-/** `2 each × ₹22,200`, or the warning when there is no rate yet. */
+/** `2 each × ₹17,000`, or the warning when there is no rate yet. */
 internal fun lineMeta(line: DraftLine): String {
     val rate = line.rate ?: return RATE_NEEDED
     return "${Money.formatQuantity(line.quantity)} ${line.unit} × " +

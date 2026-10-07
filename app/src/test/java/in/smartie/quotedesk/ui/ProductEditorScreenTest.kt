@@ -82,9 +82,9 @@ class ProductEditorScreenTest {
         name = "Sliding gate motor 1000 kg",
         unit = "each",
         gst = 18.0,
-        dealer = 18500.0,
-        contractor = 22200.0,
-        client = 25900.0
+        dealer = 14000.0,
+        contractor = 17000.0,
+        client = 23000.0
     )
 
     private var saved: Pair<ProductRecord, ProductDraft>? = null
@@ -149,11 +149,11 @@ class ProductEditorScreenTest {
         // The catalogue holds far more `per m`, `per pc` and `per kg` products
         // than area-priced ones, and the save writes the whole document.
         editor(motor.copy(unit = "per m"))
-        type(DEALER_LABEL, "450")
+        type(DEALER_LABEL, "400")
         save()
 
         assertEquals("per m", saved?.second?.unit)
-        assertEquals("450", saved?.second?.dealer)
+        assertEquals("400", saved?.second?.dealer)
     }
 
     @Test
@@ -206,7 +206,7 @@ class ProductEditorScreenTest {
     fun `the contractor rate is shown as a fact, with no box to change it`() {
         editor()
         scrollTo(CONTRACTOR_KEY)
-        assertTrue("the stored rate is readable", shows("22,200"))
+        assertTrue("the stored rate is readable", shows("17,000"))
         assertTrue("and it is labelled", shows(CONTRACTOR_LABEL))
         // Its neighbours are boxes; this one is not, which is the point.
         assertTrue("the client box is composed", offers(CLIENT_LABEL))

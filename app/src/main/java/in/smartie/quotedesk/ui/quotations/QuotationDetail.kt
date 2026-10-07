@@ -63,7 +63,7 @@ import java.util.Locale
  * in the subtotal, so that is where it appears here. A line is tagged by its
  * stored `manual` flag alone, so a V8C4 transport line shows untagged. (This
  * said "manual entry … tagged as typed by hand" until N5.9a commit 3b; the
- * invented fixture's `manual: true` moves with the N5.12 fixture pass.)
+ * fixture's invented `manual: true` was replaced by V8C4's own shape in N5.12.)
  * **Installation and discount are rows of their own when a quotation carries
  * them** — the `install` and `disc` N5.9 writes and V8C4 never does. Until
  * N5.10 commit 1 this said they were not shown "because nothing writes them
@@ -78,7 +78,7 @@ import java.util.Locale
  * **GST is shown as `total − subtotal`**, both stored figures, rather than
  * recomputed from the percentage. That is what keeps a beta record honest:
  * `q_beta_issued` has no document-level `gst` at all, only a per-line rate and
- * a `gstTotal`, and the subtraction lands on exactly the 3,132 it stored.
+ * a `gstTotal`, and the subtraction lands on exactly the 2,160 it stored.
  */
 @Composable
 internal fun QuotationDetail(

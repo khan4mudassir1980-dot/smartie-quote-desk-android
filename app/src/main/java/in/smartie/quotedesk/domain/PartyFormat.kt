@@ -13,7 +13,7 @@ package `in`.smartie.quotedesk.domain
  *
  * Used by N5.9b's finalise gate — prefixed "Client GSTIN: " and "Client
  * phone: ", as `ensureFinalised` does — and by "Save this customer", which
- * shows the problem bare, as `#qSaveParty`'s `toast(bad)` does.
+ * shows the problem bare, as `#qSaveParty` (8011-8022) does.
  *
  * ## Where a port could differ by coincidence, and does not
  *
@@ -61,7 +61,7 @@ object PartyFormat {
         "[^$JS_SPACE_CLASS@]+@[^$JS_SPACE_CLASS@]+\\.[^$JS_SPACE_CLASS@]{2,}"
     )
 
-    /** `"" is fine. Anything else must look like a real GSTIN.` */
+    /** Blank passes; anything else must have a GSTIN's shape (V8C4 6341-6360). */
     fun gstinProblem(value: String): String? {
         val s = jsTrim(value).uppercase()
         if (s.isEmpty()) return null
@@ -70,7 +70,7 @@ object PartyFormat {
         return null
     }
 
-    /** `"" is fine. Otherwise 10 digits, optionally with a country code.` */
+    /** Blank passes; otherwise 10 to 13 digits, with or without a country code (V8C4 6341-6360). */
     fun phoneProblem(value: String): String? {
         val s = jsTrim(value)
         if (s.isEmpty()) return null

@@ -137,7 +137,7 @@ class PartyDuplicatesTest {
 
     @Test
     fun `a party being edited never matches itself - which is what exceptId is for`() {
-        // V8C4's Edit party calls `findCustomer(v, c.id)`.
+        // V8C4's Edit party leaves the party being edited out of its search (6644).
         assertNull(PartyDuplicates.find(parties, PartyWrite.draftOf(sunrise), ignoring = sunrise.id))
         val clash = PartyWrite.draftOf(sunrise).copy(name = "Renamed", phone = harbour.phone, gstin = "")
         assertEquals("c_2", PartyDuplicates.find(parties, clash, ignoring = sunrise.id)?.party?.id)

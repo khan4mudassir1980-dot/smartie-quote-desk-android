@@ -24,8 +24,8 @@ import kotlinx.coroutines.flow.map
 private val Context.preferencesStore: DataStore<Preferences> by preferencesDataStore("smartie_device_prefs")
 
 /**
- * Per-device settings that never leave the phone, mirroring the PWA's
- * `state.prefs`: the text size, which catalogue shelves are open, and the
+ * Per-device settings that never leave the phone, mirroring the PWA's own
+ * per-device preferences: the text size, which catalogue shelves are open, and the
  * quotation being built. None of it is shared, and none of it is Firestore's.
  */
 class DevicePreferences(private val context: Context) {

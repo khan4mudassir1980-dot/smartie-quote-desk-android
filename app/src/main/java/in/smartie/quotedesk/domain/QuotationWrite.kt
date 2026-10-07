@@ -30,8 +30,9 @@ sealed interface QuotationPlan {
      * This draft's quotation already exists. **Nothing is written**, and the
      * answer is the **whole stored record** — its number is the one a retry
      * after a lost response must give, rather than a second — as V8C4's
-     * `fbFinaliseAtomic` returns `{no: prev.no, doc: prev, reused: true}` and
-     * its caller does `Object.assign(draft, out.doc)`.
+     * `fbFinaliseAtomic` (5111-5157) returns the stored number, the whole
+     * stored record and a reused flag, and its caller takes the record over
+     * its draft.
      */
     data class AlreadyIssued(val record: QuotationRecord) : QuotationPlan {
         val quotationId: String get() = record.id
@@ -89,8 +90,8 @@ sealed interface QuotationPlan {
  *
  * **A null `snap` writes no `snap` key at all**, and that is what N5.9b's
  * caller passes until N6: nothing was frozen, and an absent key says so.
- * It is **not** safer for V8C4 than `{}` — V8C4 re-prints through
- * `x.snap || {}` and assigns the company's name, address, GSTIN and bank
+ * It is **not** safer for V8C4 than `{}` — V8C4 re-prints from the stored
+ * `snap`, or an empty one when there is none, and assigns the company's name, address, GSTIN and bank
  * block from it with no fallback, so both come out on a blank letterhead.
  * That is why `docs/PROJECT-STATUS.md` holds an **N8 blocker** (no
  * production cutover while finalise passes no `snap`) and an **N5.11
@@ -123,9 +124,10 @@ object QuotationWrite {
     const val TRANSPORT_TITLE = "Transportation"
 
     /**
-     * **Empty, as V8C4 stores it.** `normLine` sets `u = l.u || ""` and the
-     * transport line passes none. The `no` a PWA page prints beside it is
-     * `qLabel`'s display fallback (`l.u || "no"`), never a stored value —
+     * **Empty, as V8C4 stores it.** `normLine` (2200) stores a line's unit, or
+     * an empty one, and the transport line passes none. The `no` a PWA page
+     * prints beside it is `qLabel`'s display fallback for a line with no unit,
+     * never a stored value —
      * which is where `3db056b`'s `"no"` came from, via the plan. The
      * invented `lot` in `fixtures/quotations.json` was replaced by V8C4's own
      * shape in N5.12.
@@ -330,7 +332,8 @@ object QuotationWrite {
      *
      * - `origRate` defaults to `rate`, as `normLine` defaults it.
      * - `k` is **null** on a line with no product — **read, not inferred**:
-     *   V8C4's `normLine` (2200) resolves `k: l.k||null` for every line, and
+     *   V8C4's `normLine` (2200) stores the line's product key, or null, for
+     *   every line, and
      *   the stored mapping (6224) applies it again. (`3db056b`'s KDoc called
      *   this an inference; the Owner's re-read of 2026-09-25 settled it.)
      * - `amt` is always written, though V8C4's `amtOf` would fall back to

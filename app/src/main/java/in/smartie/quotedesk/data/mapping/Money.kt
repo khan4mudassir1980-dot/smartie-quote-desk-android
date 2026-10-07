@@ -8,7 +8,7 @@ import java.math.RoundingMode
  *
  * The beta used `Double.toInt()` for display, which truncates and overflows
  * (audit C12). Everything here goes through [BigDecimal] and uses Indian
- * digit grouping, as the PWA's `toLocaleString("en-IN")` does.
+ * digit grouping, as the PWA's Indian-locale number formatting does.
  */
 object Money {
 

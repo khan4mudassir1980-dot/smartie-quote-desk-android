@@ -7,8 +7,8 @@ import `in`.smartie.quotedesk.data.model.QuotationPartySnapshot
 data class PartyMatch(val party: PartyRecord, val on: PartyMatcher)
 
 /**
- * Why two parties are the same one — V8C4's `matchReason` (6389-6393), in its
- * order of reliability, and in its words.
+ * Why two parties are the same one — V8C4's `matchReason` (6389-6393), most
+ * reliable first, and in its words.
  */
 enum class PartyMatcher(val label: String) {
     GSTIN("the same GSTIN"),
@@ -22,7 +22,7 @@ enum class PartyMatcher(val label: String) {
  *
  * V8C4 has exactly one definition and every path calls it (the Owner's reading,
  * 2026-09-26): `saveParty` (6407), `resolvePartyId` (6384), Add party (6573),
- * Edit party (6644, `findCustomer(v, c.id)` — which is what `exceptId` is for)
+ * Edit party (6644, which leaves the party being edited out — what `exceptId` is for)
  * and Save from quotation (8016). Here: the quotation's party link
  * (`QuoteParty.linkFor`), "Save this customer"
  * (`PartyWriteRepository.saveFromQuotation`) and the Parties screen's
@@ -45,8 +45,8 @@ object PartyDuplicates {
     const val MIN_PHONE_DIGITS = 7
 
     /**
-     * **V8C4's `norm` (5681, 6335), exactly:**
-     * `String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"")`.
+     * **V8C4's `norm` (5681, 6335), exactly:** lower-cased, and every
+     * character that is not a–z or 0–9 removed.
      *
      * Every character that is not a Latin letter or a digit goes — spaces,
      * dots, slashes, hyphens, ampersands. So "M/s Sunrise Ent." is
@@ -56,15 +56,15 @@ object PartyDuplicates {
     fun norm(value: String): String = value.lowercase().filter { it in 'a'..'z' || it in '0'..'9' }
 
     /**
-     * **V8C4's `digits`, exactly:** `String(s||"").replace(/\D/g,"")` — the
-     * ASCII digits only, compared by **full-string equality**. A number typed
+     * **V8C4's `digits` (5681, 6335), exactly:** every character that is not
+     * a digit removed — the ASCII digits only, compared by **full-string equality**. A number typed
      * with its country code is not the one stored without it, in V8C4 as here.
      */
     fun digits(value: String): String = value.filter { it in '0'..'9' }
 
     /**
-     * **V8C4's `sameParty` (6362-6371)** — "GSTIN first, then phone, then
-     * company name — the order of reliability". Any one is enough.
+     * **V8C4's `sameParty` (6362-6371)** — GSTIN first, then phone, then
+     * company name, the most reliable first. Any one is enough.
      */
     fun sameParty(form: QuotationPartySnapshot, saved: PartyRecord): Boolean =
         matchReason(form.gstin, form.phone, form.name, saved) != null
@@ -89,7 +89,7 @@ object PartyDuplicates {
     /**
      * The Parties screen's duplicate warning — the same rule, from the
      * editor's draft. [ignoring] is the party being edited, which must never
-     * match itself: V8C4's `findCustomer(v, c.id)`.
+     * match itself, as V8C4's Edit party leaves it out (6644).
      *
      * Since N5.9a commit 8b, and at the Owner's ruling, this is V8C4's rule
      * rather than N5.5's: an archived party is not flagged, a phone typed with

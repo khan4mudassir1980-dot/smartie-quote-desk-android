@@ -758,8 +758,8 @@ internal fun QuoteBuilderPanel(
  * The finalise gate's ₹0 question, with its two answers.
  *
  * "Continue anyway" and "Cancel" are **a choice, not a port**: V8C4 asks
- * through `window.confirm`, whose OK / Cancel are the browser's, so there was
- * no label to copy. Do not "correct" them to match V8C4.
+ * through the browser's own confirm dialog, whose OK / Cancel are the
+ * browser's, so there was no label to copy. Do not "correct" them to match V8C4.
  */
 @Composable
 private fun ZeroRateQuestion(question: String, onAnswer: (Boolean) -> Unit, modifier: Modifier = Modifier) {

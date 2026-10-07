@@ -291,8 +291,8 @@ test('the cap document can never be deleted', async () => {
 // --- N5.6b: what V8C4 will accept back ------------------------------------------
 
 test('pad is bounded to what V8C4 itself allows, 1 to 6', async () => {
-  // V8C4 clamps with `Math.min(6, Math.max(1, pd||3))` on both of its save
-  // paths, and its inputs are min="1" max="6". A pad of 7 set here would show
+  // V8C4 clamps pad to between 1 and 6 (3 when blank) on both of its save
+  // paths, and its inputs accept only 1 to 6. A pad of 7 set here would show
   // up in that input and be silently rewritten to 6 on the PWA's next
   // settings save — changing the printed number format with nobody asking.
   await givenCounter();

@@ -149,13 +149,14 @@ so in those words.
 
 Manual lines already exist in V8C4: a title, a description, a quantity, an
 amount, and `manual: true` with no product key. Their unit **prints** as `no`
-when none is stored — that is `qLabel`'s display fallback (`l.u || "no"`),
-not a stored value.
+when none is stored — that is `qLabel`'s display fallback for a line with no
+unit, not a stored value.
 
 **Transport is a line, not a field — and an ordinary line, not a manual
 one.** V8C4's `quoteLines()` pushes it through `normLine`, which stores
-exactly `{t: "Transportation", s: <note>, u: "", qty: 1, rate: amt,
-origRate: amt, k: null, manual: false, amt}`, and counts it in the subtotal.
+exactly these fields (2200-2201, 6223-6224): `t` "Transportation", `s` the
+note, `u` "", `qty` 1, `rate` and `origRate` the amount, `k` null, `manual`
+false and `amt` the amount — and counts it in the subtotal.
 *(Corrected 2026-09-25 from the Owner's reading of V8C4. This section said
 "a manual line … tagged as typed by hand" and gave manual lines unit `no`;
 the native writer followed it in `3db056b` and was corrected in N5.9a commit
@@ -426,8 +427,8 @@ stale:
 ```
 
 `pad` is 1–6 because that is what V8C4 clamps to on both of its save paths
-(`Math.min(6, Math.max(1, pd||3))`) and what its inputs allow. A pad of 7 set
-natively would have appeared in that `max="6"` input and been silently
+(between 1 and 6, 3 when blank) and what its inputs allow. A pad of 7 set
+natively would have appeared in that input, whose maximum is 6, and been silently
 rewritten to 6 on the PWA's next settings save, changing the printed number
 format with nobody asking.
 
@@ -545,8 +546,9 @@ is refused: safe by default.
 
 > **Corrected 2026-09-25 by the Owner's ruling.** This row read "Edit /
 > cancel … **their own only**" for a Manager, treating the two as one
-> permission. They are not, and V8C4 settles cancel: `if(!admin) return
-> toast("Only an administrator can cancel a quotation")`. So:
+> permission. They are not, and V8C4 settles cancel: it stops anyone but an
+> administrator, saying "Only an administrator can cancel a quotation"
+> (6834-6840). So:
 >
 > - **Edit** — the creator, and an Owner or Administrator on anyone's. This is
 >   a **new capability**: V8C4 cannot edit a finalised quotation at all, so

@@ -48,7 +48,7 @@ object Permissions {
      * Administrator on anyone's.** The Owner's decision of 2026-09-28, which
      * REPLACED the ruling of 2026-09-25 that read "Owner and Administrator
      * only … a Manager cannot cancel, including their own" (V8C4's
-     * `if(!admin)`). Until N5.10 this took no record and answered
+     * administrators-only cancel, 6834-6840). Until N5.10 this took no record and answered
      * `isAdmin(member)`; it had no caller. The rules say the same
      * (`firestore.rules`, `qnCancel`).
      */

@@ -46,7 +46,8 @@ fun DocData.toPurchaseRecord(): PurchaseRecord = PurchaseRecord(
     stockedQuantity = optionalDouble("stockedQty"),
     cancelledBy = string("cancelledBy"),
     cancelledByUid = string("cancelledUid"),
-    // V8C4 stamps `cancelledAt` with `Date.now()`, a number; `millis` also
+    // V8C4 stamps `cancelledAt` with the time in epoch milliseconds, a number
+    // (6680-6695); `millis` also
     // takes a Timestamp, a numeric string or a Date.
     cancelledAt = millis("cancelledAt"),
     orderedBy = string("orderedBy"),

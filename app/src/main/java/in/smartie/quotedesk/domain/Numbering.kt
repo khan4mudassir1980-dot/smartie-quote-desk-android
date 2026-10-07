@@ -82,8 +82,8 @@ object Numbering {
 
     /**
      * The `pad` bounds, and they are **V8C4's**, not a guess at what looks
-     * readable. Both of the PWA's save paths clamp with
-     * `Math.min(6, Math.max(1, pd||3))` and its inputs are `min="1" max="6"`,
+     * readable. Both of the PWA's save paths clamp it
+     * to between 1 and 6 (3 when blank), and its inputs accept only 1 to 6,
      * so a padding of 7 set here would appear in that input and be silently
      * rewritten to 6 on its next settings save — changing the printed number
      * format with nobody asking. The deployed configuration rule bounds it to

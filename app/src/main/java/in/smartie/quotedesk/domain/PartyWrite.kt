@@ -266,15 +266,11 @@ object PartyWrite {
     // --- the other semantics, for N5.8 -----------------------------------------------
 
     /**
-     * **V8C4's `saveParty` update branch** (the Owner's reading, 2026-09-26):
-     * fill the gaps, take the genuine changes, never blank anything already
-     * held — and **never rename**.
-     *
-     * ```
-     * if(p.site) c.city=p.site;
-     * ["gstin","contact","phone","email","address"].forEach(k=>{ if(p[k]) c[k]=p[k]; });
-     * if(p.type) c.type=p.type;
-     * ```
+     * **V8C4's `saveParty` update branch** (from 6404; the Owner's reading,
+     * 2026-09-26): fill the gaps, take the genuine changes, never blank
+     * anything already held — and **never rename**. A typed site becomes the
+     * city; GSTIN, contact, phone, email and address are each copied only when
+     * given; the type only when given.
      *
      * **`name` is not in that list.** V8C4 writes a name only when it creates
      * a record, so the quotation's Save never renames a saved customer — and a
@@ -286,9 +282,9 @@ object PartyWrite {
      * rather than an instruction to forget. The form's site arrives here as
      * [PartyDraft.city] (`QuoteParty.draftOf`), as `saveParty` maps it.
      *
-     * **One deliberate difference, awaiting the Owner:** V8C4's caller passes
-     * `type: state.tier`, so its update always sets the type to the
-     * quotation's tier. This app cannot quote at the contractor tier, so doing
+     * **One deliberate difference, awaiting the Owner:** V8C4's caller
+     * (`#qSaveParty`, 8011-8022) passes the quotation's tier as the type, so
+     * its update always sets the type to the quotation's tier. This app cannot quote at the contractor tier, so doing
      * the same would turn every contractor saved from a native quotation into
      * a dealer or a client. So a type is written here only when one is stated,
      * and the quotation path states none; see `docs/PROJECT-STATUS.md`.

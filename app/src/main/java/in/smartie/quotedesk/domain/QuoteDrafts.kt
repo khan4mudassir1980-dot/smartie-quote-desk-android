@@ -75,8 +75,8 @@ data class QuoteDrafts(
      * **Never `QuoteDraft.clear()` for this.** A cleared draft keeps its id,
      * and finalise's read-first looks the id up: the next quotation built on
      * it would be answered with the previous one's number and never issued.
-     * V8C4 gets the same result by clearing `state.draftId` on success
-     * ("this record is closed") before it clears the draft; here the id and
+     * V8C4 gets the same result by clearing its draft id on success (6262),
+     * before it clears the draft; here the id and
      * the draft go together, in one call, so there is no moment when one has
      * gone and the other has not.
      *

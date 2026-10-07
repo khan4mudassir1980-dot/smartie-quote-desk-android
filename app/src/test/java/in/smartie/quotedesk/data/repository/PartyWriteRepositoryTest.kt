@@ -344,7 +344,7 @@ class PartyWriteRepositoryTest {
                     PartyWriteRepository(store, now = { 1_000L })
                         .save(manager, form, customers = listOf(sunrise.copy(gstin = "27AAACS1234F1Z5")))
                 }
-                // Bare, as V8C4's toast(bad): no "Client GSTIN: " prefix here.
+                // Bare, as V8C4 shows it (8011-8022): no "Client GSTIN: " prefix here.
                 assertEquals(problem, failure?.message)
                 assertTrue("nobody was asked about ${form}", asked.isEmpty())
                 assertTrue("nothing on the wire for ${form}", store.writes.isEmpty())
@@ -391,7 +391,7 @@ class PartyWriteRepositoryTest {
     @Test
     fun `a customer typed onto the quotation is created at the type chosen, the site as its city`() = runTest {
         // Until N5.10 commit 9 this was "…created at the quotation's tier" —
-        // V8C4's `type: state.tier`, a default the Owner ruled out
+        // V8C4 passes the quotation's tier (8011-8022), a default the Owner ruled out
         // (amendment D). The type is asked for, and the answer is written.
         val store = FakeStore()
         val writes = PartyWriteRepository(store, now = { 1_000L })

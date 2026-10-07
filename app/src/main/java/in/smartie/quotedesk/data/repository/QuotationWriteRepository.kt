@@ -101,7 +101,8 @@ sealed interface CancelOutcome {
  * and coming back as an unexplained `permission-denied`.
  *
  * The party link is the exception, and deliberately: it is derived from the
- * customers the screen holds, as V8C4 derives it from `state.customers`,
+ * customers the screen holds, as V8C4 derives it from its in-memory customer
+ * list (`resolvePartyId`, 6379),
  * because it is metadata — a list a moment old costs at most a
  * cross-reference.
  *

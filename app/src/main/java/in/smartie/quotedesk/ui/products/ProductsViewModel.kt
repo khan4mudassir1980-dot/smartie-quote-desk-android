@@ -408,8 +408,8 @@ class ProductsViewModel(
      * person has said Dealer or Client ([typeQuestion], answered through
      * [answerType]) — there is no default, and the answer sets the customer's
      * type alone (amendment D). Afterwards the draft **adopts** whichever
-     * customer the form was saved as, found or created — V8C4's
-     * `state.partyId = c.id; saveDraft()`; finalise re-derives the link from
+     * customer the form was saved as, found or created — as V8C4's
+     * `#qSaveParty` does (8011-8022); finalise re-derives the link from
      * the form regardless. Declined, nothing is written and nothing is said,
      * as V8C4's Cancel returns.
      */
@@ -458,7 +458,7 @@ class ProductsViewModel(
     }
 
     /**
-     * V8C4's `confirmAction` before updating a saved party: the question is
+     * V8C4's confirmation before updating a saved party (8011-8022): the question is
      * published and the save waits — with the Save control still busy — until
      * [answerMerge] is called.
      */

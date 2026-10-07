@@ -55,7 +55,7 @@ class ProductUnitTest {
 
     @Test
     fun `a blank box falls back to each, exactly as the PWA does`() {
-        // V8C4's `#fU` saves `value.trim() || "each"`, so a cleared box means
+        // V8C4's `#fU` saves the trimmed value, else "each" (`index.html:6058`), so a cleared box means
         // `each` in both apps rather than an empty string in one of them.
         assertEquals("each", ProductUnit.normalise(""))
         assertEquals("each", ProductUnit.normalise("   "))

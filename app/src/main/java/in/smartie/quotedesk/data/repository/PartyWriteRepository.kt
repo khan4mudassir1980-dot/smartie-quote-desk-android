@@ -131,10 +131,9 @@ class PartyWriteRepository(
      * (8011-8022) and `saveParty` (6404), as the Owner read them.
      *
      * 1. **A name first** — nothing is found or written without one.
-     * 2. **Then the formats** — V8C4's `gstinProblem(p.gstin) ||
-     *    phoneProblem(p.phone) || emailProblem(p.email)`, `PartyFormat` here,
-     *    the first problem shown **bare**, as `#qSaveParty`'s `toast(bad)`
-     *    shows it (the finalise gate prefixes "Client GSTIN: "; this does
+     * 2. **Then the formats** — V8C4's GSTIN, phone and email checks, in that
+     *    order (`#qSaveParty`, 8011-8022), `PartyFormat` here, the first
+     *    problem shown **bare**, as `#qSaveParty` shows it (the finalise gate prefixes "Client GSTIN: "; this does
      *    not). Blank passes all three. Since N5.9b commit 4c; until then
      *    this step was empty because the text was not in the repository.
      *    A GSTIN typed with spaces inside is refused here by length, as in
@@ -158,7 +157,7 @@ class PartyWriteRepository(
      *    Client?" — and **nothing is created without an answer** (the Owner,
      *    amendment D, 2026-09-28). The answer is the customer's type and
      *    nothing else: the quotation's rate stays where its switch is. V8C4
-     *    took the quotation's tier (`type: state.tier`); until N5.10 commit 9
+     *    took the quotation's tier (`#qSaveParty`, 8011-8022); until N5.10 commit 9
      *    so did this — a default, which the Owner ruled out. Created under
      *    [newId], held by the screen for as long as one quotation is being
      *    filled in, so a retry lands on the same document and is refused

@@ -18,8 +18,8 @@ import org.junit.Test
  * stops that; three gates in [QuoteDraft.refusal] do.
  *
  * It matters beyond tidiness. Every figure is rounded HALF_UP, which rounds a
- * half **away from zero**, while V8C4 prints with JavaScript's `Math.round`,
- * which rounds a half toward **+infinity**. They agree on every non-negative
+ * half **away from zero**, while V8C4 prints with JavaScript's standard
+ * rounding, which rounds a half toward **+infinity**. They agree on every non-negative
  * value and disagree on negative halves — so while the invariant holds the two
  * apps print the same number, and the moment it does not they quietly stop.
  */
@@ -170,7 +170,7 @@ class QuoteDraftRefusalTest {
 
     @Test
     fun `no lines is refused in V8C4's own words`() {
-        // `ensureFinalised`: toast("Add a line to the quotation first").
+        // V8C4's `ensureFinalised` shows exactly this when there are no lines (8418).
         assertEquals("Add a line to the quotation first", QuoteDraft.NO_LINES)
     }
 

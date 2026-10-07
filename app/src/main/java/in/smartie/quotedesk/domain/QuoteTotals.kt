@@ -162,7 +162,7 @@ object QuoteMath {
      *
      * It matters beyond tidiness. Every figure here is rounded HALF_UP, which
      * rounds a half **away from zero**, while V8C4 prints with JavaScript's
-     * `Math.round`, which rounds a half toward **+infinity**. The two agree on
+     * standard rounding, which rounds a half toward **+infinity**. The two agree on
      * every non-negative value and disagree on negative halves — so while the
      * invariant holds, the app and the PWA print the same number, and the
      * moment it does not, they quietly stop agreeing.

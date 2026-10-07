@@ -10,7 +10,7 @@ fun DocData.toTeamMember(): TeamMember = TeamMember(
     // The PWA stores the token email verbatim; compare folded, store as given.
     email = string("email"),
     roleWireValue = string("role", default = "worker").lowercase(),
-    // A missing `active` field means active, as `d.active !== false` in the PWA.
+    // A missing `active` field means active, as in the PWA: only an explicit false is inactive.
     active = bool("active", default = true),
     photoUrl = string("photoURL", "photoUrl"),
     createdAt = millis("createdAt", "t"),

@@ -192,7 +192,7 @@ class ProductWriteTest {
 
     @Test
     fun `a missing seedModel is derived and written, which is what repairs it`() {
-        // V8C4's `applyProductDoc` keys on `v.seedModel || v.model`, so after
+        // V8C4's `applyProductDoc` keys on the seed model, else the model, so after
         // this write the two apps agree — the write fixes the ambiguity rather
         // than inheriting it.
         val legacy = stored().toMutableMap().apply { remove("seedModel") }
@@ -271,8 +271,8 @@ class ProductWriteTest {
 
     @Test
     fun `an overridden model never becomes the seed model`() {
-        // V8C4 writes `seedModel` from the seed but `model` from
-        // `o.md || it.m`, so `model` is the display override where one is
+        // V8C4 writes `seedModel` from the seed but `model` from the display
+        // override, else the seed's model, so `model` is the display override where one is
         // set. Deriving the seed model from it would compute a different
         // document id and write to a second document — the duplicate the
         // canonical id exists to prevent.

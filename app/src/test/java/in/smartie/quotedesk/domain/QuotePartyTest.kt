@@ -68,7 +68,8 @@ class QuotePartyTest {
 
     @Test
     fun `the form's site becomes the customer's city, as V8C4's saveParty maps it`() {
-        // `if(p.site) c.city=p.site` (the Owner's reading, 2026-09-26). Until
+        // V8C4's saveParty copies a typed site to the city (from 6404; the
+        // Owner's reading, 2026-09-26). Until
         // N5.9a commit 8b this test pinned the opposite — that the site never
         // went back onto a customer — and V8C4 is the authority.
         val onScreen = QuoteParty.snapshotOf(sunrise).copy(site = "Bhiwandi")
@@ -191,7 +192,7 @@ class QuotePartyTest {
         val shortStored = sunrise.copy(phone = "543210")
         // Six digits on both sides: never a match, however equal.
         assertFalse(PartyDuplicates.sameParty(QuotationPartySnapshot(phone = "543210"), shortStored))
-        // Exact on digits, as V8C4's `digits(c.phone)===ph`: a number typed
+        // Exact on digits, as V8C4's sameParty compares them (6362-6371): a number typed
         // with its country code is not the one stored without it. N5.5's
         // duplicate warning (`find`) matches that by suffix; V8C4 does not.
         assertFalse(PartyDuplicates.sameParty(QuotationPartySnapshot(phone = "+91 98765 43210"), sunrise))

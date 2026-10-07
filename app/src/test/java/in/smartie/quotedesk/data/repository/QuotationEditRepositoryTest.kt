@@ -205,8 +205,8 @@ class QuotationEditRepositoryTest {
 
     @Test
     fun `cancel writes exactly V8C4's three keys`() = runBlocking {
-        // R13. `{status: "Cancelled", cancelledBy, cancelledAt}` and not a key
-        // more: the rule's `hasOnly`, and what V8C4 itself sends.
+        // R13. The three fields — `status`, `cancelledBy`, `cancelledAt` — and
+        // not a key more: the rule's `hasOnly`, and what V8C4 itself sends.
         val store = issued()
         val before = store.docs.getValue("quotations/qd_1")
         clock += 120_000

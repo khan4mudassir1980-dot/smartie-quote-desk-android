@@ -56,7 +56,7 @@ object ProductCategories {
      * over the defaults, unknown shelves appended, archived ones dropped.
      *
      * An override that omits a field keeps the default's: the PWA's
-     * `Object.assign` does that, and `toProductCategories` cannot tell an
+     * merge (7416-7423) does that, and `toProductCategories` cannot tell an
      * absent `name` or `order` from a blank one, so a name equal to the id and
      * an order of zero are both read as "not supplied". Every category the PWA
      * and the migration write carries all three fields, so this only matters

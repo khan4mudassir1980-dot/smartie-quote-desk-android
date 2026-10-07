@@ -48,8 +48,8 @@ sealed interface GateOutcome {
 }
 
 /**
- * **V8C4's `ensureFinalised` — "one gate in front of every action that issues
- * a quotation."**
+ * **V8C4's `ensureFinalised` — the one gate in front of every action that
+ * issues a quotation** (its `finaliseQuote` call is at 8418).
  *
  * V8C4 has no Finalise button. `finaliseQuote` has exactly one caller, this
  * gate, and the gate's callers are PDF, Print and WhatsApp (the Owner's
@@ -64,7 +64,8 @@ sealed interface GateOutcome {
  *    `QuotationWrite.plan` also calls. It covers V8C4's no-lines check and
  *    this app's refusal of an unpriced line, and its message is shown as it
  *    stands.
- * 2. *(V8C4's `if(isFinalised()) return true` has no counterpart. A
+ * 2. *(V8C4's early return for an already-finalised quotation has no
+ *    counterpart. A
  *    finalised draft here is **retired**, so there is never an
  *    already-finalised draft to short-circuit; a press after a lost
  *    acknowledgement goes to the read-first instead, which answers it.)*
@@ -72,9 +73,9 @@ sealed interface GateOutcome {
  *    V8C4's predicate; after step 1 only lines priced at exactly zero can
  *    reach it. The sentence is **ours**, not V8C4's "have no rate", which is
  *    false for these lines; the structure is V8C4's. The answers, "Continue
- *    anyway" and "Cancel", are **a choice, not a port** — V8C4's
- *    `confirmAction` is `window.confirm`, the browser's OK / Cancel, so there
- *    was no label to port. Do not "correct" them to match V8C4.
+ *    anyway" and "Cancel", are **a choice, not a port** — V8C4 asks
+ *    through the browser's own confirm dialog, OK / Cancel, so there was no
+ *    label to port. Do not "correct" them to match V8C4.
  * 4. **"Client GSTIN: "** + `PartyFormat.gstinProblem`.
  * 5. **"Client phone: "** + `PartyFormat.phoneProblem`.
  * 6. **Offline** → [OFFLINE]. **A courtesy that removes the common case, not

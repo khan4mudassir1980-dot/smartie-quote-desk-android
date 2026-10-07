@@ -1026,9 +1026,10 @@ service cloud.firestore {
      * V8C4's cancel — its three keys, exactly as its `updateDoc` sends them,
      * and **never twice**: a second cancel would overwrite who cancelled it
      * and when, which rewrites history. V8C4 never sends one (its button shows
-     * only when `admin && s !== "Cancelled"`), so this refuses nothing the
-     * PWA does. V8C4 writes `cancelledBy = currentUserName()`, a **name**, and
-     * `cancelledAt = Date.now()`, a **number** (the advisor's reading, Q4).
+     * only to an administrator, and never on a cancelled quotation —
+     * 6834-6840), so this refuses nothing the PWA does. V8C4 writes
+     * `cancelledBy` as the signed-in person's **name** and `cancelledAt` as the
+     * device's clock in milliseconds, a **number** (the advisor's reading, Q4).
      */
     function qnCancel() {
       return touched().hasOnly(['status','cancelledBy','cancelledAt'])
@@ -1134,7 +1135,8 @@ service cloud.firestore {
                     && request.resource.data.at is number
                     // N5.11 (the Owner's decision 1.1 of 2026-10-06): the
                     // issue time from the server, which the PDF prints. V8C4's
-                    // finalise writes `serverAt: serverTimestamp()` (fact e),
+                    // finalise writes `serverAt` as a server timestamp
+                    // (5111-5157; fact e),
                     // and so does this app's now; when present it must be the
                     // request time, so neither a phone's clock nor an old
                     // stamp passes for it.
@@ -1148,7 +1150,7 @@ service cloud.firestore {
       // **CANCEL: the creator, and an Owner or Administrator on anyone's.**
       // The Owner's decision of 2026-09-28, which REPLACED the ruling of
       // 2026-09-25 that read "Owner and Administrator only … A Manager cannot
-      // cancel, including their own" (V8C4's `if(!admin)`). V8C4's own
+      // cancel, including their own" (V8C4 6834-6840). V8C4's own
       // three-field payload from an admin is accepted unchanged.
       //
       // **EDIT: the creator, and an Owner or Administrator on anyone's** —

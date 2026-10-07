@@ -225,7 +225,8 @@ class LegacyDocumentMappingTest {
 
     @Test
     fun `the cancel and Ordered stamps read V8C4's numeric times, whatever number type arrives`() {
-        // V8C4 stamps `cancelledAt` with Date.now(); Firestore hands it back as
+        // V8C4 stamps `cancelledAt` with the device's clock in milliseconds
+        // (6680-6695); Firestore hands it back as
         // a Long, a Double after a JS round trip, or a numeric string from an
         // older build. N5.10b writes `orderedAt` the same way.
         val cancelled = DocData("pr_x", mapOf(

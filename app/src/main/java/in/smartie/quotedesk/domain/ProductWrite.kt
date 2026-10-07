@@ -32,7 +32,7 @@ object ProductUnit {
     /** V8C4's own spelling, and the only value that turns area pricing on. */
     const val AREA = "per sq ft"
 
-    /** What a cleared box falls back to, exactly as V8C4's `|| "each"` does. */
+    /** What a cleared box falls back to, exactly as V8C4's product editor does when it saves (`index.html:6058`). */
     const val EACH = "each"
 
     fun isArea(stored: String): Boolean = stored.trim().lowercase() == AREA
@@ -293,7 +293,8 @@ object ProductWrite {
      * then `model`.
      *
      * `model` must not come earlier, however tempting: V8C4 writes
-     * `seedModel` from the seed but `model` from `o.md || it.m`, so `model`
+     * `seedModel` from the seed but `model` from the display override, else
+     * the seed's model, so `model`
      * is the *display override* where one is set. Deriving from it would
      * compute a different `docId` and land the write on a second document —
      * exactly the duplicate the canonical id exists to prevent.

@@ -309,7 +309,8 @@ internal fun QuotationDetail(
  * While an edit is open it is not offered, and the line says why. When the
  * quotation being worked on has lines, **V8C4's question** comes first —
  * "Replace the quotation you are working on with a copy of this one?" —
- * answered "Replace it" / "Keep mine" (a choice: V8C4's is `window.confirm`).
+ * answered "Replace it" / "Keep mine" (a choice: V8C4's is the browser's own
+ * confirm dialog).
  */
 @Composable
 private fun DuplicateControls(
@@ -364,8 +365,8 @@ private fun DuplicateControls(
  *
  * **The question is V8C4's, word for word** (`QuotationCancel.confirmText`);
  * its two answers, "Cancel quotation" and "Keep it", are **a choice, not a
- * port** — V8C4 asks through `window.confirm`, whose OK / Cancel are the
- * browser's, and "Cancel" would name both buttons here. Nothing is marked
+ * port** — V8C4 asks through the browser's own confirm dialog, whose OK /
+ * Cancel are the browser's, and "Cancel" would name both buttons here. Nothing is marked
  * cancelled on this screen: the write is remote-first, and the quotation
  * turns Cancelled when the listener brings it.
  */

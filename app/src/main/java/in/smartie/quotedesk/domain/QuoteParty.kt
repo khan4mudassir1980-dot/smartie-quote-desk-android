@@ -14,8 +14,8 @@ import `in`.smartie.quotedesk.data.model.RateTierV2
  * **The site is the asymmetry.** `QuotationPartySnapshot` carries a `site` and
  * `PartyRecord` has no such field. Picking a customer leaves the site alone
  * ([snapshotOf]); **saving one from the quotation writes the site into the
- * customer's `city`**, as V8C4's `saveParty` does — `if(p.site) c.city=p.site`
- * (the Owner's reading, 2026-09-26). Until N5.9a commit 8b this file said the
+ * customer's `city`**, as V8C4's `saveParty` does (from 6404; the Owner's
+ * reading, 2026-09-26). Until N5.9a commit 8b this file said the
  * site "never goes back onto" a customer; V8C4 says otherwise, and V8C4 is the
  * authority.
  */
@@ -38,8 +38,8 @@ object QuoteParty {
     )
 
     /**
-     * The other way, for "Save this customer" — V8C4's `partyFromForm` as
-     * `saveParty` reads it.
+     * The other way, for "Save this customer" — the party details on the
+     * form, as V8C4's `saveParty` reads them (from 6404).
      *
      * **The form's site becomes the customer's `city`**, as `saveParty` maps
      * it. The `city` a picked customer brought onto the snapshot is not shown
@@ -66,9 +66,9 @@ object QuoteParty {
 
     /**
      * The saved customer a quotation should link to, **derived from the form**
-     * — V8C4's `resolvePartyId` (6379), whose own KDoc states the principle:
-     * **"A link that no longer matches what is typed is never kept — that is
-     * how a quotation ends up on the wrong party."**
+     * — V8C4's `resolvePartyId` (6379), on the principle its own comment
+     * states: **a link that no longer matches what is typed is never kept,
+     * because keeping one files a quotation under the wrong party.**
      *
      * 1. nothing identifying on the form — no name, GSTIN or phone — links
      *    to nothing;
@@ -83,7 +83,7 @@ object QuoteParty {
      * has gone costs a cross-reference and loses no quotation data.
      *
      * [customers] is the list the screen already holds, as V8C4 uses its
-     * in-memory `state.customers`. The held customer is looked up there
+     * in-memory customer list (6379). The held customer is looked up there
      * without regard to `archived`, as V8C4 looks it up; only the fallback
      * search skips archived parties.
      *

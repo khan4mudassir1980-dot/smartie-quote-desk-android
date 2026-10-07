@@ -10,9 +10,9 @@ anything.** Last updated 2026-10-07.
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
 | **Last CI-verified head** | `e67d24d` — run #277, fully green (unit tests, lint, Firestore rules emulator, APK build). N5.12 commit 8, the status record. **The last commit that changed app code is `713c1b0`** (N5.12 commit 6, the banner out, run #275), so every APK from #275 on carries the same app. Later commits may sit above it. |
 | **APK to install** | The `smartie-native-apks` artifact **from the run that verified the head you intend to install** — never from whichever run this table happens to name. A build contains the commit it ran on and nothing above it, so a head hash and an APK go out of step the moment anything lands. Each run's job summary reports its head and the signing certificate; the app must show **Staging**. |
-| **Ruleset anchor** | `fde9ad3` (N5.12 commit 4b — the hard-block: `rev` on every `/purchase` create and update) — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
-| **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **nineteen rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap), `ff20dd4` (N5.10 — edit, the creator's cancel, the cap only when raised), `cff32be`, `6d2c25c`, `d59f1e6`, `877701f`, `547d218`, `caa835e`, `85c4fb7` (N5.10b — the expression limit, the status pin, a boolean `received`, the uid pin, the headroom reorder and ternaries, Ordered and a Manager's cancel), `0bf1dfe`, `907a660` (the review — two second definitions removed, the same decisions), `5b03d57` (N5.11 — the server's clock on an edit and on an issue), `fde9ad3` (N5.12 — the hard-block: `rev` on every `/purchase` create and update, so the PWA's purchase writes are refused); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
-| **To deploy next** | The **latest CI-verified head**, not a hash copied into this file. Check it before deploying: `git diff --quiet <head> fde9ad3 -- firestore/firestore.rules` — silence means that head carries the current ruleset. No index deploy: `firestore.indexes.json` is unchanged since `69d0fce`. |
+| **Ruleset anchor** | The **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`) — since 2026-10-07 that is the quoting cleanup, which changed **two comments only**; its rules are `fde9ad3`'s (N5.12 commit 4b — the hard-block: `rev` on every `/purchase` create and update) clause for clause, as `git diff fde9ad3 <anchor> -- firestore/firestore.rules` shows. This moves whenever the file changes, which is why it is recorded separately from the head. |
+| **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **twenty rules commits behind** (the last changing comments only): `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap), `ff20dd4` (N5.10 — edit, the creator's cancel, the cap only when raised), `cff32be`, `6d2c25c`, `d59f1e6`, `877701f`, `547d218`, `caa835e`, `85c4fb7` (N5.10b — the expression limit, the status pin, a boolean `received`, the uid pin, the headroom reorder and ternaries, Ordered and a Manager's cancel), `0bf1dfe`, `907a660` (the review — two second definitions removed, the same decisions), `5b03d57` (N5.11 — the server's clock on an edit and on an issue), `fde9ad3` (N5.12 — the hard-block: `rev` on every `/purchase` create and update, so the PWA's purchase writes are refused), and the quoting cleanup of 2026-10-07 (comments only); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
+| **To deploy next** | The **latest CI-verified head**, not a hash copied into this file. Check it before deploying: `git diff --quiet <head> <anchor> -- firestore/firestore.rules`, with `<anchor>` from the row above — silence means that head carries the current ruleset. No index deploy: `firestore.indexes.json` is unchanged since `69d0fce`. |
 
 > **Three fields, three meanings — they were one field until 2026-09-24 and it
 > had gone wrong.** The table said `a849650` was "the commit to deploy the rules
@@ -1137,7 +1137,8 @@ written to the canonical document, carrying its shelf and spec across.
 `model`, and that order is load-bearing.** The `id`/`key` field is
 `group|model` and loses nothing; the document id is `group__model` with six
 characters replaced, and is lossy. `model` must come last, because V8C4 writes
-it from `o.md || it.m` and it is therefore the display override where one is
+it from the display override, else from the seed's model, and it is therefore
+the display override where one is
 set — deriving from it would compute a different document id and write to a
 second document. Where only a sanitised document id is left and its model half
 contains a `_`, the save is refused rather than guessed: both `/` and `.`
@@ -1401,14 +1402,53 @@ this file carried eleven fenced excerpts of its source from N5.9 to N5.11 —
 the Owner's quotes, recorded under Rule 8 — one of them with V8C4's own
 GSTIN example. **The repository is public**, so anyone could read them, and
 history keeps them: by the Owner's decision nothing is rewritten. **From now
-on a quote of V8C4 in the docs is a description of the behaviour with V8C4's
-line numbers — never its source:** no code, comment, pattern or example
-copied from it. As this commit applies it, the words a person sees — a
-message or a label the app ports and shows as its own — are kept as they
-read; that reading is the Owner's to narrow. This tightens N5.11's lesson
-("quote V8C4 expressions exactly"): exactness stays — describe a pattern
-completely, character class by character class — but in words, with the
-line number to check it against. The rule is also in `CLAUDE.md`.
+on a quote of V8C4 in the docs, a code comment or an inline citation is a
+description of the behaviour with V8C4's line numbers — never its source:**
+no code, comment, pattern or example copied from it (decision 3 below). The
+words a person sees in the app — a message or a label — are the app's own
+text and stay as they are (decision 2). **N5.11's lesson now reads: state
+V8C4's behaviour exactly, in your own words, with its line numbers** —
+describe a pattern completely, character class by character class. The rule is also in `CLAUDE.md`.
+
+### The Owner's decisions on quoting V8C4, 2026-10-07 — recorded before acting
+
+Rule 8. **"Good catch on the extra findings. One more cleanup commit, then
+stop."** The decisions:
+
+1. **`CLAUDE.md` stays as added** — the rule belongs in the standing
+   constraints.
+2. **The words a person sees in the app stay as they are.** "They are the
+   app's own text now, not a quote of V8C4."
+3. **The rule covers docs, code comments and the inline one-line citations
+   alike:** describe the behaviour and give V8C4's file line numbers; never
+   the source.
+4. **The ported built-in defaults stay** — `ProductCategories.DEFAULTS`,
+   `Color.kt`, `AppError.kt`, the confirm and toast wording. "They are the
+   app's behaviour, and carry no rates and no company data. The rule is about
+   quoting V8C4's source, not about the app behaving the same way."
+
+**The one commit — docs and comments only, no behaviour change:** the three
+fenced blocks left in this file (the `snap` object and the financial-year
+guard become descriptions with V8C4's line numbers; the stored
+Transportation line becomes our own table of its fields and values); every
+inline one-line V8C4 expression, in docs, Kotlin comments, `firestore.rules`
+and the emulator tests, replaced by a short description with the V8C4 line
+number; the V8C4 code comments quoted as prose here, likewise. **N5.11's
+lesson now reads: state V8C4's behaviour exactly, in your own words, with
+its line numbers.** Then stop and wait for the N5.12b prompt.
+
+**Where a V8C4 line number was not recorded,** the description stands
+without one rather than a guessed number: `findCustomer`'s own line; the
+`snap` reader on re-print; `qLabel`'s display fallback; how
+`applyProductDoc` keys a product and writes its `model`; the `pad` clamp on
+the settings saves; the browser confirm behind V8C4's questions; and the
+PWA's per-device preferences, Indian number formatting and `active` default.
+`tools/catalogue-import/inspect-v8c4.mjs` can supply them on the Owner's
+machine.
+
+**`firestore.rules` changed in comments only** — two comments that quoted
+V8C4 — so the file's last commit moves to this one while its rules stay
+`fde9ad3`'s clause for clause (the ruleset rows above say how to check).
 
 
 ### N5.12 — every commit pushed alone, CI green before the next
@@ -2073,18 +2113,19 @@ authority**: it is checked against the repository below wherever the
 repository can check it, and nothing here is a V8C4 figure or company datum.
 
 **1. What `fbFinaliseAtomic` freezes into `snap{}` — the target for N6.**
-V8C4 line 6230, under its own comment "what the quotation said on the day.
-Text only — the logo and QR are not copied into every record, the current
-images are used":
+V8C4 line 6230 *(described, not quoted)*. V8C4's comment there explains
+that the `snap` keeps the quotation's details as they stood when it was
+issued, as text only: the logo and the QR are not copied into each record,
+and the current images are used.
+Its fields, in V8C4's order:
 
-```
-snap: {
-  name, tag, addr, phones, email, web, gstin, pan,
-  bank: { name, branch, acc, ifsc, upi },
-  terms: termsList(), notes: notesList(),
-  validityDays, gstPct, payTerms, warranty, pdfFooter
-}
-```
+- **company identity:** `name`, `tag`, `addr`, `phones`, `email`, `web`,
+  `gstin`, `pan`;
+- **the bank block**, `bank`: `name`, `branch`, `acc`, `ifsc`, `upi`;
+- **terms and notes**, `terms` and `notes`, each the list of lines the
+  settings hold;
+- **five quote settings:** `validityDays`, `gstPct`, `payTerms`, `warranty`,
+  `pdfFooter`.
 
 Three groups: **company identity** (`name` … `pan`), the **bank block**, then
 **terms and notes plus five quote settings** (`validityDays`, `gstPct`,
@@ -2098,21 +2139,30 @@ of the fifteen, invented by this project — consistent with, and much smaller
 than, the real shape.
 
 **2. The Transportation line V8C4 stores — and two corrections to the plan.**
-`quoteLines()` pushes
-`normLine({ t:"Transportation", s: t.note||"", amt: t.amt, q:"1 no", transport:true })`,
-and `normLine` resolves it: `qty` 1 (`+"1 no"` is NaN, so the `q` string is
-not a number), `rate = amt / 1`, `u = l.u || ""` with `l.u` undefined, and
-`manual = !!l.manual` with nothing passed. The stored mapping at 6223-6224 is
-`{ t, s, u, qty, rate, origRate, k, manual, amt }`, so V8C4 stores exactly:
+`quoteLines()` passes it through `normLine` (2200-2201) *(described, not
+quoted)* with the title "Transportation", the transport note (or nothing),
+the amount, a quantity label of "1 no" — text, not a number — and a
+transport flag. `normLine` settles it: quantity 1 (the label is not a
+number), the rate equal to the amount, no unit (none was passed), and not
+manual (no flag was passed). The stored mapping at 6223-6224 keeps nine
+fields, so the stored line is — our list of the fields and their values:
 
-```
-t: "Transportation", s: <the note>, u: "", qty: 1,
-rate: <amount>, origRate: <amount>, k: null, manual: false, amt: <amount>
-```
+| Field | Value |
+|---|---|
+| `t` | "Transportation" |
+| `s` | the transport note, or "" |
+| `u` | "" |
+| `qty` | 1 |
+| `rate` | the amount |
+| `origRate` | the amount |
+| `k` | null |
+| `manual` | false |
+| `amt` | the amount |
 
 - **Correction 1 — `u` is `""`,** not `"no"` and not `"lot"`. The plan's
   "manual lines use unit `no`" is V8C4's **display** fallback — `qLabel`
-  reads `l.u || "no"` only when rendering — not the stored value.
+  shows "no" for a line with no unit, only when rendering — not the stored
+  value.
   `QuotationWrite.TRANSPORT_UNIT` was `"no"` in `3db056b`, taken from that
   line of the plan. The invented fixture's `"lot"` is wrong too and **moves
   with the N5.12 fixture pass**, not before.
@@ -2183,9 +2233,9 @@ the repository wherever the repository can check it. Recorded before any code
 acts on it (rule 8).
 
 **1. `k: null` on a product-less line is read, not inferred — twice.**
-`normLine` (2200) resolves `k: l.k||null`, `s: l.s||""`, `u: l.u||""`,
-`qty`/`rate` floored at zero, and `origRate: l.origRate!=null ? +l.origRate :
-Math.max(0,rate||0)` (2201) — which `QuotationWrite.lineData`'s fallback
+`normLine` (2200) stores the product key or null, the description or "",
+the unit or "", `qty`/`rate` floored at zero, and `origRate` as given, else
+the rate floored at zero (2201) — which `QuotationWrite.lineData`'s fallback
 matches. The store mapping at 6224 applies `k` again. `qlabel` and
 `needsRate` exist in memory and are **not** in the stored mapping — dropped
 at save, as this app already has it. The KDoc calling `k: null` "an
@@ -2209,22 +2259,23 @@ inference" is to be downgraded to read.
   timestamp added.
 
 - **a. The read-first is V8C4's own design.** It returns the **whole prior
-  record** with `reused: true`, and the caller does
-  `if(out.reused) Object.assign(draft, out.doc)`. Ours must hand back the
+  record** with a reused flag, and the caller then copies that record over
+  its draft. Ours must hand back the
   record, not only the number.
 - **b. The document id is the draft id**, minted at 6209
-  (`if(!state.draftId) state.draftId = newDraftId()` — "survives a failed
-  attempt") and cleared **only on success** at 6262 ("this record is
-  closed"), never in the catch. That is the whole mechanism the read-first
+  only when there is none — so a failed attempt keeps it — and cleared
+  **only on success** at 6262, never in the catch. That is the whole mechanism the read-first
   depends on: an id re-minted on the second press finds nothing and mints a
   second number.
-- **c. `if(cur) update else set`** — "never a set followed by an update on a
-  document that did not exist when we read it."
+- **c. The counter is updated when it was read, else set** — V8C4's comment
+  there rules out a set followed by an update on a document that did not
+  exist when it was read.
 - **d. Two guards with their own messages:**
   - no counter and not admin: "Numbering has not been set up yet. An
     administrator must open Settings and press Save shared settings once."
-  - financial-year mismatch: `The team is on financial year ${cur.fy}; this
-    device is on ${N.fy}. Reload before finalising.`
+  - financial-year mismatch: "The team is on financial year <the
+    counter's year>; this device is on <the device's year>. Reload before
+    finalising."
 - **e. V8C4 has no self-retry loop.** None. It relies entirely on the
   Firestore JS SDK's own transaction retry.
 
@@ -2238,10 +2289,11 @@ id; if a party is held (picked earlier) **and the form still describes it**
 (`sameParty`) it returns the held id; otherwise it searches the saved
 customers with `findCustomer` and returns the match's id, or no id.
 
-and at 6270: "No party is created here. A party joins the Parties list only
-when the user presses 'Save this customer', or picks one that is already
-saved... Either way the quotation keeps its own snapshot of the details in
-draft.party, so editing the party later never rewrites it."
+and V8C4's comment at 6270 *(described, not quoted)*: finalising creates no
+party. A party joins the Parties list only when the person presses "Save
+this customer" or picks one already saved, and either way the quotation
+keeps its own snapshot of the details, so editing the party later never
+rewrites the quotation.
 
 - **The party id is optional metadata.** The quotation is self-contained —
   name, GSTIN, phone and address are copied into it — so a missing record
@@ -2251,8 +2303,9 @@ draft.party, so editing the party later never rewrites it."
   native-only failure the PWA does not have, at the one moment the person
   most needs the number.
 - **The link is re-derived from the form, not merely re-read from the
-  record.** 6211: "a party that was picked and then typed over cannot be
-  carried into the record" — `if(held && sameParty(onForm, held))`. A held
+  record.** At 6211 V8C4 notes that a party picked and then typed over
+  cannot be carried into the record: the held party is kept only while
+  `sameParty` still matches the form. A held
   id survives only while it still matches what is on the form now. Checking
   only that the record exists would file a quotation for Party B's details
   under Party A.
@@ -2265,15 +2318,17 @@ draft.party, so editing the party later never rewrites it."
 - Offline, checked **before** anything is built (6203): "Finalising needs an
   internet connection — the number is shared with the team"
 - Counter returns nothing: "The shared counter did not respond"
-- Any failure (the catch at 6274): `"Not finalised — " +
-  friendlyAuthError(e) + " Your quotation is untouched."` — and in that same
-  catch `state.quoteNo = null`, the draft is **not** cleared, the draft id is
-  **not** cleared: "nothing was consumed and nothing is marked finalised."
-- Success, in this order (6259-6264): `draft.no = no` → `state.draftId =
-  null` → `upsertQuote(draft)` → `clearDraft()` → toast `Finalised as
-  ${no}`. The draft is cleared **after** the number is in hand, and
-  `upsertQuote` carries "the listener may have beaten us to it" — ours needs
-  the same tolerance.
+- Any failure (the catch at 6274): "Not finalised — <the failure, in plain
+  words> Your quotation is untouched." — and in that same catch the
+  quotation's number is cleared on the device, the draft is **not** cleared,
+  the draft id is **not** cleared: nothing was consumed and nothing is marked
+  finalised.
+- Success, in this order (6259-6264): the number goes onto the draft → the
+  draft id is cleared → the quotation is put into the device's list → the
+  draft is cleared → toast "Finalised as <number>". The draft is cleared
+  **after** the number is in hand, and putting the quotation into the list
+  allows for the listener having added it already — ours needs the same
+  tolerance.
 
 **5. Commit 6 — the Owner's decision, and the question it must answer
 first.** Do (1), the Node emulator test of the protocol under the real
@@ -2360,7 +2415,7 @@ is written and never rewritten from a record. The link is derived from the
 form by `QuoteParty.linkFor` — the picked customer survives only while the
 form still matches it, else a saved customer the form matches (N5.5's port
 of `findCustomer`, `PartyDuplicates.find`), else nothing — against the
-customer list the screen holds, as V8C4 uses `state.customers`. The finalise
+customer list the screen holds, as V8C4 uses its in-memory list (6379). The finalise
 transaction no longer reads `/customers`; like V8C4's it reads the quotation
 and the counter, plus the discount limit V8C4 has no need of.
 
@@ -2392,7 +2447,7 @@ The builder's existing `clearDraft()` empties the lines and **keeps the id**.
 Used after a successful finalise, the next quotation would carry the issued
 one's id, the read-first would find it, and the new quotation would be
 answered with the **previous number** and never issued. V8C4 clears
-`state.draftId` only on success (6262) and never in the catch; 9b does the
+its draft id only on success (6262) and never in the catch; 9b does the
 same with `remove`, and only on `Issued` or `AlreadyIssued`.
 
 ### The Owner's answers of 2026-09-25 (second re-read) — recorded before acting
@@ -2404,8 +2459,7 @@ assumed.
 **1. `sameParty` is OR, not AND — `3c`'s stand-in is too strict.** V8C4
 6362-6371 *(described, not quoted)*. Given the typed details and a saved
 party — and false if either is missing — it answers **yes if any one** of
-these holds, checked in this order, which V8C4's own comment calls "the
-order of reliability":
+these holds, checked in this order — the most reliable first:
 
 - the GSTINs are equal after `norm`, and the typed one is not blank;
 - the phones are equal as digit strings, and the typed one has **at least 7
@@ -2416,8 +2470,8 @@ order of reliability":
 **and** any GSTIN or phone present on both sides — stricter in the direction
 that hurts: correct a spelling in the company name on a party whose GSTIN is
 unchanged and the stand-in drops the link, where V8C4 keeps it on the GSTIN
-alone. V8C4 accepted the loose end deliberately: GSTIN first, "the order of
-reliability", and a ≥7-digit floor that stops a short or junk phone
+alone. V8C4 accepted the loose end deliberately: GSTIN first, as the most
+reliable, and a ≥7-digit floor that stops a short or junk phone
 matching. **Replace the stand-in with this rule, exactly, including the ≥7
 check.**
 
@@ -2434,14 +2488,14 @@ editing a party), that is **not archived**, and that `sameParty` matches.
   not, a quotation can link to a party the person archived. To be reported
   yes or no.
 
-V8C4's KDoc on `resolvePartyId` states the principle: **"A link that no
-longer matches what is typed is never kept — that is how a quotation ends
-up on the wrong party."**
+V8C4's comment on `resolvePartyId` (6379) states the principle, here in our
+words: **a link that no longer matches what is typed is never kept, because
+keeping one files a quotation under the wrong party.**
 
 **2. The "Save this customer" defect is native-only. FIX IT — as commit 8
 of this batch**, after commit 7 and before 9b. V8C4's `saveParty` (6404)
-opens `if(!p || !p.name) return null; ... let c=findCustomer(p);` — it
-re-finds from the **form's own details** and never consults the held id.
+returns nothing for a party with no name, then searches with `findCustomer`
+(6407) — it re-finds from the **form's own details** and never consults the held id.
 Picking Sunrise, typing Metro Glass over it and pressing Save creates or
 updates **Metro Glass**; Sunrise is untouched. Ours merges the form into the
 held id and silently corrupts a saved customer. Its own commit, saying it
@@ -2449,11 +2503,11 @@ is a behaviour change to N5.8b code. Timing: same predicate, context hot,
 and 9b is the Finalise control, which a party-store fix would muddy.
 
 **3. `N` is the device's numbering settings — and the answer changes at
-N6.** `state.numbering` (2020) is
-`{prefix:"SIE", fy:"", next:1, pad:3, lastIssued:null, fyAsked:""}`:
-device-local, defaulted on the device, edited in Settings (3220-3223),
+N6.** V8C4's numbering settings (2020) are a prefix, a financial year (blank at
+first), the next number (1), the padding (3), the last issued (none) and
+whether the year has been asked (blank) — device-local, defaulted on the device, edited in Settings (3220-3223),
 persisted locally (3457, 3466, 3624), re-synced after a transaction (5177,
-"keep the local view in step"). So 4b's answer — no financial-year check,
+to keep the device's own view in step). So 4b's answer — no financial-year check,
 because nothing on the phone holds a year — is right **for the app as it
 stands**, and only until N6 builds a numbering settings screen. See the N6
 requirement below.
@@ -2520,18 +2574,17 @@ Advisor-read evidence from V8C4; checked against the repository where it can
 be. Recorded before acting (rule 8). Two correct what shipped.
 
 **Q1 — one rule, used in five places.** V8C4 has exactly one definition of
-"same party" and every path calls it: `saveParty` (6407) `findCustomer(p)`;
-`resolvePartyId` (6384) `findCustomer(onForm)`; Add party (6573)
-`findCustomer(v)`; **Edit party (6644) `findCustomer(v, c.id)` — which is
-what `exceptId` is for**, since without it editing a party matches it
-against itself; Save from quotation (8016) `findCustomer(p)`. **Switch the
+"same party" and every path calls it: `saveParty` (6407);
+`resolvePartyId` (6384); Add party (6573); **Edit party (6644), which leaves
+the party being edited out of the search — what `exceptId` is for**, since without it editing a party matches it
+against itself; Save from quotation (8016). **Switch the
 Parties screen's warning to V8C4's rule.** The three behaviour changes N5.9a
 predicted are V8C4's actual behaviour, so accepting them matches the PWA
 rather than regressing it: archived parties are not flagged; a phone typed
 with its country code does not match one stored without (V8C4 compares the
-full digit strings); the first match in list order wins (`.find()`).
-**Caveat:** on OK, V8C4's two Parties-screen paths do
-`Object.assign(dup, v, {...})` — a full overwrite **including the name**,
+full digit strings); the first match in list order wins.
+**Caveat:** on OK, V8C4's two Parties-screen paths (6573, 6644)
+overwrite the duplicate whole — **including the name** —
 unlike `saveParty`. **Do not harmonise them; match each path to its own V8C4
 counterpart.**
 
@@ -2550,8 +2603,9 @@ exactly that behaviour; confirm `digits` is full-string equality, not a suffix
 comparison. See the pattern under "Decisions that bind future work".
 
 **Q3 — `saveParty` never renames.** Its update branch (V8C4 `saveParty`,
-from 6404), in full *(described, not quoted)*. Its own comment: fill gaps
-and take genuine changes, never blank a detail already held. A typed **site**
+from 6404), in full *(described, not quoted)*. Its rule, in our words:
+fill the gaps and take the genuine changes, never blanking a detail already
+held. A typed **site**
 becomes the customer's **city**; each of **GSTIN, contact, phone, email and
 address** is copied only when the typed value is not blank; the **type** is
 copied only when one is given; and the record is stamped with the time and
@@ -2562,7 +2616,7 @@ the quotation's Save never renames an existing customer, and a Manager
 saving a spelling correction is never refused. **Match it: on an update, do
 not write `name`.** Only truthy values are copied — a blank never wipes a
 held detail — and `site` maps to `city`. New records take
-`type: p.type || state.tier || "client"`.
+the given type, else the quotation's tier, else "client".
 
 **4 — V8C4 asks before merging.** `#qSaveParty` (V8C4 8011-8022), the path
 commit 8 rewrote, in order *(described, not quoted)*:
@@ -2586,7 +2640,7 @@ commit 8 rewrote, in order *(described, not quoted)*:
   silently update a third company's record. Add the confirmation.
 - **b. Validation order:** name first, then GSTIN, phone and email
   validated, and only then the find. To be confirmed.
-- **c.** `state.partyId = c.id` then save the draft — commit 8's "the draft
+- **c.** The draft adopts the customer's id and is saved — commit 8's "the draft
   adopts whichever customer the form was saved as" is right.
 
 **What to do:** one commit, **8b** — `norm` corrected, no rename on update,
@@ -2620,7 +2674,7 @@ vanished customer losing only its link.
   measured:** with the question removed, three tests fail, first among them
   `declining the question writes nothing`.
 - **New customers take the quotation's tier as their type**, as V8C4's
-  caller passes `type: state.tier`.
+  caller passes the quotation's tier as the type (8011-8022).
 
 **4b, the validation order — answered NO in part.** Ours checks the name
 first and then finds, as V8C4 does; but **there is no GSTIN, phone or email
@@ -2630,7 +2684,7 @@ this repository; porting them needs it.
 
 **THREE THINGS LEFT OPEN FOR THE OWNER:**
 
-1. **The type on update.** V8C4's update branch sets `c.type = p.type`, and
+1. **The type on update.** V8C4's update branch sets the type when one is given, and
    its caller passes the quotation's tier, so saving always sets the type to
    the tier. This app **cannot quote at the contractor tier**, so doing the
    same would turn every contractor saved from a native quotation into a
@@ -2639,9 +2693,9 @@ this repository; porting them needs it.
    Match V8C4 regardless, or keep the difference?
 2. **The Parties screen's own flows are not V8C4's.** 8b switched the rule
    only. V8C4's Add party confirms and on OK overwrites the duplicate whole,
-   name included (`Object.assign(dup, v, …)`); ours warns once, offers to
+   name included (6573); ours warns once, offers to
    open the existing party, and creates a second on the next press. V8C4's
-   Edit party checks `findCustomer(v, c.id)`; ours does not check on edit at
+   Edit party searches, leaving the party itself out (6644); ours does not check on edit at
    all. Per the Owner, each path is to match its own V8C4 counterpart, not
    be harmonised — that is a change to N5.5's screen, not made unasked.
 3. **The validators** named above. **ANSWERED 2026-09-26:** the Owner sent
@@ -2651,7 +2705,7 @@ this repository; porting them needs it.
 
 **A consequence to know:** the builder's **Site** box now also becomes the
 customer's city when "Save this customer" is pressed with a site typed, as
-V8C4's `if(p.site) c.city=p.site`. Picking a customer does not fill the site
+V8C4's `saveParty` does (from 6404). Picking a customer does not fill the site
 from the city.
 
 ### The Owner's answers on the 9b plan, 2026-09-26 — recorded before any code
@@ -2663,9 +2717,9 @@ evidence, not authority**, checked against the repository wherever it can
 check them. The plan of record is summarised under "Current next action".
 
 **1. V8C4 has no Finalise button. It has one gate.** `finaliseQuote` has
-exactly one caller in the file, at 8418, inside `ensureFinalised` — its own
-comment: "One gate in front of every action that issues a quotation".
-In order *(described, not quoted)*:
+exactly one caller in the file, at 8418, inside `ensureFinalised`, the one gate in
+front of every action that issues a quotation. In order *(described, not
+quoted)*:
 
 1. No lines → toast "Add a line to the quotation first", and stop.
 2. Already finalised → go ahead (the same quotation keeps its number).
@@ -2686,8 +2740,8 @@ not built and nothing could issue otherwise. N5.11 adds three callers and
 changes nothing else. **Whether the button stays after N5.11 is the Owner's
 call then, not now.**
 
-`if(isFinalised()) return true` — V8C4 never attempts a second time — has no
-counterpart here: this app **retires** a finalised draft, so there is never
+V8C4's early return for an already-finalised quotation — it never attempts a
+second time — has no counterpart here: this app **retires** a finalised draft, so there is never
 an already-finalised draft to short-circuit. Stated in the KDoc and the
 commit rather than left unexplained.
 
@@ -2725,7 +2779,7 @@ refuses only a discount worth more than zero), and `plan`'s pre-check goes.
 - **`NO_LINES` takes V8C4's words:** "Add a line to the quotation first".
 
 **3. The ₹0 question — B, and its text must change.** V8C4 asks about
-`!(l.rate > 0)`; this app's `needsRate` is `rate == null`, and `refusal()`
+every line whose rate is not above zero; this app's `needsRate` is `rate == null`, and `refusal()`
 already **refuses** such a line (N5.8a, `62af89d`), while a typed rate of 0
 was issued with no question at all. The Owner chose **B**: unpriced lines
 stay refused; the question names the lines priced at zero. On record:
@@ -2743,14 +2797,14 @@ and it is ₹0 — so this is the one place in 9b where V8C4's exact text is
 **not** used. V8C4's structure stays (the count, up to four titles as
 `• title`, then `• …`, the closing question); the sentence is "1 line is
 priced at ₹0:" / "N lines are priced at ₹0:". **The answers are a choice,
-not a port:** V8C4's `confirmAction` is `window.confirm(msg)`, so the PWA
+not a port:** V8C4 asks through the browser's own confirm dialog, so the PWA
 shows the browser's OK / Cancel and there is no label to port. "Continue
 anyway" / "Cancel" is chosen; nobody should "correct" it to match V8C4.
 
 **4. The validators** (V8C4 6341-6360) *(described, not quoted)*; this app
 ports them in `PartyFormat`, messages included:
 
-- **GSTIN.** Blank is fine. Otherwise trimmed and upper-cased. Not 15
+- **GSTIN.** Blank passes. Otherwise trimmed and upper-cased. Not 15
   characters → "A GSTIN is 15 characters, for example …" — V8C4 names a
   real-looking GSTIN there, which is not reproduced; since N5.12 this app
   shows the checksum-invalid sample `22AAAAA0000A1Z5` (the Owner's decision
@@ -2758,11 +2812,11 @@ ports them in `PartyFormat`, messages included:
   look right — check it against the certificate". **The shape:** two digits,
   five letters, four digits, a letter, then one of 1–9 or A–Z, the letter
   Z, and one digit or letter — and nothing before or after.
-- **Phone.** Blank is fine (V8C4's comment: 10 digits, optionally with a
-  country code). Otherwise trimmed and reduced to its digits: fewer than 10
+- **Phone.** Blank passes. Otherwise trimmed and reduced to its digits —
+  a number with or without its country code: fewer than 10
   → "A phone number needs at least 10 digits"; more than 13 → "That phone
   number has too many digits".
-- **Email.** Blank after trimming is fine. Otherwise the whole value must
+- **Email.** Blank after trimming passes. Otherwise the whole value must
   be: one or more characters that are neither whitespace nor "@", an "@",
   one or more such characters, a dot, then two or more such characters →
   else "That does not look like an email address".
@@ -2775,15 +2829,15 @@ ports them in `PartyFormat`, messages included:
 - **JavaScript's whitespace, spelled out** for `trim()` and inside the email
   pattern, because Kotlin's `trim()` and Java's `\s` use different sets.
 - **In the gate** they are prefixed "Client GSTIN: " / "Client phone: ".
-  **In "Save this customer"** V8C4 runs `gstinProblem || phoneProblem ||
-  emailProblem` after the name and before the find, and shows the problem
-  **bare** (`toast(bad)`, recorded above under `#qSaveParty`) — commit 4c,
+  **In "Save this customer"** V8C4 runs the GSTIN, phone and email checks, in
+  that order, after the name and before the find, and shows the problem
+  **bare** (recorded above under `#qSaveParty`) — commit 4c,
   its own commit, because it changes shipped behaviour. **This answers 8b's
   open question 3.**
 - **For N6, not built here:** V8C4 runs the same three on the fields as the
   person types (8027 — `#qGst`, `#qPhone`, `#qEmail`), and `stSave` runs the
-  GSTIN and phone checks on the company's own details (7296-7298), splitting
-  the first phone off a list with `.split(/[·,/]/)[0]`.
+  GSTIN and phone checks on the company's own details (7296-7298), taking
+  the first phone of a list split at "·", "," or "/".
 
 **5. A deliberate divergence: the client name.** `ensureFinalised` — the
 whole function, read by the Owner — does not require a client name; this
@@ -2802,11 +2856,11 @@ and `pan`, the bank's name from `snap.bank.name`, and so on through the bank
 block.
 
 The identity fields are assigned **directly**, with no fallback, and
-`Object.assign` with `undefined` overwrites — so an absent `snap` and `{}`
+assigning a missing value overwrites the current one — so an absent `snap` and `{}`
 behave **identically**, and both reprint with **no company name, no address,
 no GSTIN, no bank details**. Only five fields fall back: validity days,
-payment terms, warranty, the PDF footer and the GST rate (through `x.gstPct`,
-then `sn.gstPct`, then current). The plan's reason for "absent" — that V8C4
+payment terms, warranty, the PDF footer and the GST rate (the quotation's own
+`gstPct`, then the `snap`'s, then the current setting). The plan's reason for "absent" — that V8C4
 would fall back on it — was **wrong**. Absent is still chosen, because it
 states that nothing was frozen and is no worse than `{}`. Two things follow,
 each recorded in its own section below: an **N8 blocker** and an **N5.11
@@ -2816,8 +2870,8 @@ requirement**.
 "Finalised as X", as V8C4's `reused` path continues into the same success
 order. Edits are refused while a number is being taken — stricter than V8C4,
 which loses them silently, the worse failure. No local upsert: the Quotations
-tab reads only the listener, keyed by document id, so V8C4's "the listener
-may have beaten us to it" tolerance holds by construction.
+tab reads only the listener, keyed by document id, so V8C4's tolerance of the
+listener having added the quotation first holds by construction.
 
 **8. Three more amendments.**
 
@@ -2923,10 +2977,10 @@ an admin cancel. Both are to be recorded as new behaviour, not as ports.
 
 V8C4's cancel is **local-first**: it marks the quotation cancelled on the
 device, then writes, and on failure says "Cancelled here, but not for the
-team: " + `friendlyAuthError(e)`. **Do not copy that shape** (hazard 6).
+team: <the failure, in plain words>". **Do not copy that shape** (hazard 6).
 
-**Duplicate in V8C4** (6886-6897): "a fresh draft that will take its own
-number". If the current draft has lines it asks "Replace the quotation you
+**Duplicate in V8C4** (6886-6897) makes a fresh draft that takes its own
+number. If the current draft has lines it asks "Replace the quotation you
 are working on with a copy of this one?". It copies the lines — the stored
 Transportation line comes over as an **ordinary** line, and the transport
 field is reset — the party and the tier. Toast: "Copied into a new draft —
@@ -3061,14 +3115,14 @@ authority.
 
 - **Q2 — the stamp:** `lastEditedBy`, `lastEditedByUid`, `lastEditedAt`;
   `docs/N5-plan.md`'s table corrected to match.
-- **Q4 — V8C4's cancel values:** `q.cancelledBy = currentUserName()` (4246:
-  `state.auth.name` when signed in, else `state.sync.who || "unnamed"`) —
-  a **name string**, never a uid; `q.cancelledAt = Date.now()` — a
-  **number** in ms, not a server time. V8C4's Cancel button renders only
-  when `admin && s !== "Cancelled"`: never on a cancelled quotation or a
-  draft. So the cancel clause may require `is string` and `is number`, and
-  the emulator test sends exactly
-  `{status:"Cancelled", cancelledBy:"<name>", cancelledAt:<ms>}`.
+- **Q4 — V8C4's cancel values** (4246, 6680-6695): `cancelledBy` is the
+  current person's name — the signed-in name, else the name the device syncs
+  under, else "unnamed" — a **name string**, never a uid; `cancelledAt` is
+  the device's clock — a **number** in ms, not a server time. V8C4's Cancel
+  button renders only for an administrator, and never on a cancelled
+  quotation or a draft. So the cancel clause may require `is string` and
+  `is number`, and the emulator test sends exactly three fields: `status`
+  "Cancelled", `cancelledBy` a name, `cancelledAt` a number in ms.
 - **Q6 — tier on an edit:** the stored tier stands unless the person
   changes it.
 - **Duplicate's carriage:** **restored** to the transport field, as edit
@@ -4005,7 +4059,7 @@ deploy Firebase.
 1. **Finalise writes no `serverAt`.** The recorded requirement — "Last
    edited" from the server clock "as finalise's `serverAt` does" (below,
    "Owed in N5.11: the 'Last edited' time from the server's clock") —
-   assumes one. V8C4's finalise writes `serverAt: serverTimestamp()` on the
+   assumes one. V8C4's finalise writes `serverAt` as a server timestamp on the
    quotation (its transaction, recorded above under the N5.9a re-read), but
    this app's does not: `QuotationWrite.kt:261-283` writes `at` from the
    phone, and the create rule (`firestore.rules`, `/quotations` create) asks
@@ -4061,8 +4115,8 @@ decisions.
   — it prints the device's current label, wrong on any re-issue. **The
   Price list row is omitted.** If N6 brings a price-book revision, it is
   stored at finalise and printed then.
-- **e.** V8C4's finalise writes `serverAt: serverTimestamp()` and
-  `at: Date.now()` on the quotation, inside the transaction.
+- **e.** V8C4's finalise writes `serverAt` as a server timestamp and `at`
+  from the device's clock on the quotation, inside the transaction.
 
 **Decisions on the approval list:**
 
@@ -4247,11 +4301,12 @@ loosely; these are its exact behaviours"**:
    omit the row — never invent.
 2. **No customer name:** V8C4 prints **"Accepted for the client"**. Use "the
    client".
-3. **The file name, exactly as V8C4 does it:**
-   `clean(s) = s.replace(/[^A-Za-z0-9]+/g, "-")`, then a leading and a
-   trailing "-" stripped. Runs **collapse** to one "-": "M/s. A & B" becomes
-   `M-s-A-B`. `no = clean(number)`, or "Draft" if that comes out empty.
-   `client = clean(name)` cut to 36 characters, or "Client" if empty.
+3. **The file name, exactly as V8C4 does it** *(the Owner quoted V8C4's
+   expression; described here)*: every run of characters other than A–Z,
+   a–z and 0–9 becomes one "-", then a leading and a trailing "-" are
+   stripped. Runs **collapse** to one "-": "M/s. A & B" becomes `M-s-A-B`.
+   The number, cleaned, or "Draft" if that comes out empty; the client's
+   name, cleaned and cut to 36 characters, or "Client" if empty.
 4. **The issue date (choice 9):** the history list must **sort** by the same
    date it shows (`serverAt`, else `at`). **One definition, not two.**
 
@@ -4346,9 +4401,9 @@ in its commit message.
 **Advisor error #11, and its lesson, as the Owner numbered it:** the brief
 paraphrased V8C4's file-name regex and its bank rows, and the build followed
 the paraphrase. **Quote V8C4 expressions exactly** — a regex, a field name,
-a label — never in words. *(Tightened 2026-10-07: in committed docs, exactly
-but described, with V8C4's line numbers — see "Quoting V8C4" under the
-Owner's acceptance of N5.12.)*
+a label — never in words. *(Reworded by the Owner on 2026-10-07: **state
+V8C4's behaviour exactly, in your own words, with its line numbers** — see
+"Quoting V8C4" under the Owner's acceptance of N5.12.)*
 
 **The Owner's add-on of 2026-10-06 — recorded (Rule 8):** "Mode: normal.
 ADD-ON, read-only." The repository is **public** (the Owner's decision of
@@ -4470,8 +4525,8 @@ real document-id scheme and carry no rates.
 Recorded 2026-09-26. V8C4 runs `gstinProblem`, `phoneProblem` and
 `emailProblem` on the quotation's own fields as the person types (8027 —
 `#qGst`, `#qPhone`, `#qEmail`), and `stSave` runs the GSTIN and phone checks
-on the **company's** details (7296-7298), taking the first of several phones
-with `.split(/[·,/]/)[0]`. The functions themselves arrive in 9b commit 4a
+on the **company's** details (7296-7298), taking the first of several phones,
+split at "·", "," or "/". The functions themselves arrive in 9b commit 4a
 (`PartyFormat`); these two uses are N6's.
 
 ### Owed in N6: the financial-year guard, and the year-turn prompt — a REQUIREMENT
@@ -4481,12 +4536,10 @@ note. **The moment a person can type a financial year on the phone — which
 N6's numbering settings screen will allow — finalise must refuse when the
 device's year and the shared counter's disagree**, with V8C4's own message.
 V8C4 has the guard twice, at 5138 inside `fbFinaliseAtomic` and at 4733 in
-the older reserve path:
-
-```
-if(cur && cur.fy && N.fy && cur.fy !== N.fy)
-  throw new Error(`The team is on financial year ${cur.fy}; this device is on ${N.fy}. Reload before finalising.`);
-```
+the older reserve path *(described, not quoted)*: when the shared counter
+has a financial year, the device has one, and the two differ, it stops with
+"The team is on financial year <the counter's year>; this device is on
+<the device's year>. Reload before finalising."
 
 **The failure it prevents is silent:** a device left open across the year
 rollover keeps issuing numbers in last year's series, and nobody sees it
@@ -5202,8 +5255,8 @@ which is why the phone pass carries a *negative* check for it.
 
 Recorded 2026-09-26 at the Owner's instruction, **as a blocker, not a note.**
 From N5.9b until N6 builds company settings, a native finalise writes **no
-`snap` key**. V8C4 re-prints a quotation through `const sn = x.snap || {}`
-and assigns the company's name, address, GSTIN, PAN, phones, email, web and
+`snap` key**. V8C4 re-prints a quotation from its stored `snap`, or an empty one
+when there is none, and assigns the company's name, address, GSTIN, PAN, phones, email, web and
 bank block **directly** from it, with no fallback — so a native pre-N6
 quotation re-printed from V8C4 comes out on a **blank letterhead**. (An
 empty `{}` would do exactly the same; see "The Owner's answers on the 9b

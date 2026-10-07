@@ -11,7 +11,7 @@ import `in`.smartie.quotedesk.data.mapping.DocData
  * two. V8C4's transaction reads only the first two — the discount limit is
  * this app's addition, for the cap V8C4 does not have. **No customer is read
  * here**: the party link is derived from the list the screen already holds,
- * as V8C4 derives it from `state.customers`. Naming each read keeps the fake
+ * as V8C4 derives it from its in-memory customer list (`resolvePartyId`, 6379). Naming each read keeps the fake
  * in the tests simple and the rules-relevant shape of every write visible at
  * its call site.
  *

@@ -606,8 +606,8 @@ test('a quotation with no snap at all is accepted - what N5.9b writes until N6',
 // checks it when present.
 
 test('a quotation issued with serverAt from the server is accepted — V8C4\'s finalise payload included', async () => {
-  // V8C4: `Object.assign({}, draft, {no, serverAt: serverTimestamp()})`, with
-  // `at: Date.now()` — accepted unchanged.
+  // V8C4 (5111-5157) writes the draft with its number and a server-time
+  // `serverAt`, and `at` from the device's clock — accepted unchanged.
   const db = as(testEnv, UIDS.staff);
   await assertSucceeds(quotations(db).doc('q_srv_v8').set(quotation('q_srv_v8', UIDS.staff, {
     at: Date.now(), serverAt: serverTime(),
@@ -1017,9 +1017,10 @@ test('the shape still binds when the cap does not: an inflated base is refused',
 // --- N5.10: cancelling --------------------------------------------------------
 
 test('V8C4\'s own cancel, byte for byte, is accepted from an administrator', async () => {
-  // Q4, the advisor's reading of V8C4: `status: "Cancelled"`,
-  // `cancelledBy = currentUserName()` — a name, "unnamed" when there is none
-  // — and `cancelledAt = Date.now()`, a number. Its three keys and no other.
+  // Q4, the advisor's reading of V8C4 (6680-6695): `status` "Cancelled",
+  // `cancelledBy` the signed-in person's name — "unnamed" when there is none
+  // (4246) — and `cancelledAt` the device's clock in milliseconds, a number.
+  // Its three keys and no other.
   await givenIssued('q_v8c4');
   await assertSucceeds(quotations(as(testEnv, UIDS.admin)).doc('q_v8c4').update({
     status: 'Cancelled', cancelledBy: 'Asha Nair', cancelledAt: 1_760_100_000_000,

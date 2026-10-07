@@ -414,7 +414,7 @@ class QuotationWriteTest {
 
     @Test
     fun `a transport line with no note still carries its s, as an empty string`() {
-        // V8C4: `s: t.note || ""`.
+        // V8C4 stores the transport note, or an empty string (2200).
         val noNote = lines(write(plan(draft = ready.copy(transportNote = "  ")))).last()
         assertEquals("", noNote["s"])
         assertTrue(noNote.containsKey("s"))

@@ -146,8 +146,9 @@ class QuotationWriteRepositoryTest {
 
     @Test
     fun `both outcomes hand back the whole record, as V8C4's reused path hands back doc`() = runBlocking {
-        // `{no: prev.no, doc: prev, reused: true}` and the caller's
-        // `Object.assign(draft, out.doc)`: the stored quotation, not a number.
+        // V8C4 (5111-5157) answers with the stored number, the whole record and
+        // a reused flag, and its caller takes the record: the stored quotation,
+        // not a number.
         val store = FakeQuotationStore(seeded())
         val repository = repository(store)
 
@@ -395,7 +396,7 @@ class QuotationWriteRepositoryTest {
     fun `the party link comes from the screen's customers, and the transaction reads only its own two documents`() =
         runBlocking {
             // As V8C4: its transaction reads the quotation and the counter and
-            // nothing else; the link is derived from `state.customers`.
+            // nothing else; the link is derived from its in-memory customer list (6379).
             val sunrise = PartyRecord(id = "c_1", name = "Sunrise Constructions")
             val picked = draft.copy(
                 partyId = "c_1",

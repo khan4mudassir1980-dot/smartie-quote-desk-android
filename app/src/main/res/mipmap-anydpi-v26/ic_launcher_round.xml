@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The launcher icon from Android 8 (N5.12b): the Owner's mark in front of a
+    plain #F7F4FF, and the mark's one-colour silhouette for Android 13's
+    themed icons. The layers are generated from branding/ by
+    tools/branding/make-assets.py, which keeps the mark inside the 66dp safe
+    circle so no launcher's mask clips it.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_monochrome" />
+</adaptive-icon>

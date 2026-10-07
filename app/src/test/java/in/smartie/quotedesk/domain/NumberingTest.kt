@@ -36,7 +36,7 @@ class NumberingTest {
         pad: Int = 3
     ) = NumberingDraft(prefix, financialYear, next, pad)
 
-    private val owner = NumberingAuthor(name = "Mudassir", uid = "uid_owner")
+    private val owner = NumberingAuthor(name = "Owner Person", uid = "uid_owner")
 
     private fun written(plan: NumberingPlan): Map<String, Any?> =
         (plan as NumberingPlan.Write).data
@@ -266,7 +266,7 @@ class NumberingTest {
         assertEquals(12, data["next"])
         assertEquals(3, data["pad"])
         assertEquals(5_000L, data["updated"])
-        assertEquals("Mudassir", data["by"])
+        assertEquals("Owner Person", data["by"])
     }
 
     @Test
@@ -310,7 +310,7 @@ class NumberingTest {
  */
 class DiscountCapTest {
 
-    private val owner = NumberingAuthor(name = "Mudassir", uid = "uid_owner")
+    private val owner = NumberingAuthor(name = "Owner Person", uid = "uid_owner")
 
     @Test
     fun `nought and a hundred are both real settings`() {
@@ -347,7 +347,7 @@ class DiscountCapTest {
         val data = (DiscountCap.save(10.0, owner, 5_000L, canConfigure = true) as NumberingPlan.Write).data
         assertEquals(10.0, data["managerDiscountPct"])
         assertEquals(5_000L, data["updated"])
-        assertEquals("Mudassir", data["by"])
+        assertEquals("Owner Person", data["by"])
     }
 
     @Test

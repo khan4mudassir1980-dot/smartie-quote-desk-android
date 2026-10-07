@@ -19,7 +19,7 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * "Mudassir Khan · Owner" on the card and in History — where it can be known.
+ * "Owner Person · Owner" on the card and in History — where it can be known.
  *
  * C6. The role comes from the uid, so two accounts sharing a display name are
  * told apart; and where the team cannot be read it is absent rather than
@@ -33,11 +33,11 @@ class PurchaseRoleLineScreenTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private val namesake = Member(uid = "uid_owner", name = "Mudassir Khan", role = purchaseOwner.role)
+    private val namesake = Member(uid = "uid_owner", name = "Owner Person", role = purchaseOwner.role)
     private val team = PurchasePeople.byUid(listOf(namesake, purchaseAdmin, purchaseWorker))
 
     private val raised = requirement("pr_one", name = "Sliding gate rack")
-        .copy(by = "Mudassir Khan", byUid = "uid_owner")
+        .copy(by = "Owner Person", byUid = "uid_owner")
 
     private fun card(members: Map<String, Member>) {
         compose.setContent {
@@ -58,7 +58,7 @@ class PurchaseRoleLineScreenTest {
     fun `the card names the person and what they are`() {
         card(team)
 
-        assertTrue(shows("Added by Mudassir Khan · Owner"))
+        assertTrue(shows("Added by Owner Person · Owner"))
     }
 
     @Test
@@ -69,8 +69,8 @@ class PurchaseRoleLineScreenTest {
 
         // The card still carries the date after the name, so the thing to
         // assert absent is the title, not the separator.
-        assertTrue(shows("Added by Mudassir Khan"))
-        assertFalse("no role is invented", shows("Mudassir Khan · Owner"))
+        assertTrue(shows("Added by Owner Person"))
+        assertFalse("no role is invented", shows("Owner Person · Owner"))
     }
 
     @Test

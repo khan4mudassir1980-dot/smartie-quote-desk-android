@@ -67,7 +67,7 @@ class PartyWriteRepositoryTest {
     }
 
     private val manager = Member(uid = "uid_staff", name = "Sam", role = Role.STAFF)
-    private val owner = Member(uid = "uid_owner", name = "Mudassir", role = Role.OWNER)
+    private val owner = Member(uid = "uid_owner", name = "Owner Person", role = Role.OWNER)
 
     /** Stored `worker`, displayed Staff. */
     private val staff = Member(uid = "uid_worker", name = "Ravi", role = Role.WORKER)
@@ -204,7 +204,7 @@ class PartyWriteRepositoryTest {
         val data = store.writes.single().data
         assertEquals(true, data["archived"])
         // Not whoever last edited the record — the person doing it now.
-        assertEquals("Mudassir", data["upBy"])
+        assertEquals("Owner Person", data["upBy"])
         assertEquals("uid_owner", data["upUid"])
     }
 
@@ -272,7 +272,7 @@ class PartyWriteRepositoryTest {
         // `contractor`; through `mergeInto` it is silence.
         val saved = writes.save(
             manager,
-            QuotationPartySnapshot(name = "Sunrise Constructions", phone = "9820011223"),
+            QuotationPartySnapshot(name = "Sunrise Constructions", phone = "9000000003"),
             customers = listOf(sunrise)
         )
         assertEquals(SavedParty("c_1", PartyWriteResult.WRITTEN), saved)
@@ -280,7 +280,7 @@ class PartyWriteRepositoryTest {
         val written = store.writes.single()
         assertEquals("c_1", written.docId)
         assertTrue("merged, never overwritten whole", written.merge)
-        assertEquals("9820011223", written.data["phone"])
+        assertEquals("9000000003", written.data["phone"])
         assertNull("the stored type is left alone", written.data["type"])
         assertNull("and so is the city, with no site typed", written.data["city"])
     }
@@ -294,7 +294,7 @@ class PartyWriteRepositoryTest {
 
         val saved = writes.save(
             manager,
-            QuotationPartySnapshot(name = "Sunrise Constructions", phone = "9820011223"),
+            QuotationPartySnapshot(name = "Sunrise Constructions", phone = "9000000003"),
             customers = listOf(sunrise),
             confirm = no
         )
@@ -379,12 +379,12 @@ class PartyWriteRepositoryTest {
         val store = FakeStore(mutableMapOf("c_1" to sunriseWithGstin))
         val saved = PartyWriteRepository(store, now = { 1_000L }).save(
             manager,
-            QuotationPartySnapshot(name = "Sunrise Construction Co", gstin = "27AAACS1234F1Z5", phone = "9820011223"),
+            QuotationPartySnapshot(name = "Sunrise Construction Co", gstin = "27AAACS1234F1Z5", phone = "9000000003"),
             customers = listOf(sunrise.copy(gstin = "27AAACS1234F1Z5"))
         )
         assertEquals(SavedParty("c_1", PartyWriteResult.WRITTEN), saved)
         val written = store.writes.single().data
-        assertEquals("9820011223", written["phone"])
+        assertEquals("9000000003", written["phone"])
         assertTrue("the name is never written on an update", !written.containsKey("name"))
     }
 
@@ -432,7 +432,7 @@ class PartyWriteRepositoryTest {
         // D2, from the other side: the type question is for a new customer only.
         val store = FakeStore(mutableMapOf("c_1" to sunriseDoc))
         PartyWriteRepository(store, now = { 1_000L })
-            .save(manager, QuotationPartySnapshot(name = "Sunrise Constructions", phone = "9820011223"), listOf(sunrise))
+            .save(manager, QuotationPartySnapshot(name = "Sunrise Constructions", phone = "9000000003"), listOf(sunrise))
 
         assertTrue(typeAsked.isEmpty())
         assertNull(store.writes.single().data["type"])
@@ -510,9 +510,9 @@ class PartyWriteRepositoryTest {
         // V8C4's `saveParty` re-finds from the form and never consults the
         // held id; until N5.9a commit 8 this merged Metro Glass's phone into
         // Sunrise. There is no held id to pass any more.
-        val metroDoc = mapOf("id" to "c_2", "name" to "Metro Glass", "phone" to "9822001100")
-        val metro = PartyRecord(id = "c_2", name = "Metro Glass", phone = "9822001100")
-        val typedOver = QuotationPartySnapshot(name = "Metro Glass", phone = "9822001100", site = "Pune")
+        val metroDoc = mapOf("id" to "c_2", "name" to "Metro Glass", "phone" to "9000000004")
+        val metro = PartyRecord(id = "c_2", name = "Metro Glass", phone = "9000000004")
+        val typedOver = QuotationPartySnapshot(name = "Metro Glass", phone = "9000000004", site = "Pune")
 
         // Metro Glass is saved: it is updated once the person agrees, and
         // Sunrise is untouched.
@@ -538,7 +538,7 @@ class PartyWriteRepositoryTest {
         val store = FakeStore(mutableMapOf("c_1" to sunriseDoc + ("archived" to true)))
         val saved = PartyWriteRepository(store, now = { 1_000L }).save(
             manager,
-            QuotationPartySnapshot(name = "Sunrise Constructions", phone = "9820011223"),
+            QuotationPartySnapshot(name = "Sunrise Constructions", phone = "9000000003"),
             customers = listOf(sunrise.copy(archived = true))
         )
         assertEquals(SavedParty("c_new", PartyWriteResult.WRITTEN, type = RateTierV2.CLIENT), saved)

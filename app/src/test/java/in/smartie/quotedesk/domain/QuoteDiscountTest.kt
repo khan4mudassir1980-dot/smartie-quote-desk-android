@@ -19,7 +19,7 @@ import org.junit.Test
  */
 class QuoteDiscountTest {
 
-    private val owner = Member(uid = "u_o", name = "Mudassir", role = Role.OWNER)
+    private val owner = Member(uid = "u_o", name = "Owner Person", role = Role.OWNER)
     private val admin = Member(uid = "u_a", name = "Asif", role = Role.ADMIN)
     private val manager = Member(uid = "u_m", name = "Sam", role = Role.STAFF)
 

@@ -4,8 +4,8 @@ package `in`.smartie.quotedesk.domain
  * Who did something to a requirement, and what they are.
  *
  * **Resolved by uid, never by name**, which is the whole reason this exists.
- * Two accounts can carry the same display name — the Owner's and a Manager
- * test account both read "Mudassir Khan" on staging — so a name tells a
+ * Two accounts can carry the same display name — on staging the Owner's own
+ * account and a Manager test account carry the same one — so a name tells a
  * reader which words were typed and nothing about which person typed them.
  * A requirement stores both: `by`/`byUid` for who raised it, `rcvBy`/`rcvUid`
  * for who received it, `delBy`/`deletedBy` for who took it off the list.
@@ -28,7 +28,7 @@ object PurchasePeople {
     private const val JOIN = " · "
 
     /**
-     * `"Mudassir Khan · Owner"`, or `"Mudassir Khan"` when the uid cannot be
+     * `"Owner Person · Owner"`, or `"Owner Person"` when the uid cannot be
      * resolved — because it is blank, because the row predates it, or because
      * this account may not read other people.
      *

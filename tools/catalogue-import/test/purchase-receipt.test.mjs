@@ -191,10 +191,10 @@ test('uses that never reach the screen are UNKNOWN rather than assumed hidden', 
 // --- what may be printed -------------------------------------------------
 
 test('a snippet carries no price, no long literal and no number', () => {
-  const line = "  const price = 14000.50; const acct = 'HDFC 50200012345678'; // rcvQty";
+  const line = "  const price = 14000.50; const acct = 'TESTBANK 00000012345678'; // rcvQty";
   const safe = redact(line);
   assert.doesNotMatch(safe, /14000/, 'a price must not leave the machine');
-  assert.doesNotMatch(safe, /50200012345678/, 'nor an account number');
+  assert.doesNotMatch(safe, /00000012345678/, 'nor an account number');
   assert.doesNotMatch(safe, /\d/, 'no digits at all survive redaction');
   assert.match(safe, /rcvQty/, 'the field being classified still has to be legible');
 });

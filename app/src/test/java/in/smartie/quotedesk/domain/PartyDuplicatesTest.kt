@@ -24,7 +24,7 @@ class PartyDuplicatesTest {
     private val sunrise = party(
         "c_1", name = "Sunrise Constructions", gstin = "27AAACS1234F1Z5", phone = "9876543210"
     )
-    private val harbour = party("c_2", name = "Harbour Interiors", phone = "9820011223")
+    private val harbour = party("c_2", name = "Harbour Interiors", phone = "9000000003")
     private val parties = listOf(sunrise, harbour)
 
     // --- norm and digits, exactly ------------------------------------------------------
@@ -35,7 +35,7 @@ class PartyDuplicatesTest {
         // spaces — kept all of this and matched strictly fewer pairs.
         assertEquals(PartyDuplicates.norm("M s Sunrise Ent"), PartyDuplicates.norm("M/s Sunrise Ent."))
         assertEquals(PartyDuplicates.norm("Sunrise Enterprises"), PartyDuplicates.norm("Sunrise Enterprises."))
-        assertEquals(PartyDuplicates.norm("27AABCU9603R1ZM"), PartyDuplicates.norm("27 AABCU 9603 R1ZM"))
+        assertEquals(PartyDuplicates.norm("27AAACM1234F1Z5"), PartyDuplicates.norm("27 AAACM 1234 F1Z5"))
         assertEquals("abc123", PartyDuplicates.norm(" A-b&C / 1.2_3 "))
     }
 

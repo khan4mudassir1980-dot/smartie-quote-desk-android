@@ -157,7 +157,7 @@ class PartiesTest {
     fun `a row with only a contact is flagged, and shows the person`() {
         // Nothing here can be invented: there is no firm name to show, so the
         // contact is displayed and the row says why.
-        val contactOnly = party("c_contact", contact = "Mrs Pinto", phone = "9820011223")
+        val contactOnly = party("c_contact", contact = "Mrs Pinto", phone = "9000000003")
 
         assertTrue(Parties.missingFirmName(contactOnly))
         assertEquals("Mrs Pinto", Parties.displayName(contactOnly))
@@ -171,7 +171,7 @@ class PartiesTest {
 
     @Test
     fun `a row with neither says it has no name rather than showing a blank`() {
-        val nameless = party("c_empty", phone = "9820011223")
+        val nameless = party("c_empty", phone = "9000000003")
 
         assertEquals(Parties.UNNAMED, Parties.displayName(nameless))
         // Not flagged: there is no contact standing in for a firm name here,

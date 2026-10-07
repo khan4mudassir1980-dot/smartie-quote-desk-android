@@ -24,7 +24,7 @@ import org.junit.Test
  */
 class QuotationHistoryTest {
 
-    private val owner = Member(uid = "uid_owner", name = "Mudassir", role = Role.OWNER)
+    private val owner = Member(uid = "uid_owner", name = "Owner Person", role = Role.OWNER)
     private val admin = Member(uid = "uid_admin", name = "Asha", role = Role.ADMIN)
 
     /** Stored `staff`, displayed **Manager**. */

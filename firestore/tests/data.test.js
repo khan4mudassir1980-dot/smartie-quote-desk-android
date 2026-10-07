@@ -322,7 +322,7 @@ test('settings are readable by staff and writable by administrators only', async
   const staffDb = as(testEnv, UIDS.staff);
   await refused(staffDb.collection('teamSettings').doc('company').set({ name: 'X' }));
   const adminDb = as(testEnv, UIDS.admin);
-  await assertSucceeds(adminDb.collection('teamSettings').doc('company').set({ name: 'Smart India Enterprises' }));
+  await assertSucceeds(adminDb.collection('teamSettings').doc('company').set({ name: 'Test Gates & Shutters' }));
   await assertSucceeds(staffDb.collection('teamSettings').doc('company').get());
   await refused(as(testEnv, UIDS.worker).collection('teamSettings').doc('company').get());
 });

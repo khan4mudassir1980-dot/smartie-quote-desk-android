@@ -315,7 +315,7 @@ class QuotationWriteTest {
         phone = "9876543210",
         address = "Plot 14, Andheri East"
     )
-    private val metro = PartyRecord(id = "c_2", name = "Metro Glass", phone = "9822001100")
+    private val metro = PartyRecord(id = "c_2", name = "Metro Glass", phone = "9000000004")
 
     @Test
     fun `a walk-in is written from the typed name, with partyId absent`() {
@@ -348,7 +348,7 @@ class QuotationWriteTest {
         // details over the form. `3db056b` checked only that Sunrise's record
         // existed and would have filed this under Sunrise.
         val typedOver = ready.withParty(sunrise).copy(
-            party = QuotationPartySnapshot(name = "Metro Glass", phone = "98220 01100")
+            party = QuotationPartySnapshot(name = "Metro Glass", phone = "90000 00004")
         )
         assertEquals("c_1", typedOver.partyId)
 
@@ -377,7 +377,7 @@ class QuotationWriteTest {
 
     @Test
     fun `typed details that match a saved customer are linked to it, as V8C4 links them`() {
-        val typed = ready.copy(party = QuotationPartySnapshot(name = "Walk-in Builders", phone = "98220 01100"))
+        val typed = ready.copy(party = QuotationPartySnapshot(name = "Walk-in Builders", phone = "90000 00004"))
         assertEquals("c_2", write(plan(draft = typed, customers = listOf(sunrise, metro))).quotation["partyId"])
     }
 

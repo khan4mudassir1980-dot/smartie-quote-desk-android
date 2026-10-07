@@ -29,7 +29,7 @@ import org.junit.Test
  */
 class ProductEditRepositoryTest {
 
-    private val owner = Member(uid = "uid_owner", name = "Mudassir", role = Role.OWNER)
+    private val owner = Member(uid = "uid_owner", name = "Owner Person", role = Role.OWNER)
     private val manager = Member(uid = "uid_staff", name = "Manager", role = Role.STAFF)
 
     private val record = ProductRecord(
@@ -187,7 +187,7 @@ class ProductEditRepositoryTest {
         repository.save(owner, record, ProductWrite.draftOf(record).copy(dealer = "19000"))
 
         val (_, data) = store.writes.single()
-        assertEquals("Mudassir", data["by"])
+        assertEquals("Owner Person", data["by"])
         assertEquals("uid_owner", data["byUid"])
         assertEquals(1_758_600_000_000L, data["updated"])
     }

@@ -264,7 +264,7 @@ class QuotationEditTest {
     // --- the link ---------------------------------------------------------------------
 
     private val walkIn = PartyRecord(id = "c_walk", name = "Walk-in Builders", phone = "9876543210")
-    private val metro = PartyRecord(id = "c_metro", name = "Metro Glass", phone = "9822001100")
+    private val metro = PartyRecord(id = "c_metro", name = "Metro Glass", phone = "9000000004")
 
     @Test
     fun `an absent partyId stays absent - it is never re-resolved`() {

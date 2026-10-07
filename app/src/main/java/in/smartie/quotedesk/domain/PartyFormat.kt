@@ -4,7 +4,9 @@ package `in`.smartie.quotedesk.domain
  * **V8C4's three format checks — `gstinProblem`, `phoneProblem` and
  * `emailProblem` (6341-6360) — ported verbatim**, messages included, from the
  * text the Owner sent on 2026-09-26 (advisor-read evidence; recorded in
- * `docs/PROJECT-STATUS.md`).
+ * `docs/PROJECT-STATUS.md`). **One deliberate difference:** the example
+ * GSTIN in [GSTIN_LENGTH] is a sample whose check character is wrong, so it
+ * can belong to nobody — the Owner's decision of 2026-10-07 (N5.12).
  *
  * **Blank is valid in all three.** They are format checks, not required
  * fields: each answers null for an empty or all-space value, as V8C4's do.
@@ -33,7 +35,8 @@ package `in`.smartie.quotedesk.domain
  */
 object PartyFormat {
 
-    const val GSTIN_LENGTH = "A GSTIN is 15 characters, for example 27FXJPK9635L1ZM"
+    /** V8C4's sentence; its example is a checksum-invalid sample (N5.12). */
+    const val GSTIN_LENGTH = "A GSTIN is 15 characters, for example 22AAAAA0000A1Z5"
     const val GSTIN_SHAPE = "That GSTIN does not look right — check it against the certificate"
     const val PHONE_TOO_SHORT = "A phone number needs at least 10 digits"
     const val PHONE_TOO_LONG = "That phone number has too many digits"

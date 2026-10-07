@@ -90,14 +90,14 @@ class QuotePartyTest {
         // email and address — never the name, which is written only when a
         // record is created. So a Manager correcting a spelling is never
         // refused for a rename, because none is attempted.
-        val corrected = QuoteParty.snapshotOf(sunrise).copy(name = "Sunrise Construction Co", phone = "9820011223")
+        val corrected = QuoteParty.snapshotOf(sunrise).copy(name = "Sunrise Construction Co", phone = "9000000003")
         val write = PartyWrite.mergeInto(
             sunrise,
             QuoteParty.draftOf(corrected),
             PartyAuthor(name = "Manager", uid = "u_m"),
             at = 100L
         ) as PartyPlan.Write
-        assertEquals("9820011223", write.data["phone"])
+        assertEquals("9000000003", write.data["phone"])
         assertFalse(write.data.containsKey("name"))
         assertFalse(write.data.containsKey("notes"))
     }
@@ -121,7 +121,7 @@ class QuotePartyTest {
 
     @Test
     fun `a correction typed on the quotation is taken, and only that field`() {
-        val corrected = QuoteParty.snapshotOf(sunrise).copy(phone = "9820011223")
+        val corrected = QuoteParty.snapshotOf(sunrise).copy(phone = "9000000003")
         val plan = PartyWrite.mergeInto(
             sunrise,
             QuoteParty.draftOf(corrected),
@@ -130,7 +130,7 @@ class QuotePartyTest {
         )
 
         val write = plan as PartyPlan.Write
-        assertEquals("9820011223", write.data["phone"])
+        assertEquals("9000000003", write.data["phone"])
         assertEquals(null, write.data["type"])
         assertEquals(null, write.data["notes"])
         assertEquals(true, write.merge)
@@ -138,7 +138,7 @@ class QuotePartyTest {
 
     // --- the party link, derived from the form ------------------------------------------
 
-    private val metro = PartyRecord(id = "c_2", name = "Metro Glass", gstin = "27AABCM9999K1Z2", phone = "9822001100")
+    private val metro = PartyRecord(id = "c_2", name = "Metro Glass", gstin = "27AABCM9999K1Z2", phone = "9000000004")
     private val saved = listOf(sunrise, metro)
 
     @Test
@@ -200,7 +200,7 @@ class QuotePartyTest {
     @Test
     fun `nothing on the form, or nothing matching, is not the same party`() {
         assertFalse(PartyDuplicates.sameParty(QuotationPartySnapshot(site = "Plot 7"), sunrise))
-        assertFalse(PartyDuplicates.sameParty(QuotationPartySnapshot(name = "Metro Glass", phone = "9822001100"), sunrise))
+        assertFalse(PartyDuplicates.sameParty(QuotationPartySnapshot(name = "Metro Glass", phone = "9000000004"), sunrise))
     }
 
     @Test

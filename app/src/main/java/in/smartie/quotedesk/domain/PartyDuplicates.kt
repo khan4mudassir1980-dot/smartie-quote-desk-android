@@ -50,7 +50,7 @@ object PartyDuplicates {
      *
      * Every character that is not a Latin letter or a digit goes — spaces,
      * dots, slashes, hyphens, ampersands. So "M/s Sunrise Ent." is
-     * "M s Sunrise Ent", and "27 AABCU 9603 R1ZM" is "27AABCU9603R1ZM":
+     * "M s Sunrise Ent", and "27 AAACM 1234 F1Z5" is "27AAACM1234F1Z5":
      * people type GSTINs with spaces.
      */
     fun norm(value: String): String = value.lowercase().filter { it in 'a'..'z' || it in '0'..'9' }

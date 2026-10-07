@@ -394,7 +394,7 @@ test('every teamSettings document either app uses is still readable by the roles
   // that the named rules were all present.
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
-    await db.collection('teamSettings').doc('company').set({ name: 'Smart India Enterprises' });
+    await db.collection('teamSettings').doc('company').set({ name: 'Test Gates & Shutters' });
     await db.collection('teamSettings').doc('categories').set({ map: {} });
     await db.collection('teamSettings').doc('productPins').set({ keys: [] });
   });

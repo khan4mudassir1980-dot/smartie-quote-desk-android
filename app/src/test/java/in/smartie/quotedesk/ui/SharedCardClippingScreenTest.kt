@@ -83,7 +83,7 @@ class SharedCardClippingScreenTest {
                 title = LONG_TITLE,
                 secondary = "10 required · 4 received · 6 remaining",
                 note = LONG_NOTE,
-                meta = "Added by Mudassir Khan · 22 Sep 2026",
+                meta = "Added by Owner Person · 22 Sep 2026",
                 accent = SmartieColors.Warn,
                 tags = { Tag("Needed", TagTone.PURPLE) },
                 trailing = { Text("4 in") },

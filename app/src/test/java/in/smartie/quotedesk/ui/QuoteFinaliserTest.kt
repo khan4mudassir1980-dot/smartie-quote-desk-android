@@ -152,7 +152,7 @@ class QuoteFinaliserTest {
         val outcome = gate().ensureFinalised(draft, capPercent = null)
 
         assertEquals(
-            GateOutcome.NotFinalised("Client GSTIN: A GSTIN is 15 characters, for example 27FXJPK9635L1ZM"),
+            GateOutcome.NotFinalised("Client GSTIN: A GSTIN is 15 characters, for example 22AAAAA0000A1Z5"),
             outcome
         )
         nothingSent()

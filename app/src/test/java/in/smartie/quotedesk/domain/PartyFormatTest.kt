@@ -10,11 +10,15 @@ import java.util.Locale
  *
  * Every message is pinned by its text, because the text **is** the port: the
  * Owner sent it from V8C4 (6341-6360) and nothing in this repository could
- * have produced it otherwise.
+ * have produced it otherwise. The one difference is the example GSTIN in
+ * [PartyFormat.GSTIN_LENGTH]: a sample whose check character is wrong, by the
+ * Owner's decision of 2026-10-07 (N5.12).
  */
 class PartyFormatTest {
 
-    private val valid = "27FXJPK9635L1ZM" // V8C4's own example, in its message
+    // The message's own example. It passes the shape check, which reads no
+    // check character; that it is checksum-invalid is the point (N5.12).
+    private val valid = "22AAAAA0000A1Z5"
 
     // --- blank is valid: format checks, not required fields ---------------------------------
 
@@ -33,17 +37,17 @@ class PartyFormatTest {
     fun `a GSTIN is fifteen characters in V8C4's shape`() {
         assertNull(PartyFormat.gstinProblem(valid))
         assertEquals(
-            "A GSTIN is 15 characters, for example 27FXJPK9635L1ZM",
+            "A GSTIN is 15 characters, for example 22AAAAA0000A1Z5",
             PartyFormat.gstinProblem(valid.dropLast(1))
         )
         assertEquals(PartyFormat.GSTIN_LENGTH, PartyFormat.gstinProblem(valid + "1"))
         // Fifteen characters, but the fourteenth must be Z.
         assertEquals(
             "That GSTIN does not look right — check it against the certificate",
-            PartyFormat.gstinProblem("27FXJPK9635L1XM")
+            PartyFormat.gstinProblem("22AAAAA0000A1X5")
         )
         // The thirteenth is [1-9A-Z]: a zero is not a GSTIN.
-        assertEquals(PartyFormat.GSTIN_SHAPE, PartyFormat.gstinProblem("27FXJPK9635L0ZM"))
+        assertEquals(PartyFormat.GSTIN_SHAPE, PartyFormat.gstinProblem("22AAAAA0000A0Z5"))
     }
 
     @Test
@@ -52,7 +56,7 @@ class PartyFormatTest {
         // Trimmed at the ends only, as JavaScript's trim(); a space inside
         // makes it sixteen characters.
         assertNull(PartyFormat.gstinProblem("  $valid  "))
-        assertEquals(PartyFormat.GSTIN_LENGTH, PartyFormat.gstinProblem("27FXJPK 9635L1ZM"))
+        assertEquals(PartyFormat.GSTIN_LENGTH, PartyFormat.gstinProblem("22AAAAA 0000A1Z5"))
     }
 
     @Test
@@ -106,19 +110,19 @@ class PartyFormatTest {
 
     @Test
     fun `an email needs a name, an at, a domain and a two-letter ending`() {
-        assertNull(PartyFormat.emailProblem("sales@sunrise.in"))
-        assertNull(PartyFormat.emailProblem("  sales@sunrise.in  "))
+        assertNull(PartyFormat.emailProblem("sales@sunrise.invalid"))
+        assertNull(PartyFormat.emailProblem("  sales@sunrise.invalid  "))
         assertEquals("That does not look like an email address", PartyFormat.emailProblem("sales@sunrise.i"))
-        assertEquals(PartyFormat.EMAIL_SHAPE, PartyFormat.emailProblem("sales.sunrise.in"))
-        assertEquals(PartyFormat.EMAIL_SHAPE, PartyFormat.emailProblem("sales@@sunrise.in"))
+        assertEquals(PartyFormat.EMAIL_SHAPE, PartyFormat.emailProblem("sales.sunrise.invalid"))
+        assertEquals(PartyFormat.EMAIL_SHAPE, PartyFormat.emailProblem("sales@@sunrise.invalid"))
     }
 
     @Test
     fun `whitespace inside an email is JavaScript's, not Java's`() {
-        assertEquals(PartyFormat.EMAIL_SHAPE, PartyFormat.emailProblem("sa les@sunrise.in"))
+        assertEquals(PartyFormat.EMAIL_SHAPE, PartyFormat.emailProblem("sa les@sunrise.invalid"))
         // Java's \s does not match U+00A0 or U+3000; JavaScript's does, so
         // V8C4 refuses both.
-        assertEquals(PartyFormat.EMAIL_SHAPE, PartyFormat.emailProblem("sa\u00A0les@sunrise.in"))
+        assertEquals(PartyFormat.EMAIL_SHAPE, PartyFormat.emailProblem("sa\u00A0les@sunrise.invalid"))
         assertEquals(PartyFormat.EMAIL_SHAPE, PartyFormat.emailProblem("sales@sun\u3000rise.in"))
     }
 }

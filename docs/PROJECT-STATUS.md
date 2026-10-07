@@ -2428,8 +2428,8 @@ const digits = s => String(s||"").replace(/\D/g,"");
 
 `norm` removes spaces, dots, slashes, hyphens, ampersands — so
 `"M/s Sunrise Ent."` matches `"M s Sunrise Ent"`, `"Sunrise Enterprises."`
-matches `"Sunrise Enterprises"`, and `"27AABCU9603R1ZM"` matches
-`"27 AABCU 9603 R1ZM"` — people type GSTINs with spaces. `3d`'s port (trim,
+matches `"Sunrise Enterprises"`, and `"27AAACM1234F1Z5"` matches
+`"27 AAACM 1234 F1Z5"` — people type GSTINs with spaces. `3d`'s port (trim,
 lower case, single spaces) matched strictly fewer pairs. Fix `norm` to
 exactly that line; confirm `digits` is full-string equality, not a suffix
 comparison. See the pattern under "Decisions that bind future work".

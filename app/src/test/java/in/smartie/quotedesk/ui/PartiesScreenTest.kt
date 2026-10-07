@@ -48,7 +48,7 @@ class PartiesScreenTest {
     )
     private val harbour = PartyRecord(id = "c_2", name = "Harbour Interiors", city = "Thane")
     private val old = PartyRecord(id = "c_3", name = "Old Client Pvt Ltd", archived = true)
-    private val contactOnly = PartyRecord(id = "c_4", contact = "Mrs Pinto", phone = "9820011223")
+    private val contactOnly = PartyRecord(id = "c_4", contact = "Mrs Pinto", phone = "9000000003")
 
     private fun screen(parties: List<PartyRecord> = listOf(sunrise, harbour, old)) {
         compose.setContent { SmartieTheme { PartiesScreen(parties = parties) } }

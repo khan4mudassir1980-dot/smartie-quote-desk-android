@@ -29,7 +29,7 @@ import org.junit.Test
  */
 class ProductWriteTest {
 
-    private val owner = ProductAuthor(name = "Mudassir", uid = "uid_owner")
+    private val owner = ProductAuthor(name = "Owner Person", uid = "uid_owner")
 
     private val record = ProductRecord(
         documentId = "gateMotors__SIE1000",

@@ -1110,7 +1110,7 @@ async function givenParty(id = 'c_1', fields = {}) {
       id, name: 'Sunrise Constructions', type: 'contractor', city: 'Mumbai',
       gstin: '27AAACS1234F1Z5', contact: 'Mr Deshmukh', phone: '9876543210',
       email: 'accounts@sunrise.invalid', address: 'Plot 14, Andheri East',
-      notes: '', archived: false, t: 1700000000000, by: 'Mudassir Khan',
+      notes: '', archived: false, t: 1700000000000, by: 'Owner Person',
       byUid: UIDS.primaryOwner, updated: 1705000000000,
       ...fields,
     });
@@ -1127,7 +1127,7 @@ test('a Manager creates a party, in the shape V8C4 reads', async () => {
     city: 'Mumbai',
     gstin: '27AAACM1234F1Z5',
     contact: 'Mr Rane',
-    phone: '9820011223',
+    phone: '9000000003',
     email: 'accounts@metro.invalid',
     address: 'Plot 9, Bhandup',
     notes: 'Pays on delivery',

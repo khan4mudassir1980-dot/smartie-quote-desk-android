@@ -30,7 +30,7 @@ any valid write is 900** (the Owner, 2026-10-05).
 |---|---|
 | `headroom.js` | The library: pads the rules with N always-true terms (`request.auth != null`, in chunks) and finds the most padding a write survives. **cost ≈ (163 − N) × 1000 / 163, about ±6.** `PAD_ALL=1` pads every allow; `PAD_MATCH='/purchase/{id}'` pads one match block (a per-document figure). |
 | `budget.sh` | The headroom report: `purch.js` (every valid purchase path in `scenarios.js`), `users.js`, `quotes.js` and `stock.js` (per block, for the per-request sums of a finalise, a stock movement and a photo). |
-| `purch.js` | One purchase table. `RULES=<file>` measures another rules file; `SCEN=./scenarios-ordered.js` measures the Ordered and cancel paths (commit 9). |
+| `purch.js` | One purchase table. `RULES=<file>` measures another rules file; `SCEN=./scenarios-ordered.js` measures the Ordered and cancel paths (commit 9); `SCEN=./scenarios-create.js` measures a create as `PurchaseWrite.create` sends it, `rev: 1` (N5.12 commit 4b). |
 | `refcost.js` | The cost of a **refused** write: the padding at which "denied" turns into "limit". |
 | `margin.sh` | The margin test: the purchase-side emulator tests with the `/purchase` block padded by N terms. `margin.sh ../firestore.rules 16 <suite>` passing with no limit line means every purchase write those tests make — refusals included — costs under about 900. |
 | `padrules.js` | Prints padded rules (used by `margin.sh`). |

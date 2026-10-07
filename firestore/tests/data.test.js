@@ -205,34 +205,37 @@ test('the limited role corrects the requirement it raised, and no other', async 
   // just mistyped. It may now correct its own while nothing has been
   // delivered against it. Ownership is byUid and nothing else — stored
   // `worker` is displayed **Staff**; the value is not renamed.
+  //
+  // Every write carries `rev`, as the native app sends it — required since
+  // N5.12's hard-block — so each refusal below is the ownership clause's.
   const db = as(testEnv, UIDS.worker);
   await assertSucceeds(db.collection('purchase').doc('pr_worker').set({
     id: 'pr_worker', name: 'Anchor bolts', qty: 20, urgency: 'normal', status: 'Needed',
-    byUid: UIDS.worker, t: Date.now(), updated: Date.now(),
+    byUid: UIDS.worker, t: Date.now(), updated: Date.now(), rev: 1,
   }));
   await assertSucceeds(
-    db.collection('purchase').doc('pr_worker').update({ qty: 30, updated: Date.now() })
+    db.collection('purchase').doc('pr_worker').update({ qty: 30, updated: Date.now(), rev: 2 })
   );
 
   // Somebody else's, raised by the displayed Manager.
   await assertSucceeds(as(testEnv, UIDS.staff).collection('purchase').doc('pr_manager').set({
     id: 'pr_manager', name: 'Remote handsets', qty: 4, urgency: 'normal', status: 'Needed',
-    byUid: UIDS.staff, t: Date.now(), updated: Date.now(),
+    byUid: UIDS.staff, t: Date.now(), updated: Date.now(), rev: 1,
   }));
   await refused(
-    db.collection('purchase').doc('pr_manager').update({ qty: 5, updated: Date.now() })
+    db.collection('purchase').doc('pr_manager').update({ qty: 5, updated: Date.now(), rev: 2 })
   );
 
   // Changed again by N4.3: receiving IS theirs now, on the requirement they
   // raised — the person who noticed the shortage is usually the person
   // standing in front of the van.
   await assertSucceeds(db.collection('purchase').doc('pr_worker').update({
-    qty: 30, updated: Date.now(), received: true, rcvQty: 30, rcvUid: UIDS.worker,
+    qty: 30, updated: Date.now(), received: true, rcvQty: 30, rcvUid: UIDS.worker, rev: 3,
   }));
 
   // And still not on somebody else's.
   await refused(db.collection('purchase').doc('pr_manager').update({
-    qty: 4, updated: Date.now(), received: true, rcvQty: 4, rcvUid: UIDS.worker,
+    qty: 4, updated: Date.now(), received: true, rcvQty: 4, rcvUid: UIDS.worker, rev: 2,
   }));
 });
 

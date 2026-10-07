@@ -318,10 +318,12 @@ test('reopen clears the receipt, the cancel and the Ordered stamps, and the row 
 // --- a new requirement ------------------------------------------------------------------
 
 test('a new requirement is neither Ordered nor Cancelled, and carries neither stamp', async () => {
+  // `rev: 1`, as the native app creates one — required since N5.12's
+  // hard-block — so each refusal below is its own clause's.
   const db = as(testEnv, UIDS.worker).collection('purchase');
   const fresh = (id, extra = {}) => ({
     id, name: 'Anchor bolts', qty: 20, urgency: 'normal', status: 'Needed',
-    by: 'Staff Person', byUid: UIDS.worker, t: Date.now(), updated: Date.now(), ...extra,
+    by: 'Staff Person', byUid: UIDS.worker, t: Date.now(), updated: Date.now(), rev: 1, ...extra,
   });
   await refused(db.doc('pr_n1').set(fresh('pr_n1', { status: 'Ordered' })));
   await refused(db.doc('pr_n2').set(fresh('pr_n2', { status: 'Cancelled' })));

@@ -14,7 +14,9 @@ rules_version = '2';
 //      the two lower roles only).
 //   3. Purchase requirements are soft-deleted; a hard delete is refused for
 //      everyone, so a PWA device can never resurrect a deleted item.
-//   4. Purchase updates carry an optimistic `rev` counter.
+//   4. Every purchase create and update carries an optimistic `rev`
+//      counter (required on every one since N5.12: the PWA never sends
+//      it, so its purchase writes are refused — the Owner's hard-block).
 //   5. Purchase ownership: the person who raised a requirement may correct
 //      it while nothing has been delivered against it, and a delivery closes
 //      the record to everyone but an Administrator.
@@ -128,8 +130,8 @@ service cloud.firestore {
      *
      * **The cap check is one rupee generous, never strict.** The app allows
      * `base × cap ÷ 100` rounded HALF_UP to whole rupees; this rule sees the
-     * unrounded figure. Without the margin, 5% of 44,410 — ₹2,220.50, which
-     * the app lets a Manager have as ₹2,221 — was refused here, and a refusal
+     * unrounded figure. Without the margin, 5% of 34,010 — ₹1,700.50, which
+     * the app lets a Manager have as ₹1,701 — was refused here, and a refusal
      * at finalise is one the person cannot see coming. With it the rule
      * accepts at most one rupee the app would not, and never refuses one it
      * would. The five vectors pinning both sides are in `quotation.test.js`
@@ -449,9 +451,22 @@ service cloud.firestore {
 
     // --- purchase ------------------------------------------------------
 
+    /**
+     * **`rev` on every update — the hard-block** (N5.12 commit 4b; the
+     * Owner's option (b), 2026-10-07). The written `rev` must be the stored
+     * one plus one, and a row that never carried one starts at 1. A write
+     * that does not send it keeps the stored value or none, and is refused.
+     *
+     * The native app sends it on every update (`PurchaseWrite.base()`); the
+     * PWA never does, so every PWA purchase update is refused — the staff
+     * stopping PWA Purchase use is the control the Owner chose on 2026-09-29,
+     * and this is the hard-block behind it. Until N5.12 a row that had never
+     * carried a `rev` let an update without one through, and a create needed
+     * none: that is how 19 of the V8C4 writes `firestore/tools/diffrules.js`
+     * replays were still accepted.
+     */
     function revOk() {
-      return !request.resource.data.keys().hasAny(['rev'])
-        || request.resource.data.rev == resource.data.get('rev', 0) + 1;
+      return request.resource.data.get('rev', -1) == resource.data.get('rev', 0) + 1;
     }
 
     // --- purchase: who owns a requirement, and for how long ----------------
@@ -916,6 +931,10 @@ service cloud.firestore {
       // Everyone, Workers included, may add a requirement.
       allow create: if member()
                     && request.resource.data.id == id
+                    // The hard-block, as on update: a new requirement is
+                    // revision 1, which the native app sends and the PWA does
+                    // not (N5.12 commit 4b).
+                    && request.resource.data.get('rev', -1) == 1
                     && request.resource.data.byUid == mine()
                     && request.resource.data.qty is number && request.resource.data.qty > 0
                     && request.resource.data.status == 'Needed'

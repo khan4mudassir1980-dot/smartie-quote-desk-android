@@ -96,13 +96,13 @@ data class PurchaseDraft(
  * 4. **`updated` is epoch milliseconds, never a server timestamp.** The rules
  *    want `updated is number`; the sentinel is not one. `serverAt` carries the
  *    server's own clock alongside it.
- * 5. **`rev` is mandatory the moment a row has one**, though `revOk()` reads
- *    as though it were optional. Its `keys().hasAny(['rev'])` test sees the
- *    merged post-state too, so a row already holding `rev: 1` still holds it
- *    after an update that omits `rev`, and `1 == 1 + 1` refuses the write. The
- *    tolerance covers only a row that has **never** carried a `rev`. Every
- *    update here sends `stored.rev + 1` — which the rule requires, and which
- *    is what stops two devices completing the same requirement.
+ * 5. **`rev` is mandatory on every create and update** — since N5.12 commit
+ *    4b, the Owner's hard-block on the PWA's purchase writes. [create] sends
+ *    `rev: 1` and every update sends `stored.rev + 1` (1 on a row the PWA
+ *    wrote, which carries none) — which the rule requires, which the PWA
+ *    never sends, and which is what stops two devices completing the same
+ *    requirement. Until N5.12 `revOk()` let an update without `rev` through
+ *    on a row that had never carried one.
  *
  * ## What is deliberately absent
  *

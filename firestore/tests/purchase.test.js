@@ -687,16 +687,21 @@ test('once a row carries a rev, omitting it is refused, not tolerated', async ()
   );
 });
 
-test('a V8C4 row that never had a rev is the one case the tolerance is for', async () => {
-  // That is the whole of it: the PWA writes no `rev`, so its own documents
-  // stay updatable. Every native update sends `stored.rev + 1` regardless,
-  // which is what turns the tolerance back into a guard.
+test('since N5.12, a V8C4 row that never had a rev has no tolerance either - its first native update is rev 1', async () => {
+  // Turned by N5.12 commit 4b, the Owner's hard-block. Until then this was
+  // "the one case the tolerance is for": the PWA writes no `rev`, so an
+  // update without one was let through on a row that had never carried
+  // one. Now every update must carry the stored revision plus one — 1 on
+  // such a row — which the native app always sends and the PWA never does.
   const { rev, ...withoutRev } = HEALTHY;
   await given('pr_norev', { ...withoutRev, id: 'pr_norev' });
   const db = as(testEnv, UIDS.staff);
 
-  await assertSucceeds(
+  await refused(
     db.collection('purchase').doc('pr_norev').update({ id: 'pr_norev', qty: 4, updated: Date.now() })
+  );
+  await assertSucceeds(
+    db.collection('purchase').doc('pr_norev').update({ id: 'pr_norev', qty: 4, updated: Date.now(), rev: 1 })
   );
 });
 
@@ -1105,10 +1110,11 @@ test('a uid carried unchanged, or removed, is not asked about', async () => {
 });
 
 test('a new requirement names nobody else either', async () => {
+  // `rev: 1`, as the native app creates one — required since N5.12.
   const db = as(testEnv, UIDS.worker).collection('purchase');
   const fresh = (id, extra = {}) => ({
     id, name: 'Anchor bolts', qty: 20, urgency: 'normal', status: 'Needed',
-    by: 'Staff Person', byUid: UIDS.worker, t: Date.now(), updated: Date.now(), ...extra,
+    by: 'Staff Person', byUid: UIDS.worker, t: Date.now(), updated: Date.now(), rev: 1, ...extra,
   });
 
   await refused(db.doc('pr_new1').set(fresh('pr_new1', { upBy: 'Administrator', upUid: UIDS.admin })));

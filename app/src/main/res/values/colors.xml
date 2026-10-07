@@ -1,7 +1,9 @@
 <resources>
-    <!-- Approved PWA tokens (index.html:22-42). -->
-    <color name="smartie_purple">#6D28D9</color>
-    <color name="smartie_purple_dark">#4C1D95</color>
+    <!-- Approved PWA tokens (index.html:22-42), except the purples, which
+         are the brand's since N5.12b - as in ui/theme/Color.kt. -->
+    <color name="smartie_purple">#581FEB</color>
+    <color name="smartie_purple_dark">#3212BD</color>
+    <color name="smartie_highlight">#A138FC</color>
     <color name="smartie_paper">#F8F7FC</color>
     <color name="smartie_panel">#FFFFFF</color>
     <color name="smartie_green">#15803D</color>

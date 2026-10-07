@@ -4,15 +4,30 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 
 /**
- * Colour tokens copied from the approved PWA (V8C4 `index.html:22-42`).
+ * Colour tokens, copied from the approved PWA (V8C4 `index.html:22-42`) —
+ * except the brand colours the Owner set in N5.12b.
  *
- * The beta theme used `#7125DC`; the approved purple is `#6D28D9`. Every value
- * here is the PWA's, so a native screen and a PWA screen can be compared side
- * by side without a colour difference.
+ * Since N5.12b the purples are the brand's, not the PWA's: [Purple] is the
+ * primary purple `#581FEB` (the PWA's was `#6D28D9`, the beta's `#7125DC`);
+ * [PurpleDark] is the deep indigo `#3212BD`, the pressed colour, and takes the
+ * PWA's dark purple's other roles too; [Highlight] is the light violet
+ * `#A138FC`. [Navy] and [IconBackground] are the other two. Everything else is
+ * still the PWA's. `BrandContrastTest` checks every pair they are drawn in.
  */
 object SmartieColors {
-    val Purple = Color(0xFF6D28D9)
-    val PurpleDark = Color(0xFF4C1D95)
+    val Purple = Color(0xFF581FEB)
+    val PurpleDark = Color(0xFF3212BD)
+
+    /**
+     * The light violet: what marks a **highlighted** thing — the field being
+     * typed in, a stepper holding a change, a card being dragged. A line,
+     * never text: on the page it is 4.39:1, short of AA for text.
+     */
+    val Highlight = Color(0xFFA138FC)
+
+    /** The primary button's fill: the deep indigo while it is pressed. */
+    fun primaryButton(pressed: Boolean): Color = if (pressed) PurpleDark else Purple
+
     val PurpleLight = Color(0xFFEDE9FE)
     val PurpleLine = Color(0xFFD8CCF5)
 

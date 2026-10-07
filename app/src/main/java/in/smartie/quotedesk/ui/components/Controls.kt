@@ -3,6 +3,8 @@ package `in`.smartie.quotedesk.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +28,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +47,7 @@ import `in`.smartie.quotedesk.ui.theme.SmartieColors
 
 /**
  * Primary button at the PWA's 42-44dp height, not Material's 40dp default.
+ * The brand purple, turning deep indigo while pressed (N5.12b).
  *
  * [busyText] is what a busy button **says** it is doing, beside its spinner —
  * for a wait long enough that a spinner alone reads as a dead button (N5.9b's
@@ -59,9 +64,13 @@ fun SmartiePrimaryButton(
     busyText: String? = null
 ) {
     val dimens = LocalSmartieDimens.current
+    val interactions = remember { MutableInteractionSource() }
+    val pressed by interactions.collectIsPressedAsState()
     Button(
         onClick = onClick,
         enabled = enabled && !busy,
+        interactionSource = interactions,
+        colors = ButtonDefaults.buttonColors(containerColor = SmartieColors.primaryButton(pressed)),
         shape = RoundedCornerShape(dimens.radius),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 17.dp),
         modifier = modifier.heightIn(min = dimens.buttonHeightCompact)
@@ -253,7 +262,7 @@ fun SmartieField(
                 unfocusedContainerColor = SmartieColors.Panel,
                 disabledContainerColor = SmartieColors.Panel2,
                 errorContainerColor = SmartieColors.Panel,
-                focusedIndicatorColor = SmartieColors.Purple,
+                focusedIndicatorColor = SmartieColors.Highlight,
                 unfocusedIndicatorColor = SmartieColors.Rule,
                 disabledIndicatorColor = SmartieColors.Rule2
             ),
@@ -305,7 +314,7 @@ fun CompactStepper(
             .background(SmartieColors.Panel)
             .border(
                 dimens.hairline,
-                if (highlighted) SmartieColors.PurpleLine else SmartieColors.Rule,
+                if (highlighted) SmartieColors.Highlight else SmartieColors.Rule,
                 RoundedCornerShape(dimens.radius)
             ),
         verticalAlignment = Alignment.CenterVertically

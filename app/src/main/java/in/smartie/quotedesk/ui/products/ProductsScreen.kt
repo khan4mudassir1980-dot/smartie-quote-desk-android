@@ -878,7 +878,7 @@ private fun ProductCard(
             modifier
         },
         background = if (dragging || pinned) SmartieColors.PurpleTint else SmartieColors.Panel,
-        borderColor = if (dragging) SmartieColors.PurpleLine else SmartieColors.Rule,
+        borderColor = if (dragging) SmartieColors.Highlight else SmartieColors.Rule,
         accent = if (inQuote) SmartieColors.Purple else null,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(dimens.gapXs)) {

@@ -12,11 +12,11 @@ class FieldReadersTest {
     @Test
     fun `numeric strings parse instead of becoming zero`() {
         assertEquals(5.0, "5".asDoubleOrNull()!!, 0.0)
-        assertEquals(1250.5, "1,250.50".asDoubleOrNull()!!, 0.0)
-        assertEquals(1250.5, "₹ 1,250.50".asDoubleOrNull()!!, 0.0)
+        assertEquals(1234.5, "1,234.50".asDoubleOrNull()!!, 0.0)
+        assertEquals(1234.5, "₹ 1,234.50".asDoubleOrNull()!!, 0.0)
         // A no-break space grouping the digits, as formatted money can write
         // it. Inside the figure, so trim() alone would leave it and fail.
-        assertEquals(1250.5, "₹1\u00A0250.50".asDoubleOrNull()!!, 0.0)
+        assertEquals(1234.5, "₹1\u00A0234.50".asDoubleOrNull()!!, 0.0)
         assertEquals(-2.0, "-2".asDoubleOrNull()!!, 0.0)
     }
 

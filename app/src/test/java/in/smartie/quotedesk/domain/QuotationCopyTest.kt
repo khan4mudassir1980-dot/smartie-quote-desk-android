@@ -41,7 +41,7 @@ class QuotationCopyTest {
         model = "SIE1000",
         categoryId = "cat-sliding",
         dealer = 18_000.0,
-        client = 22_200.0
+        client = 17_000.0
     )
 
     private val original: QuoteDraft = QuoteDraft(
@@ -98,7 +98,7 @@ class QuotationCopyTest {
         assertEquals(RateTierV2.CLIENT, copied.tier)
         assertEquals(record.party, copied.party)
         assertEquals("c_walkin", copied.partyId)
-        assertEquals(listOf(22_200.0, 1_000.0), copied.lines.map { it.rate })
+        assertEquals(listOf(17_000.0, 1_000.0), copied.lines.map { it.rate })
         assertEquals(listOf(2.0, 1.0), copied.lines.map { it.quantity })
     }
 
@@ -111,7 +111,7 @@ class QuotationCopyTest {
         assertEquals(1_500.0, copied.transport, 0.0)
         assertEquals("Mumbai to Vadodara", copied.transportNote)
         assertTrue(copied.lines.none { it.title == QuotationWrite.TRANSPORT_TITLE })
-        assertEquals(45_400.0, copied.totals().discountBase, 0.0)
+        assertEquals(35_000.0, copied.totals().discountBase, 0.0)
     }
 
     @Test
@@ -168,7 +168,7 @@ class QuotationCopyTest {
                 .add(motor, quantity = 2.0, id = "ln_motor")
         )
         val copied = copy(of = dealer)
-        val todays = mapOf(motor.key to 18_500.0)
+        val todays = mapOf(motor.key to 14_000.0)
 
         assertEquals(RateTierV2.DEALER, copied.tier)
         assertFalse(copied.hasLinesOutOfStep)
@@ -182,11 +182,11 @@ class QuotationCopyTest {
     fun `one tap on the other tier reprices at today's catalogue, and the note stops claiming the quoted rates`() {
         val copied = copy()
 
-        val switched = copied.withTier(RateTierV2.DEALER) { key -> mapOf(motor.key to 18_500.0)[key] }
+        val switched = copied.withTier(RateTierV2.DEALER) { key -> mapOf(motor.key to 14_000.0)[key] }
 
         assertEquals(1, switched.repriced)
         assertEquals(1, switched.kept)
-        assertEquals(18_500.0, switched.draft.lines.first { it.key == motor.key }.rate!!, 0.0)
+        assertEquals(14_000.0, switched.draft.lines.first { it.key == motor.key }.rate!!, 0.0)
         assertFalse(switched.draft.ratesAsQuoted)
     }
 
@@ -206,7 +206,7 @@ class QuotationCopyTest {
         val edit = QuotationEdit.draftFrom(record, copiedAt) { "ln_e${ids++}" }
         assertTrue(edit.ratesAsQuoted)
 
-        val switched = edit.withTier(RateTierV2.DEALER) { key -> mapOf(motor.key to 18_500.0)[key] }.draft
+        val switched = edit.withTier(RateTierV2.DEALER) { key -> mapOf(motor.key to 14_000.0)[key] }.draft
         assertFalse(switched.ratesAsQuoted)
         assertFalse("and back again is today's rates, not the quoted ones",
             switched.withTier(RateTierV2.CLIENT) { key -> mapOf(motor.key to 23_000.0)[key] }.draft.ratesAsQuoted)
@@ -220,7 +220,7 @@ class QuotationCopyTest {
 
         val line = more.lines.single { it.key == motor.key }
         assertEquals(3.0, line.quantity, 0.0)
-        assertEquals(22_200.0, line.rate!!, 0.0)
+        assertEquals(17_000.0, line.rate!!, 0.0)
     }
 
     @Test

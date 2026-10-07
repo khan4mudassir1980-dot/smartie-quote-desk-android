@@ -123,11 +123,11 @@ class QuoteAreaTest {
 
         assertEquals(113.5, QuoteArea.chargeableSqft(line), 0.0)
         assertEquals(227.0, QuoteArea.totalSqft(line), 0.0)
-        assertEquals(102_150.0, QuoteArea.amount(line, rate = 450.0), 0.0)
+        assertEquals(79_450.0, QuoteArea.amount(line, rate = 350.0), 0.0)
         // qty x rate really does equal the amount, which is the point.
         assertEquals(
-            QuoteArea.amount(line, rate = 450.0),
-            QuoteArea.totalSqft(line) * 450.0,
+            QuoteArea.amount(line, rate = 350.0),
+            QuoteArea.totalSqft(line) * 350.0,
             0.0
         )
     }
@@ -143,15 +143,15 @@ class QuoteAreaTest {
     fun `the line says its own working, for the card and for the PDF`() {
         val line = opening(3000.0, 3500.0, count = 2.0)
         assertEquals(
-            "3000 × 3500 mm = 113.5 sq ft × ₹450 × 2 nos",
-            QuoteArea.describe(line, rate = 450.0)
+            "3000 × 3500 mm = 113.5 sq ft × ₹350 × 2 nos",
+            QuoteArea.describe(line, rate = 350.0)
         )
     }
 
     @Test
     fun `the measurements are not digit-grouped, because a width is not a price`() {
         // `Money.formatQuantity` would render this opening as 3,000 x 3,500.
-        val described = QuoteArea.describe(opening(3000.0, 3500.0), rate = 450.0)
+        val described = QuoteArea.describe(opening(3000.0, 3500.0), rate = 350.0)
         assertTrue("grouped as a price: $described", described.startsWith("3000 × 3500 mm"))
     }
 

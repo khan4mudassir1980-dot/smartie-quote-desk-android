@@ -31,7 +31,7 @@ class QuoteLineEntryTest {
 
     @Test
     fun `a number typed with the grouping a person reads is still a number`() {
-        assertEquals(22200.0, QuoteLineEntry.number("22,200")!!, 0.0)
+        assertEquals(17000.0, QuoteLineEntry.number("17,000")!!, 0.0)
         assertEquals(1234.5, QuoteLineEntry.number(" 1,234.5 ")!!, 0.0)
     }
 
@@ -123,7 +123,7 @@ class QuoteLineEntryTest {
             width = "3000",
             height = "3500",
             count = "2",
-            rate = "450"
+            rate = "350"
         )
         assertNull(entry.refusal())
 
@@ -131,7 +131,7 @@ class QuoteLineEntryTest {
         // 113.5 chargeable sq ft per opening, two of them.
         assertEquals(227.0, line.quantity, 0.0)
         assertEquals(ProductUnit.AREA, line.unit)
-        assertEquals(102_150.0, line.amount!!, 0.0)
+        assertEquals(79_450.0, line.amount!!, 0.0)
     }
 
     @Test
@@ -141,7 +141,7 @@ class QuoteLineEntryTest {
             width = "3000",
             height = "3500",
             count = "2",
-            rate = "450",
+            rate = "350",
             minimumSqft = "120"
         ).addTo(QuoteDraft(id = "qd_1"), "ln_a").lines.single()
 
@@ -149,7 +149,7 @@ class QuoteLineEntryTest {
         assertEquals("3000", reopened.width)
         assertEquals("3500", reopened.height)
         assertEquals("2", reopened.count)
-        assertEquals("450", reopened.rate)
+        assertEquals("350", reopened.rate)
         assertEquals("120", reopened.minimumSqft)
         assertEquals(DimensionUnit.MM, reopened.unit)
     }
@@ -157,7 +157,7 @@ class QuoteLineEntryTest {
     @Test
     fun `correcting a measurement recomputes the quantity from the opening`() {
         val draft = AreaEntry(
-            title = "Rolling shutter", width = "3000", height = "3500", count = "2", rate = "450"
+            title = "Rolling shutter", width = "3000", height = "3500", count = "2", rate = "350"
         ).addTo(QuoteDraft(id = "qd_1"), "ln_a")
         val line = draft.lines.single()
 
@@ -175,7 +175,7 @@ class QuoteLineEntryTest {
         // repriced by a change of tier. Reopening the form to fix a width
         // must not do that to a line the catalogue prices.
         val draft = AreaEntry(
-            title = "Rolling shutter", width = "3000", height = "3500", count = "2", rate = "450"
+            title = "Rolling shutter", width = "3000", height = "3500", count = "2", rate = "350"
         ).addTo(QuoteDraft(id = "qd_1"), "ln_a", key = "rs|RS500")
         val line = draft.lines.single()
         assertTrue("a keyed area line starts catalogue-priced", !line.rateEdited)
@@ -193,7 +193,7 @@ class QuoteLineEntryTest {
     @Test
     fun `an opening with no minimum keeps none, rather than a zero`() {
         val line = AreaEntry(
-            title = "Shutter", width = "3000", height = "3500", rate = "450"
+            title = "Shutter", width = "3000", height = "3500", rate = "350"
         ).addTo(QuoteDraft(id = "qd_1"), "ln_a").lines.single()
 
         assertNull(line.area!!.minimumSqft)

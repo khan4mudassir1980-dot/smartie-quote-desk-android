@@ -126,8 +126,9 @@ object QuotationWrite {
      * **Empty, as V8C4 stores it.** `normLine` sets `u = l.u || ""` and the
      * transport line passes none. The `no` a PWA page prints beside it is
      * `qLabel`'s display fallback (`l.u || "no"`), never a stored value —
-     * which is where `3db056b`'s `"no"` came from, via the plan. The `lot`
-     * in `fixtures/quotations.json` is invented and moves with N5.12.
+     * which is where `3db056b`'s `"no"` came from, via the plan. The
+     * invented `lot` in `fixtures/quotations.json` was replaced by V8C4's own
+     * shape in N5.12.
      */
     const val TRANSPORT_UNIT = ""
 

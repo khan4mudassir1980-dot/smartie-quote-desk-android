@@ -41,15 +41,15 @@ class ProductEditRepositoryTest {
         name = "Sliding gate motor",
         unit = "each",
         gst = 18.0,
-        dealer = 18500.0,
-        client = 25900.0
+        dealer = 14000.0,
+        client = 23000.0
     )
 
     private val canonical = mapOf<String, Any?>(
         "id" to "gateMotors|SIE1000", "key" to "gateMotors|SIE1000",
         "group" to "gateMotors", "seedModel" to "SIE1000", "model" to "SIE1000",
         "name" to "Sliding gate motor", "unit" to "each", "gst" to 18.0,
-        "dealer" to 18500.0, "contractor" to null, "client" to 25900.0,
+        "dealer" to 14000.0, "contractor" to null, "client" to 23000.0,
         "categoryId" to "cat-sliding", "active" to true
     )
 
@@ -76,7 +76,7 @@ class ProductEditRepositoryTest {
 
     @Test
     fun `an unedited field is written from the fresh read, not from the open sheet`() = runTest {
-        // The sheet opened when the dealer rate was 18500 and somebody has
+        // The sheet opened when the dealer rate was 14000 and somebody has
         // since corrected it to 21000. Changing only the name must carry the
         // 21000.
         val store = storeOf("gateMotors__SIE1000" to canonical + ("dealer" to 21000.0))
@@ -146,7 +146,7 @@ class ProductEditRepositoryTest {
     fun `where the canonical document exists, its values win over the legacy one`() = runTest {
         val legacy = record.copy(documentId = "gateMotors|SIE1000")
         val store = storeOf(
-            "gateMotors|SIE1000" to canonical + ("dealer" to 18500.0),
+            "gateMotors|SIE1000" to canonical + ("dealer" to 14000.0),
             "gateMotors__SIE1000" to canonical + ("dealer" to 21000.0)
         )
         val repository = ProductEditRepository(store) { 1L }

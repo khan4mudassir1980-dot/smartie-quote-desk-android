@@ -25,16 +25,16 @@ import org.junit.Test
  *
  * | Step | Figure |
  * |---|---|
- * | Sliding gate motor, 2 × ₹22,200 | ₹44,400 |
- * | Rolling shutter, 3000 × 3500 mm = 113.02 → **113.5** sq ft × 2 nos × ₹450 | ₹1,02,150 |
- * | **Products** | **₹1,46,550** |
+ * | Sliding gate motor, 2 × ₹17,000 | ₹34,000 |
+ * | Rolling shutter, 3000 × 3500 mm = 113.02 → **113.5** sq ft × 2 nos × ₹350 | ₹79,450 |
+ * | **Products** | **₹1,13,450** |
  * | Installation, fixed | ₹2,000 |
- * | **Discount base** | **₹1,48,550** |
- * | 5% (₹7,427.50, HALF_UP) — exactly a Manager's cap of 5 | − ₹7,428 |
+ * | **Discount base** | **₹1,15,450** |
+ * | 5% (₹5,772.50, HALF_UP) — exactly a Manager's cap of 5 | − ₹5,773 |
  * | Transport, "Mumbai to Vadodara" | ₹1,500 |
- * | **Subtotal** | **₹1,42,622** |
- * | GST 18% (₹25,671.96) | + ₹25,672 |
- * | **Total** | **₹1,68,294** |
+ * | **Subtotal** | **₹1,11,177** |
+ * | GST 18% (₹20,011.86) | + ₹20,012 |
+ * | **Total** | **₹1,31,189** |
  *
  * Stored `staff` is displayed **Manager** and stored `worker` **Staff**.
  */
@@ -61,7 +61,7 @@ class QuotationWriteTest {
                 key = "gateMotors|SIE1000",
                 spec = "1000 kg",
                 quantity = 2.0,
-                rate = 22_200.0,
+                rate = 17_000.0,
                 tier = RateTierV2.CLIENT
             )
         ),
@@ -71,7 +71,7 @@ class QuotationWriteTest {
         installation = Installation(InstallationMode.FIXED, 2_000.0),
         discount = Discount(DiscountKind.PERCENT, 5.0),
         gstPercent = 18.0
-    ).addArea(id = "ln_shutter", area = shutter, rate = 450.0, title = "Rolling shutter")
+    ).addArea(id = "ln_shutter", area = shutter, rate = 350.0, title = "Rolling shutter")
 
     private fun plan(
         draft: QuoteDraft = ready,
@@ -132,14 +132,14 @@ class QuotationWriteTest {
         val write = write(plan())
         val q = write.quotation
 
-        assertEquals(142_622.0, q["subtotal"])
-        assertEquals(168_294.0, q["total"])
+        assertEquals(111_177.0, q["subtotal"])
+        assertEquals(131_189.0, q["total"])
         assertEquals(
             mapOf("mode" to "fixed", "rate" to 2_000.0, "amt" to 2_000.0, "basis" to 0.0),
             q["install"]
         )
-        assertEquals(mapOf("kind" to "pct", "value" to 5.0, "amt" to 7_428.0), q["disc"])
-        assertEquals(148_550.0, q["discBase"])
+        assertEquals(mapOf("kind" to "pct", "value" to 5.0, "amt" to 5_773.0), q["disc"])
+        assertEquals(115_450.0, q["discBase"])
 
         // `discountOk()`: the base is bounded by `subtotal + disc.amt`, and
         // with transport on the quotation it sits exactly transport below it.
@@ -288,7 +288,7 @@ class QuotationWriteTest {
     fun `a Manager past the cap is refused with the figure they may have`() {
         val tenPercent = ready.copy(discount = Discount(DiscountKind.PERCENT, 10.0))
         assertEquals(
-            QuotationPlan.Refused(QuoteMath.overTheCap(5.0, 7_428.0)),
+            QuotationPlan.Refused(QuoteMath.overTheCap(5.0, 5_773.0)),
             plan(draft = tenPercent)
         )
     }
@@ -304,7 +304,7 @@ class QuotationWriteTest {
     fun `an Owner is uncapped`() {
         val tenPercent = ready.copy(discount = Discount(DiscountKind.PERCENT, 10.0))
         val q = write(plan(draft = tenPercent, member = owner)).quotation
-        assertEquals(14_855.0, q.child("disc")["amt"])
+        assertEquals(11_545.0, q.child("disc")["amt"])
     }
 
     // --- who it is for ----------------------------------------------------------------------
@@ -437,7 +437,7 @@ class QuotationWriteTest {
         assertNull(area["k"])
         assertEquals(true, area["manual"])
         // `origRate` defaults to the rate, as `normLine` defaults it.
-        assertEquals(22_200.0, motor["origRate"])
+        assertEquals(17_000.0, motor["origRate"])
     }
 
     @Test
@@ -453,8 +453,8 @@ class QuotationWriteTest {
 
         assertEquals("Rolling shutter", area["t"])
         assertEquals(227.0, area["qty"])
-        assertEquals(450.0, area["rate"])
-        assertEquals(102_150.0, area["amt"])
+        assertEquals(350.0, area["rate"])
+        assertEquals(79_450.0, area["amt"])
         assertEquals("per sq ft", area["u"])
         // The working, in the field V8C4 prints and keeps.
         assertEquals("3000 × 3500 mm = 113.5 sq ft × 2 nos", area["s"])
@@ -480,7 +480,7 @@ class QuotationWriteTest {
         assertNull(read.lines[0].geometry)
         assertNull(read.lines[2].geometry)
         // The money never depended on it.
-        assertEquals(102_150.0, read.lines[1].amount, 0.0)
+        assertEquals(79_450.0, read.lines[1].amount, 0.0)
     }
 
     @Test
@@ -489,7 +489,7 @@ class QuotationWriteTest {
         // as a plain line; it never fills in the missing half.
         val stored = mapOf<String, Any?>(
             "lines" to listOf(
-                mapOf("t" to "Rolling shutter", "u" to "per sq ft", "qty" to 227, "rate" to 450, "amt" to 102150, "w" to 3000, "h" to 3500)
+                mapOf("t" to "Rolling shutter", "u" to "per sq ft", "qty" to 227, "rate" to 350, "amt" to 79450, "w" to 3000, "h" to 3500)
             )
         )
         assertNull(DocData("q_x", stored).toQuotationRecord().lines.single().geometry)

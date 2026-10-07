@@ -28,9 +28,9 @@ class StockEntryTest {
         unit = unit,
         categoryId = categoryId,
         gst = 18.0,
-        dealer = 18500.0,
-        contractor = 22200.0,
-        client = 25900.0
+        dealer = 14000.0,
+        contractor = 17000.0,
+        client = 23000.0
     )
 
     // --- from the catalogue ----------------------------------------------
@@ -71,7 +71,7 @@ class StockEntryTest {
     fun `no price or tax field is carried across from the catalogue`() {
         val entry = StockEntry.fromProduct(product())
         val text = entry.toString()
-        for (forbidden in listOf("18500", "22200", "25900")) {
+        for (forbidden in listOf("14000", "17000", "23000")) {
             assertTrue("A price leaked into the stock entry: $forbidden", !text.contains(forbidden))
         }
     }

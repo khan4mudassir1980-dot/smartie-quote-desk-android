@@ -49,7 +49,7 @@ class QuotationEditTest {
         lines = listOf(
             DraftLine(
                 id = "ln_motor", title = "Sliding gate motor", key = "gateMotors|SIE1000",
-                spec = "1000 kg", quantity = 2.0, rate = 22_200.0, tier = RateTierV2.CLIENT
+                spec = "1000 kg", quantity = 2.0, rate = 17_000.0, tier = RateTierV2.CLIENT
             )
         ),
         party = QuotationPartySnapshot(name = "Walk-in Builders", site = "Plot 7", phone = "9876543210"),
@@ -58,7 +58,7 @@ class QuotationEditTest {
         installation = Installation(InstallationMode.FIXED, 2_000.0),
         discount = Discount(DiscountKind.PERCENT, 5.0),
         gstPercent = 18.0
-    ).addArea(id = "ln_shutter", area = shutter, rate = 450.0, title = "Rolling shutter")
+    ).addArea(id = "ln_shutter", area = shutter, rate = 350.0, title = "Rolling shutter")
 
     /** Issue [draft] as [member] and hand back the stored map the plan wrote. */
     private fun issued(draft: QuoteDraft = ready, member: Member = manager, cap: QuotingRecord = capOfTen): Map<String, Any?> {
@@ -114,8 +114,8 @@ class QuotationEditTest {
         assertEquals(1_500.0, draft.transport, 0.0)
         assertEquals("Mumbai to Vadodara", draft.transportNote)
         assertFalse(draft.lines.any { it.title == QuotationWrite.TRANSPORT_TITLE })
-        assertEquals(148_550.0, draft.totals().discountBase, 0.0)
-        assertEquals(7_428.0, draft.totals().discount, 0.0)
+        assertEquals(115_450.0, draft.totals().discountBase, 0.0)
+        assertEquals(5_773.0, draft.totals().discount, 0.0)
     }
 
     @Test
@@ -126,11 +126,11 @@ class QuotationEditTest {
             "q_v8c4",
             mapOf(
                 "id" to "q_v8c4", "no" to "SIE/QD/2025-26/010", "byUid" to "u_m", "tier" to "dealer",
-                "gst" to true, "gstPct" to 18.0, "subtotal" to 24_700.0, "total" to 29_146.0,
+                "gst" to true, "gstPct" to 18.0, "subtotal" to 19_500.0, "total" to 23_010.0,
                 "party" to mapOf("name" to "Sunrise Constructions"),
                 "lines" to listOf(
-                    mapOf("t" to "Sliding gate motor", "s" to "", "u" to "each", "qty" to 1.0, "rate" to 22_200.0,
-                        "origRate" to 22_200.0, "k" to "gateMotors|SIE1000", "manual" to false, "amt" to 22_200.0),
+                    mapOf("t" to "Sliding gate motor", "s" to "", "u" to "each", "qty" to 1.0, "rate" to 17_000.0,
+                        "origRate" to 17_000.0, "k" to "gateMotors|SIE1000", "manual" to false, "amt" to 17_000.0),
                     mapOf("t" to "Transportation", "s" to "Pune", "u" to "", "qty" to 1.0, "rate" to 2_500.0,
                         "origRate" to 2_500.0, "k" to null, "manual" to false, "amt" to 2_500.0)
                 )
@@ -169,7 +169,7 @@ class QuotationEditTest {
         ).addArea(
             id = "ln_small",
             area = AreaLine(width = 600.0, height = 600.0, count = 3.0, minimumSqft = 10.0),
-            rate = 450.0,
+            rate = 350.0,
             title = "Rolling shutter"
         )
         val stored = issued(small)
@@ -212,7 +212,7 @@ class QuotationEditTest {
     @Test
     fun `a rate V8C4 had typed by hand comes back typed by hand`() {
         val record = read(issued()).let { r ->
-            r.copy(lines = r.lines.map { if (it.key == "gateMotors|SIE1000") it.copy(rate = 20_000.0, originalRate = 22_200.0) else it })
+            r.copy(lines = r.lines.map { if (it.key == "gateMotors|SIE1000") it.copy(rate = 20_000.0, originalRate = 17_000.0) else it })
         }
         val lines = open(record).lines
 

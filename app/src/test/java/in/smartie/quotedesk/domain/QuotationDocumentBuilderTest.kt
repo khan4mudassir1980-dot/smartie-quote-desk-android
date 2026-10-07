@@ -69,7 +69,7 @@ class QuotationDocumentBuilderTest {
 
     private val catalogueLine = QuotationLineRecord(
         title = "TM-1 — Test gate motor (old name)", spec = "Synthetic spec", unit = "each",
-        quantity = 1.0, rate = 44_400.0, key = "gates|TM-1", amount = 44_400.0
+        quantity = 1.0, rate = 34_000.0, key = "gates|TM-1", amount = 34_000.0
     )
     private val areaLine = QuotationLineRecord(
         title = "Test shutter", spec = "2 × 10 ft × 6.025 ft", unit = "sqft",
@@ -83,7 +83,7 @@ class QuotationDocumentBuilderTest {
         quantity = 1.0, rate = 1_500.0, amount = 1_500.0
     )
 
-    /** Products 58,450; installation 1,500; discount 5,845; carriage 1,500; GST 18%. */
+    /** Products 48,050; installation 1,500; discount 4,805; carriage 1,500; GST 18%. */
     private val record = QuotationRecord(
         id = "q_test",
         number = "TEST/QD/2026-27/001",
@@ -107,11 +107,11 @@ class QuotationDocumentBuilderTest {
         lines = listOf(catalogueLine, areaLine, carriage, manualLine),
         gstEnabled = true,
         gstPercent = 18.0,
-        subtotal = 55_605.0,
-        total = 65_614.0,
+        subtotal = 46_245.0,
+        total = 54_569.0,
         installation = QuotationInstallationRecord(mode = "fixed", rate = 1_500.0, amount = 1_500.0),
-        discount = QuotationDiscountRecord(kind = "pct", value = 10.0, amount = 5_845.0),
-        discountBase = 58_450.0
+        discount = QuotationDiscountRecord(kind = "pct", value = 10.0, amount = 4_805.0),
+        discountBase = 48_050.0
     )
 
     private fun build(
@@ -164,7 +164,7 @@ class QuotationDocumentBuilderTest {
         )
         assertEquals(
             listOf(
-                ItemRow(1, "TM-1", "Test gate motor", "Synthetic spec", "1", "₹44,400", "₹44,400"),
+                ItemRow(1, "TM-1", "Test gate motor", "Synthetic spec", "1", "₹34,000", "₹34,000"),
                 ItemRow(2, "", "Test shutter", "2 × 10 ft × 6.025 ft", "120.5 sqft", "₹100", "₹12,050"),
                 ItemRow(3, B.MANUAL, "Test site visit", "", "2", "₹1,000", "₹2,000")
             ),
@@ -172,17 +172,17 @@ class QuotationDocumentBuilderTest {
         )
         assertEquals(
             listOf(
-                TotalRow(B.PRODUCTS_SUBTOTAL, "₹58,450"),
+                TotalRow(B.PRODUCTS_SUBTOTAL, "₹48,050"),
                 TotalRow(B.INSTALLATION, "₹1,500"),
-                TotalRow(B.DISCOUNT, "- ₹5,845"),
+                TotalRow(B.DISCOUNT, "- ₹4,805"),
                 TotalRow(B.TRANSPORTATION, "₹1,500", note = "Test depot to site"),
-                TotalRow(B.SUBTOTAL, "₹55,605"),
-                TotalRow("GST 18%", "₹10,009"),
-                TotalRow(B.GRAND_TOTAL, "₹65,614", emphasis = true)
+                TotalRow(B.SUBTOTAL, "₹46,245"),
+                TotalRow("GST 18%", "₹8,324"),
+                TotalRow(B.GRAND_TOTAL, "₹54,569", emphasis = true)
             ),
             doc.totals
         )
-        assertEquals("Sixty-five thousand six hundred and fourteen rupees only", doc.amountInWords)
+        assertEquals("Fifty-four thousand five hundred and sixty-nine rupees only", doc.amountInWords)
         assertEquals(
             listOf(
                 "Rates hold for 15 days from the date of this quotation.",
@@ -379,7 +379,7 @@ class QuotationDocumentBuilderTest {
         assertEquals("₹1,000", totals[B.SUBTOTAL])
         assertEquals("₹180", totals["GST 18%"])
         assertEquals("₹1,180", totals[B.GRAND_TOTAL])
-        assertEquals("₹58,450", totals[B.PRODUCTS_SUBTOTAL])
+        assertEquals("₹48,050", totals[B.PRODUCTS_SUBTOTAL])
         assertEquals("One thousand one hundred and eighty rupees only", build(odd).amountInWords)
     }
 
@@ -390,16 +390,16 @@ class QuotationDocumentBuilderTest {
             installation = null,
             discount = null,
             gstEnabled = false,
-            subtotal = 44_400.0,
-            total = 44_400.0
+            subtotal = 34_000.0,
+            total = 34_000.0
         )
         assertEquals(
             listOf(
-                TotalRow(B.PRODUCTS_SUBTOTAL, "₹44,400"),
+                TotalRow(B.PRODUCTS_SUBTOTAL, "₹34,000"),
                 TotalRow(B.INSTALLATION_EXTRA, ""),
-                TotalRow(B.SUBTOTAL, "₹44,400"),
+                TotalRow(B.SUBTOTAL, "₹34,000"),
                 TotalRow(B.GST_NOT_INCLUDED, ""),
-                TotalRow(B.GRAND_TOTAL, "₹44,400", emphasis = true)
+                TotalRow(B.GRAND_TOTAL, "₹34,000", emphasis = true)
             ),
             build(plain).totals
         )

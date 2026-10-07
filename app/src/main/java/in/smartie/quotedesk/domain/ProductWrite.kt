@@ -344,7 +344,7 @@ object ProductWrite {
      * Whether a stored price can be written back without inventing anything.
      *
      * Absent, `null` and the PWA's `∅` marker all mean "not set" and all
-     * become `null`. A formatted number like `"1,250.50"` is read. Anything
+     * become `null`. A formatted number like `"1,234.50"` is read. Anything
      * else is refused, because writing it back as "not set" would wipe a rate
      * nobody asked to change.
      */

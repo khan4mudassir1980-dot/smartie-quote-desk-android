@@ -34,7 +34,7 @@ class QuoteDraftRefusalTest {
         partyId = "c_1",
         party = party,
         gstPercent = 18.0
-    ).addManual(id = "ln_1", title = "Sliding gate motor", quantity = 2.0, rate = 22200.0)
+    ).addManual(id = "ln_1", title = "Sliding gate motor", quantity = 2.0, rate = 17000.0)
 
     private val uncapped = QuoteMath.NO_CAP
 
@@ -73,7 +73,7 @@ class QuoteDraftRefusalTest {
     @Test
     fun `a discount equal to the whole quotation leaves nothing, and one rupee more is refused`() {
         val base = ready.discountBase
-        assertEquals(44400.0, base, 0.0)
+        assertEquals(34000.0, base, 0.0)
 
         val exact = ready.copy(discount = Discount(DiscountKind.RUPEES, base))
         assertNull(exact.refusal(uncapped))
@@ -259,12 +259,12 @@ class QuoteDraftRefusalTest {
             discount = Discount(DiscountKind.PERCENT, 10.0)
         )
         val totals = draft.totals()
-        assertEquals(44400.0, totals.discountBase, 0.0)
-        assertEquals(4440.0, totals.discount, 0.0)
-        // 44400 - 4440 + 2500: the discount stopped before the carriage.
-        assertEquals(42460.0, totals.subtotal, 0.0)
+        assertEquals(34000.0, totals.discountBase, 0.0)
+        assertEquals(3400.0, totals.discount, 0.0)
+        // 34000 - 3400 + 2500: the discount stopped before the carriage.
+        assertEquals(33100.0, totals.subtotal, 0.0)
         // 18% of the lot, transport included.
-        assertEquals(7643.0, totals.gst, 0.0)
-        assertEquals(50103.0, totals.total, 0.0)
+        assertEquals(5958.0, totals.gst, 0.0)
+        assertEquals(39058.0, totals.total, 0.0)
     }
 }

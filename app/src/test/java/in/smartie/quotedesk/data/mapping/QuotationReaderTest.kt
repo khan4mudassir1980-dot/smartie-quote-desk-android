@@ -30,8 +30,8 @@ class QuotationReaderTest {
             "tier" to "client",
             "gst" to true,
             "gstPct" to 18.0,
-            "subtotal" to 42_960.0,
-            "total" to 50_693.0
+            "subtotal" to 33_600.0,
+            "total" to 39_648.0
         ) + fields
     ).toQuotationRecord()
 
@@ -40,16 +40,16 @@ class QuotationReaderTest {
         // R1: without this an edit's first save drops both, silently.
         val record = quotation(
             "install" to mapOf("mode" to "door", "rate" to 500.0, "amt" to 2_000.0, "basis" to 4.0),
-            "disc" to mapOf("kind" to "pct", "value" to 10.0, "amt" to 4_440.0),
-            "discBase" to 44_400.0
+            "disc" to mapOf("kind" to "pct", "value" to 10.0, "amt" to 3_400.0),
+            "discBase" to 34_000.0
         )
 
         assertEquals(
             QuotationInstallationRecord(mode = "door", rate = 500.0, amount = 2_000.0, basis = 4.0),
             record.installation
         )
-        assertEquals(QuotationDiscountRecord(kind = "pct", value = 10.0, amount = 4_440.0), record.discount)
-        assertEquals(44_400.0, record.discountBase)
+        assertEquals(QuotationDiscountRecord(kind = "pct", value = 10.0, amount = 3_400.0), record.discount)
+        assertEquals(34_000.0, record.discountBase)
     }
 
     @Test

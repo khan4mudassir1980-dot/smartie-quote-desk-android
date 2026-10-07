@@ -23,7 +23,7 @@ enum class DimensionUnit(val wireValue: String, val label: String) {
 /**
  * One opening, priced by the square foot rather than by the piece.
  *
- * New in N5: V8C4 has no area pricing at all. A shutter quoted at ₹450 a
+ * New in N5: V8C4 has no area pricing at all. A shutter quoted at ₹350 a
  * square foot is not two of anything, so `quantity × rate` is the wrong
  * question — what is charged is the opening's area, rounded the way the trade
  * rounds it, times however many openings there are.
@@ -106,7 +106,7 @@ object QuoteArea {
         QuoteMath.rupees(totalSqft(line) * rate)
 
     /**
-     * `3000 × 3500 mm = 113.5 sq ft × ₹450 × 2 nos`.
+     * `3000 × 3500 mm = 113.5 sq ft × ₹350 × 2 nos`.
      *
      * Written into the line's `s` (spec) field as well as shown on the card,
      * because V8C4 already prints that field — so the PWA shows the working

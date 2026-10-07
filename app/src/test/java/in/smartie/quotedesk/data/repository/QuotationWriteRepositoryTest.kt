@@ -363,7 +363,7 @@ class QuotationWriteRepositoryTest {
                 // **The rule itself is proved by the emulator**, not by this:
                 // `firestore/tests/quotation.test.js`, "with no quoting
                 // document at all, a Manager gets no discount" — a Manager's
-                // create with `disc.amt` 2220 and no quoting document fails,
+                // create with `disc.amt` 1700 and no quoting document fails,
                 // and the same quotation without a discount succeeds. This
                 // fake only models what that test proves (rule 6), and
                 // models it for a Manager, the only author this test uses;

@@ -368,9 +368,9 @@ class QuoteDraftsTest {
 
         val opening = AreaLine(width = 3000.0, height = 3500.0)
         val storedArea = QuoteDraft(id = "qd_1")
-            .addArea("ln_c", opening, 450.0, "Shutter", key = "rs|RS500")
+            .addArea("ln_c", opening, 350.0, "Shutter", key = "rs|RS500")
         val typedArea = QuoteDraft()
-            .addArea("ln_d", opening, 450.0, "Shutter", key = "rs|RS500")
+            .addArea("ln_d", opening, 350.0, "Shutter", key = "rs|RS500")
         assertEquals(2, QuoteDrafts.resume(typedArea, storedArea, "qd_1").lineCount)
     }
 

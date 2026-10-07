@@ -165,8 +165,8 @@ class QuoteDraftTest {
         val wide = AreaLine(width = 3000.0, height = 3500.0)
         val narrow = AreaLine(width = 1200.0, height = 2100.0)
         val draft = QuoteDraft()
-            .addArea(id = "ln_w", area = wide, rate = 450.0, title = "Shutter", key = motor.key)
-            .addArea(id = "ln_n", area = narrow, rate = 450.0, title = "Shutter", key = motor.key)
+            .addArea(id = "ln_w", area = wide, rate = 350.0, title = "Shutter", key = motor.key)
+            .addArea(id = "ln_n", area = narrow, rate = 350.0, title = "Shutter", key = motor.key)
 
         assertEquals(2, draft.lineCount)
         assertEquals(113.5, draft.line("ln_w")!!.quantity, 0.0)
@@ -200,7 +200,7 @@ class QuoteDraftTest {
             .addArea(
                 id = "ln_area",
                 area = AreaLine(width = 3000.0, height = 3500.0),
-                rate = 450.0,
+                rate = 350.0,
                 title = "Shutter",
                 key = motor.key
             )
@@ -228,18 +228,18 @@ class QuoteDraftTest {
         val draft = QuoteDraft().addArea(
             id = "ln_x",
             area = AreaLine(width = 3000.0, height = 3500.0, count = 2.0),
-            rate = 450.0,
+            rate = 350.0,
             title = "Shutter",
             key = motor.key
         )
         val line = draft.lines.single()
         assertEquals(227.0, line.quantity, 0.0)
-        assertEquals(102150.0, line.amount!!, 0.0)
+        assertEquals(79450.0, line.amount!!, 0.0)
 
         val record = line.toRecord()!!
         assertEquals(227.0, record.quantity, 0.0)
-        assertEquals(450.0, record.rate, 0.0)
-        assertEquals(102150.0, record.amount, 0.0)
+        assertEquals(350.0, record.rate, 0.0)
+        assertEquals(79450.0, record.amount, 0.0)
         assertEquals(ProductUnit.AREA, record.unit)
         // The opening travels in the spec, without the rate, so an edited rate
         // cannot leave a contradiction inside the sentence.

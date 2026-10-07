@@ -9,8 +9,8 @@ class MoneyTest {
     fun `amounts use Indian digit grouping`() {
         assertEquals("1,23,456.50", Money.formatAmount(123456.5))
         assertEquals("999.00", Money.formatAmount(999.0))
-        assertEquals("52,982.00", Money.formatAmount(52982.0))
-        assertEquals("₹44,400.00", Money.formatRupees(44400.0))
+        assertEquals("40,710.00", Money.formatAmount(40710.0))
+        assertEquals("₹34,000.00", Money.formatRupees(34000.0))
     }
 
     @Test

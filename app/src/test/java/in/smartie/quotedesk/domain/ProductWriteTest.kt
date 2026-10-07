@@ -40,8 +40,8 @@ class ProductWriteTest {
         name = "Sliding gate motor 1000 kg",
         unit = "each",
         gst = 18.0,
-        dealer = 18500.0,
-        client = 25900.0
+        dealer = 14000.0,
+        client = 23000.0
     )
 
     /** What the document actually holds, as the transaction re-read it. */
@@ -54,9 +54,9 @@ class ProductWriteTest {
         "name" to "Sliding gate motor 1000 kg",
         "unit" to "each",
         "gst" to 18.0,
-        "dealer" to 18500.0,
+        "dealer" to 14000.0,
         "contractor" to null,
-        "client" to 25900.0,
+        "client" to 23000.0,
         "categoryId" to "cat-sliding",
         "active" to true
     ) + pairs
@@ -82,9 +82,9 @@ class ProductWriteTest {
     @Test
     fun `a hand-edited rate survives a unit change`() {
         // The whole reason no import is run to correct the units. The sheet
-        // was opened when the dealer rate was 18500; somebody has since
+        // was opened when the dealer rate was 14000; somebody has since
         // corrected it to 21000 on another phone. Changing only the unit must
-        // carry the 21000, not the 18500 this screen still shows, and above
+        // carry the 21000, not the 14000 this screen still shows, and above
         // all not a seed figure.
         val fields = written(
             plan(
@@ -105,14 +105,14 @@ class ProductWriteTest {
         val openedOn = ProductWrite.draftOf(perMetre)
         val fields = written(
             plan(
-                draft = openedOn.copy(dealer = "450"),
+                draft = openedOn.copy(dealer = "400"),
                 stored = stored("unit" to "per m"),
                 on = perMetre,
                 loadedAs = openedOn
             )
         )
         assertEquals("per m", fields["unit"])
-        assertEquals(450.0, fields["dealer"])
+        assertEquals(400.0, fields["dealer"])
     }
 
     @Test
@@ -141,9 +141,9 @@ class ProductWriteTest {
     @Test
     fun `a stored contractor rate is carried through unchanged and is not editable`() {
         val fields = written(
-            plan(draft = loaded.copy(dealer = "19000"), stored = stored("contractor" to 22200.0))
+            plan(draft = loaded.copy(dealer = "19000"), stored = stored("contractor" to 17000.0))
         )
-        assertEquals(22200.0, fields["contractor"])
+        assertEquals(17000.0, fields["contractor"])
     }
 
     @Test
@@ -185,9 +185,9 @@ class ProductWriteTest {
     @Test
     fun `a price stored as a formatted string is repaired to its number`() {
         val fields = written(
-            plan(draft = loaded.copy(name = "Wheel"), stored = stored("dealer" to "1,250.50"))
+            plan(draft = loaded.copy(name = "Wheel"), stored = stored("dealer" to "1,234.50"))
         )
-        assertEquals(1250.5, fields["dealer"])
+        assertEquals(1234.5, fields["dealer"])
     }
 
     @Test

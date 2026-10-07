@@ -30,8 +30,8 @@ class QuoteDraftCodecTest {
                 spec = "24V DC, 1000 kg",
                 unit = "each",
                 quantity = 2.0,
-                rate = 1250.5,
-                originalRate = 1250.5,
+                rate = 1234.5,
+                originalRate = 1234.5,
                 tier = RateTierV2.CONTRACTOR,
             ),
             DraftLine(
@@ -65,8 +65,8 @@ class QuoteDraftCodecTest {
                 number = "SIE/QD/2025-26/009",
                 revision = 3,
                 tier = RateTierV2.CONTRACTOR,
-                discountAmount = 4_440.0,
-                discountBase = 44_400.0
+                discountAmount = 3_400.0,
+                discountBase = 34_000.0
             ),
             copiedFrom = CopyOrigin("SIE/QD/2025-26/007", 1_712_000_000_000L)
         )
@@ -187,7 +187,7 @@ class QuoteDraftCodecTest {
             "v1\u001fdealer",
             listOf(
                 "gate|SIE1000", "SIE1000", "24V DC", "each",
-                "2.0", "1250.5", "1250.5", "dealer", "0",
+                "2.0", "1234.5", "1234.5", "dealer", "0",
             ).joinToString("\u001f"),
         ).joinToString("\u001e")
 
@@ -196,7 +196,7 @@ class QuoteDraftCodecTest {
         val line = restored.lines.single()
         assertEquals("gate|SIE1000", line.key)
         assertEquals(2.0, line.quantity, 0.0)
-        assertEquals(1250.5, line.rate!!, 0.0)
+        assertEquals(1234.5, line.rate!!, 0.0)
         // It had no id, so one is derived from the product key it did carry.
         assertEquals("${QuoteDraftCodec.V1_ID_PREFIX}gate|SIE1000", line.id)
         assertFalse(line.manual)
@@ -224,7 +224,7 @@ class QuoteDraftCodecTest {
     fun `an opening survives with every part of it`() {
         val area = AreaLine(width = 3000.0, height = 3500.0, count = 2.0, minimumSqft = 10.0)
         val drafted = QuoteDraft().addArea(
-            id = "ln_x", area = area, rate = 450.0, title = "Rolling shutter", key = "rs|RS500"
+            id = "ln_x", area = area, rate = 350.0, title = "Rolling shutter", key = "rs|RS500"
         )
         val line = roundTrip(drafted).lines.single()
         assertNotNull(line.area)
@@ -233,7 +233,7 @@ class QuoteDraftCodecTest {
         // The stored quantity is the total chargeable area, so the PWA prints
         // the line right: 113.5 per door, two doors.
         assertEquals(227.0, line.quantity, 0.0)
-        assertEquals(450.0, line.rate!!, 0.0)
+        assertEquals(350.0, line.rate!!, 0.0)
     }
 
     @Test

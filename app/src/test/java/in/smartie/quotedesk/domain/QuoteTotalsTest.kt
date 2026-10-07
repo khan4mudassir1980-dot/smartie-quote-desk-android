@@ -145,7 +145,7 @@ class QuoteTotalsTest {
         listOf(0.0, 1.0, 2500.0, 99_999.0).forEach { transport ->
             val totals = QuoteMath.totals(
                 QuoteCharges(
-                    products = 44_400.33,
+                    products = 34_000.33,
                     installation = Installation(InstallationMode.PER_DOOR, rate = 1500.0, basis = 2.0),
                     discount = Discount(DiscountKind.PERCENT, 10.0),
                     transport = transport
@@ -211,12 +211,12 @@ class QuoteTotalsTest {
 
     @Test
     fun `A - a percentage discount, installation per door, transport and GST`() {
-        val motors = 2 * 22_200.0
+        val motors = 2 * 17_000.0
         val shutters = QuoteArea.amount(
             AreaLine(3000.0, 3500.0, DimensionUnit.MM, count = 2.0),
-            rate = 450.0
+            rate = 350.0
         )
-        assertEquals(102_150.0, shutters, 0.0)
+        assertEquals(79_450.0, shutters, 0.0)
 
         val totals = QuoteMath.totals(
             QuoteCharges(
@@ -229,22 +229,22 @@ class QuoteTotalsTest {
             )
         )
 
-        assertEquals(146_550.0, totals.products, 0.0)
+        assertEquals(113_450.0, totals.products, 0.0)
         assertEquals(3000.0, totals.installation, 0.0)
-        assertEquals(149_550.0, totals.discountBase, 0.0)
-        assertEquals(14_955.0, totals.discount, 0.0)
+        assertEquals(116_450.0, totals.discountBase, 0.0)
+        assertEquals(11_645.0, totals.discount, 0.0)
         assertEquals(2500.0, totals.transport, 0.0)
-        assertEquals(137_095.0, totals.subtotal, 0.0)
-        assertEquals(24_677.0, totals.gst, 0.0)
-        assertEquals(161_772.0, totals.total, 0.0)
+        assertEquals(107_305.0, totals.subtotal, 0.0)
+        assertEquals(19_315.0, totals.gst, 0.0)
+        assertEquals(126_620.0, totals.total, 0.0)
     }
 
     @Test
     fun `B - a rupee discount, installation as a percentage of products`() {
         val totals = QuoteMath.totals(
             QuoteCharges(
-                products = 120 * 145.0 + 2000.0,
-                installation = Installation(InstallationMode.PERCENT, rate = 8.0, basis = 19_400.0),
+                products = 120 * 100.0 + 2000.0,
+                installation = Installation(InstallationMode.PERCENT, rate = 8.0, basis = 14_000.0),
                 discount = Discount(DiscountKind.RUPEES, 2000.0),
                 transport = 800.0,
                 gstEnabled = true,
@@ -252,13 +252,13 @@ class QuoteTotalsTest {
             )
         )
 
-        assertEquals(19_400.0, totals.products, 0.0)
-        assertEquals(1552.0, totals.installation, 0.0)
-        assertEquals(20_952.0, totals.discountBase, 0.0)
+        assertEquals(14_000.0, totals.products, 0.0)
+        assertEquals(1120.0, totals.installation, 0.0)
+        assertEquals(15_120.0, totals.discountBase, 0.0)
         assertEquals(2000.0, totals.discount, 0.0)
-        assertEquals(19_752.0, totals.subtotal, 0.0)
-        assertEquals(3555.0, totals.gst, 0.0)
-        assertEquals(23_307.0, totals.total, 0.0)
+        assertEquals(13_920.0, totals.subtotal, 0.0)
+        assertEquals(2506.0, totals.gst, 0.0)
+        assertEquals(16_426.0, totals.total, 0.0)
     }
 
     @Test

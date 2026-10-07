@@ -106,6 +106,20 @@ class QuotationListScreenTest {
     }
 
     @Test
+    fun `the list no longer sends anybody to the PWA to issue a quotation`() {
+        // N5.12 took the N5 banner off the Quotations tab: it said "View only
+        // · rebuilt in phase N5" and "Keep using the PWA to issue
+        // quotations", which stopped being true with N5.11. The tab and More
+        // → Quotation history are this one composable, so this holds for both.
+        screen()
+
+        assertTrue("the witness: the list did draw", shows("SIE/QD/2025-26/007"))
+        assertFalse(shows("Keep using the PWA"))
+        assertFalse(shows("View only"))
+        assertFalse(shows("rebuilt in phase"))
+    }
+
+    @Test
     fun `an empty database says so rather than looking broken`() {
         screen(records = emptyList())
         assertTrue(shows(NO_QUOTATIONS))

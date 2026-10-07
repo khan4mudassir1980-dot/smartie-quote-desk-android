@@ -18,8 +18,10 @@ import `in`.smartie.quotedesk.ui.quotations.QuotationsViewModel
  * the defect N4.4 found on the Purchase board, and keeping one implementation
  * is how it cannot happen again.
  *
- * The banner stays until the cutover batch: issuing a quotation is still the
- * PWA's job, and the tab says so.
+ * No banner since N5.12. The N5 one said "Keep using the PWA to issue
+ * quotations", which stopped being true when N5.11 brought the PDF, WhatsApp
+ * and Print; when this app takes over from the PWA is `docs/N5-cutover.md`'s
+ * subject, not the tab's.
  */
 @Composable
 fun QuotationsScreen(
@@ -43,7 +45,6 @@ fun QuotationsScreen(
         records = quotations,
         viewer = data.member,
         loading = quotations.isEmpty(),
-        banner = true,
         cancelling = cancelling,
         cancelFailure = cancelFailure,
         copyStart = copyStart,

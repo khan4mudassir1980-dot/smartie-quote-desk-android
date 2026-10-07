@@ -22,7 +22,6 @@ import `in`.smartie.quotedesk.domain.PdfAction
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.QuotationHistory
 import `in`.smartie.quotedesk.ui.components.EmptyState
-import `in`.smartie.quotedesk.ui.components.InDevelopmentBanner
 import `in`.smartie.quotedesk.ui.components.ListRow
 import `in`.smartie.quotedesk.ui.components.Tag
 import `in`.smartie.quotedesk.ui.components.TagTone
@@ -48,12 +47,12 @@ data class QuotationActions(
  * Every quotation this person may look back at, newest first, and a way into
  * each one.
  *
- * Shared by the Quotations tab and by More → Quotation history. The tab adds
- * the N5 banner; nothing else differs, and **that is deliberate**. N4.4 found
- * the Purchase board and the Purchase history screen answering different
- * questions about who may see what, which showed a Staff account somebody
- * else's delivery. Two lists of the same documents must apply the same filter
- * or one of them is a leak.
+ * Shared by the Quotations tab and by More → Quotation history, and nothing
+ * differs between them: **that is deliberate**. N4.4 found the Purchase board
+ * and the Purchase history screen answering different questions about who
+ * may see what, which showed a Staff account somebody else's delivery. Two
+ * lists of the same documents must apply the same filter or one of them is a
+ * leak. (Until N5.12 the tab added the N5 banner; it is gone.)
  *
  * Who sees whose is `QuotationHistory`'s answer, and it is an **app-level**
  * filter; that file says why the rules do not enforce it and what would have
@@ -64,8 +63,6 @@ internal fun QuotationListScreen(
     records: List<QuotationRecord> = emptyList(),
     viewer: Member = Member(uid = ""),
     loading: Boolean = false,
-    /** The Quotations tab shows it; More → Quotation history does not. */
-    banner: Boolean = false,
     /** The id of the quotation whose cancel is out, if any. */
     cancelling: String? = null,
     /** Why the last cancel did not happen, and on which quotation. */
@@ -110,12 +107,6 @@ internal fun QuotationListScreen(
         ),
         verticalArrangement = Arrangement.spacedBy(dimens.gapS)
     ) {
-        if (banner) {
-            item(key = "banner") {
-                InDevelopmentBanner(phase = "N5", detail = BANNER_DETAIL)
-            }
-        }
-
         when {
             loading && visible.isEmpty() -> item { EmptyState(LOADING_QUOTATIONS) }
             visible.isEmpty() -> item { EmptyState(NO_QUOTATIONS) }
@@ -159,6 +150,3 @@ internal const val PARTY_NOT_RECORDED = "Party not recorded"
 internal const val EDITED = "Edited"
 internal const val LOADING_QUOTATIONS = "Loading quotations…"
 internal const val NO_QUOTATIONS = "No quotations have been issued from this database yet."
-internal const val BANNER_DETAIL =
-    "Creating a quotation, the professional PDF, WhatsApp and Print return with the " +
-        "Quotation phase. Keep using the PWA to issue quotations."

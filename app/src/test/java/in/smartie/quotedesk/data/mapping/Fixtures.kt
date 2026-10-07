@@ -8,10 +8,10 @@ import com.google.gson.JsonParser
 /**
  * Loads legacy document fixtures from `src/test/resources/fixtures`.
  *
- * The fixtures are synthesised from every variant the parity audit records in
- * section 5.2 and section 6. When a read-only production export is available
- * its documents can be dropped into the same folder and these tests re-run
- * unchanged.
+ * The fixtures are **synthetic**, hand-built from every variant the parity
+ * audit records in section 5.2 and section 6 — never an export, and nothing
+ * exported is ever put in this folder: the repository is public (the
+ * fixtures' own README says how to tell).
  */
 object Fixtures {
 

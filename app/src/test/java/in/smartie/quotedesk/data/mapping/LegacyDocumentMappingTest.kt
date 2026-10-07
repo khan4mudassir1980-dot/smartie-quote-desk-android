@@ -117,7 +117,7 @@ class LegacyDocumentMappingTest {
     @Test
     fun `a price stored as a formatted string is read`() {
         val wheel = Fixtures.loadOne("products.json", "hwWheel__SIEBAL58H_V").toProductRecord()
-        assertEquals(1250.5, wheel.dealer!!, 0.0)
+        assertEquals(1234.5, wheel.dealer!!, 0.0)
         assertTrue(wheel.active)
         assertEquals("hwWheel|SIEBAL58H/V", wheel.key)
     }
@@ -282,10 +282,25 @@ class LegacyDocumentMappingTest {
         assertEquals("Sunrise Constructions", quote.party.name)
         assertEquals(2, quote.lines.size)
         assertEquals("Sliding gate motor 1000 kg", quote.lines[0].title)
-        assertEquals(44400.0, quote.lines[0].amount, 0.0)
+        assertEquals(34000.0, quote.lines[0].amount, 0.0)
         assertTrue(quote.gstEnabled)
         assertEquals(18.0, quote.gstPercent, 0.0)
         assertFalse(quote.legacyBetaShape)
+    }
+
+    @Test
+    fun `a PWA quotation's Transportation line reads in V8C4's own shape - an ordinary line, not one typed by hand`() {
+        // N5.12: V8C4 stores {t: "Transportation", s: <note>, u: "", qty: 1,
+        // rate, origRate, k: null, manual: false, amt}; the fixture used to
+        // carry an invented `u: "lot"` and `manual: true`.
+        val transport = Fixtures.loadOne("quotations.json", "q_pwa_finalised").toQuotationRecord().lines[1]
+        assertEquals("Transportation", transport.title)
+        assertEquals("Test City to Andheri East", transport.spec)
+        assertFalse(transport.manual)
+        assertEquals("", transport.key)
+        assertEquals(500.0, transport.rate, 0.0)
+        assertEquals(500.0, transport.originalRate!!, 0.0)
+        assertEquals(500.0, transport.amount, 0.0)
     }
 
     @Test
@@ -294,7 +309,7 @@ class LegacyDocumentMappingTest {
         assertTrue(quote.legacyBetaShape)
         assertEquals("Harbour Interiors", quote.party.name)
         assertEquals("Toughened glass 12 mm", quote.lines.single().title)
-        assertEquals(17400.0, quote.lines.single().amount, 0.0)
+        assertEquals(12000.0, quote.lines.single().amount, 0.0)
         assertEquals(18.0, quote.gstPercent, 0.0)
         assertTrue(quote.gstEnabled)
     }
@@ -302,8 +317,8 @@ class LegacyDocumentMappingTest {
     @Test
     fun `a quotation with string totals and a plain party string reads`() {
         val quote = Fixtures.loadOne("quotations.json", "q_string_totals").toQuotationRecord()
-        assertEquals(12390.0, quote.total, 0.0)
-        assertEquals(10500.0, quote.subtotal, 0.0)
+        assertEquals(17700.0, quote.total, 0.0)
+        assertEquals(15000.0, quote.subtotal, 0.0)
         assertEquals("Walk-in customer", quote.party.name)
         assertEquals(1690000000000L, quote.at)
         assertTrue(quote.gstEnabled)

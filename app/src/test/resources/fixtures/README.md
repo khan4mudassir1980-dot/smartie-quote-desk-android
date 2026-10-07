@@ -24,14 +24,24 @@ times, and nothing beside the files said so.
 - **Phones and GSTINs are patterned**: `9876543210` is descending digits;
   `27AAACS1234F1Z5` is a placeholder shape.
 - **Personas are obviously invented**: `Former Member`, `Legacy Member`,
-  `Unlabelled`, `Asha Nair (Google)`.
+  `Unlabelled`, `Asha Nair (Google)`. The Owner appears as **`Owner
+  Person`**; only the Owner's email, which the rules need, is real.
 
-## The one thing that is not settled
+## The rates — scrubbed in N5.12
 
-**Treat every rate in `products.json` and `quotations.json` as potentially
-real.** At least one dealer figure matches a rate in V8C4's own embedded seed
-catalogue, and the other tiers are simple multiples of it. They stay for now
-and are replaced in **N5.12** — see `docs/PROJECT-STATUS.md`.
+Until N5.12 the rates in `products.json` and `quotations.json` had to be
+treated as potentially real: one dealer figure matched a rate in V8C4's own
+embedded seed catalogue. **On 2026-10-07 (N5.12) every rate and every total
+built from them was replaced by an obviously synthetic round figure**, with
+the totals recomputed, and the tests that state them moved with them.
+
+The repository is public and its **history is not rewritten** (the Owner's
+decision of 2026-10-07): the earlier versions of these files stay readable
+in git history. Nothing here may say what those figures were.
+
+`q_pwa_finalised`'s Transportation line now has V8C4's own shape — `u: ""`,
+`manual: false`, `k: null`, an `origRate` and the note in `s` — where it
+used to carry an invented `u: "lot"` and `manual: true`.
 
 ## The rule this note is here to enforce
 

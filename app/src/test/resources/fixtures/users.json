@@ -2,7 +2,7 @@
   {
     "id": "uid_owner",
     "fields": {
-      "name": "Mudassir Khan",
+      "name": "Owner Person",
       "email": "Khan4Mudassir1980@gmail.com",
       "role": "owner",
       "active": true,

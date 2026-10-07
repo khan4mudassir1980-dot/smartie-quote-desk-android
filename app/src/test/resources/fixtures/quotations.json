@@ -25,24 +25,27 @@
           "s": "1000 kg, 230 V",
           "u": "each",
           "qty": 2,
-          "rate": 22200,
-          "origRate": 22200,
+          "rate": 17000,
+          "origRate": 17000,
           "k": "gateMotors|SIE1000",
-          "amt": 44400
+          "amt": 34000
         },
         {
           "t": "Transportation",
-          "u": "lot",
+          "s": "Test City to Andheri East",
+          "u": "",
           "qty": 1,
           "rate": 500,
-          "manual": true,
+          "origRate": 500,
+          "k": null,
+          "manual": false,
           "amt": 500
         }
       ],
       "gst": true,
       "gstPct": 18,
-      "subtotal": 44900,
-      "total": 52982,
+      "subtotal": 34500,
+      "total": 40710,
       "status": "Finalised",
       "snap": { "gstPct": 18, "validityDays": 15 }
     }
@@ -63,14 +66,14 @@
           "description": "Toughened glass 12 mm",
           "unit": "sqft",
           "qty": 120,
-          "rate": 145,
+          "rate": 100,
           "gst": 18,
-          "amount": 17400,
-          "gstAmount": 3132
+          "amount": 12000,
+          "gstAmount": 2160
         }
       ],
-      "gstTotal": 3132,
-      "total": 20532,
+      "gstTotal": 2160,
+      "total": 14160,
       "status": "Issued"
     }
   },
@@ -82,8 +85,8 @@
       "at": "1690000000000",
       "party": "Walk-in customer",
       "lines": [],
-      "total": "12390",
-      "subtotal": "10500",
+      "total": "17700",
+      "subtotal": "15000",
       "gst": 1,
       "gstPct": "18",
       "status": "Finalised"

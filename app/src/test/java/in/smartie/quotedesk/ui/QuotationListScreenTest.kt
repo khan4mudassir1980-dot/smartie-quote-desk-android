@@ -40,14 +40,14 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * The quotation list and the detail view, against **the real exported
- * documents** rather than records shaped to suit the test.
+ * The quotation list and the detail view, against **the synthetic fixtures
+ * modelled on what V8C4 stores** rather than records shaped to suit the test.
  *
  * `fixtures/quotations.json` holds the three shapes that actually exist: a
  * finalised PWA quotation issued at the contractor tier, a native-beta record
  * with per-line GST and no document-level total scheme, and a row whose totals
  * were stored as strings. Each has broken something before. A cancelled
- * quotation is built here, because no export carried one.
+ * quotation is built here, because no fixture carries one.
  *
  * Titles: stored `staff` is displayed **Manager**.
  */
@@ -60,14 +60,14 @@ class QuotationListScreenTest {
 
     private val admin = Member(uid = "uid_admin", name = "Asha", role = Role.ADMIN)
 
-    /** Every quotation in the export, through the reader the app really uses. */
-    private val exported: List<QuotationRecord> =
+    /** Every quotation in the fixtures, through the reader the app really uses. */
+    private val stored: List<QuotationRecord> =
         Fixtures.load("quotations.json").map { it.toQuotationRecord() }
 
-    private fun byId(id: String) = exported.first { it.id == id }
+    private fun byId(id: String) = stored.first { it.id == id }
 
     private fun screen(
-        records: List<QuotationRecord> = exported,
+        records: List<QuotationRecord> = stored,
         viewer: Member = admin
     ) {
         compose.setContent {
@@ -97,7 +97,7 @@ class QuotationListScreenTest {
     // --- the list -----------------------------------------------------------------
 
     @Test
-    fun `every exported quotation reaches the list`() {
+    fun `every stored quotation reaches the list`() {
         screen()
 
         assertTrue(shows("SIE/QD/2025-26/007"))
@@ -125,23 +125,23 @@ class QuotationListScreenTest {
         assertTrue(shows("Sunrise Constructions"))
 
         scrollToTotals()
-        assertTrue("its own subtotal", shows("44,900"))
-        assertTrue("and its stored total", shows("52,982"))
+        assertTrue("its own subtotal", shows("34,500"))
+        assertTrue("and its stored total", shows("40,710"))
     }
 
     @Test
     fun `a record with string totals reads as money, not as text`() {
-        // `q_string_totals` stores total "12390" and subtotal "10500" as
+        // `q_string_totals` stores total "17700" and subtotal "15000" as
         // strings, and gst as the number 1 rather than a boolean.
         screen()
         open("SIE/QD/2024-25/101")
 
         scrollToTotals()
-        assertTrue(shows("12,390"))
-        assertTrue(shows("10,500"))
+        assertTrue(shows("17,700"))
+        assertTrue(shows("15,000"))
         // GST is the difference between two stored figures, so it lands even
         // though neither was a number when it was written.
-        assertTrue(shows("1,890"))
+        assertTrue(shows("2,700"))
     }
 
     @Test
@@ -154,8 +154,8 @@ class QuotationListScreenTest {
         assertTrue(shows("Harbour Interiors"))
 
         scrollToTotals()
-        assertTrue("the gstTotal it stored", shows("3,132"))
-        assertTrue(shows("20,532"))
+        assertTrue("the gstTotal it stored", shows("2,160"))
+        assertTrue(shows("14,160"))
     }
 
     @Test
@@ -225,8 +225,8 @@ class QuotationListScreenTest {
         // quotation's totals did not visibly add up.
         val native = byId("q_pwa_finalised").copy(
             installation = QuotationInstallationRecord(mode = "door", rate = 500.0, amount = 2_000.0, basis = 4.0),
-            discount = QuotationDiscountRecord(kind = "pct", value = 10.0, amount = 4_440.0),
-            discountBase = 44_400.0
+            discount = QuotationDiscountRecord(kind = "pct", value = 10.0, amount = 3_400.0),
+            discountBase = 34_000.0
         )
         screen(records = listOf(native))
         open("SIE/QD/2025-26/007")
@@ -235,7 +235,7 @@ class QuotationListScreenTest {
         assertTrue(shows(INSTALLATION_ROW))
         assertTrue(shows("2,000"))
         assertTrue(shows(DISCOUNT_ROW))
-        assertTrue("a deduction, as the builder shows one", shows("- ₹4,440"))
+        assertTrue("a deduction, as the builder shows one", shows("- ₹3,400"))
     }
 
     @Test
@@ -258,8 +258,8 @@ class QuotationListScreenTest {
         open("SIE/QD/2025-26/007")
 
         assertTrue("a catalogue line", shows("Sliding gate motor 1000 kg"))
-        assertTrue("its rate", shows("22,200"))
-        assertTrue("the transport line V8C4 writes by hand", shows("Transportation"))
+        assertTrue("its rate", shows("17,000"))
+        assertTrue("the Transportation line V8C4 writes", shows("Transportation"))
 
         scrollToTotals()
         assertTrue("the grand total", shows(GRAND_TOTAL))

@@ -9,7 +9,7 @@
       "targetEmail": "asha@example.invalid",
       "detail": { "from": "staff", "to": "admin" },
       "byUid": "uid_owner",
-      "by": "Mudassir Khan",
+      "by": "Owner Person",
       "at": 1712000000000
     }
   },
@@ -21,7 +21,7 @@
       "targetUid": "uid_second_owner",
       "targetName": "Second Owner",
       "byUid": "uid_owner",
-      "by": "Mudassir Khan",
+      "by": "Owner Person",
       "at": 1712900000000
     }
   }

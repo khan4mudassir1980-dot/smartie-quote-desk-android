@@ -11,15 +11,15 @@
       "unit": "each",
       "spec": "1000 kg, 230 V",
       "gst": 18,
-      "dealer": 18500,
-      "contractor": 22200,
-      "client": 25900,
+      "dealer": 14000,
+      "contractor": 17000,
+      "client": 23000,
       "categoryId": "motors",
       "active": true,
       "kg": 1000,
       "seeded": true,
       "updated": 1700000000000,
-      "by": "Mudassir Khan"
+      "by": "Owner Person"
     }
   },
   {
@@ -32,7 +32,7 @@
       "model": "SIE1000",
       "name": "Sliding gate motor 1000 kg (edited)",
       "gst": 18,
-      "dealer": 18900,
+      "dealer": 14500,
       "active": true,
       "updated": 1710000000000,
       "conflictResolved": true
@@ -63,7 +63,7 @@
       "model": "SIEBAL58H/V",
       "name": "Bearing wheel 58 mm",
       "gst": 18,
-      "dealer": "1,250.50",
+      "dealer": "1,234.50",
       "active": 1
     }
   },
@@ -90,8 +90,8 @@
       "model": "BB6",
       "name": "Boom barrier 6 m (legacy document)",
       "gst": 18,
-      "dealer": 40000,
-      "client": 52000,
+      "dealer": 30000,
+      "client": 39000,
       "active": true,
       "categoryId": "cat-boom",
       "updated": 1720000000000
@@ -108,8 +108,8 @@
       "name": "Boom barrier 6 m",
       "unit": "each",
       "gst": 18,
-      "dealer": 41000,
-      "client": 53000,
+      "dealer": 31000,
+      "client": 40000,
       "active": true,
       "categoryId": "cat-boom",
       "kg": 0,
@@ -127,8 +127,8 @@
       "name": "Shutter motor 500 kg",
       "unit": "each",
       "gst": 18,
-      "dealer": 12000,
-      "client": 16000,
+      "dealer": 11000,
+      "client": 14000,
       "active": 1,
       "kg": 500,
       "categoryId": "cat-shutter"

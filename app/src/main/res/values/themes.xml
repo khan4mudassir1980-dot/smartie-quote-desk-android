@@ -3,12 +3,18 @@
         Launch theme only. Everything after the first frame is drawn by
         SmartieTheme in Compose; the window is edge to edge with transparent
         system bars so the app can draw behind them and apply its own insets.
+
+        The window is the icon background, #F7F4FF (N5.12b) - the colour the
+        intro paints - so the first frame lands on the colour already showing.
+        values-v29 and values-v31 extend this style rather than copy it.
     -->
-    <style name="Theme.SmartieQuoteDesk" parent="android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@color/smartie_paper</item>
+    <style name="Base.Theme.SmartieQuoteDesk" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/ic_launcher_background</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowActionModeOverlay">true</item>
     </style>
+
+    <style name="Theme.SmartieQuoteDesk" parent="Base.Theme.SmartieQuoteDesk" />
 </resources>

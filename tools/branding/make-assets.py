@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Makes the app's launcher icon from the Owner's brand PNGs in branding/.
+Makes the app's launcher icon and its logo from the Owner's brand PNGs in
+branding/.
 
 Run from the repository root:
 
@@ -8,8 +9,8 @@ Run from the repository root:
 
 It needs Pillow (`pip install pillow`). It reads branding/ and never writes
 there: the 1024 x 1024 originals stay exactly as the Owner uploaded them. It
-writes only the PNGs listed in `make_icons` below, under app/src/main/res/,
-and running it again gives the same files.
+writes only the PNGs listed in `make_icons` and `make_logo` below, under
+app/src/main/res/, and running it again gives the same files.
 
 Every file is the artwork scaled down, and placed on a plain #F7F4FF shape for
 the older launchers. Nothing is redrawn, recoloured or cropped.
@@ -25,6 +26,9 @@ RES = os.path.join("app", "src", "main", "res")
 
 MARK = os.path.join(BRANDING, "QD_icon_mark_1024.png")
 MONOCHROME = os.path.join(BRANDING, "QD_icon_monochrome_1024.png")
+FULL_COLOUR = os.path.join(BRANDING, "QD_full_colour_1024.png")
+# QD_full_whitetext_1024.png is the Owner's, for later: the intro and sign-in
+# are always light, so nothing is made from it yet.
 
 # The icon background, #F7F4FF (the Owner, N5.12b).
 BACKGROUND = (0xF7, 0xF4, 0xFF, 0xFF)
@@ -52,6 +56,10 @@ LEGACY_MARK_DP = 28
 LEGACY_CORNER_DP = 8
 
 SUPERSAMPLE = 8
+
+# The logo - the mark over "Quote Desk" - on the intro, at 200dp square, and
+# on sign-in, smaller. Made at 200dp so neither scales a bitmap up.
+LOGO_DP = 200
 
 
 def px(dp, scale):
@@ -117,6 +125,12 @@ def legacy(source, scale, round_shape):
     return icon
 
 
+def make_logo():
+    logo = load(FULL_COLOUR)
+    for name, scale in DENSITIES:
+        save(scaled(logo, px(LOGO_DP, scale)), f"drawable-{name}", "qd_logo.png")
+
+
 def save(image, folder, name):
     os.makedirs(os.path.join(RES, folder), exist_ok=True)
     path = os.path.join(RES, folder, name)
@@ -139,3 +153,4 @@ if __name__ == "__main__":
     if not os.path.isdir(BRANDING) or not os.path.isdir(RES):
         sys.exit("run this from the repository root")
     make_icons()
+    make_logo()

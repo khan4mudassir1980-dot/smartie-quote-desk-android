@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,20 +12,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.ShoppingCart
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -42,11 +38,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -59,7 +53,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import `in`.smartie.quotedesk.BuildConfig
-import `in`.smartie.quotedesk.R
 import `in`.smartie.quotedesk.core.AppContainer
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.PurchasePeople
@@ -89,6 +82,7 @@ import `in`.smartie.quotedesk.ui.quotations.QuotationListScreen
 import `in`.smartie.quotedesk.ui.quotations.QuotationsViewModel
 import `in`.smartie.quotedesk.ui.screens.PurchaseScreen
 import `in`.smartie.quotedesk.ui.screens.QuotationsScreen
+import `in`.smartie.quotedesk.ui.screens.IntroScreen
 import `in`.smartie.quotedesk.ui.screens.SignInScreen
 import `in`.smartie.quotedesk.ui.stock.StockScreen
 import `in`.smartie.quotedesk.ui.stock.StockViewModel
@@ -104,34 +98,62 @@ fun SmartieApp(container: AppContainer, sessionViewModel: SessionViewModel) {
     val signIn by sessionViewModel.signIn.collectAsStateWithLifecycle()
     val activity = LocalContext.current.findActivity()
 
-    when (val current = session) {
-        SessionState.Loading -> LoadingScreen()
+    SessionScreens(
+        session = session,
+        signedOut = {
+            SignInScreen(
+                state = signIn,
+                onGoogleSignIn = { activity?.let(sessionViewModel::signInWithGoogle) },
+                onEmailSignIn = sessionViewModel::signInWithEmail,
+                onPasswordReset = sessionViewModel::sendPasswordReset,
+            )
+        },
+        ready = { member ->
+            SignedInShell(
+                member = member,
+                container = container,
+                onSignOut = { activity?.let(sessionViewModel::signOut) },
+            )
+        },
+        onSignOut = { activity?.let(sessionViewModel::signOut) },
+    )
+}
 
-        SessionState.SignedOut -> SignInScreen(
-            state = signIn,
-            onGoogleSignIn = { activity?.let(sessionViewModel::signInWithGoogle) },
-            onEmailSignIn = sessionViewModel::signInWithEmail,
-            onPasswordReset = sessionViewModel::sendPasswordReset,
-        )
+/**
+ * The screen for each session state.
+ *
+ * The intro is [SessionState.Loading]'s screen and no other's (N5.12b): it is
+ * composed while the session loads, and the first composition after the
+ * session is known has the next screen in its place — no timer, no minimum
+ * time, no tap. Signed-out and ready come in as slots, so `IntroScreenTest`
+ * can drive the states without Firebase.
+ */
+@Composable
+internal fun SessionScreens(
+    session: SessionState,
+    signedOut: @Composable () -> Unit,
+    ready: @Composable (Member) -> Unit,
+    onSignOut: () -> Unit,
+) {
+    when (session) {
+        SessionState.Loading -> IntroScreen()
+
+        SessionState.SignedOut -> signedOut()
 
         is SessionState.Blocked -> MessageScreen(
             title = "Access switched off",
-            message = "${current.member.name}, that account has been switched off. " +
+            message = "${session.member.name}, that account has been switched off. " +
                 "Ask an Owner or Administrator to switch it on again.",
-            onSignOut = { activity?.let(sessionViewModel::signOut) },
+            onSignOut = onSignOut,
         )
 
         is SessionState.Failed -> MessageScreen(
             title = "Something went wrong",
-            message = current.message,
-            onSignOut = { activity?.let(sessionViewModel::signOut) },
+            message = session.message,
+            onSignOut = onSignOut,
         )
 
-        is SessionState.Ready -> SignedInShell(
-            member = current.member,
-            container = container,
-            onSignOut = { activity?.let(sessionViewModel::signOut) },
-        )
+        is SessionState.Ready -> ready(session.member)
     }
 }
 
@@ -410,28 +432,6 @@ private fun titleFor(route: String?): String = when (route) {
     "more" -> "More"
     null -> "SMARTIE Quote Desk"
     else -> MoreMenu.destinations.firstOrNull { it.route == route }?.label ?: "SMARTIE Quote Desk"
-}
-
-@Composable
-private fun LoadingScreen() {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Image(
-            painter = painterResource(R.drawable.ic_launcher),
-            contentDescription = null,
-            modifier = Modifier.size(72.dp).clip(RoundedCornerShape(18.dp)),
-        )
-        CircularProgressIndicator(Modifier.padding(top = 20.dp))
-        Text(
-            "Opening SMARTIE Quote Desk…",
-            style = MaterialTheme.typography.bodyMedium,
-            color = SmartieColors.Steel,
-            modifier = Modifier.padding(top = 12.dp),
-        )
-    }
 }
 
 @Composable

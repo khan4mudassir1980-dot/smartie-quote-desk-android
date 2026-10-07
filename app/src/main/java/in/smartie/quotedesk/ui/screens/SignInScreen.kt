@@ -1,6 +1,5 @@
 package `in`.smartie.quotedesk.ui.screens
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -22,11 +20,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import `in`.smartie.quotedesk.R
 import `in`.smartie.quotedesk.ui.SignInUiState
 import `in`.smartie.quotedesk.ui.components.SmartieCard
 import `in`.smartie.quotedesk.ui.components.SmartieField
@@ -41,6 +37,9 @@ import `in`.smartie.quotedesk.ui.theme.SmartieColors
  * Sign-in, matching the approved PWA: Google first, an existing email and
  * password behind a disclosure, and a password reset. There is no
  * self-registration — a new person enters as an active Worker by signing in.
+ *
+ * Since N5.12b it is the intro's logo above the card, on the intro's
+ * `#F7F4FF` — painted here, so it stays light in dark mode.
  */
 @Composable
 fun SignInScreen(
@@ -55,7 +54,7 @@ fun SignInScreen(
     var password by remember { mutableStateOf("") }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize().imePadding(),
+        modifier = Modifier.fillMaxSize().brandBackground().imePadding(),
         contentPadding = PaddingValues(
             start = dimens.screenPadding,
             end = dimens.screenPadding,
@@ -66,11 +65,7 @@ fun SignInScreen(
     ) {
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                Image(
-                    painter = painterResource(R.drawable.ic_launcher),
-                    contentDescription = null,
-                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)),
-                )
+                QuoteDeskLogo(SIGN_IN_LOGO_SIZE)
             }
         }
 

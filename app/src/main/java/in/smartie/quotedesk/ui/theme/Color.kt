@@ -56,6 +56,16 @@ object SmartieColors {
     val BlueDeep = Color(0xFF1E40AF)
     val BlueLine = Color(0xFFBFD3F6)
 
+    /**
+     * **Brand colours** (the Owner, N5.12b). [IconBackground] is behind the
+     * launcher icon, the Android 12 splash, the intro and sign-in — always,
+     * dark mode included. [Navy] is the logo's "Quote", and the intro's line.
+     * Their XML twin, for the icon and the window, is
+     * `@color/ic_launcher_background`.
+     */
+    val IconBackground = Color(0xFFF7F4FF)
+    val Navy = Color(0xFF08162C)
+
     /** Urgency colours: very urgent red, urgent yellow/amber, normal green. */
     val UrgencyCritical = Danger
     val UrgencyUrgent = Color(0xFFEAB308)

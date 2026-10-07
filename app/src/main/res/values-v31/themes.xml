@@ -1,0 +1,11 @@
+<resources>
+    <!--
+        Android 12 and later: values-v29's theme, plus the system splash. It
+        shows the launcher icon - the adaptive icon, mark on #F7F4FF - on the
+        same #F7F4FF, in dark mode too, until the app's first frame: the intro.
+    -->
+    <style name="Theme.SmartieQuoteDesk" parent="Base.Theme.SmartieQuoteDesk">
+        <item name="android:forceDarkAllowed">false</item>
+        <item name="android:windowSplashScreenBackground">@color/ic_launcher_background</item>
+    </style>
+</resources>

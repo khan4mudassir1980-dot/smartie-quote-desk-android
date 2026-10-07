@@ -1,0 +1,11 @@
+<resources>
+    <!--
+        Android 10 and later. The app is light only, and the intro and sign-in
+        stay light in dark mode (the Owner, N5.12b), so Android's Force Dark
+        is refused: it may otherwise darken a light app's window when the
+        phone is in dark mode.
+    -->
+    <style name="Theme.SmartieQuoteDesk" parent="Base.Theme.SmartieQuoteDesk">
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+</resources>

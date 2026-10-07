@@ -1,9 +1,7 @@
 package `in`.smartie.quotedesk.branding
 
-import java.awt.image.BufferedImage
 import java.io.File
 import java.security.MessageDigest
-import javax.imageio.ImageIO
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
@@ -15,7 +13,7 @@ import org.junit.Test
  * The launcher icon, checked as files (N5.12b).
  *
  * `tools/branding/make-assets.py` makes every one of them from the Owner's
- * 1024 PNGs in `branding/`; this pins what it made. Plain JVM — `ImageIO`
+ * 1024 PNGs in `branding/`; this pins what it made. Plain JVM — [PngImage]
  * reads the PNGs — so it runs without Android. The adaptive icon as Android
  * inflates it is `LauncherIconTest`'s.
  */
@@ -30,19 +28,18 @@ class LauncherIconFilesTest {
         "mdpi" to 1.0, "hdpi" to 1.5, "xhdpi" to 2.0, "xxhdpi" to 3.0, "xxxhdpi" to 4.0,
     )
 
-    private fun png(folder: String, name: String): BufferedImage =
-        ImageIO.read(File(res, "$folder/$name")) ?: error("$folder/$name is not a readable PNG")
+    private fun png(folder: String, name: String): PngImage = PngImage.read(File(res, "$folder/$name"))
 
-    private fun alpha(image: BufferedImage, x: Int, y: Int): Int = image.getRGB(x, y) ushr 24
+    private fun alpha(image: PngImage, x: Int, y: Int): Int = image.getRGB(x, y) ushr 24
 
     /** Pixels at least [opacity] opaque, out of 255 — by default, any that is not fully transparent. */
-    private fun visible(image: BufferedImage, opacity: Int = 1): List<Pair<Int, Int>> =
+    private fun visible(image: PngImage, opacity: Int = 1): List<Pair<Int, Int>> =
         (0 until image.height).flatMap { y ->
             (0 until image.width).filter { x -> alpha(image, x, y) >= opacity }.map { x -> x to y }
         }
 
     /** From the image's centre to the farthest corner of any pixel that is not fully transparent. */
-    private fun reach(image: BufferedImage): Double {
+    private fun reach(image: PngImage): Double {
         val cx = image.width / 2.0
         val cy = image.height / 2.0
         return visible(image).maxOf { (x, y) ->
@@ -54,7 +51,7 @@ class LauncherIconFilesTest {
      * left, top, right, bottom of the pixels at least half opaque — the
      * artwork's edge, not the faint fringe the scaling leaves round it.
      */
-    private fun box(image: BufferedImage): List<Int> = visible(image, opacity = 128).let { pixels ->
+    private fun box(image: PngImage): List<Int> = visible(image, opacity = 128).let { pixels ->
         listOf(pixels.minOf { it.first }, pixels.minOf { it.second },
             pixels.maxOf { it.first }, pixels.maxOf { it.second })
     }
@@ -71,7 +68,7 @@ class LauncherIconFilesTest {
                 val size = (dp * scale).toInt()
                 assertEquals("$folder/$file width", size, image.width)
                 assertEquals("$folder/$file height", size, image.height)
-                assertTrue("$folder/$file has an alpha channel", image.colorModel.hasAlpha())
+                assertTrue("$folder/$file has an alpha channel", image.hasAlpha)
             }
         }
     }

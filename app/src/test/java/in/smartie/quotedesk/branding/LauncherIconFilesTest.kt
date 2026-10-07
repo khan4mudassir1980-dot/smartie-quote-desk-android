@@ -142,17 +142,17 @@ class LauncherIconFilesTest {
     }
 
     @Test
-    fun `the manifest uses the new icons, and the label is still SMARTIE Quote Desk`() {
+    fun `the manifest uses the new icons, and the label is Quote Desk`() {
         val manifest = File(module, "src/main/AndroidManifest.xml").readText()
         assertTrue(manifest.contains("android:icon=\"@mipmap/ic_launcher\""))
         assertTrue(manifest.contains("android:roundIcon=\"@mipmap/ic_launcher_round\""))
         assertTrue(manifest.contains("android:label=\"@string/app_name\""))
-        // The Owner asked to be told before the label changes; it has not.
+        // The Owner's label since 2026-10-07; it was "SMARTIE Quote Desk".
         val names = File(module, "src").walkTopDown()
             .filter { it.name == "strings.xml" }
             .flatMap { file -> Regex("<string name=\"app_name\">([^<]*)</string>").findAll(file.readText()).map { it.groupValues[1] } }
             .toList()
-        assertEquals(listOf("SMARTIE Quote Desk"), names)
+        assertEquals(listOf("Quote Desk"), names)
     }
 
     @Test

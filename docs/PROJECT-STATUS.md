@@ -8,7 +8,7 @@ anything.** Last updated 2026-10-07.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `39f0231` — run #286, fully green (unit tests, lint, Firestore rules emulator, APK build). N5.12b commit 3, the brand purples. **The last commit that changed app code is `39f0231`** too, so the APK from #286 — or any later run — carries the new icon, the splash and intro, sign-in's logo and the brand colours. Later commits may sit above it. |
+| **Last CI-verified head** | `39f0231` — run #286, fully green (unit tests, lint, Firestore rules emulator, APK build). N5.12b commit 3, the brand purples. **The label commit above it — the one that records "The Owner's acceptance of N5.12b, and the label" below — changes app code again** (the app's name), so the phone pass's APK comes from that commit's run or a later one; the pack sent by message names it. Later commits may sit above it. |
 | **APK to install** | The `smartie-native-apks` artifact **from the run that verified the head you intend to install** — never from whichever run this table happens to name. A build contains the commit it ran on and nothing above it, so a head hash and an APK go out of step the moment anything lands. Each run's job summary reports its head and the signing certificate; the app must show **Staging**. |
 | **Ruleset anchor** | The **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`) — since 2026-10-07 that is the quoting cleanup, which changed **two comments only**; its rules are `fde9ad3`'s (N5.12 commit 4b — the hard-block: `rev` on every `/purchase` create and update) clause for clause, as `git diff fde9ad3 <anchor> -- firestore/firestore.rules` shows. This moves whenever the file changes, which is why it is recorded separately from the head. |
 | **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **twenty rules commits behind** (the last changing comments only): `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap), `ff20dd4` (N5.10 — edit, the creator's cancel, the cap only when raised), `cff32be`, `6d2c25c`, `d59f1e6`, `877701f`, `547d218`, `caa835e`, `85c4fb7` (N5.10b — the expression limit, the status pin, a boolean `received`, the uid pin, the headroom reorder and ternaries, Ordered and a Manager's cancel), `0bf1dfe`, `907a660` (the review — two second definitions removed, the same decisions), `5b03d57` (N5.11 — the server's clock on an edit and on an issue), `fde9ad3` (N5.12 — the hard-block: `rev` on every `/purchase` create and update, so the PWA's purchase writes are refused), and the quoting cleanup of 2026-10-07 (comments only); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
@@ -50,7 +50,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
 | N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2, N4.3 and N4.4 are all code complete and CI-verified**, and both are waiting on the same Owner-run staging rules deployment paired with the APK rollout — they were never deployed separately and must not be. Purchase History is built and open to every role, so what was Batch 5 is done; the tab badge is Batch 6 |
-| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.10 are complete and CI-verified** — N5.9 (finalise) at `57d607a`, run #204, Part A of the Owner's review of it at `2848bb9`, run #208, and **N5.10** (edit, cancel, Duplicate, the party type) at `4283ef2`, run #222. The builder **issues quotations** and now **edits** them — the same number, saved over, stamped "Last edited" — while the creator, or an Owner or Administrator, may **cancel** one and anyone who quotes may **duplicate** one. **Not yet run on a phone** — T-Q1 to T-Q22 are owed. Rules deploy once, at the final staging pass, from the head named above; the ruleset anchor is now `907a660`. **N5.10b is complete and CI-verified** — the rules' expression limit, then Purchase's **Ordered** and **a Manager's cancel**: commits 0 to 13, runs #225 to #240, each pushed alone, one red run (#237) fixed by its own commit; commit 14 is the record. **Not yet run on a phone** — T-R19 to T-R28 are owed. **The Owner's review of it is closed out** (2026-10-06: one app-side gap fixed, two second definitions removed from the rules, the N5.11 survey done). **N5.11 is complete and CI-verified** — the PDF, Print and WhatsApp, behind the finalise gate; the edit and issue times from the server's clock: `3cab563`..`9985c70`, runs #249 to #259, each pushed alone, one red run (#255) fixed by its own commit; the ruleset anchor is now `5b03d57`. **The Owner's review of N5.11 is closed out** (2026-10-06: five choices accepted, four V8C4-parity fixes, `280043f`..`2fb6bae`, runs #262 to #265, no rule changed). **Not yet run on a phone** — T-Q23 to T-Q38 are owed, after the synthetic company settings are entered on staging. **N5.12 is complete and CI-verified** — the public-repository scrub (synthetic rates, the persona, patterned phones, `.invalid` mail, checksum-invalid sample GSTINs), **the hard-block** (the rules require `rev` on every `/purchase` create and update, so every PWA purchase write is refused from the deploy that carries it; ruleset anchor `fde9ad3`), the production placeholder zeroed and artifacts kept 30 days, the N5 banner out, and `docs/N5-cutover.md`: `ac76a9e`..`99f2568`, runs #267 to #276, each pushed alone, none red. **The Owner accepted N5.12 on 2026-10-07.** **N5.12b is complete and CI-verified** — the app icon (adaptive, themed, and for Android 6 to 7.1), the Android 12+ splash, the intro and sign-in's logo, light in dark mode, and the brand purples: `291db09`..`39f0231`, runs #282 to #286, each pushed alone, one red run (#283) fixed by its own commit; no rule changed. **Not yet run on a phone** — T-B1 to T-B6 are owed. **Next: the Owner's review of N5.12b**; the first phone pass — every owed row, T-Q39, T-R29 and T-B1 to T-B6 included — and N6 wait |
+| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.10 are complete and CI-verified** — N5.9 (finalise) at `57d607a`, run #204, Part A of the Owner's review of it at `2848bb9`, run #208, and **N5.10** (edit, cancel, Duplicate, the party type) at `4283ef2`, run #222. The builder **issues quotations** and now **edits** them — the same number, saved over, stamped "Last edited" — while the creator, or an Owner or Administrator, may **cancel** one and anyone who quotes may **duplicate** one. **Not yet run on a phone** — T-Q1 to T-Q22 are owed. Rules deploy once, at the final staging pass, from the head named above; the ruleset anchor is now `907a660`. **N5.10b is complete and CI-verified** — the rules' expression limit, then Purchase's **Ordered** and **a Manager's cancel**: commits 0 to 13, runs #225 to #240, each pushed alone, one red run (#237) fixed by its own commit; commit 14 is the record. **Not yet run on a phone** — T-R19 to T-R28 are owed. **The Owner's review of it is closed out** (2026-10-06: one app-side gap fixed, two second definitions removed from the rules, the N5.11 survey done). **N5.11 is complete and CI-verified** — the PDF, Print and WhatsApp, behind the finalise gate; the edit and issue times from the server's clock: `3cab563`..`9985c70`, runs #249 to #259, each pushed alone, one red run (#255) fixed by its own commit; the ruleset anchor is now `5b03d57`. **The Owner's review of N5.11 is closed out** (2026-10-06: five choices accepted, four V8C4-parity fixes, `280043f`..`2fb6bae`, runs #262 to #265, no rule changed). **Not yet run on a phone** — T-Q23 to T-Q38 are owed, after the synthetic company settings are entered on staging. **N5.12 is complete and CI-verified** — the public-repository scrub (synthetic rates, the persona, patterned phones, `.invalid` mail, checksum-invalid sample GSTINs), **the hard-block** (the rules require `rev` on every `/purchase` create and update, so every PWA purchase write is refused from the deploy that carries it; ruleset anchor `fde9ad3`), the production placeholder zeroed and artifacts kept 30 days, the N5 banner out, and `docs/N5-cutover.md`: `ac76a9e`..`99f2568`, runs #267 to #276, each pushed alone, none red. **The Owner accepted N5.12 on 2026-10-07.** **N5.12b is complete and CI-verified** — the app icon (adaptive, themed, and for Android 6 to 7.1), the Android 12+ splash, the intro and sign-in's logo, light in dark mode, and the brand purples: `291db09`..`39f0231`, runs #282 to #286, each pushed alone, one red run (#283) fixed by its own commit; no rule changed. **Not yet run on a phone** — T-B1 to T-B6 are owed. **The Owner accepted N5.12b on 2026-10-07**, every call as built; then **the app was renamed "Quote Desk"** (its own commit; T-B7). **Next: the first phone pass**, from the re-pinned pack — every owed row, T-Q39, T-R29 and T-B1 to T-B7 included — and N6 waits |
 | N6 Products & Categories | Not started. The Products & Categories editing screen, which T-P7 is blocked on. **Also owed here: read the company GST from `teamSettings/company.defaultGst`.** V8C4's `stSave` writes it there and the native app is already permitted to read that document. N5.8a resolves a quotation's GST from the rate its catalogue lines agree on, which is an honest stopgap and not the final answer — a quotation whose lines disagree, or which has only hand-typed lines, has nothing to agree on and currently refuses to finalise until somebody sets the rate |
 | N7 Calculators | Not started. Port the four V8C4 calculators — rolling shutter, high-speed door, garage door, glass door — whose output becomes ordinary quotation lines carrying the opening size in the line's spec text |
 | N8 Migration & cutover | Not started. **The production migration and cutover.** `docs/N2-delivery.md:40` calls N8 "the catalogue migration"; that line is the stale one and `docs/N3-plan.md:585` is right. **Read the blocking warning about `import-staging.mjs` under "Decisions that bind future work" before planning any part of this** — the importer carries seed rates in every payload and would destroy live pricing if pointed at production |
@@ -1368,7 +1368,100 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**Wait for the Owner's review of N5.12b — the report was sent by message on 2026-10-07 — and do nothing until it comes. Do NOT start N6 or the phone pass.** N5.12b's record follows ("N5.12b — every commit pushed alone…"), after it the prompt it answers. **The launcher label is still "SMARTIE Quote Desk"**: the Owner asked to be told before it changes, and has been. The first phone pass's rows — T-B1 to T-B6 now among them — are in `docs/PHONE-TEST-CHECKLIST.md`; its APK is the one from the run that verified the head then current, `39f0231`'s (#286) or later.
+**Once the label commit — the one recording the Owner's message below — is green, send the phone pass pack again by message, pinned to that head and its run; then stop and wait.** Do NOT start N6, and do not begin the pass: the Owner runs it. Two questions on the name wait for the Owner (below): the `Download/SMARTIE` folder, and whether the staging build should say "Staging" on the launcher. The pass's rows, T-B1 to T-B7 now among them, are in `docs/PHONE-TEST-CHECKLIST.md`.
+
+### The Owner's acceptance of N5.12b, and the label, 2026-10-07 — recorded before acting
+
+Rule 8. **"N5.12b accepted. Two things, then the phone pass pack."** In the
+Owner's words where quoted:
+
+1. **The launcher label**, its own commit, pushed alone, CI green: "Change
+   the label from 'SMARTIE Quote Desk' to 'Quote Desk' in every flavour.
+   Staging keeps whatever marks it as Staging, so a tester can still tell
+   the builds apart — report how it reads after the change." Check
+   wherever the app shows its own name to a person — the About screen, the
+   sign-in screen, any heading, any share or notification text — report
+   each with what it says now, and change those that are the app's name.
+   "Do NOT change the firm's name 'Smart India Enterprises', the intro
+   byline, or the package name. If anything is ambiguous, list it and ask."
+   Tests pin the new label and any screen text changed, each with its
+   ablation.
+2. **The N5.12b calls: all accepted as built.** "The byline stays, the
+   spinner stays removed, the highlight stays on lines only."
+3. **The phone pass pack, re-pinned, by message, no code**, once the label
+   commit is green: the head and its run; the APK artifact and its run,
+   with the certificate SHA-1 and which commit's app code it carries; the
+   ZIP deploy steps with the new sha and the check that proves the ruleset
+   — noting that `firestore.rules` changed only in comments since
+   `fde9ad3`, with the command that shows it; how many rules commits
+   staging is behind; the staging `teamSettings/company` table, unchanged;
+   the full row list grouped by account and phone, with T-B1 to T-B6 and
+   anything else added, and the total; and anything N5.12b made stale.
+   "Then STOP. Do not start N6 and do not begin the pass itself."
+
+**Where the app shows its own name — found, and what it says now** (from
+`grep` for "SMARTIE" and "Quote Desk" in every string the app holds, and the
+manifest):
+
+| Where | Was | Now |
+|---|---|---|
+| The launcher label — home screen, app drawer, recent apps, Settings → Apps — **every build** (`app_name`; no flavour overrides it) | SMARTIE Quote Desk | **Quote Desk** |
+| More → About, the first card's heading | SMARTIE Quote Desk | **Quote Desk** |
+| The header's title where a screen has none of its own (a fallback; in practice only before the first screen is chosen) | SMARTIE Quote Desk | **Quote Desk** |
+| Team → Share app link, the invite text | "Join SMARTIE Quote Desk. Open the app and choose Continue with Google; …" | "**Join Quote Desk.** Open the app and choose Continue with Google; …" |
+| The intro and sign-in: the logo, read aloud | Quote Desk (since N5.12b) | unchanged |
+| The intro's line | by Smart India Enterprises | unchanged — the firm |
+| More → About, the "Internal use" card | Smart India Enterprises | unchanged — the firm |
+| The package | `in.smartie.quotedesk` (staging: `.staging.debug`) | unchanged |
+
+**No name at all:** sign-in shows the logo and "Sign in", no name in words;
+the app posts no notification; the PDF's letterhead is the company
+settings' firm, never the app; the print job and the file are
+"Quotation-<no>-<client>"; WhatsApp sends no text; the share sheet's title is
+"Share app link". The names a person never sees — the package, the theme
+`Theme.SmartieQuoteDesk`, class names, the preferences file — stay.
+
+**How staging reads after the change.** **The launcher never marked staging:**
+before this, both builds read "SMARTIE Quote Desk" under the same icon; now
+both read **"Quote Desk"**. Staging is told apart **inside** the app, and
+all of it stays: the header of every signed-in screen carries **"Staging"**
+under its title; About shows Environment **"staging"**, the note "This is a
+staging build. It must only ever be pointed at staging data.", the package
+`in.smartie.quotedesk.staging.debug` and the version
+`2.0.0-native-beta03-staging-debug`. The intro and sign-in show nothing of
+it.
+
+**Ambiguous — left as they are, and asked:**
+
+- **The download folder, `Download/SMARTIE`**, and its message "Saved to
+  Downloads/SMARTIE as …" (T-Q24). "SMARTIE" is the brand's short name, not
+  the app's name; renaming the folder would also leave every PDF saved so
+  far in the old one.
+- **A staging launcher label.** If a tester should tell the builds apart on
+  the home screen, the staging flavour can carry its own label — "Quote
+  Desk Staging", say. Not added: the Owner asked to keep staging's marks,
+  and the launcher had none. `AppNameTest` holds every flavour to "Quote
+  Desk", so adding one is a deliberate change to that test.
+- **Outside the repository:** the Google sign-in sheet shows the name set in
+  the Firebase / Google Cloud project's OAuth consent screen, which the app
+  cannot set and this session cannot see. If it still says "SMARTIE Quote
+  Desk", it is changed there, by the Owner, in the staging console.
+
+**Built in the commit that records this:** `AppName.NAME` = "Quote Desk"
+(`domain/AppName.kt`) feeds the About heading, the header fallback and the
+invite (`AppName.invite`); `app_name` says the same. Tests: **`AppNameTest`**
+(plain JVM, 4) — the name; the launcher label in every `strings.xml` equal to
+it; the invite, with and without the link; no "SMARTIE" left in either.
+**`AppNameScreenTest`** (Robolectric, 2) — About headed "Quote Desk", no
+"SMARTIE Quote Desk", the firm still named; `titleFor` gives "Quote Desk" for
+no route and an unknown one, a screen's own title untouched.
+**`LauncherIconFilesTest`**'s label pin now reads "Quote Desk". Ablations,
+measured here, each failing: the label back to the old name (`AppNameTest`'s
+label test, and `LauncherIconFilesTest`'s); the name constant back (all four
+of `AppNameTest`); the invite keeping the old name (two); a staging-only
+label (the every-flavour test). `AppNameScreenTest`'s ablations are CI-only
+and not measured. Local sweep: **OK (1154 tests)**, 77 classes (the scratch
+`sweep15.sh`; 1150 before).
 
 ### N5.12b — every commit pushed alone, CI green before the next; one red run, fixed by its own commit
 
@@ -1456,7 +1549,8 @@ a lavender screen.
 **As built — the Owner's points answered:**
 
 - **The label** is "SMARTIE Quote Desk", unchanged (`LauncherIconFilesTest`
-  holds it so).
+  holds it so). *Superseded the same day: the Owner had it renamed "Quote
+  Desk" — "The Owner's acceptance of N5.12b, and the label", above.*
 - **Removed:** `app/src/main/res/drawable/ic_launcher.png`, the old SIE
   launcher PNG (192 × 192, no alpha), in commit 2. Nothing uses it: the
   manifest moved in commit 1, the loading screen and sign-in in commit 2.

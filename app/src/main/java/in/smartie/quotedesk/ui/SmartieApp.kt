@@ -54,9 +54,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import `in`.smartie.quotedesk.BuildConfig
 import `in`.smartie.quotedesk.core.AppContainer
+import `in`.smartie.quotedesk.domain.AppName
 import `in`.smartie.quotedesk.domain.Member
 import `in`.smartie.quotedesk.domain.PurchasePeople
-import `in`.smartie.quotedesk.domain.RoleTitles
 
 import `in`.smartie.quotedesk.domain.Permissions
 import `in`.smartie.quotedesk.ui.components.ConnectivityBanner
@@ -424,14 +424,15 @@ private fun SignedInShell(member: Member, container: AppContainer, onSignOut: ()
     }
 }
 
-private fun titleFor(route: String?): String = when (route) {
+/** The header's title for a route; the app's own name where no screen has one. */
+internal fun titleFor(route: String?): String = when (route) {
     "products" -> "Products"
     "stock" -> "Our Stock"
     "purchase" -> "Purchase"
     "quotations" -> "Quotation"
     "more" -> "More"
-    null -> "SMARTIE Quote Desk"
-    else -> MoreMenu.destinations.firstOrNull { it.route == route }?.label ?: "SMARTIE Quote Desk"
+    null -> AppName.NAME
+    else -> MoreMenu.destinations.firstOrNull { it.route == route }?.label ?: AppName.NAME
 }
 
 @Composable
@@ -463,12 +464,7 @@ private fun Context.findActivity(): Activity? = when (this) {
 
 /** Share sheet for the invite; the link is a build setting, not a secret. */
 private fun Context.shareInvite() {
-    val link = BuildConfig.APP_SHARE_URL
-    val text = buildString {
-        append("Join SMARTIE Quote Desk. Open the app and choose Continue with Google; ")
-        append("you enter as ${RoleTitles.STAFF} and an Owner or Administrator sets your role.")
-        if (link.isNotBlank()) append("\n\n").append(link)
-    }
+    val text = AppName.invite(BuildConfig.APP_SHARE_URL)
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
         putExtra(Intent.EXTRA_TEXT, text)

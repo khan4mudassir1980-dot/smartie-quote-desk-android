@@ -8,7 +8,7 @@ run once, at the end, against one staging APK and one staging rules
 deployment. That is why this file exists: nothing else carries the memory of
 what is owed.
 
-Last updated for **N5.12b**.
+Last updated for **N5.12b and the "Quote Desk" label**.
 
 ## How to use it
 
@@ -25,19 +25,22 @@ Last updated for **N5.12b**.
 
 ### N5.12b — the app icon, the intro and the brand colours
 
-Against any APK from N5.12b commit 3 (`39f0231`, run #286) or later. No rule changed.
-Rows T-B1 to T-B4 are the Owner's (2026-10-07); T-B5 and T-B6 are added by
-this side for what N5.12b changed that no automated test can see — a colour
-on a real screen, and a launcher on Android 6 or 7.
+Against any APK from the commit that names the app **"Quote Desk"** (the label
+commit above N5.12b's `39f0231`; the phone pass pack names its hash and run)
+or later. No rule changed. Rows T-B1 to T-B4 are the Owner's (2026-10-07);
+T-B5 and T-B6 are added by this side for what N5.12b changed that no
+automated test can see — a colour on a real screen, and a launcher on
+Android 6 or 7 — and T-B7 for the name.
 
 | Row | Check |
 |---|---|
-| T-B1 | **The icon on the home screen — round and squircle.** On a launcher with **round** icons (a Pixel's default), and again with a **squircle** or rounded-square shape (Samsung's One UI; on a Pixel, Wallpaper & style → app grid / icon shape where offered): the purple Q with the white document and the SIE gear sits in the middle of a pale lavender (`#F7F4FF`) shape, **whole** — the Q's tail at the bottom right is not cut by the edge — with clear space all round. The label under it reads **"SMARTIE Quote Desk"** (a launcher may shorten it). The round icon — long-press, or the Pixel's "Round icons" — is the same |
+| T-B1 | **The icon on the home screen — round and squircle.** On a launcher with **round** icons (a Pixel's default), and again with a **squircle** or rounded-square shape (Samsung's One UI; on a Pixel, Wallpaper & style → app grid / icon shape where offered): the purple Q with the white document and the SIE gear sits in the middle of a pale lavender (`#F7F4FF`) shape, **whole** — the Q's tail at the bottom right is not cut by the edge — with clear space all round. The label under it reads **"Quote Desk"** — on the staging build too, which says "Staging" only inside the app (T-B7). The round icon — long-press, or the Pixel's "Round icons" — is the same |
 | T-B2 | **The themed icon, Android 13 and later.** Turn on **Themed icons** (Pixel: Wallpaper & style; Samsung: Themes → Icons, where offered). The icon becomes the mark's **one-colour silhouette** — the Q, the document and its lines, the gear — tinted to the wallpaper's colours, not the colour mark and not a blank tile; it is whole, as in T-B1. Turn themed icons off: the colour mark comes back |
-| T-B3 | **Splash → intro → sign-in, with no visible wait.** Signed out, force-stop the app (Settings → Apps → SMARTIE Quote Desk → Force stop) and open it. **Android 12+**: first the icon on pale lavender (the system splash), then the **Quote Desk logo** — the Q over "Quote Desk" — centred on the same lavender with "by Smart India Enterprises" small at the foot, then **sign-in** with the same logo above the card and "Continue with Google". **No spinner, no "Opening…" line, nothing to tap, and no pause beyond the app's own loading** — on a quick phone the intro may only flash. Sign in: the logo gives way straight to the app. Force-stop and open again, signed in: splash, the logo briefly, then the Products tab. On **Android 8 to 11** there is no system splash: the screen is lavender from the first instant, then the intro |
+| T-B3 | **Splash → intro → sign-in, with no visible wait.** Signed out, force-stop the app (Settings → Apps → Quote Desk → Force stop) and open it. **Android 12+**: first the icon on pale lavender (the system splash), then the **Quote Desk logo** — the Q over "Quote Desk" — centred on the same lavender with "by Smart India Enterprises" small at the foot, then **sign-in** with the same logo above the card and "Continue with Google". **No spinner, no "Opening…" line, nothing to tap, and no pause beyond the app's own loading** — on a quick phone the intro may only flash. Sign in: the logo gives way straight to the app. Force-stop and open again, signed in: splash, the logo briefly, then the Products tab. On **Android 8 to 11** there is no system splash: the screen is lavender from the first instant, then the intro |
 | T-B4 | **The intro in dark mode.** Turn the phone's **Dark theme** on, force-stop, open. The splash, the intro and sign-in are all still **pale lavender with the logo in colour** — not dark, not inverted, not grey — and "by Smart India Enterprises" is dark navy and readable; the clock and battery at the top are dark, readable on the lavender. Sign in: the app is light as ever. (Phones with their own extra dark mode — some Xiaomi, OnePlus — may override any app; note the make if it does) |
 | T-B5 | **The brand purples.** The buttons, the header rule and the purple accents are a **brighter, bluer purple** than before (`#581FEB`). **Press and hold** "Continue with Google" or any purple button: it turns **deep indigo** (`#3212BD`) while held and back when let go; the press still works. Tap into any text box: its outline is the **light violet** (`#A138FC`). On Products, drag a card to reorder: its border is light violet while it moves; a product in the quotation has a light violet border round its − n + stepper. All white text on purple, and purple text on white or lavender, reads easily |
 | T-B6 | **Android 6 to 7.1** (if such a phone is to hand; otherwise owed). The icon is the mark on a pale lavender **rounded square**; on Android 7.1 with round icons, on a pale lavender **circle**. No splash: the screen is lavender, then the intro |
+| T-B7 | **The app's name is "Quote Desk".** The launcher, the app drawer, the recent-apps screen and Settings → Apps all say **"Quote Desk"**, never "SMARTIE Quote Desk". More → About: the first card is headed **"Quote Desk"**, and the last card still names **Smart India Enterprises**. Team → **Share app link**: the message begins "Join Quote Desk. Open the app and choose Continue with Google; …". The intro still says "by Smart India Enterprises". **Staging is still told apart inside the app**: every signed-in screen's header has "Staging" under its title, and About shows Environment "staging", the staging note, and a package and version ending in `.staging.debug` and `-staging-debug` |
 
 ### N5.12 — the banner gone, and the hard-block
 

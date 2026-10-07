@@ -1,6 +1,6 @@
 # Branding
 
-This folder holds the SMARTIE Quote Desk brand files: the app icon and the
+This folder holds the Quote Desk brand files: the app icon and the
 logo shown on the opening intro. They are the **sources** — the Owner's
 artwork, uploaded here through the GitHub web page in `c9b2e3c`. Nothing else
 adds images to this folder, and nothing changes the four PNGs:

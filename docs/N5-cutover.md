@@ -146,7 +146,9 @@ single list.
     days since N5.12 commit 5b. Before anything reaches `main`, the Owner
     decides: take that step out of the public workflow, or build the
     production APK privately. The old `main` artifacts expire on their
-    own; nothing is deleted.
+    own; nothing is deleted. **Also a candidate for N5.12c** (the Owner,
+    2026-10-07): decide before launch whether CI stops building or
+    uploading it.
 11. **The production Android API key — restrict it, do not rotate the
     wrong one** (the Owner's decision of 2026-10-07: no action until N8).
     Restricting or rotating the key the PWA uses would break the live PWA.

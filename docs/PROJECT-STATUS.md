@@ -8,7 +8,7 @@ anything.** Last updated 2026-10-07.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `99f2568` — run #276, fully green (unit tests, lint, Firestore rules emulator, APK build). N5.12 commit 7, the cutover document. **The last commit that changed app code is `713c1b0`** (N5.12 commit 6, the banner out, run #275), so every APK from #275 on carries the same app. Later commits may sit above it. |
+| **Last CI-verified head** | `e67d24d` — run #277, fully green (unit tests, lint, Firestore rules emulator, APK build). N5.12 commit 8, the status record. **The last commit that changed app code is `713c1b0`** (N5.12 commit 6, the banner out, run #275), so every APK from #275 on carries the same app. Later commits may sit above it. |
 | **APK to install** | The `smartie-native-apks` artifact **from the run that verified the head you intend to install** — never from whichever run this table happens to name. A build contains the commit it ran on and nothing above it, so a head hash and an APK go out of step the moment anything lands. Each run's job summary reports its head and the signing certificate; the app must show **Staging**. |
 | **Ruleset anchor** | `fde9ad3` (N5.12 commit 4b — the hard-block: `rev` on every `/purchase` create and update) — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
 | **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **nineteen rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap), `ff20dd4` (N5.10 — edit, the creator's cancel, the cap only when raised), `cff32be`, `6d2c25c`, `d59f1e6`, `877701f`, `547d218`, `caa835e`, `85c4fb7` (N5.10b — the expression limit, the status pin, a boolean `received`, the uid pin, the headroom reorder and ternaries, Ordered and a Manager's cancel), `0bf1dfe`, `907a660` (the review — two second definitions removed, the same decisions), `5b03d57` (N5.11 — the server's clock on an edit and on an issue), `fde9ad3` (N5.12 — the hard-block: `rev` on every `/purchase` create and update, so the PWA's purchase writes are refused); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
@@ -50,7 +50,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
 | N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2, N4.3 and N4.4 are all code complete and CI-verified**, and both are waiting on the same Owner-run staging rules deployment paired with the APK rollout — they were never deployed separately and must not be. Purchase History is built and open to every role, so what was Batch 5 is done; the tab badge is Batch 6 |
-| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.10 are complete and CI-verified** — N5.9 (finalise) at `57d607a`, run #204, Part A of the Owner's review of it at `2848bb9`, run #208, and **N5.10** (edit, cancel, Duplicate, the party type) at `4283ef2`, run #222. The builder **issues quotations** and now **edits** them — the same number, saved over, stamped "Last edited" — while the creator, or an Owner or Administrator, may **cancel** one and anyone who quotes may **duplicate** one. **Not yet run on a phone** — T-Q1 to T-Q22 are owed. Rules deploy once, at the final staging pass, from the head named above; the ruleset anchor is now `907a660`. **N5.10b is complete and CI-verified** — the rules' expression limit, then Purchase's **Ordered** and **a Manager's cancel**: commits 0 to 13, runs #225 to #240, each pushed alone, one red run (#237) fixed by its own commit; commit 14 is the record. **Not yet run on a phone** — T-R19 to T-R28 are owed. **The Owner's review of it is closed out** (2026-10-06: one app-side gap fixed, two second definitions removed from the rules, the N5.11 survey done). **N5.11 is complete and CI-verified** — the PDF, Print and WhatsApp, behind the finalise gate; the edit and issue times from the server's clock: `3cab563`..`9985c70`, runs #249 to #259, each pushed alone, one red run (#255) fixed by its own commit; the ruleset anchor is now `5b03d57`. **The Owner's review of N5.11 is closed out** (2026-10-06: five choices accepted, four V8C4-parity fixes, `280043f`..`2fb6bae`, runs #262 to #265, no rule changed). **Not yet run on a phone** — T-Q23 to T-Q38 are owed, after the synthetic company settings are entered on staging. **N5.12 is complete and CI-verified** — the public-repository scrub (synthetic rates, the persona, patterned phones, `.invalid` mail, checksum-invalid sample GSTINs), **the hard-block** (the rules require `rev` on every `/purchase` create and update, so every PWA purchase write is refused from the deploy that carries it; ruleset anchor `fde9ad3`), the production placeholder zeroed and artifacts kept 30 days, the N5 banner out, and `docs/N5-cutover.md`: `ac76a9e`..`99f2568`, runs #267 to #276, each pushed alone, none red. **Next: the first phone pass** — every owed row, T-Q39 and T-R29 included |
+| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.10 are complete and CI-verified** — N5.9 (finalise) at `57d607a`, run #204, Part A of the Owner's review of it at `2848bb9`, run #208, and **N5.10** (edit, cancel, Duplicate, the party type) at `4283ef2`, run #222. The builder **issues quotations** and now **edits** them — the same number, saved over, stamped "Last edited" — while the creator, or an Owner or Administrator, may **cancel** one and anyone who quotes may **duplicate** one. **Not yet run on a phone** — T-Q1 to T-Q22 are owed. Rules deploy once, at the final staging pass, from the head named above; the ruleset anchor is now `907a660`. **N5.10b is complete and CI-verified** — the rules' expression limit, then Purchase's **Ordered** and **a Manager's cancel**: commits 0 to 13, runs #225 to #240, each pushed alone, one red run (#237) fixed by its own commit; commit 14 is the record. **Not yet run on a phone** — T-R19 to T-R28 are owed. **The Owner's review of it is closed out** (2026-10-06: one app-side gap fixed, two second definitions removed from the rules, the N5.11 survey done). **N5.11 is complete and CI-verified** — the PDF, Print and WhatsApp, behind the finalise gate; the edit and issue times from the server's clock: `3cab563`..`9985c70`, runs #249 to #259, each pushed alone, one red run (#255) fixed by its own commit; the ruleset anchor is now `5b03d57`. **The Owner's review of N5.11 is closed out** (2026-10-06: five choices accepted, four V8C4-parity fixes, `280043f`..`2fb6bae`, runs #262 to #265, no rule changed). **Not yet run on a phone** — T-Q23 to T-Q38 are owed, after the synthetic company settings are entered on staging. **N5.12 is complete and CI-verified** — the public-repository scrub (synthetic rates, the persona, patterned phones, `.invalid` mail, checksum-invalid sample GSTINs), **the hard-block** (the rules require `rev` on every `/purchase` create and update, so every PWA purchase write is refused from the deploy that carries it; ruleset anchor `fde9ad3`), the production placeholder zeroed and artifacts kept 30 days, the N5 banner out, and `docs/N5-cutover.md`: `ac76a9e`..`99f2568`, runs #267 to #276, each pushed alone, none red. **The Owner accepted N5.12 on 2026-10-07.** **Next: N5.12b** (the app icon and the opening intro), on the Owner's prompt; the first phone pass — every owed row, T-Q39 and T-R29 included — and N6 wait |
 | N6 Products & Categories | Not started. The Products & Categories editing screen, which T-P7 is blocked on. **Also owed here: read the company GST from `teamSettings/company.defaultGst`.** V8C4's `stSave` writes it there and the native app is already permitted to read that document. N5.8a resolves a quotation's GST from the rate its catalogue lines agree on, which is an honest stopgap and not the final answer — a quotation whose lines disagree, or which has only hand-typed lines, has nothing to agree on and currently refuses to finalise until somebody sets the rate |
 | N7 Calculators | Not started. Port the four V8C4 calculators — rolling shutter, high-speed door, garage door, glass door — whose output becomes ordinary quotation lines carrying the opening size in the line's spec text |
 | N8 Migration & cutover | Not started. **The production migration and cutover.** `docs/N2-delivery.md:40` calls N8 "the catalogue migration"; that line is the stale one and `docs/N3-plan.md:585` is right. **Read the blocking warning about `import-staging.mjs` under "Decisions that bind future work" before planning any part of this** — the importer carries seed rates in every payload and would destroy live pricing if pointed at production |
@@ -1367,7 +1367,49 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**The first phone pass on staging — then stop. Do NOT start N6 until the Owner says so.** The Owner deploys the **staging** rules from the head the pass uses (ZIP or git form, sent by message on 2026-10-07 with the pack — never `--project smartie-quote-desk`), enters the synthetic company settings ("Synthetic company settings for the staging pass") in the **staging** console only, installs the `smartie-native-apks` artifact from that head's run, and runs every row owed in `docs/PHONE-TEST-CHECKLIST.md` — the pack groups them by account and phone. Rows that pass move to Passed with the run number; anything that fails comes back as a defect, fixed before N6. T-P7 stays blocked on N6; T-E4 and T-E5 need a PWA build pointed at staging, which does not exist; T-Q25 needs an Android 6 to 9 phone.
+**Wait for the Owner's N5.12b prompt — the app icon and the opening intro — and do nothing until it comes.** The Owner is uploading four brand PNGs to a new `branding/` folder on this branch through GitHub's web page: **do not create that folder** and do not start N5.12b before the prompt. **N6 and the first phone pass are not started**; the pass's rows are in `docs/PHONE-TEST-CHECKLIST.md`, and the pack sent on 2026-10-07 names a head that N5.12b will move on.
+
+### The Owner's acceptance of N5.12, 2026-10-07 — recorded before acting
+
+Rule 8. **"N5.12 accepted — good work, and thank you for the three
+self-corrections."** Then, in the Owner's words where quoted:
+
+- **First, one docs-only commit, pushed alone, CI green:** "Replace the 11
+  fenced V8C4 code excerpts in docs/PROJECT-STATUS.md (lines ~2154-2913)
+  with a plain description of the behaviour plus V8C4's file line numbers.
+  No V8C4 source lines, no V8C4 GSTIN example (line 2740) — use a
+  checksum-invalid sample instead. Keep every decision and finding intact;
+  only the quoted code goes. History stays as it is." Done in the commit
+  that records this: each of the eleven is now a description with its V8C4
+  lines, marked *(described, not quoted)*; the GSTIN message names the
+  checksum-invalid `22AAAAA0000A1Z5`; every decision and finding around
+  them is unchanged.
+- **Then** grep the whole tree for any other committed V8C4 source or
+  built-in defaults, and report — by message.
+- **Settled, no action now:** 4b's `emulators:exec` wording (corrected in
+  the N5.12 record below; the pushed commit is not amended); the two scrub
+  hits that equal **new** synthetic figures stay; the production APK built
+  and uploaded by the public CI stays an **N8** item (`docs/N5-cutover.md`
+  §5, item 10) **and is a candidate for N5.12c** — decide before launch
+  whether CI stops building or uploading it.
+- **Then stop and wait for N5.12b.** Do not start it, do not create
+  `branding/`, and do not start N6 or the phone pass.
+
+**Quoting V8C4 — binding from 2026-10-07.** **CLAUDE.md's rule was
+breached:** V8C4's `index.html` is deliberately not in this repository, yet
+this file carried eleven fenced excerpts of its source from N5.9 to N5.11 —
+the Owner's quotes, recorded under Rule 8 — one of them with V8C4's own
+GSTIN example. **The repository is public**, so anyone could read them, and
+history keeps them: by the Owner's decision nothing is rewritten. **From now
+on a quote of V8C4 in the docs is a description of the behaviour with V8C4's
+line numbers — never its source:** no code, comment, pattern or example
+copied from it. As this commit applies it, the words a person sees — a
+message or a label the app ports and shows as its own — are kept as they
+read; that reading is the Owner's to narrow. This tightens N5.11's lesson
+("quote V8C4 expressions exactly"): exactness stays — describe a pattern
+completely, character class by character class — but in words, with the
+line number to check it against. The rule is also in `CLAUDE.md`.
+
 
 ### N5.12 — every commit pushed alone, CI green before the next
 
@@ -2149,23 +2191,22 @@ matches. The store mapping at 6224 applies `k` again. `qlabel` and
 at save, as this app already has it. The KDoc calling `k: null` "an
 inference" is to be downgraded to read.
 
-**2. The transaction, 5111-5157**, as the Owner quoted it:
+**2. The transaction, V8C4 5111-5157** — the Owner quoted it in full;
+*(described, not quoted)*:
 
-```
-const qRef = doc(f.db, "quotations", draft.id);   // the draft keeps this id across retries
-runTransaction(f.db, async tx => {
-  const qSnap   = await tx.get(qRef);             // both reads before any write
-  const numSnap = await tx.get(numRef);
-  if(qSnap.exists()){                             // retry after a dropped commit
-    const prev = qSnap.data();
-    return {no: prev.no, doc: prev, counter: null, lastIssued: null, reused: true};
-  }
-  ...
-  if(cur) tx.update(numRef, {next: n+1, lastIssued});
-  else    tx.set(numRef, {prefix, fy, pad, next: n+1, lastIssued, serverAt: serverTimestamp()});
-  tx.set(qRef, Object.assign({}, draft, {no, serverAt: serverTimestamp()}));
-})
-```
+- The quotation's document is addressed by **the draft's own id**, which the
+  draft keeps across retries.
+- In one transaction it **reads both documents before it writes anything** —
+  the quotation first, then the numbering counter.
+- **If the quotation already exists** (a retry after a dropped commit) it
+  returns at once: the stored number, the **whole stored record**, no counter
+  change, and a "reused" flag.
+- Otherwise (the lines the Owner elided work out the number) it **updates**
+  the counter — next plus one, and `lastIssued` — when the counter was read,
+  or **sets** it — prefix, financial year, pad, next plus one, `lastIssued`
+  and a server timestamp — when it was not.
+- Last, it **sets** the quotation: the draft with its number and a server
+  timestamp added.
 
 - **a. The read-first is V8C4's own design.** It returns the **whole prior
   record** with `reused: true`, and the caller does
@@ -2190,16 +2231,12 @@ runTransaction(f.db, async tx => {
 **3. DEFECT, in a design not yet built: the saved-customer refusal must not
 exist.** `QuotationWrite` (`3db056b`) refuses finalise with `CUSTOMER_GONE`
 when the saved customer's record cannot be found. V8C4 does the opposite,
-deliberately. `resolvePartyId` (6379) returns null and never throws:
-
-```
-const onForm = partyFromForm();
-if(!onForm.name && !onForm.gstin && !onForm.phone) return null;
-const held = state.partyId ? state.customers.find(c=>c.id===state.partyId) : null;
-if(held && sameParty(onForm, held)) return held.id;
-const found = findCustomer(onForm);
-return found ? found.id : null;
-```
+deliberately. `resolvePartyId` (V8C4 6379; its search at 6384) returns null
+and never throws *(described, not quoted)*. In order: it reads the party
+details on the form; with **no name, no GSTIN and no phone** it returns no
+id; if a party is held (picked earlier) **and the form still describes it**
+(`sameParty`) it returns the held id; otherwise it searches the saved
+customers with `findCustomer` and returns the match's id, or no id.
 
 and at 6270: "No party is created here. A party joins the Parties list only
 when the user presses 'Save this customer', or picks one that is already
@@ -2365,19 +2402,15 @@ repository where it can be. Two of the three reverse what this batch had
 assumed.
 
 **1. `sameParty` is OR, not AND — `3c`'s stand-in is too strict.** V8C4
-6362-6371, with its own KDoc:
+6362-6371 *(described, not quoted)*. Given the typed details and a saved
+party — and false if either is missing — it answers **yes if any one** of
+these holds, checked in this order, which V8C4's own comment calls "the
+order of reliability":
 
-```
-/** Do these typed details still describe this saved party? GSTIN first,
-    then phone, then company name — the order of reliability. */
-function sameParty(p, c){
-  if(!p || !c) return false;
-  const g=norm(p.gstin), ph=digits(p.phone), nm=norm(p.name);
-  return !!((g  && norm(c.gstin)===g) ||
-            (ph && ph.length>=7 && digits(c.phone)===ph) ||
-            (nm && norm(c.name)===nm));
-}
-```
+- the GSTINs are equal after `norm`, and the typed one is not blank;
+- the phones are equal as digit strings, and the typed one has **at least 7
+  digits**;
+- the company names are equal after `norm`, and the typed one is not blank.
 
 **Any one of the three matching is enough.** The stand-in required the name
 **and** any GSTIN or phone present on both sides — stricter in the direction
@@ -2385,17 +2418,14 @@ that hurts: correct a spelling in the company name on a party whose GSTIN is
 unchanged and the stand-in drops the link, where V8C4 keeps it on the GSTIN
 alone. V8C4 accepted the loose end deliberately: GSTIN first, "the order of
 reliability", and a ≥7-digit floor that stops a short or junk phone
-matching. **Replace the stand-in with this, exactly, including the ≥7
+matching. **Replace the stand-in with this rule, exactly, including the ≥7
 check.**
 
-**`findCustomer` is `sameParty` over the list**, not a separate rule:
-
-```
-function findCustomer(p, exceptId){
-  return state.customers.find(c => c.id!==exceptId && !c.archived
-                                   && sameParty(p, c));
-}
-```
+**`findCustomer` is `sameParty` over the list**, not a separate rule
+*(described, not quoted)*: it returns the **first** saved customer, in
+list order, whose id is not the one to leave out (`exceptId`, used when
+editing a party), that is **not archived**, and that `sameParty` matches.
+(Its own line was not recorded; its callers' lines are under Q1 below.)
 
 - **a. One definition of "same party", never two.** If
   `PartyDuplicates.find` already contains this predicate inline, expose it
@@ -2506,32 +2536,26 @@ unlike `saveParty`. **Do not harmonise them; match each path to its own V8C4
 counterpart.**
 
 **Q2 — `norm` strips every non-alphanumeric; the port was too strict.**
-Lines 5681 and 6335:
-
-```
-const norm   = s => String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"");
-const digits = s => String(s||"").replace(/\D/g,"");
-```
+V8C4 5681 and 6335 *(described, not quoted)*: `norm` turns the value into
+text (nothing becomes blank), lower-cases it, and **removes every character
+that is not a–z or 0–9**; `digits` removes every character that is not a
+digit.
 
 `norm` removes spaces, dots, slashes, hyphens, ampersands — so
 `"M/s Sunrise Ent."` matches `"M s Sunrise Ent"`, `"Sunrise Enterprises."`
 matches `"Sunrise Enterprises"`, and `"27AAACM1234F1Z5"` matches
 `"27 AAACM 1234 F1Z5"` — people type GSTINs with spaces. `3d`'s port (trim,
 lower case, single spaces) matched strictly fewer pairs. Fix `norm` to
-exactly that line; confirm `digits` is full-string equality, not a suffix
+exactly that behaviour; confirm `digits` is full-string equality, not a suffix
 comparison. See the pattern under "Decisions that bind future work".
 
-**Q3 — `saveParty` never renames.** Its update branch, in full:
-
-```
-if(c){
-  // fill gaps and take genuine changes — never blank a detail already held
-  if(p.site) c.city=p.site;
-  ["gstin","contact","phone","email","address"].forEach(k=>{ if(p[k]) c[k]=p[k]; });
-  if(p.type) c.type=p.type;
-  c.updated=now; c.upBy=who; c.upUid=currentUserId();
-}
-```
+**Q3 — `saveParty` never renames.** Its update branch (V8C4 `saveParty`,
+from 6404), in full *(described, not quoted)*. Its own comment: fill gaps
+and take genuine changes, never blank a detail already held. A typed **site**
+becomes the customer's **city**; each of **GSTIN, contact, phone, email and
+address** is copied only when the typed value is not blank; the **type** is
+copied only when one is given; and the record is stamped with the time and
+the person's name and uid (`updated`, `upBy`, `upUid`).
 
 `name` is not in the list: it is written only when a record is created, so
 the quotation's Save never renames an existing customer, and a Manager
@@ -2540,21 +2564,20 @@ not write `name`.** Only truthy values are copied — a blank never wipes a
 held detail — and `site` maps to `city`. New records take
 `type: p.type || state.tier || "client"`.
 
-**4 — V8C4 asks before merging.** `#qSaveParty` (8011-8022), the path
-commit 8 rewrote:
+**4 — V8C4 asks before merging.** `#qSaveParty` (V8C4 8011-8022), the path
+commit 8 rewrote, in order *(described, not quoted)*:
 
-```
-const p = partyFromForm();
-if(!p.name) return toast("Enter the company or party name first");
-const bad = gstinProblem(p.gstin) || phoneProblem(p.phone) || emailProblem(p.email);
-if(bad) return toast(bad);
-const existing = findCustomer(p);
-if(existing && !confirmAction(
-    `“${existing.name}” is already saved with ${matchReason(p, existing)}.\n\n` +
-    `OK — update that party with these details.\nCancel — leave it alone.`)) return;
-const c = saveParty(Object.assign({}, p, {type: state.tier}));
-if(c){ state.partyId = c.id; saveDraft(); toast(`${c.name} saved to Parties`); }
-```
+1. Read the party details on the form. No name → toast "Enter the company
+   or party name first", and stop.
+2. Run the GSTIN, phone and email checks, in that order; the first problem
+   is shown **bare** as a toast, and it stops.
+3. Look for an existing customer with `findCustomer`.
+4. If there is one, ask (the browser's own confirm): "“<name>” is already
+   saved with <the reason>." and, after a blank line, "OK — update that
+   party with these details." / "Cancel — leave it alone." Cancel stops.
+5. Save through `saveParty`, with the type set to the quotation's tier.
+6. On success: the draft adopts the customer's id, the draft is saved, and
+   the toast is "<name> saved to Parties".
 
 - **a. It confirms before updating an existing party**, naming it and the
   reason — `matchReason` (6389-6393), checked in this order: "the same
@@ -2640,23 +2663,19 @@ evidence, not authority**, checked against the repository wherever it can
 check them. The plan of record is summarised under "Current next action".
 
 **1. V8C4 has no Finalise button. It has one gate.** `finaliseQuote` has
-exactly one caller in the file, at 8418, inside:
+exactly one caller in the file, at 8418, inside `ensureFinalised` — its own
+comment: "One gate in front of every action that issues a quotation".
+In order *(described, not quoted)*:
 
-```
-/** One gate in front of every action that issues a quotation. */
-async function ensureFinalised(){
-  if(!quoteLines().length){ toast("Add a line to the quotation first"); return false; }
-  if(isFinalised()) return true;            // same quotation keeps its number
-  const blank=state.lines.filter(l=>!(l.rate>0));
-  if(blank.length && !confirmAction(
-      `${blank.length} line${blank.length>1?"s have":" has"} no rate:\n\n• ${blank.slice(0,4).map(l=>l.t).join("\n• ")}`+
-      `${blank.length>4?"\n• …":""}\n\nContinue anyway?`)) return false;
-  const P0 = partyFromForm();
-  const g0 = gstinProblem(P0.gstin); if(g0){ toast("Client GSTIN: "+g0); return false; }
-  const h0 = phoneProblem(P0.phone); if(h0){ toast("Client phone: "+h0); return false; }
-  return !!(await finaliseQuote());
-}
-```
+1. No lines → toast "Add a line to the quotation first", and stop.
+2. Already finalised → go ahead (the same quotation keeps its number).
+3. Lines whose rate is **not above zero** → a confirm counting them ("1 line
+   has no rate:" / "N lines have no rate:"), listing up to four titles as
+   "• title", then "• …" if there are more, and ending "Continue anyway?".
+   Cancel stops.
+4. The client's GSTIN, then phone, are checked; a problem is shown as
+   "Client GSTIN: …" or "Client phone: …", and it stops.
+5. `finaliseQuote` runs; it goes ahead only if that succeeded.
 
 Its three callers are `#btnPdf`, `#btnPrint` and `#btnWa`, and nothing else —
 so the builder's tail line, "A number is issued when this is downloaded,
@@ -2728,34 +2747,25 @@ not a port:** V8C4's `confirmAction` is `window.confirm(msg)`, so the PWA
 shows the browser's OK / Cancel and there is no label to port. "Continue
 anyway" / "Cancel" is chosen; nobody should "correct" it to match V8C4.
 
-**4. The validators, verbatim** (V8C4 6341-6360):
+**4. The validators** (V8C4 6341-6360) *(described, not quoted)*; this app
+ports them in `PartyFormat`, messages included:
 
-```
-const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-
-/** "" is fine. Anything else must look like a real GSTIN. */
-function gstinProblem(v){
-  const s = String(v||"").trim().toUpperCase();
-  if(!s) return null;
-  if(s.length !== 15) return "A GSTIN is 15 characters, for example 27FXJPK9635L1ZM";
-  if(!GSTIN_RE.test(s)) return "That GSTIN does not look right — check it against the certificate";
-  return null;
-}
-
-/** "" is fine. Otherwise 10 digits, optionally with a country code. */
-function phoneProblem(v){
-  const s = String(v||"").trim();
-  if(!s) return null;
-  const d = digits(s);              // digits = replace(/\D/g,"")
-  if(d.length < 10) return "A phone number needs at least 10 digits";
-  if(d.length > 13) return "That phone number has too many digits";
-  return null;
-}
-
-const emailProblem = v =>
-  (!String(v||"").trim() || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(v).trim()))
-    ? null : "That does not look like an email address";
-```
+- **GSTIN.** Blank is fine. Otherwise trimmed and upper-cased. Not 15
+  characters → "A GSTIN is 15 characters, for example …" — V8C4 names a
+  real-looking GSTIN there, which is not reproduced; since N5.12 this app
+  shows the checksum-invalid sample `22AAAAA0000A1Z5` (the Owner's decision
+  of 2026-10-07). Fifteen characters outside the shape → "That GSTIN does not
+  look right — check it against the certificate". **The shape:** two digits,
+  five letters, four digits, a letter, then one of 1–9 or A–Z, the letter
+  Z, and one digit or letter — and nothing before or after.
+- **Phone.** Blank is fine (V8C4's comment: 10 digits, optionally with a
+  country code). Otherwise trimmed and reduced to its digits: fewer than 10
+  → "A phone number needs at least 10 digits"; more than 13 → "That phone
+  number has too many digits".
+- **Email.** Blank after trimming is fine. Otherwise the whole value must
+  be: one or more characters that are neither whitespace nor "@", an "@",
+  one or more such characters, a dot, then two or more such characters →
+  else "That does not look like an email address".
 
 - **Blank is valid in all three** — format checks, not required fields.
   GSTIN trimmed and upper-cased; phone and email trimmed only.
@@ -2783,15 +2793,13 @@ divergence, not a port**. Provenance at its strength: `finaliseQuote` has not
 been read in full, so a name check further down is not excluded.
 
 **6. `snap` — absent, and the real consequence is worse than the plan said.**
-V8C4's reader:
-
-```
-const sn = x.snap || {};
-state.company = Object.assign({}, state.company, {
-  name:sn.name, tagline:sn.tag, address:sn.addr, phone:sn.phones,
-  email:sn.email, web:sn.web, gstin:sn.gstin, pan:sn.pan,
-  bankName:sn.bank&&sn.bank.name, ... });
-```
+V8C4's reader (the re-print path; its line was not recorded)
+*(described, not quoted)* takes the stored `snap`, or an empty object when
+there is none, and copies its fields **straight onto** the company settings
+in memory — `name` from `snap.name`, `tagline` from `snap.tag`, `address`
+from `snap.addr`, `phone` from `snap.phones`, then `email`, `web`, `gstin`
+and `pan`, the bank's name from `snap.bank.name`, and so on through the bank
+block.
 
 The identity fields are assigned **directly**, with no fallback, and
 `Object.assign` with `undefined` overwrites — so an absent `snap` and `{}`
@@ -2902,15 +2910,16 @@ revision copy; a visible **"Last edited by <name>, <date time>"**; `snap`
 is never re-frozen. **Cancel by the creator is also new** — V8C4 lets only
 an admin cancel. Both are to be recorded as new behaviour, not as ports.
 
-**Cancel in V8C4** (6834-6840, 6680-6695):
+**Cancel in V8C4** (6834-6840, 6680-6695) *(described, not quoted)*:
 
-```
-if(!admin) return toast("Only an administrator can cancel a quotation")
-confirm: `Cancel ${x.no}?\n\nThe record is kept and marked cancelled. The number is never released or re-used.`
-toast:   `${x.no} cancelled`
-write:   updateDoc(quotations/<id>, {status:"Cancelled", cancelledBy, cancelledAt})
-         // "status, cancelledBy and cancelledAt are the only fields the rules allow"
-```
+- Not an administrator → toast "Only an administrator can cancel a
+  quotation", and stop.
+- Confirm: "Cancel <number>?", a blank line, then "The record is kept and
+  marked cancelled. The number is never released or re-used."
+- Toast: "<number> cancelled".
+- The write: an update to the quotation of exactly `status: "Cancelled"`,
+  `cancelledBy` and `cancelledAt` — V8C4's own comment says these are the
+  only fields the rules allow.
 
 V8C4's cancel is **local-first**: it marks the quotation cancelled on the
 device, then writes, and on failure says "Cancelled here, but not for the
@@ -4337,7 +4346,9 @@ in its commit message.
 **Advisor error #11, and its lesson, as the Owner numbered it:** the brief
 paraphrased V8C4's file-name regex and its bank rows, and the build followed
 the paraphrase. **Quote V8C4 expressions exactly** — a regex, a field name,
-a label — never in words.
+a label — never in words. *(Tightened 2026-10-07: in committed docs, exactly
+but described, with V8C4's line numbers — see "Quoting V8C4" under the
+Owner's acceptance of N5.12.)*
 
 **The Owner's add-on of 2026-10-06 — recorded (Rule 8):** "Mode: normal.
 ADD-ON, read-only." The repository is **public** (the Owner's decision of

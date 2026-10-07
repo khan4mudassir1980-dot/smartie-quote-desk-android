@@ -41,6 +41,11 @@ Then, before your first edit:
   behaviour, and is deliberately not in this repository. Do not guess what the
   PWA does — `tools/catalogue-import/inspect-v8c4.mjs` reads it read-only on
   the Owner's machine and prints the answers.
+- **Quote V8C4 in the docs by describing it, never by copying it.** A
+  reference to V8C4 is a description of the behaviour with its `index.html`
+  line numbers — no code, comment, pattern or example taken from it. The
+  repository is public. (The Owner, 2026-10-07, after eleven excerpts had to
+  be removed from `docs/PROJECT-STATUS.md`.)
 - Stock writing is **online-only**: a Firestore transaction that re-reads the
   stored quantity, with no offline queue and no optimistic quantity change. See
   `docs/N3-plan.md`.

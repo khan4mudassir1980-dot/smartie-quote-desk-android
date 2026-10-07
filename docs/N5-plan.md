@@ -161,7 +161,8 @@ origRate: amt, k: null, manual: false, amt}`, and counts it in the subtotal.
 the native writer followed it in `3db056b` and was corrected in N5.9a commit
 3b.)* The read-only detail tags a line by its stored `manual` flag, so a V8C4
 transport line shows untagged; the invented fixture's `manual: true` and
-`lot` move with the N5.12 fixture pass.
+`lot` move with the N5.12 fixture pass. *(Done in N5.12 commit 1: the
+fixture's Transportation line is now V8C4's shape, and a test reads it so.)*
 
 ---
 
@@ -838,7 +839,7 @@ of 0.5 must not be lifted to 80.5.
 | **N5.10** | Edit and cancel, with the last-edited stamp; **Duplicate**; **the party type** (pick sets the rate on an empty quotation, a new customer's type always chosen, the Parties screen's checks) — all approved 2026-09-28 | **Yes** | **Done**, `0e9d0b8`..`4283ef2`, CI #211-#222; ruleset anchor `ff20dd4` |
 | **N5.10b** | The 1,000-expression limit: `/purchase` update and the stock rules restructured, `refused()` on every refusal test, tests aimed at their own clause; **the status pin** (status moves only by closing, cancel, reopen and — commit 9 — Ordered), **`received` boolean when set** (the write-off enforced), **the uid pin**; then **Ordered** and **a Manager's cancel** (commits 8 to 11: the reorder, the rules, domain and data, the screens) — approved 2026-09-29, the Ordered and cancel design 2026-10-05 | **Yes** | **Done**, `519b0ba`..`7a73e64`, CI #225-#240 (one red run, #237, fixed by its own commit); ruleset anchor `85c4fb7` |
 | **N5.11** | PDF, WhatsApp and Print in the printed order above — each **calls the finalise gate first**, as V8C4's do; the PDF falls back to the **live** company settings when `snap` is absent; prints **"Last edited by"** right after the date, its time **from the server's clock**, checked by the rule against the request time; Duplicate's message returns to **V8C4's exact words** (with "finalise" added, approved 2026-10-06) | Yes (the edit time and the issue time) | **Done**, `3cab563`..`9985c70`, CI #249-#259 (one red run, #255, fixed by its own commit); ruleset anchor `5b03d57` |
-| **N5.12** | `docs/N5-cutover.md`, and **only here** does the banner come out. It also records the Owner's QZ decision of 2026-09-29, as corrected on 2026-10-05: **the PWA's Purchase writing stops at cutover**, and **the control is staff stopping PWA Purchase use** — not the rules, which still accept the 19 V8C4 purchase writes `PROJECT-STATUS.md` lists ("Owed in N5.12"). Hard-blocking the PWA is revisited here | No | To do |
+| **N5.12** | `docs/N5-cutover.md`; the banner out; the Owner's QZ decision of 2026-09-29, as corrected on 2026-10-05 — **the PWA's Purchase writing stops at cutover** — and, by the Owner's option (b) of 2026-10-07, **the hard-block**: the rules require `rev` on every `/purchase` create and update, so the 19 V8C4 purchase writes once still accepted are refused (4b). Also the public-repository scrub (fixtures, rates, people, contact data), the production placeholder zeroed and artifacts kept 30 days | **Yes** (4b) | **Done**, `ac76a9e`..`99f2568`, CI #267-#276 (none red); ruleset anchor `fde9ad3` |
 
 Rules deploy **once**, at the final staging pass, with one APK — not per batch.
 
@@ -863,8 +864,9 @@ quotation capability**: its four questions are stock, movement shape,
 canonicalisation and reorder level. Anything further about the PWA's quotation
 behaviour needs new patterns written before it can be established first-hand.
 
-V8C4 keeps issuing quotations until N5.12. Nothing in N5 is deployed to
-production, and no batch writes to it.
+V8C4 keeps issuing quotations on production until the N8 cutover
+(`docs/N5-cutover.md`). Nothing in N5 is deployed to production, and no batch
+writes to it.
 
 ---
 

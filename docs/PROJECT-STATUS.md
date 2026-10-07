@@ -1,18 +1,18 @@
 # Project status
 
 **The single current-status record. Read this before planning or changing
-anything.** Last updated 2026-10-06.
+anything.** Last updated 2026-10-07.
 
 ## Where the work is
 
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `2fb6bae` — run #265, fully green (unit tests, lint, Firestore rules emulator, APK build). The fourth of the Owner's N5.11 review fixes, the last commit that changed app code. Later commits may sit above it. |
+| **Last CI-verified head** | `99f2568` — run #276, fully green (unit tests, lint, Firestore rules emulator, APK build). N5.12 commit 7, the cutover document. **The last commit that changed app code is `713c1b0`** (N5.12 commit 6, the banner out, run #275), so every APK from #275 on carries the same app. Later commits may sit above it. |
 | **APK to install** | The `smartie-native-apks` artifact **from the run that verified the head you intend to install** — never from whichever run this table happens to name. A build contains the commit it ran on and nothing above it, so a head hash and an APK go out of step the moment anything lands. Each run's job summary reports its head and the signing certificate; the app must show **Staging**. |
-| **Ruleset anchor** | `5b03d57` (N5.11 commit 3 — an edit's `lastEditedAt` and a create's `serverAt` are the server's time) — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
-| **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **eighteen rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap), `ff20dd4` (N5.10 — edit, the creator's cancel, the cap only when raised), `cff32be`, `6d2c25c`, `d59f1e6`, `877701f`, `547d218`, `caa835e`, `85c4fb7` (N5.10b — the expression limit, the status pin, a boolean `received`, the uid pin, the headroom reorder and ternaries, Ordered and a Manager's cancel), `0bf1dfe`, `907a660` (the review — two second definitions removed, the same decisions), `5b03d57` (N5.11 — the server's clock on an edit and on an issue); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
-| **To deploy next** | The **latest CI-verified head**, not a hash copied into this file. Check it before deploying: `git diff --quiet <head> 5b03d57 -- firestore/firestore.rules` — silence means that head carries the current ruleset. No index deploy: `firestore.indexes.json` is unchanged since `69d0fce`. |
+| **Ruleset anchor** | `fde9ad3` (N5.12 commit 4b — the hard-block: `rev` on every `/purchase` create and update) — the **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`). This moves only when a rule changes, which is why it is recorded separately from the head. |
+| **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **nineteen rules commits behind**: `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap), `ff20dd4` (N5.10 — edit, the creator's cancel, the cap only when raised), `cff32be`, `6d2c25c`, `d59f1e6`, `877701f`, `547d218`, `caa835e`, `85c4fb7` (N5.10b — the expression limit, the status pin, a boolean `received`, the uid pin, the headroom reorder and ternaries, Ordered and a Manager's cancel), `0bf1dfe`, `907a660` (the review — two second definitions removed, the same decisions), `5b03d57` (N5.11 — the server's clock on an edit and on an issue), `fde9ad3` (N5.12 — the hard-block: `rev` on every `/purchase` create and update, so the PWA's purchase writes are refused); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
+| **To deploy next** | The **latest CI-verified head**, not a hash copied into this file. Check it before deploying: `git diff --quiet <head> fde9ad3 -- firestore/firestore.rules` — silence means that head carries the current ruleset. No index deploy: `firestore.indexes.json` is unchanged since `69d0fce`. |
 
 > **Three fields, three meanings — they were one field until 2026-09-24 and it
 > had gone wrong.** The table said `a849650` was "the commit to deploy the rules
@@ -50,7 +50,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
 | N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2, N4.3 and N4.4 are all code complete and CI-verified**, and both are waiting on the same Owner-run staging rules deployment paired with the APK rollout — they were never deployed separately and must not be. Purchase History is built and open to every role, so what was Batch 5 is done; the tab badge is Batch 6 |
-| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.10 are complete and CI-verified** — N5.9 (finalise) at `57d607a`, run #204, Part A of the Owner's review of it at `2848bb9`, run #208, and **N5.10** (edit, cancel, Duplicate, the party type) at `4283ef2`, run #222. The builder **issues quotations** and now **edits** them — the same number, saved over, stamped "Last edited" — while the creator, or an Owner or Administrator, may **cancel** one and anyone who quotes may **duplicate** one. **Not yet run on a phone** — T-Q1 to T-Q22 are owed. Rules deploy once, at the final staging pass, from the head named above; the ruleset anchor is now `907a660`. The Quotation tab keeps its "Keep using the PWA to issue quotations" banner until N5.12. **N5.10b is complete and CI-verified** — the rules' expression limit, then Purchase's **Ordered** and **a Manager's cancel**: commits 0 to 13, runs #225 to #240, each pushed alone, one red run (#237) fixed by its own commit; commit 14 is the record. **Not yet run on a phone** — T-R19 to T-R28 are owed. **The Owner's review of it is closed out** (2026-10-06: one app-side gap fixed, two second definitions removed from the rules, the N5.11 survey done). **N5.11 is complete and CI-verified** — the PDF, Print and WhatsApp, behind the finalise gate; the edit and issue times from the server's clock: `3cab563`..`9985c70`, runs #249 to #259, each pushed alone, one red run (#255) fixed by its own commit; the ruleset anchor is now `5b03d57`. **The Owner's review of N5.11 is closed out** (2026-10-06: five choices accepted, four V8C4-parity fixes, `280043f`..`2fb6bae`, runs #262 to #265, no rule changed). **Not yet run on a phone** — T-Q23 to T-Q38 are owed, after the synthetic company settings are entered on staging |
+| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.10 are complete and CI-verified** — N5.9 (finalise) at `57d607a`, run #204, Part A of the Owner's review of it at `2848bb9`, run #208, and **N5.10** (edit, cancel, Duplicate, the party type) at `4283ef2`, run #222. The builder **issues quotations** and now **edits** them — the same number, saved over, stamped "Last edited" — while the creator, or an Owner or Administrator, may **cancel** one and anyone who quotes may **duplicate** one. **Not yet run on a phone** — T-Q1 to T-Q22 are owed. Rules deploy once, at the final staging pass, from the head named above; the ruleset anchor is now `907a660`. **N5.10b is complete and CI-verified** — the rules' expression limit, then Purchase's **Ordered** and **a Manager's cancel**: commits 0 to 13, runs #225 to #240, each pushed alone, one red run (#237) fixed by its own commit; commit 14 is the record. **Not yet run on a phone** — T-R19 to T-R28 are owed. **The Owner's review of it is closed out** (2026-10-06: one app-side gap fixed, two second definitions removed from the rules, the N5.11 survey done). **N5.11 is complete and CI-verified** — the PDF, Print and WhatsApp, behind the finalise gate; the edit and issue times from the server's clock: `3cab563`..`9985c70`, runs #249 to #259, each pushed alone, one red run (#255) fixed by its own commit; the ruleset anchor is now `5b03d57`. **The Owner's review of N5.11 is closed out** (2026-10-06: five choices accepted, four V8C4-parity fixes, `280043f`..`2fb6bae`, runs #262 to #265, no rule changed). **Not yet run on a phone** — T-Q23 to T-Q38 are owed, after the synthetic company settings are entered on staging. **N5.12 is complete and CI-verified** — the public-repository scrub (synthetic rates, the persona, patterned phones, `.invalid` mail, checksum-invalid sample GSTINs), **the hard-block** (the rules require `rev` on every `/purchase` create and update, so every PWA purchase write is refused from the deploy that carries it; ruleset anchor `fde9ad3`), the production placeholder zeroed and artifacts kept 30 days, the N5 banner out, and `docs/N5-cutover.md`: `ac76a9e`..`99f2568`, runs #267 to #276, each pushed alone, none red. **Next: the first phone pass** — every owed row, T-Q39 and T-R29 included |
 | N6 Products & Categories | Not started. The Products & Categories editing screen, which T-P7 is blocked on. **Also owed here: read the company GST from `teamSettings/company.defaultGst`.** V8C4's `stSave` writes it there and the native app is already permitted to read that document. N5.8a resolves a quotation's GST from the rate its catalogue lines agree on, which is an honest stopgap and not the final answer — a quotation whose lines disagree, or which has only hand-typed lines, has nothing to agree on and currently refuses to finalise until somebody sets the rate |
 | N7 Calculators | Not started. Port the four V8C4 calculators — rolling shutter, high-speed door, garage door, glass door — whose output becomes ordinary quotation lines carrying the opening size in the line's spec text |
 | N8 Migration & cutover | Not started. **The production migration and cutover.** `docs/N2-delivery.md:40` calls N8 "the catalogue migration"; that line is the stale one and `docs/N3-plan.md:585` is right. **Read the blocking warning about `import-staging.mjs` under "Decisions that bind future work" before planning any part of this** — the importer carries seed rates in every payload and would destroy live pricing if pointed at production |
@@ -1024,7 +1024,13 @@ would then have demoted every contractor in the book on its first save. The
 fallback belongs to whichever writer has the context — `create` takes V8C4's
 `client`, `edit` and `mergeInto` keep what is stored.
 
-### Owed in N5.12: scrub the fixture rates
+### Owed in N5.12: scrub the fixture rates — done in N5.12
+
+**Done** — commits 1 to 4 (`87db1d0`, `14fb07f`, `4ed75d7`, `d68cf3a`,
+runs #268 to #271): every rate and total in the fixtures and the tests is
+synthetic, the Transportation line is V8C4's shape, and the persona and
+contact data followed in commit 5. **The repository is public — final**
+(the Owner, 2026-10-07); the record below is kept as it was written.
 
 **N5.12 — replace every rate in `app/src/test/resources/fixtures/` with
 obviously-fake values and update the expected totals.**
@@ -1361,7 +1367,88 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**Build N5.12 as approved on 2026-10-07 — commits 0, 1, 2, 3, 4, 4b, 5, 5b, 6, 7, 8, in that order, each pushed alone with CI green before the next — then send the first phone pass pack, and stop. Do NOT start N6.** The approval, the Owner's answers and the advisor's decisions are recorded below ("The Owner's approval of the N5.12 plan, 2026-10-07"). The Owner's review of N5.11 before it is closed out ("The Owner's review of N5.11 — what was done"). N5.11's phone rows, T-Q23 to T-Q38, join T-Q1 to T-Q22 and T-R19 to T-R28 at the first phone pass, right after N5.12, with the rules deployed from the head then current, after the Owner enters the synthetic company settings ("Synthetic company settings for the staging pass") in the **staging** console only.
+**The first phone pass on staging — then stop. Do NOT start N6 until the Owner says so.** The Owner deploys the **staging** rules from the head the pass uses (ZIP or git form, sent by message on 2026-10-07 with the pack — never `--project smartie-quote-desk`), enters the synthetic company settings ("Synthetic company settings for the staging pass") in the **staging** console only, installs the `smartie-native-apks` artifact from that head's run, and runs every row owed in `docs/PHONE-TEST-CHECKLIST.md` — the pack groups them by account and phone. Rows that pass move to Passed with the run number; anything that fails comes back as a defect, fixed before N6. T-P7 stays blocked on N6; T-E4 and T-E5 need a PWA build pointed at staging, which does not exist; T-Q25 needs an Android 6 to 9 phone.
+
+### N5.12 — every commit pushed alone, CI green before the next
+
+From `git log --oneline 054a08b..HEAD` and
+`gh api "repos/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs?branch=claude/trusting-hamilton-z12eer"`.
+All on 2026-10-07, after the Owner's approval (recorded above, "The Owner's
+approval of the N5.12 plan"). Nothing was pushed on top of a head until CI
+had passed it; no run was red:
+
+| Commit | What | Run |
+|---|---|---|
+| `ac76a9e` | 0 — Docs: the Owner's approval and the advisor's decisions recorded before acting | #267 green |
+| `87db1d0` | 1 — The fixtures: synthetic rates and totals, V8C4's Transportation line, the persona; the two tests that read them | #268 green |
+| `14fb07f` | 2 — The pure tests' inline rates and totals | #269 green |
+| `4ed75d7` | 3 — The Robolectric tests' inline rates and totals | #270 green |
+| `d68cf3a` | 4 — The rules tests, `quotes.js`, the import tool's test and the docs' figures, with their two Kotlin twins | #271 green |
+| `fde9ad3` | 4b — **Rules**: the hard-block, `rev` on every `/purchase` create and update | #272 green |
+| `31195a6` | 5 — People and contact data: the persona, patterned phones, `.invalid`, checksum-invalid sample GSTINs | #273 green |
+| `d0d3789` | 5b — The production placeholder zeroed; `retention-days: 30` on both uploads | #274 green |
+| `713c1b0` | 6 — The Quotations tab's N5 banner out, and a test that it stays out | #275 green |
+| `99f2568` | 7 — `docs/N5-cutover.md` | #276 green |
+
+**The scrub's acceptance** — a local `git grep` over the tree for every
+old figure, name and contact the audit found — was run and **reported to
+the Owner by message only**, as decision 6 requires: no N5.12 commit or
+document names an old value (history keeps them, by the Owner's decision). Kept by decision: the Owner's email where
+the rules and the PWA need it, "Smart India Enterprises" on the About screen
+and in the README's certificate `dname`, and the `SIE/QD` prefix and hint.
+**Found while scrubbing, and reported by message rather than changed:** this
+file quotes V8C4 source in several places (the excerpts the Owner sent for
+N5.9 to N5.11), one of them carrying V8C4's own GSTIN example; the
+standing rule says no V8C4 code is committed. Its fix is the Owner's call.
+
+**The hard-block (4b).** Every `/purchase` create must carry `rev: 1` and
+every update the stored `rev` plus one; the PWA sends neither, so from the
+rules deploy every PWA purchase write is refused. The 19 V8C4 writes the
+replay counted as still accepted are refused — each test beside a witness
+that the same write with the native `rev` is accepted, and each refusal
+aimed at another clause still proving that clause. The full account, with
+the N8 consequences, is `docs/N5-cutover.md` §3.
+
+**Counts, each with its command:**
+
+- **The emulator suite** (`cd firestore && node --test --test-concurrency=1
+  tests/*.test.js`, against a standing emulator started with `npx firebase
+  emulators:start --project smartie-rules-test --only firestore`; the glob
+  because the local Node is 22): **351 tests, 351 pass, 0 "maximum of 1000
+  expressions" lines** at 4b and at 5 (347 at commit 4, the four new ones
+  4b's). *Correction to 4b's commit message, which names `npx firebase
+  emulators:exec … "node --test …"` as the command: that was commit 4's
+  run; 4b's count was taken against the standing emulator, with the same
+  tests and rules. CI's own run of the suite (`npm test` under
+  `emulators:exec`) passed on 4b, #272.*
+- **The Administrator check** (`cd firestore/tools && node admincheck.js`):
+  **24 accepted, 0 refused** at 4b.
+- **The differential replay** (`capture_all.js` on commit 4's suite, then
+  `OLD_WHOLE=1 CAPTURED=<file> node diffrules.js <commit 4's rules>
+  ../firestore.rules <out>`): 315 cases, **25 decisions differ** — the 19
+  V8C4 writes, and 6 hand-built writes of the old suite that sent no `rev`
+  (each now sends it). The 40 valid paths: none moved.
+- **The ablations** (a suite copy on a second emulator, `suite-copy.sh`):
+  each weakening of the two new clauses turns tests red (7, 6, 12, 2, 1 of
+  148), and each V8C4 refusal that now sends `rev` goes red when its own
+  clause is neutralised. The figures are in 4b's commit message.
+- **Headroom** (`firestore/tools/purch.js`, three scenario files, every rule
+  padded and per document): every update 6 to 13 cheaper, every create 12
+  dearer (190 → 202); **the dearest valid write is 748** (a Manager
+  cancelling somebody's requirement; 755 before), against the stop line of
+  900. The full before-and-after table is `docs/N5-cutover.md` §6.
+- **The local JVM sweep** (pure Kotlin, the scratch sweep script): **74
+  classes, 1,138 tests, OK** from commit 2 through commit 5 — 73 and 1,130
+  at commit 1, before `ProductEditRepositoryTest` (with a stub of
+  `ProductStore`'s two interfaces) joined the sweep.
+- **The import tool's tests** (`cd tools/catalogue-import && node --test`):
+  **58, 58 pass** at commits 4 and 5.
+- **The Robolectric tests** (CI only — `./gradlew testStagingDebugUnitTest`
+  on GitHub Actions; the session's machine has no Android SDK and cannot
+  reach Google's Maven): green on every run above. Commit 6's new test ("the
+  list no longer sends anybody to the PWA to issue a quotation") compiled
+  and the suite passed on #275 — the log prints no test names. **Its
+  ablation — the banner put back — is not measured**, for the same reason.
 
 ### N5.11 — every commit pushed alone, CI green before the next; one red run, fixed by its own commit
 
@@ -5217,7 +5304,12 @@ fields under status Ordered, is a V8C4 fact: read it with
 `tools/catalogue-import/inspect-v8c4.mjs` before the N8 batch is written,
 and if it can, the shape includes Ordered.
 
-### Owed in N5.12: the cutover document says the PWA stops writing Purchase
+### Owed in N5.12: the cutover document says the PWA stops writing Purchase — done in N5.12
+
+**Done, and overtaken:** `docs/N5-cutover.md` (N5.12 commit 7) says all of
+this, and since N5.12 commit 4b (`fde9ad3`) the 19 writes listed below are
+**refused** — the Owner chose the hard-block, option (b), on 2026-10-07.
+The list is kept as it was written; it is the cutover document's §3.
 
 Recorded 2026-09-29 (QZ); **corrected 2026-10-05 by the Owner's decision 2**,
 because "the PWA's purchase writes will be refused by the rules" was not

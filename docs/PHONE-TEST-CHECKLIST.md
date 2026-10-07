@@ -8,7 +8,7 @@ run once, at the end, against one staging APK and one staging rules
 deployment. That is why this file exists: nothing else carries the memory of
 what is owed.
 
-Last updated for **N5.10b**.
+Last updated for **N5.12**.
 
 ## How to use it
 
@@ -22,6 +22,17 @@ Last updated for **N5.10b**.
 ---
 
 ## Owed now
+
+### N5.12 — the banner gone, and the hard-block
+
+Against the rules at `fde9ad3` (N5.12 commit 4b) or later. V8C4's own
+purchase payloads, now all refused, are emulator-only
+(`firestore/tests/v8c4-purchase.test.js`) — no PWA build points at staging.
+
+| Row | Check |
+|---|---|
+| T-Q39 | **No "in development" banner.** The Quotations tab, and More → Quotation history, start with the quotations: no "View only · rebuilt in phase N5" and no "Keep using the PWA to issue quotations" |
+| T-R29 | **A requirement the PWA wrote still takes a native write.** In the **staging** console, open any open requirement and **delete its `rev` field** — that is how a V8C4 row looks. On the phone, as the Owner, change its urgency: it saves, and the console now shows `rev: 1`. Change it again: `rev: 2`. Every requirement on production is shaped like this at cutover |
 
 ### N5.10b — Purchase: Ordered, and a Manager's cancel
 
@@ -230,7 +241,7 @@ for every collection at once.
 
 | Row | Check |
 |---|---|
-| T-E14 | **Verify every document shape the PWA writes is accepted by the committed ruleset** — quotations, customers, products, purchase, stock, teamSettings — each pinned by an emulator test rather than checked by hand. `firestore/tests/catalogue.test.js` is the pattern: it pins what `fbPushProduct` writes, so a mistake in that reading fails in CI instead of stopping the business on the day |
+| T-E14 | **Verify every document shape the PWA writes is accepted by the committed ruleset** — quotations, customers, products, stock, teamSettings; **not purchase, which the hard-block refuses by design since N5.12 commit 4b** (`docs/N5-cutover.md` §3) — each pinned by an emulator test rather than checked by hand. `firestore/tests/catalogue.test.js` is the pattern: it pins what `fbPushProduct` writes, so a mistake in that reading fails in CI instead of stopping the business on the day |
 
 ---
 

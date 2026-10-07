@@ -1361,7 +1361,7 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**The Owner reviews the N5.12 plan and the public-repository audit, both sent by message on 2026-10-06. Do NOT start N5.12 code until the Owner approves.** The Owner's review of N5.11 is closed out, each commit pushed alone with CI green before the next: the review and the add-on are recorded below ("The Owner's review of N5.11, 2026-10-06") and what was done follows it ("The Owner's review of N5.11 — what was done"). N5.11's record follows; its phone rows, T-Q23 to T-Q38, join T-Q1 to T-Q22 and T-R19 to T-R28 at the final staging pass, with the rules deployed from the head then current — the ruleset anchor is `5b03d57` — after the Owner enters the synthetic company settings ("Synthetic company settings for the staging pass") in the **staging** console only.
+**Build N5.12 as approved on 2026-10-07 — commits 0, 1, 2, 3, 4, 4b, 5, 5b, 6, 7, 8, in that order, each pushed alone with CI green before the next — then send the first phone pass pack, and stop. Do NOT start N6.** The approval, the Owner's answers and the advisor's decisions are recorded below ("The Owner's approval of the N5.12 plan, 2026-10-07"). The Owner's review of N5.11 before it is closed out ("The Owner's review of N5.11 — what was done"). N5.11's phone rows, T-Q23 to T-Q38, join T-Q1 to T-Q22 and T-R19 to T-R28 at the first phone pass, right after N5.12, with the rules deployed from the head then current, after the Owner enters the synthetic company settings ("Synthetic company settings for the staging pass") in the **staging** console only.
 
 ### N5.11 — every commit pushed alone, CI green before the next; one red run, fixed by its own commit
 
@@ -4266,6 +4266,106 @@ from the audit, and no history rewrite.** Done before the N5.12 plan and
 reported **in that message**. Its findings are deliberately **not** written
 into this file: in a public repository, a list of where the sensitive
 values sit would only point to them.
+
+### The Owner's approval of the N5.12 plan, 2026-10-07 — recorded before acting
+
+Rule 8. **"N5.12 plan APPROVED with the Owner's answers and the changes
+below. Build in this order, each commit pushed alone, CI green before the
+next: 0, 1, 2, 3, 4, 4b, 5, 5b, 6, 7, 8."** The plan was sent by message on
+2026-10-06, with the public-repository audit; what was approved is
+summarised after the decisions.
+
+**The Owner's answers (2026-10-07):**
+
+- **The repository stays public — final.** The tree is scrubbed going
+  forward; **history stays as it is** (no rewrite, no force-push).
+- **The PWA's Purchase writing is hard-blocked by option (b):** the rules
+  require `rev` on every `/purchase` create and update.
+- **The GSTIN example in the user-facing message** is replaced by a sample
+  whose checksum is **invalid**, such as `22AAAAA0000A1Z5`, so it can belong
+  to nobody. **"Smart India Enterprises" stays on the About screen. The
+  `SIE/QD` hint stays.**
+- **The first phone pass comes right after N5.12.** N6 comes later, with its
+  own smaller pass.
+
+**The advisor's decisions:**
+
+1. **The hard-block is built now**, as its own rules commit **4b**, after
+   the scrub; it reaches production only with the N8 rules deploy. The 19
+   "still accepted" V8C4 writes flip to refused, each test still proving its
+   own clause; native writes stay accepted; `firestore/tools/admincheck.js`
+   is re-run on the old V8C4 rows and all 24 writes must stay accepted;
+   headroom is re-measured per document and per request. **Stop if any
+   valid write reaches 900, or the Administrator check loses a write.**
+2. **5b:** the production placeholder `google-services` file is zeroed the
+   way the staging one is, and the artifact uploads get `retention-days:
+   30` — after confirming that no build reads real values from the
+   placeholder (CI uses secrets) and that the APK build stays green.
+3. **The production API key: no action now.** Restricting or rotating the
+   wrong key could break the live PWA. It goes into the N8 checklist with
+   exact steps: first identify which key is the Android key and which the
+   browser key the PWA uses, then restrict only the Android key, to the
+   package and its SHA-1.
+4. **The old `main` artifacts expire on their own.** Nothing is deleted.
+5. **The phone pass's deploy steps** also come in the ZIP form the Owner
+   already uses, pinned to the exact commit, with no git: download
+   `https://github.com/khan4mudassir1980-dot/smartie-quote-desk-android/archive/<full-sha>.zip`,
+   extract it, check the folder name carries that sha, go into its
+   `firestore` folder, then `firebase.cmd login:list` and `firebase.cmd
+   deploy --only firestore:rules --project smartie-quote-desk-staging`. The
+   git form stays as an alternative. Staging only.
+6. **The scrub's acceptance:** a local `git grep` for every old figure, name
+   and contact comes back empty — **reported by message only; the old
+   figures are never written into a commit or a document.**
+7. **Approved as planned:** the banner's removal, the cutover document
+   (with 4b and the API-key steps in its N8 list) and the fixture scrub.
+
+**At the end:** the commits with their CI runs, the counts with the command
+behind each, and the headroom table; then the **first phone pass pack** as
+one message — the commit and APK to use, the ZIP deploy steps, the staging
+`teamSettings/company` table, and the rows due grouped by account and phone;
+**then stop. Do not start N6.** Always: one commit per push, CI green before
+the next; this branch only; no `main`, no PR, no force-push, no amending
+pushed commits; never deploy Firebase.
+
+#### The plan as approved
+
+| # | Commit |
+|---|---|
+| 0 | Docs — this record |
+| 1 | The fixtures: synthetic rates and totals, the Transportation line in V8C4's shape, a persona in place of a real name, the fixture README; the two tests that read them |
+| 2 | The same figures inline in the pure tests (the local JVM sweep) |
+| 3 | The same figures inline in the Robolectric tests (CI only) |
+| 4 | The rules tests, `firestore/tools/quotes.js` and the figures in the docs; the emulator suite and the headroom re-run |
+| 4b | **Rules** — the hard-block: `rev` on every `/purchase` create and update |
+| 5 | People and contact data: the persona, patterned phones, `.invalid` mail domains, placeholder GSTINs, the user-facing GSTIN example |
+| 5b | The production placeholder zeroed; `retention-days: 30` |
+| 6 | The Quotation tab's "in development" banner removed |
+| 7 | `docs/N5-cutover.md` |
+| 8 | Docs — the status, the plan, the checklist |
+
+**Kept, by the Owner's decision or by design:** the Owner's email where the
+rules and the PWA need it; "Smart India Enterprises" on the About screen;
+the `SIE/QD` prefix and hint; the real model identifiers, which pin the
+real document-id scheme and carry no rates.
+
+**What the repository says against it — found while recording it:**
+
+1. **"The 19" are writes, not tests.** They are counted by the differential
+   replay (`firestore/tools/diffrules.js` over `v8cases.js`), and
+   `firestore/tests/v8c4-purchase.test.js` pins them **by category** in four
+   tests (create, top-up, edit, an Administrator's delete; an Administrator's
+   cancel or restore where `received` is already 0; since N5.10b commit 9,
+   an Administrator taking a V8C4 Ordered row back to Needed; an
+   Administrator removing a restored row with stale receipt fields). 4b
+   turns each category to refused, beside a witness that the same write
+   carrying the native `rev` is accepted, and the replay is re-run to show
+   which decisions moved.
+2. **The Administrator check's 24 writes** are `admincheck.js`'s two access
+   states × two old V8C4 rows × three writes (N4's reopen, N5.10b's reopen,
+   the removal) × two people (an Administrator and the Primary Owner). Each
+   already carries `rev: 1`, as `PurchaseWrite.base()` sends it on a row
+   with no stored `rev`.
 
 ### Owed in N6: the validators on the fields and on the company's own details
 

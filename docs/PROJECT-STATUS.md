@@ -8,7 +8,7 @@ anything.** Last updated 2026-10-07.
 | | |
 |---|---|
 | **Active development branch** | `claude/trusting-hamilton-z12eer` |
-| **Last CI-verified head** | `e67d24d` — run #277, fully green (unit tests, lint, Firestore rules emulator, APK build). N5.12 commit 8, the status record. **The last commit that changed app code is `713c1b0`** (N5.12 commit 6, the banner out, run #275), so every APK from #275 on carries the same app. Later commits may sit above it. |
+| **Last CI-verified head** | `39f0231` — run #286, fully green (unit tests, lint, Firestore rules emulator, APK build). N5.12b commit 3, the brand purples. **The last commit that changed app code is `39f0231`** too, so the APK from #286 — or any later run — carries the new icon, the splash and intro, sign-in's logo and the brand colours. Later commits may sit above it. |
 | **APK to install** | The `smartie-native-apks` artifact **from the run that verified the head you intend to install** — never from whichever run this table happens to name. A build contains the commit it ran on and nothing above it, so a head hash and an APK go out of step the moment anything lands. Each run's job summary reports its head and the signing certificate; the app must show **Staging**. |
 | **Ruleset anchor** | The **last commit that changed `firestore.rules`** (`git log -1 --format=%h -- firestore/firestore.rules`) — since 2026-10-07 that is the quoting cleanup, which changed **two comments only**; its rules are `fde9ad3`'s (N5.12 commit 4b — the hard-block: `rev` on every `/purchase` create and update) clause for clause, as `git diff fde9ad3 <anchor> -- firestore/firestore.rules` shows. This moves whenever the file changes, which is why it is recorded separately from the head. |
 | **Live on staging today** | Deployed from `a6c5839`, whose ruleset is identical to `88f343f`'s. It is the **N4.3-era** ruleset and it is **twenty rules commits behind** (the last changing comments only): `ba2db27` (N5.0b), `f61eebc`, `74ff81e`, `677e751`, `a794d64` (N5.6, N5.6b, N5.6c), `ccc08c4`, `ead0a52` (N5.9a — the Manager's discount cap), `ff20dd4` (N5.10 — edit, the creator's cancel, the cap only when raised), `cff32be`, `6d2c25c`, `d59f1e6`, `877701f`, `547d218`, `caa835e`, `85c4fb7` (N5.10b — the expression limit, the status pin, a boolean `received`, the uid pin, the headroom reorder and ternaries, Ordered and a Manager's cancel), `0bf1dfe`, `907a660` (the review — two second definitions removed, the same decisions), `5b03d57` (N5.11 — the server's clock on an edit and on an issue), `fde9ad3` (N5.12 — the hard-block: `rev` on every `/purchase` create and update, so the PWA's purchase writes are refused), and the quoting cleanup of 2026-10-07 (comments only); count with `git log --oneline a6c5839..HEAD -- firestore/firestore.rules`. |
@@ -50,7 +50,7 @@ above; it is the last head CI has verified, not necessarily the tip.
 | N3 Our Stock | **Single-device staging verification passed; physical two-device concurrency verification pending.** A second phone has since been used, and it did **not** run T-S5 — nobody wrote the same row from both at once. Not fully closed |
 | N3.1 Stock Photo | **Ten of fifteen photo rows have passed on physical phones.** T-P4, T-P6 and T-P11 closed in the second pass; the run #73 clipping defect is confirmed fixed on a device. **Five rows remain open** — T-P7 (**blocked** on the N6 Products & Categories screen), T-P12 (**passed in part** on 20 September against its replacement contract), T-P13, T-P14, T-P15 — so N3.1 is **not closed**. All rules, including `/stoppedStock`, are deployed to staging (Owner-confirmed observation, not a fresh read) |
 | N4 Purchase | **In progress.** The plan of record is `docs/N4-plan.md`. Batches 0 to 4 are done, and so are the four defect batches A, B, C and D. A staging phone pass has since confirmed **all four defect fixes on a device**, plus three partial-receipt behaviours **in part** — listed line by line under "The Batch C staging phone pass". **No role-specific row and no whole T-R row is passed yet**, and N3's **T-S25 stays pending**. **N4.2, N4.3 and N4.4 are all code complete and CI-verified**, and both are waiting on the same Owner-run staging rules deployment paired with the APK rollout — they were never deployed separately and must not be. Purchase History is built and open to every role, so what was Batch 5 is done; the tab badge is Batch 6 |
-| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.10 are complete and CI-verified** — N5.9 (finalise) at `57d607a`, run #204, Part A of the Owner's review of it at `2848bb9`, run #208, and **N5.10** (edit, cancel, Duplicate, the party type) at `4283ef2`, run #222. The builder **issues quotations** and now **edits** them — the same number, saved over, stamped "Last edited" — while the creator, or an Owner or Administrator, may **cancel** one and anyone who quotes may **duplicate** one. **Not yet run on a phone** — T-Q1 to T-Q22 are owed. Rules deploy once, at the final staging pass, from the head named above; the ruleset anchor is now `907a660`. **N5.10b is complete and CI-verified** — the rules' expression limit, then Purchase's **Ordered** and **a Manager's cancel**: commits 0 to 13, runs #225 to #240, each pushed alone, one red run (#237) fixed by its own commit; commit 14 is the record. **Not yet run on a phone** — T-R19 to T-R28 are owed. **The Owner's review of it is closed out** (2026-10-06: one app-side gap fixed, two second definitions removed from the rules, the N5.11 survey done). **N5.11 is complete and CI-verified** — the PDF, Print and WhatsApp, behind the finalise gate; the edit and issue times from the server's clock: `3cab563`..`9985c70`, runs #249 to #259, each pushed alone, one red run (#255) fixed by its own commit; the ruleset anchor is now `5b03d57`. **The Owner's review of N5.11 is closed out** (2026-10-06: five choices accepted, four V8C4-parity fixes, `280043f`..`2fb6bae`, runs #262 to #265, no rule changed). **Not yet run on a phone** — T-Q23 to T-Q38 are owed, after the synthetic company settings are entered on staging. **N5.12 is complete and CI-verified** — the public-repository scrub (synthetic rates, the persona, patterned phones, `.invalid` mail, checksum-invalid sample GSTINs), **the hard-block** (the rules require `rev` on every `/purchase` create and update, so every PWA purchase write is refused from the deploy that carries it; ruleset anchor `fde9ad3`), the production placeholder zeroed and artifacts kept 30 days, the N5 banner out, and `docs/N5-cutover.md`: `ac76a9e`..`99f2568`, runs #267 to #276, each pushed alone, none red. **The Owner accepted N5.12 on 2026-10-07.** **Next: N5.12b** (the app icon and the opening intro), on the Owner's prompt; the first phone pass — every owed row, T-Q39 and T-R29 included — and N6 wait |
+| N5 Quotation | **In progress.** The plan of record is `docs/N5-plan.md`. **N5.0 through N5.10 are complete and CI-verified** — N5.9 (finalise) at `57d607a`, run #204, Part A of the Owner's review of it at `2848bb9`, run #208, and **N5.10** (edit, cancel, Duplicate, the party type) at `4283ef2`, run #222. The builder **issues quotations** and now **edits** them — the same number, saved over, stamped "Last edited" — while the creator, or an Owner or Administrator, may **cancel** one and anyone who quotes may **duplicate** one. **Not yet run on a phone** — T-Q1 to T-Q22 are owed. Rules deploy once, at the final staging pass, from the head named above; the ruleset anchor is now `907a660`. **N5.10b is complete and CI-verified** — the rules' expression limit, then Purchase's **Ordered** and **a Manager's cancel**: commits 0 to 13, runs #225 to #240, each pushed alone, one red run (#237) fixed by its own commit; commit 14 is the record. **Not yet run on a phone** — T-R19 to T-R28 are owed. **The Owner's review of it is closed out** (2026-10-06: one app-side gap fixed, two second definitions removed from the rules, the N5.11 survey done). **N5.11 is complete and CI-verified** — the PDF, Print and WhatsApp, behind the finalise gate; the edit and issue times from the server's clock: `3cab563`..`9985c70`, runs #249 to #259, each pushed alone, one red run (#255) fixed by its own commit; the ruleset anchor is now `5b03d57`. **The Owner's review of N5.11 is closed out** (2026-10-06: five choices accepted, four V8C4-parity fixes, `280043f`..`2fb6bae`, runs #262 to #265, no rule changed). **Not yet run on a phone** — T-Q23 to T-Q38 are owed, after the synthetic company settings are entered on staging. **N5.12 is complete and CI-verified** — the public-repository scrub (synthetic rates, the persona, patterned phones, `.invalid` mail, checksum-invalid sample GSTINs), **the hard-block** (the rules require `rev` on every `/purchase` create and update, so every PWA purchase write is refused from the deploy that carries it; ruleset anchor `fde9ad3`), the production placeholder zeroed and artifacts kept 30 days, the N5 banner out, and `docs/N5-cutover.md`: `ac76a9e`..`99f2568`, runs #267 to #276, each pushed alone, none red. **The Owner accepted N5.12 on 2026-10-07.** **N5.12b is complete and CI-verified** — the app icon (adaptive, themed, and for Android 6 to 7.1), the Android 12+ splash, the intro and sign-in's logo, light in dark mode, and the brand purples: `291db09`..`39f0231`, runs #282 to #286, each pushed alone, one red run (#283) fixed by its own commit; no rule changed. **Not yet run on a phone** — T-B1 to T-B6 are owed. **Next: the Owner's review of N5.12b**; the first phone pass — every owed row, T-Q39, T-R29 and T-B1 to T-B6 included — and N6 wait |
 | N6 Products & Categories | Not started. The Products & Categories editing screen, which T-P7 is blocked on. **Also owed here: read the company GST from `teamSettings/company.defaultGst`.** V8C4's `stSave` writes it there and the native app is already permitted to read that document. N5.8a resolves a quotation's GST from the rate its catalogue lines agree on, which is an honest stopgap and not the final answer — a quotation whose lines disagree, or which has only hand-typed lines, has nothing to agree on and currently refuses to finalise until somebody sets the rate |
 | N7 Calculators | Not started. Port the four V8C4 calculators — rolling shutter, high-speed door, garage door, glass door — whose output becomes ordinary quotation lines carrying the opening size in the line's spec text |
 | N8 Migration & cutover | Not started. **The production migration and cutover.** `docs/N2-delivery.md:40` calls N8 "the catalogue migration"; that line is the stale one and `docs/N3-plan.md:585` is right. **Read the blocking warning about `import-staging.mjs` under "Decisions that bind future work" before planning any part of this** — the importer carries seed rates in every payload and would destroy live pricing if pointed at production |
@@ -1368,7 +1368,117 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**Build N5.12b as recorded below ("The Owner's N5.12b prompt, 2026-10-07") — commits 1, 2, 3 and 4, in that order, each pushed alone with CI green before the next — then report, and stop. Do NOT start N6 or the phone pass.** Step 1, the check of the four brand files, passed; the launcher label is **"SMARTIE Quote Desk"**, not "Quote Desk", and is **not changed** — the Owner asked to be told first, and is. The first phone pass's rows are in `docs/PHONE-TEST-CHECKLIST.md`; N5.12b adds its own there and moves the head the pack of 2026-10-07 names.
+**Wait for the Owner's review of N5.12b — the report was sent by message on 2026-10-07 — and do nothing until it comes. Do NOT start N6 or the phone pass.** N5.12b's record follows ("N5.12b — every commit pushed alone…"), after it the prompt it answers. **The launcher label is still "SMARTIE Quote Desk"**: the Owner asked to be told before it changes, and has been. The first phone pass's rows — T-B1 to T-B6 now among them — are in `docs/PHONE-TEST-CHECKLIST.md`; its APK is the one from the run that verified the head then current, `39f0231`'s (#286) or later.
+
+### N5.12b — every commit pushed alone, CI green before the next; one red run, fixed by its own commit
+
+From `git log --oneline c9b2e3c..HEAD` and
+`gh api "repos/khan4mudassir1980-dot/smartie-quote-desk-android/actions/runs?branch=claude/trusting-hamilton-z12eer"`.
+All on 2026-10-07, on the Owner's prompt (recorded below). Nothing was pushed
+on top of a head until CI had passed it:
+
+| Commit | What | Run |
+|---|---|---|
+| `291db09` | 0 — the prompt recorded, Step 1, the colours, the decisions | #282 green |
+| `ee651bb` | 1 — the launcher icon: adaptive on `#F7F4FF`, monochrome, legacy; the manifest | **#283 red** — the unit tests did not compile |
+| `30f8d0e` | 1b — the icon file test reads PNGs without `javax.imageio` | #284 green |
+| `827e446` | 2 — the Android 12+ splash, the intro, sign-in's logo, light in dark mode; the old `ic_launcher.png` removed | #285 green |
+| `39f0231` | 3 — the brand purples, the pressed button, the highlight | #286 green |
+
+**Run #283, and what it teaches.** `LauncherIconFilesTest` read the PNGs with
+`javax.imageio.ImageIO` and `java.awt.image.BufferedImage`. **Android unit
+tests compile against Android's API surface, which has neither**, so the
+test sources did not compile; the APK was never reached and no app code was
+at fault. It passed here because the local runner compiles against the full
+JDK. Commit 1b added `PngImage`, a PNG reader on `java.util.zip` alone, which
+agrees with ImageIO on every pixel of every PNG in the tree (25 files,
+5,132,104 pixels, checked here); the local runner now refuses any
+`java.awt`, `javax.imageio` or `javax.swing` import under `app/src/test`.
+**Lesson: a plain-JVM test under `app/src/test` may use only what Android's
+API surface has** — `java.io`, `java.util`, `java.security` and the Kotlin
+library, not the desktop JDK. Commit 2 was not yet pushed; its logo test
+moved to `PngImage` before it was.
+
+**Tests — counts from the tree, by `@Test`:**
+
+| | Command | Count |
+|---|---|---|
+| Kotlin test methods at `39f0231` | `git grep -h -o '@Test' 39f0231 -- app/src/test \| wc -l` | **2,049** (2,018 at `c9b2e3c`: +31) |
+| Kotlin test classes at `39f0231` | `git grep -l '@Test' 39f0231 -- app/src/test \| wc -l` | **171** (163: +8) |
+| N5.12b's eight classes | `git grep -c '@Test' 39f0231 -- <each file>` | `LauncherIconFilesTest` 8, `LauncherIconTest` 2, `BrandLogoFilesTest` 4, `LaunchThemeTest` 2, `IntroScreenTest` 4, `BrandScreensLayoutTest` 2, `BrandScreensDarkModeTest` 2, `BrandContrastTest` 7 |
+| The local pure-JVM sweep, with the two file tests | the scratch `sweep15.sh` (this file's "Running the pure Kotlin tests locally") | **OK (1150 tests)**, 76 classes |
+| The branding file tests on their own | the scratch runner, `LauncherIconFilesTest` + `BrandLogoFilesTest` + `PngImage` | **OK (12 tests)** |
+| `BrandContrastTest`, here | compiled against a scratch stand-in for Compose's `Color` (8-bit sRGB) | **OK (7 tests)** |
+
+CI ran every Kotlin test on each green run, Robolectric included, and lint.
+`firestore/` is unchanged since `c9b2e3c` (`git diff --quiet c9b2e3c 39f0231 --
+firestore` is silent), so the ruleset anchor does not move and its emulator
+job passed on every run.
+
+**Rule 7 — ablations.** **Measured here, each failing exactly its own test,
+then restored green:**
+
+- `LauncherIconFilesTest` (nine, run again after 1b with the same result):
+  the mark at 48dp (the safe zone, and the size); the silhouette at 40dp;
+  the manifest back on the old PNG; the round icon without its monochrome
+  layer; a white background; the legacy round icon drawn square; the legacy
+  shape white; the label changed to "Quote Desk"; an original re-saved.
+- `BrandLogoFilesTest` (four): the logo at 180dp; cropped to the mark; made
+  from the white-text file; the old launcher PNG put back.
+- `BrandContrastTest` (six, against the stand-in): no pressed colour; the
+  light violet as the primary (purple on the page 4.39); a pale pressed
+  colour (3.81 on `PurpleLight`); the highlight left as the old pale line
+  (1.51); the intro's line in grey (4.45); the PWA's purple kept (caught by
+  the exact-value test — it passes contrast).
+
+**Not measured — the Robolectric tests run in CI only**, and an ablation
+cannot be pushed: `IntroScreenTest` (against a minimum time or exit
+animation), `BrandScreensLayoutTest` (against a logo forced past the edge or
+squeezed), `BrandScreensDarkModeTest` (against a theme-aware background),
+`LaunchThemeTest` (against the splash colour or Force Dark line removed),
+`LauncherIconTest` (against a non-adaptive icon). Each is written so the
+named change fails it; that is reasoning, not a run.
+
+**What the icon looks like, shape by shape** (rendered here from the
+committed xxxhdpi layers): on a **circle**, the purple Q with its white
+document — the SIE gear, "SIE", the lavender lines — sits in the middle of a
+pale lavender disc, the Q's tail reaching toward the lower right with clear
+lavender beyond it; on a **squircle**, a **rounded square** and a
+**teardrop**, the same mark in the same place, the shape's extra corners
+plain lavender. Nothing touches any edge: the farthest pixel is 30.2dp from
+the centre, the safe circle 33dp, the circle mask 36dp. **Themed (Android
+13+)**: the mark's silhouette — the Q ring and tail, the document with its
+gear and lines cut out — in the wallpaper's tone. **Android 6 to 7.1**: the
+mark on a lavender rounded square, or a lavender circle for the round icon.
+The **Android 12+ splash** shows the same adaptive icon, mark on lavender, on
+a lavender screen.
+
+**As built — the Owner's points answered:**
+
+- **The label** is "SMARTIE Quote Desk", unchanged (`LauncherIconFilesTest`
+  holds it so).
+- **Removed:** `app/src/main/res/drawable/ic_launcher.png`, the old SIE
+  launcher PNG (192 × 192, no alpha), in commit 2. Nothing uses it: the
+  manifest moved in commit 1, the loading screen and sign-in in commit 2.
+- **`QD_full_whitetext`** is used nowhere; it stays in `branding/` only.
+- **Contrast:** no pair the new colours land on fails (the table under the
+  prompt's record, and `BrandContrastTest`).
+- **Which file feeds which asset**, and that `branding/` holds the sources:
+  `branding/README.md`, with the brand colours.
+- **The intro** is the logo and "by Smart India Enterprises", on `#F7F4FF`,
+  for exactly as long as `SessionState.Loading` lasts; the old loading
+  screen's spinner and "Opening SMARTIE Quote Desk…" line are gone.
+- **The theme:** `#581FEB` primary; `#3212BD` pressed, and the old dark
+  purple's roles; `#A138FC` on highlighted things, never text; the header
+  rule the primary; the pale lavenders unchanged. No font, spacing or
+  layout changed.
+
+**Phone rows added** (`docs/PHONE-TEST-CHECKLIST.md`, "N5.12b"): **T-B1** the
+icon on the home screen, round and squircle; **T-B2** the themed icon on
+Android 13+; **T-B3** splash → intro → sign-in with no visible wait; **T-B4**
+the intro in dark mode — the Owner's four — and, added here, **T-B5** the
+brand purples on a real screen (pressed, highlight) and **T-B6** the icon on
+Android 6 to 7.1, if such a phone is to hand.
 
 ### The Owner's N5.12b prompt, 2026-10-07 — recorded before acting
 
@@ -2408,6 +2518,13 @@ covers 44 of the suite's 124 test classes (`grep -rl "@Test" app/src/test |
 wc -l`). A pass here can still be red on CI. It is for catching a type error
 or a wrong figure **before** a push costs a cycle.
 The `verify` job remains the only evidence a commit is green.
+
+**It compiles against the whole JDK; Gradle's unit tests do not** (N5.12b,
+run #283). A test under `app/src/test` is compiled against Android's API
+surface, so `java.awt`, `javax.imageio` and `javax.swing` do not exist there,
+however well a test using them runs here. Refuse such an import before
+compiling — `grep -rln "^import java\.awt\|^import javax\.imageio\|^import javax\.swing" app/src/test`
+must print nothing — and read a PNG through the test's own `PngImage`.
 
 ### V8C4's `fbFinaliseAtomic`, re-read 2026-09-25 — what finalise must match
 

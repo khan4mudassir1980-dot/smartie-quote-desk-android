@@ -1368,7 +1368,7 @@ refuses a runaway rather than pruning one.
 
 ## Current next action
 
-**Wait for the Owner's N5.12b prompt — the app icon and the opening intro — and do nothing until it comes.** The Owner is uploading four brand PNGs to a new `branding/` folder on this branch through GitHub's web page: **do not create that folder** and do not start N5.12b before the prompt. **N6 and the first phone pass are not started**; the pass's rows are in `docs/PHONE-TEST-CHECKLIST.md`, and the pack sent on 2026-10-07 names a head that N5.12b will move on.
+**Wait for the Owner's N5.12b prompt — the app icon and the opening intro — and do nothing until it comes.** The Owner is uploading four brand PNGs to `branding/` on this branch through GitHub's web page; the folder and its `README.md` were added at the Owner's instruction of 2026-10-07 so there is somewhere to upload into. **Add no image to it** and do not start N5.12b before the prompt. **N6 and the first phone pass are not started**; the pass's rows are in `docs/PHONE-TEST-CHECKLIST.md`, and the pack sent on 2026-10-07 names a head that N5.12b will move on.
 
 ### The Owner's acceptance of N5.12, 2026-10-07 — recorded before acting
 

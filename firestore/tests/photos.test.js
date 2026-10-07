@@ -101,7 +101,7 @@ test('the image field has to be bytes', async () => {
 test('no price or tax field may ride along on a photo document', async () => {
   const db = as(testEnv, UIDS.staff);
   for (const leak of ['dealer', 'contractor', 'client', 'gst']) {
-    await refused(setPhoto(db, UIDS.staff, 1, { photo: { [leak]: 18500 } }));
+    await refused(setPhoto(db, UIDS.staff, 1, { photo: { [leak]: 14000 } }));
   }
 });
 

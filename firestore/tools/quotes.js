@@ -8,8 +8,8 @@ const serverTime = () => firebase.firestore.FieldValue.serverTimestamp();
 const quotation = (id, uid, extra = {}) => ({
   id, no: 'SIE/QD/2025-26/009', at: Date.now(), by: 'Manager Person', byUid: uid, tier: 'client', tierName: 'Client',
   partyId: 'c_1', party: { name: 'Sunrise Constructions', city: 'Mumbai' },
-  lines: [{ t: 'Sliding gate motor', u: 'each', qty: 2, rate: 22200, k: 'gateMotors|SIE1000', amt: 44400 }],
-  gst: true, gstPct: 18, subtotal: 44400, total: 52392, status: 'Finalised', ...extra });
+  lines: [{ t: 'Sliding gate motor', u: 'each', qty: 2, rate: 17000, k: 'gateMotors|SIE1000', amt: 34000 }],
+  gst: true, gstPct: 18, subtotal: 34000, total: 40120, status: 'Finalised', ...extra });
 const disc = (base, amt, kind = 'pct', value = 10) => ({
   lines: [{ t: 'Sliding gate motor', u: 'each', qty: 1, rate: base, amt: base }],
   disc: { kind, value, amt }, discBase: base, subtotal: base - amt, total: Math.round((base - amt) * 1.18) });
@@ -28,11 +28,11 @@ async function prime(env) {
 const S = [];
 for (const [label, access] of [['uid set', withUid], ['transition', transition]]) {
   S.push({ name: `[${label}] Manager's edit, flat discount raised in rate within the cap ((iv) witness)`, coll: 'quotations', id: 'q1', access,
-    stored: quotation('q1', UIDS.staff, disc(44400, 1000, 'amt', 1000)),
-    write: (e) => as(e, UIDS.staff).collection('quotations').doc('q1').update(edit(UIDS.staff, 1, disc(22200, 1000, 'amt', 1000))) });
+    stored: quotation('q1', UIDS.staff, disc(34000, 800, 'amt', 800)),
+    write: (e) => as(e, UIDS.staff).collection('quotations').doc('q1').update(edit(UIDS.staff, 1, disc(17000, 800, 'amt', 800))) });
   S.push({ name: `[${label}] Manager's edit, percentage raised within the cap ((ii) witness)`, coll: 'quotations', id: 'q1', access,
-    stored: quotation('q1', UIDS.staff, disc(44400, 1332, 'pct', 3)),
-    write: (e) => as(e, UIDS.staff).collection('quotations').doc('q1').update(edit(UIDS.staff, 1, disc(44400, 1776, 'pct', 4))) });
+    stored: quotation('q1', UIDS.staff, disc(34000, 1020, 'pct', 3)),
+    write: (e) => as(e, UIDS.staff).collection('quotations').doc('q1').update(edit(UIDS.staff, 1, disc(34000, 1360, 'pct', 4))) });
   S.push({ name: `[${label}] Manager cancels their own`, coll: 'quotations', id: 'q1', access,
     stored: quotation('q1', UIDS.staff),
     write: (e) => as(e, UIDS.staff).collection('quotations').doc('q1').update({ status: 'Cancelled', cancelledBy: 'Manager Person', cancelledAt: Date.now() }) });
@@ -44,7 +44,7 @@ for (const [label, access] of [['uid set', withUid], ['transition', transition]]
       const db = as(e, UIDS.staff);
       const id = `q_new_${label.length}_${++fresh}`;
       const b = db.batch();
-      b.set(db.collection('quotations').doc(id), quotation(id, UIDS.staff, { ...disc(44400, 2220, 'pct', 5), serverAt: serverTime() }));
+      b.set(db.collection('quotations').doc(id), quotation(id, UIDS.staff, { ...disc(34000, 1700, 'pct', 5), serverAt: serverTime() }));
       b.update(db.collection('teamSettings').doc('numbering'), { next: 10, lastIssued: { no: 'SIE/QD/2025-26/009', at: Date.now(), by: 'Manager Person', uid: UIDS.staff, src: 'android' } });
       await b.commit();
     } });

@@ -112,11 +112,11 @@ class QuoteDiscountTest {
     private data class Boundary(val base: Double, val cap: Double, val allowed: Double)
 
     private val capBoundary = listOf(
-        Boundary(44_410.0, 5.0, 2_221.0),   // 2,220.50  rounds up
-        Boundary(44_410.0, 7.5, 3_331.0),   // 3,330.75  rounds up
-        Boundary(44_403.0, 7.5, 3_330.0),   // 3,330.225 rounds down
-        Boundary(44_404.0, 12.5, 5_551.0),  // 5,550.50  rounds up
-        Boundary(44_401.0, 12.5, 5_550.0),  // 5,550.125 rounds down
+        Boundary(34_010.0, 5.0, 1_701.0),   // 1,700.50  rounds up
+        Boundary(34_010.0, 7.5, 2_551.0),   // 2,550.75  rounds up
+        Boundary(34_003.0, 7.5, 2_550.0),   // 2,550.225 rounds down
+        Boundary(34_004.0, 12.5, 4_251.0),  // 4,250.50  rounds up
+        Boundary(34_001.0, 12.5, 4_250.0),  // 4,250.125 rounds down
     )
 
     @Test

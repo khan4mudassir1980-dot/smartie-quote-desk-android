@@ -79,11 +79,11 @@ const quotation = (id, uid, extra = {}) => ({
   tierName: 'Client',
   partyId: 'c_1',
   party: { name: 'Sunrise Constructions', city: 'Mumbai' },
-  lines: [{ t: 'Sliding gate motor', u: 'each', qty: 2, rate: 22200, k: 'gateMotors|SIE1000', amt: 44400 }],
+  lines: [{ t: 'Sliding gate motor', u: 'each', qty: 2, rate: 17000, k: 'gateMotors|SIE1000', amt: 34000 }],
   gst: true,
   gstPct: 18,
-  subtotal: 44400,
-  total: 52392,
+  subtotal: 34000,
+  total: 40120,
   status: 'Finalised',
   snap: { gstPct: 18, validityDays: 15 },
   ...extra,
@@ -117,11 +117,11 @@ test('and cannot be attributed to somebody else', async () => {
 });
 
 test('a total that is not a number is refused outright', async () => {
-  // `q_string_totals` in the Kotlin fixtures is a real V8C4 row holding
-  // `"total": "12390"`. The reader copes with it; the rules will not accept a
+  // `q_string_totals` in the Kotlin fixtures is a V8C4-shaped row holding
+  // `"total": "17700"`. The reader copes with it; the rules will not accept a
   // new one, because a string total cannot be compared by any rule after it.
   const db = as(testEnv, UIDS.staff);
-  await refused(quotations(db).doc('q_1').set(quotation('q_1', UIDS.staff, { total: '52392' })));
+  await refused(quotations(db).doc('q_1').set(quotation('q_1', UIDS.staff, { total: '40120' })));
   await refused(quotations(db).doc('q_1').set(quotation('q_1', UIDS.staff, { at: '1712000000000' })));
   await refused(quotations(db).doc('q_1').set(quotation('q_1', UIDS.staff, { no: 9 })));
 });
@@ -390,7 +390,7 @@ test('an area line carries its geometry, and the rule does not mind', async () =
   await assertSucceeds(quotations(db).doc('q_area').set(quotation('q_area', UIDS.staff, {
     lines: [{
       t: 'Rolling shutter', s: '3000 × 3500 mm = 113.5 sq ft × 2 nos',
-      u: 'per sq ft', qty: 227, rate: 450, amt: 102150,
+      u: 'per sq ft', qty: 227, rate: 350, amt: 79450,
       w: 3000, h: 3500, dim: 'mm', sqft: 113.5, nos: 2,
     }],
   })));
@@ -407,8 +407,8 @@ test('a Manager may not discount past the Owner\'s limit', async () => {
 
   // 90% off, against a cap of 5.
   await refused(quotations(db).doc('q_disc').set(quotation('q_disc', UIDS.staff, {
-    disc: { kind: 'pct', value: 90, amt: 39960 },
-    discBase: 44400, subtotal: 4440, total: 5239,
+    disc: { kind: 'pct', value: 90, amt: 30600 },
+    discBase: 34000, subtotal: 3400, total: 4012,
   })));
 });
 
@@ -417,10 +417,10 @@ test('but may discount exactly up to it', async () => {
   await givenCap(5);
   const db = as(testEnv, UIDS.staff);
 
-  // 5% of 44,400 is 2,220, leaving 42,180.
+  // 5% of 34,000 is 1,700, leaving 32,300.
   await assertSucceeds(quotations(db).doc('q_ok').set(quotation('q_ok', UIDS.staff, {
-    disc: { kind: 'pct', value: 5, amt: 2220 },
-    discBase: 44400, subtotal: 42180, total: 49772,
+    disc: { kind: 'pct', value: 5, amt: 1700 },
+    discBase: 34000, subtotal: 32300, total: 38114,
   })));
 });
 
@@ -434,15 +434,15 @@ test('but may discount exactly up to it', async () => {
  *
  * Every base here is chosen so that `base × cap ÷ 100` is **not** a whole
  * rupee, and two caps are fractional, because the whole-rupee case
- * (44,400 at 5% = 2,220) is the one where the two sides cannot disagree and
+ * (34,000 at 5% = 1,700) is the one where the two sides cannot disagree and
  * it was the only case commit 2 tested.
  */
 const CAP_BOUNDARY = [
-  { base: 44410, cap: 5, allowed: 2221 },    // 2,220.50  rounds up
-  { base: 44410, cap: 7.5, allowed: 3331 },  // 3,330.75  rounds up
-  { base: 44403, cap: 7.5, allowed: 3330 },  // 3,330.225 rounds down
-  { base: 44404, cap: 12.5, allowed: 5551 }, // 5,550.50  rounds up
-  { base: 44401, cap: 12.5, allowed: 5550 }, // 5,550.125 rounds down
+  { base: 34010, cap: 5, allowed: 1701 },    // 1,700.50  rounds up
+  { base: 34010, cap: 7.5, allowed: 2551 },  // 2,550.75  rounds up
+  { base: 34003, cap: 7.5, allowed: 2550 },  // 2,550.225 rounds down
+  { base: 34004, cap: 12.5, allowed: 4251 }, // 4,250.50  rounds up
+  { base: 34001, cap: 12.5, allowed: 4250 }, // 4,250.125 rounds down
 ];
 
 /** A Manager's quotation discounting [amt] off [base], nothing else on it. */
@@ -488,8 +488,8 @@ test('an inflated discBase cannot buy a bigger discount', async () => {
 
   await refused(quotations(db).doc('q_base').set(quotation('q_base', UIDS.staff, {
     disc: { kind: 'amt', value: 40000, amt: 40000 },
-    // The lines come to 44,400. This claims four million.
-    discBase: 4000000, subtotal: 4440, total: 5239,
+    // The lines come to 34,000. This claims four million.
+    discBase: 4000000, subtotal: 3400, total: 4012,
   })));
 });
 
@@ -501,10 +501,10 @@ test('transport inside the subtotal does not break the base bound', async () => 
   await givenCap(10);
   const db = as(testEnv, UIDS.staff);
 
-  // 44,400 products, 2,220 off, 2,500 transport -> subtotal 44,680.
+  // 34,000 products, 1,700 off, 2,500 transport -> subtotal 34,800.
   await assertSucceeds(quotations(db).doc('q_tr').set(quotation('q_tr', UIDS.staff, {
-    disc: { kind: 'pct', value: 5, amt: 2220 },
-    discBase: 44400, subtotal: 44680, total: 52722,
+    disc: { kind: 'pct', value: 5, amt: 1700 },
+    discBase: 34000, subtotal: 34800, total: 41064,
   })));
 });
 
@@ -540,8 +540,8 @@ test('an Owner and an Administrator are uncapped', async () => {
   for (const uid of [UIDS.primaryOwner, UIDS.admin]) {
     await assertSucceeds(quotations(as(testEnv, uid)).doc(`q_unc_${uid}`)
       .set(quotation(`q_unc_${uid}`, uid, {
-        disc: { kind: 'pct', value: 90, amt: 39960 },
-        discBase: 44400, subtotal: 4440, total: 5239,
+        disc: { kind: 'pct', value: 90, amt: 30600 },
+        discBase: 34000, subtotal: 3400, total: 4012,
       })));
   }
 });
@@ -553,8 +553,8 @@ test('with no quoting document at all, a Manager gets no discount', async () => 
   const db = as(testEnv, UIDS.staff);
 
   await refused(quotations(db).doc('q_nocap').set(quotation('q_nocap', UIDS.staff, {
-    disc: { kind: 'pct', value: 5, amt: 2220 },
-    discBase: 44400, subtotal: 42180, total: 49772,
+    disc: { kind: 'pct', value: 5, amt: 1700 },
+    discBase: 34000, subtotal: 32300, total: 38114,
   })));
 
   // And a quotation with no discount is untouched by any of this.
@@ -690,11 +690,11 @@ async function stored(id) {
   return data;
 }
 
-/** Two motors instead of one: 88,800 of products, 18% GST. */
+/** Two motors instead of one: 68,000 of products, 18% GST. */
 const twoMotors = {
-  lines: [{ t: 'Sliding gate motor', s: '', u: 'each', qty: 4, rate: 22200, origRate: 22200, k: 'gateMotors|SIE1000', manual: false, amt: 88800 }],
-  subtotal: 88800,
-  total: 104784,
+  lines: [{ t: 'Sliding gate motor', s: '', u: 'each', qty: 4, rate: 17000, origRate: 17000, k: 'gateMotors|SIE1000', manual: false, amt: 68000 }],
+  subtotal: 68000,
+  total: 80240,
 };
 
 test('the creator edits their own quotation; the number and the counter stay', async () => {
@@ -717,7 +717,7 @@ test('an Owner and an Administrator edit anybody\'s', async () => {
   await assertSucceeds(quotations(as(testEnv, UIDS.primaryOwner)).doc('q_e2')
     .update(edit(UIDS.primaryOwner, 1, twoMotors)));
   await assertSucceeds(quotations(as(testEnv, UIDS.admin)).doc('q_e2')
-    .update(edit(UIDS.admin, 2, { total: 104785 })));
+    .update(edit(UIDS.admin, 2, { total: 80241 })));
 });
 
 test('a Manager edits no other Manager\'s quotation, and Staff edit nothing', async () => {
@@ -817,7 +817,7 @@ test('an edit that leaves the previous edit\'s time in place is refused', async 
   await givenIssued('q_time');
   const db = as(testEnv, UIDS.staff);
   await assertSucceeds(quotations(db).doc('q_time').update(edit(UIDS.staff, 1, twoMotors)));
-  await refused(quotations(db).doc('q_time').update({ total: 104785, rev: 2 }));
+  await refused(quotations(db).doc('q_time').update({ total: 80241, rev: 2 }));
 });
 
 test('an edit from an opening two edits behind is refused', async () => {
@@ -828,7 +828,7 @@ test('an edit from an opening two edits behind is refused', async () => {
   const db = as(testEnv, UIDS.staff);
   await assertSucceeds(quotations(db).doc('q_stale').update(edit(UIDS.staff, 1, twoMotors)));
   await assertSucceeds(quotations(as(testEnv, UIDS.admin)).doc('q_stale')
-    .update(edit(UIDS.admin, 2, { total: 104785 })));
+    .update(edit(UIDS.admin, 2, { total: 80241 })));
   await refused(quotations(db).doc('q_stale').update(edit(UIDS.staff, 1, { total: 104786 })));
 });
 
@@ -873,20 +873,20 @@ test('a cancelled quotation cannot be edited', async () => {
   await assertSucceeds(quotations(as(testEnv, UIDS.admin)).doc('q_gone').update({
     status: 'Cancelled', cancelledBy: 'Administrator', cancelledAt: Date.now(),
   }));
-  await refused(quotations(db).doc('q_gone').update(edit(UIDS.staff, 2, { total: 104785 })));
+  await refused(quotations(db).doc('q_gone').update(edit(UIDS.staff, 2, { total: 80241 })));
   await refused(quotations(as(testEnv, UIDS.admin)).doc('q_gone')
-    .update(edit(UIDS.admin, 2, { total: 104785 })));
+    .update(edit(UIDS.admin, 2, { total: 80241 })));
 });
 
 test('an edit may remove the discount', async () => {
   await givenCap(5);
   await givenIssued('q_nodisc', UIDS.staff, {
-    disc: { kind: 'pct', value: 5, amt: 2220 }, discBase: 44400, subtotal: 42180, total: 49772,
+    disc: { kind: 'pct', value: 5, amt: 1700 }, discBase: 34000, subtotal: 32300, total: 38114,
   });
   const db = as(testEnv, UIDS.staff);
   const remove = firebase.firestore.FieldValue.delete();
   await assertSucceeds(quotations(db).doc('q_nodisc').update(edit(UIDS.staff, 1, {
-    disc: remove, discBase: remove, subtotal: 44400, total: 52392,
+    disc: remove, discBase: remove, subtotal: 34000, total: 40120,
   })));
   const after = await stored('q_nodisc');
   assert.equal(after.disc, undefined);
@@ -894,7 +894,7 @@ test('an edit may remove the discount', async () => {
 
 // --- N5.10: the cap on an edit — only when the discount goes up (amendment A) --
 //
-// A Manager's quotation issued at 10% of 44,400 under a cap that allowed it;
+// A Manager's quotation issued at 10% of 34,000 under a cap that allowed it;
 // the Owner has since lowered the cap to 5%. The same arithmetic is in
 // `QuoteDiscount.raised` and pinned in the Kotlin tests. Change one, change both.
 
@@ -915,7 +915,7 @@ const discountedTo = (base, amt, kind = 'pct', value = 10) => ({
 });
 
 test('(i) a Manager fixing only a phone number is not stopped by a lowered cap', async () => {
-  await givenDiscounted('q_i', 44400, 4440);
+  await givenDiscounted('q_i', 34000, 3400);
   await givenCap(5);
   await assertSucceeds(quotations(as(testEnv, UIDS.staff)).doc('q_i').update(edit(UIDS.staff, 1, {
     party: { name: 'Sunrise Constructions', city: 'Mumbai', phone: '9876543211' },
@@ -923,93 +923,93 @@ test('(i) a Manager fixing only a phone number is not stopped by a lowered cap',
 });
 
 test('(ii) raising the discount brings the cap back', async () => {
-  await givenDiscounted('q_ii', 44400, 4440);
+  await givenDiscounted('q_ii', 34000, 3400);
   await givenCap(5);
   await refused(quotations(as(testEnv, UIDS.staff)).doc('q_ii')
-    .update(edit(UIDS.staff, 1, discountedTo(44400, 5328, 'pct', 12))));
+    .update(edit(UIDS.staff, 1, discountedTo(34000, 4080, 'pct', 12))));
 });
 
 test('(ii) and a raise within the cap is accepted - the witness', async () => {
-  await givenDiscounted('q_ii_ok', 44400, 1332, 'pct', 3);
+  await givenDiscounted('q_ii_ok', 34000, 1020, 'pct', 3);
   await givenCap(5);
   await assertSucceeds(quotations(as(testEnv, UIDS.staff)).doc('q_ii_ok')
-    .update(edit(UIDS.staff, 1, discountedTo(44400, 1776, 'pct', 4))));
+    .update(edit(UIDS.staff, 1, discountedTo(34000, 1360, 'pct', 4))));
 });
 
 test('(iii) lines added under an unchanged percentage raise the amount, so the cap applies', async () => {
   // Deliberate: otherwise new items get the old over-cap rate, a way round
   // the Owner's cap.
-  await givenDiscounted('q_iii', 44400, 4440);
+  await givenDiscounted('q_iii', 34000, 3400);
   await givenCap(5);
   await refused(quotations(as(testEnv, UIDS.staff)).doc('q_iii')
-    .update(edit(UIDS.staff, 1, discountedTo(66600, 6660))));
+    .update(edit(UIDS.staff, 1, discountedTo(51000, 5100))));
 });
 
 test('(iii) and lines added under a percentage the cap allows are accepted - the witness', async () => {
-  // 4% of 66,600 is 2,664, inside a 5% cap: the same raise, evaluated to the
+  // 4% of 51,000 is 2,040, inside a 5% cap: the same raise, evaluated to the
   // end, and accepted — so the refusal above is the cap's.
-  await givenDiscounted('q_iii_ok', 44400, 1776, 'pct', 4);
+  await givenDiscounted('q_iii_ok', 34000, 1360, 'pct', 4);
   await givenCap(5);
   await assertSucceeds(quotations(as(testEnv, UIDS.staff)).doc('q_iii_ok')
-    .update(edit(UIDS.staff, 1, discountedTo(66600, 2664, 'pct', 4))));
+    .update(edit(UIDS.staff, 1, discountedTo(51000, 2040, 'pct', 4))));
 });
 
 test('(iv) a flat discount kept while lines are removed raises the rate, so the cap applies', async () => {
-  // 2,000 on 44,400 is inside a 5% cap; 2,000 on 22,200 is not.
+  // 1,500 on 34,000 is inside a 5% cap; 1,500 on 17,000 is not.
   await givenCap(5);
-  await givenDiscounted('q_iv', 44400, 2000, 'amt', 2000);
+  await givenDiscounted('q_iv', 34000, 1500, 'amt', 1500);
   await refused(quotations(as(testEnv, UIDS.staff)).doc('q_iv')
-    .update(edit(UIDS.staff, 1, discountedTo(22200, 2000, 'amt', 2000))));
+    .update(edit(UIDS.staff, 1, discountedTo(17000, 1500, 'amt', 1500))));
 });
 
 test('(iv) and a flat discount the cap still allows is accepted - the witness', async () => {
-  // 1,000 on 22,200 is inside a 5% cap (1,111): the rate rose, the cap was
+  // 800 on 17,000 is inside a 5% cap (850): the rate rose, the cap was
   // asked, and it said yes.
   await givenCap(5);
-  await givenDiscounted('q_iv_ok', 44400, 1000, 'amt', 1000);
+  await givenDiscounted('q_iv_ok', 34000, 800, 'amt', 800);
   await assertSucceeds(quotations(as(testEnv, UIDS.staff)).doc('q_iv_ok')
-    .update(edit(UIDS.staff, 1, discountedTo(22200, 1000, 'amt', 1000))));
+    .update(edit(UIDS.staff, 1, discountedTo(17000, 800, 'amt', 800))));
 });
 
 test('(v) lines removed under an unchanged percentage are accepted', async () => {
-  await givenDiscounted('q_v', 44400, 4440);
+  await givenDiscounted('q_v', 34000, 3400);
   await givenCap(5);
   await assertSucceeds(quotations(as(testEnv, UIDS.staff)).doc('q_v')
-    .update(edit(UIDS.staff, 1, discountedTo(22200, 2220))));
+    .update(edit(UIDS.staff, 1, discountedTo(17000, 1700))));
 });
 
 test('(v) with a base that rounds, only because of the rupee margin', async () => {
-  // 10% of 44,410 is 4,441; of 22,205 it is 2,220.5, which is 2,221. Without
-  // the margin 2,221 × 44,410 > 4,441 × 22,205 would read as a rate rise.
-  await givenDiscounted('q_v_round', 44410, 4441);
+  // 10% of 34,010 is 3,401; of 17,005 it is 1,700.5, which is 1,701. Without
+  // the margin 1,701 × 34,010 > 3,401 × 17,005 would read as a rate rise.
+  await givenDiscounted('q_v_round', 34010, 3401);
   await givenCap(5);
   await assertSucceeds(quotations(as(testEnv, UIDS.staff)).doc('q_v_round')
-    .update(edit(UIDS.staff, 1, discountedTo(22205, 2221))));
+    .update(edit(UIDS.staff, 1, discountedTo(17005, 1701))));
 });
 
 test('a discount added where there was none counts as raised', async () => {
   await givenCap(5);
   await givenIssued('q_add');
   const db = as(testEnv, UIDS.staff);
-  await refused(quotations(db).doc('q_add').update(edit(UIDS.staff, 1, discountedTo(44400, 4440))));
+  await refused(quotations(db).doc('q_add').update(edit(UIDS.staff, 1, discountedTo(34000, 3400))));
   // Within the cap it is accepted, as at issue.
-  await assertSucceeds(quotations(db).doc('q_add').update(edit(UIDS.staff, 1, discountedTo(44400, 2220, 'pct', 5))));
+  await assertSucceeds(quotations(db).doc('q_add').update(edit(UIDS.staff, 1, discountedTo(34000, 1700, 'pct', 5))));
 });
 
 test('an Owner or Administrator raising a discount past the cap is accepted', async () => {
-  await givenDiscounted('q_admin_up', 44400, 4440);
+  await givenDiscounted('q_admin_up', 34000, 3400);
   await givenCap(5);
   await assertSucceeds(quotations(as(testEnv, UIDS.admin)).doc('q_admin_up')
-    .update(edit(UIDS.admin, 1, discountedTo(44400, 22200, 'pct', 50))));
+    .update(edit(UIDS.admin, 1, discountedTo(34000, 17000, 'pct', 50))));
 });
 
 test('the shape still binds when the cap does not: an inflated base is refused', async () => {
   // Not raised (the amount falls) — but the claimed base is past
   // subtotal + amount, which no honest quotation can hold.
-  await givenDiscounted('q_shape', 44400, 4440);
+  await givenDiscounted('q_shape', 34000, 3400);
   await givenCap(5);
   await refused(quotations(as(testEnv, UIDS.staff)).doc('q_shape').update(edit(UIDS.staff, 1, {
-    ...discountedTo(22200, 2220),
+    ...discountedTo(17000, 1700),
     discBase: 4_000_000,
   })));
 });

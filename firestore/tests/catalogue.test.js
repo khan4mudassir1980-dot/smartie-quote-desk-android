@@ -78,9 +78,9 @@ function v8c4Product(overrides = {}) {
     unit: 'per sq ft',
     spec: '',
     gst: 18,
-    dealer: 18500,
+    dealer: 14000,
     contractor: null,
-    client: 25900,
+    client: 23000,
     conflictResolved: true,
     categoryId: 'cat-other',
     active: true,
@@ -162,7 +162,7 @@ test('an active of 1 rather than true is refused', async () => {
 
 test('a price stored as a formatted string is refused', async () => {
   const db = as(testEnv, UIDS.primaryOwner);
-  await refused(products(db).doc(DOC).set(v8c4Product({ dealer: '1,250.50' })));
+  await refused(products(db).doc(DOC).set(v8c4Product({ dealer: '1,234.50' })));
 });
 
 test('and so is the PWA unset marker, which only the reader understands', async () => {
@@ -232,7 +232,7 @@ test('a one-field edit on a legacy document is refused', async () => {
   await givenLegacyProduct({
     id: 'gateMotors|SIE1000', key: 'gateMotors|SIE1000', group: 'gateMotors',
     seedModel: 'SIE1000', model: 'SIE1000', name: 'Sliding gate motor',
-    gst: '18', dealer: 18500, contractor: null, client: 25900, active: 1,
+    gst: '18', dealer: 14000, contractor: null, client: 23000, active: 1,
   });
   const db = as(testEnv, UIDS.primaryOwner);
   await refused(products(db).doc(DOC).update({ unit: 'per sq ft' }));
@@ -244,7 +244,7 @@ test('and the same edit as a complete, correctly typed write is accepted', async
   await givenLegacyProduct({
     id: 'gateMotors|SIE1000', key: 'gateMotors|SIE1000', group: 'gateMotors',
     seedModel: 'SIE1000', model: 'SIE1000', name: 'Sliding gate motor',
-    gst: '18', dealer: 18500, contractor: null, client: 25900, active: 1,
+    gst: '18', dealer: 14000, contractor: null, client: 23000, active: 1,
   });
   const db = as(testEnv, UIDS.primaryOwner);
   await assertSucceeds(
@@ -258,7 +258,7 @@ test('and the same edit as a complete, correctly typed write is accepted', async
 test('a document written before seedModel existed repairs the same way', async () => {
   await givenLegacyProduct({
     id: 'gateMotors|SIE1000', group: 'gateMotors', model: 'SIE1000',
-    name: 'Sliding gate motor', gst: 18, dealer: 18500, active: true,
+    name: 'Sliding gate motor', gst: 18, dealer: 14000, active: true,
   });
   const db = as(testEnv, UIDS.primaryOwner);
   await refused(products(db).doc(DOC).update({ name: 'Sliding gate motor 1000 kg' }));

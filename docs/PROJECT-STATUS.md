@@ -4453,13 +4453,14 @@ generous, never one rupee strict** — a refusal there is invisible to the
 person, and a rupee is not.
 
 **Q2 — ANSWERED AND FIXED in N5.9a commit 2b.** They could disagree, and
-commit 2 was **one rupee strict**. 5% of 44,410 is ₹2,220.50; the app rounds
-that to ₹2,221 and lets a Manager have it, and the rule refused ₹2,221
-because `2221 > 2220.5`. Commit 2's only boundary test used 44,400 × 5%
-= ₹2,220 exactly — the one case where the two cannot differ, so it was green
+commit 2 was **one rupee strict**. 5% of 34,010 is ₹1,700.50; the app rounds
+that to ₹1,701 and lets a Manager have it, and the rule refused ₹1,701
+because `1701 > 1700.5`. Commit 2's only boundary test used 34,000 × 5%
+= ₹1,700 exactly — the one case where the two cannot differ, so it was green
 over the fault (rule 7). Reproduced before the fix: of five non-whole
-vectors, the three that round **up** (44,410 @ 5%, 44,410 @ 7.5%,
-44,404 @ 12.5%) were refused; the two that round down passed. The rule now
+vectors, the three that round **up** (34,010 @ 5%, 34,010 @ 7.5%,
+34,004 @ 12.5%) were refused; *(figures as renumbered in N5.12's scrub,
+2026-10-07 — the arithmetic is the same)* the two that round down passed. The rule now
 reads `amount <= base × cap ÷ 100 + 1`: it accepts at most one rupee the app
 refuses (whenever the exact figure's fraction is under half a rupee) and
 never refuses one the app accepts. The five vectors are `CAP_BOUNDARY` in

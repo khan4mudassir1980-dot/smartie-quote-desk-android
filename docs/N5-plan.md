@@ -188,7 +188,7 @@ than the noise.
 knows nothing about `nos`: it prints `qty` against `rate` and falls back to
 `qty × rate` when an amount is missing, so the two must agree or a natively
 built line reads wrong in the PWA. The door count travels separately, and the
-working — `3000 × 3500 mm = 113.5 sq ft × ₹450 × 2 nos` — goes into the line's
+working — `3000 × 3500 mm = 113.5 sq ft × ₹350 × 2 nos` — goes into the line's
 `s` (spec) field, which V8C4 already prints.
 
 ---
@@ -524,7 +524,7 @@ function qnDiscountWithinCap() {
 >   disc.amt` is exact and the sketch's `+ 1` there bought nothing.
 > - **A one-rupee margin on the cap check instead** —
 >   `amount <= base × cap ÷ 100 + 1`. The app rounds the cap HALF_UP and the
->   rule sees the unrounded figure; without the rupee, 5% of 44,410 (₹2,221
+>   rule sees the unrounded figure; without the rupee, 5% of 34,010 (₹1,701
 >   in the app) was refused. Generous by at most one rupee, never strict
 >   (commit 2b, with five fractional vectors on both sides).
 >
@@ -536,7 +536,7 @@ function qnDiscountWithinCap() {
 present**, and V8C4 writes no `disc` key, so a PWA quotation short-circuits
 before any `get()` and before `subtotal` is type-checked — which matters,
 because the `q_string_totals` fixture stores `subtotal` as the string
-`"10500"`. A missing `/teamSettings/quoting` therefore cannot refuse a PWA
+`"15000"`. A missing `/teamSettings/quoting` therefore cannot refuse a PWA
 write. A Manager writing a discount with the document missing gets cap `0` and
 is refused: safe by default.
 
@@ -751,17 +751,17 @@ derived from the already-rounded figures.
 
 | Step | Figure |
 |---|---|
-| Sliding gate motor 1000 kg — 2 × ₹22,200 | ₹44,400 |
-| Rolling shutter — 3000 × 3500 mm = **113.5 sq ft**/door × 2 nos = 227 sq ft × ₹450 | ₹1,02,150 |
-| **Products** | **₹1,46,550** |
+| Sliding gate motor 1000 kg — 2 × ₹17,000 | ₹34,000 |
+| Rolling shutter — 3000 × 3500 mm = **113.5 sq ft**/door × 2 nos = 227 sq ft × ₹350 | ₹79,450 |
+| **Products** | **₹1,13,450** |
 | Installation — per door, ₹1,500 × 2 | ₹3,000 |
-| **Products + installation** (`discBase`) | **₹1,49,550** |
-| − Discount 10% | − ₹14,955 |
-| | ₹1,34,595 |
+| **Products + installation** (`discBase`) | **₹1,16,450** |
+| − Discount 10% | − ₹11,645 |
+| | ₹1,04,805 |
 | + Transport | + ₹2,500 |
-| **Subtotal (GST base)** | **₹1,37,095** |
-| + GST 18% | + ₹24,677 |
-| **Grand total** | **₹1,61,772** |
+| **Subtotal (GST base)** | **₹1,07,305** |
+| + GST 18% | + ₹19,315 |
+| **Grand total** | **₹1,26,620** |
 
 3000 × 3500 mm = 113.0211 sq ft → up to the next 0.5 → **113.5**.
 
@@ -769,17 +769,17 @@ derived from the already-rounded figures.
 
 | Step | Figure |
 |---|---|
-| Toughened glass 12 mm — 120 sq ft × ₹145 | ₹17,400 |
+| Toughened glass 12 mm — 120 sq ft × ₹100 | ₹12,000 |
 | Manual line "Site measurement visit" — 1 × ₹2,000 | ₹2,000 |
-| **Products** | **₹19,400** |
-| Installation — 8% of products | ₹1,552 |
-| **Products + installation** | **₹20,952** |
+| **Products** | **₹14,000** |
+| Installation — 8% of products | ₹1,120 |
+| **Products + installation** | **₹15,120** |
 | − Discount ₹2,000 (flat) | − ₹2,000 |
-| | ₹18,952 |
+| | ₹13,120 |
 | + Transport | + ₹800 |
-| **Subtotal** | **₹19,752** |
-| + GST 18% | + ₹3,555 |
-| **Grand total** | **₹23,307** |
+| **Subtotal** | **₹13,920** |
+| + GST 18% | + ₹2,506 |
+| **Grand total** | **₹16,426** |
 
 ### C — installation per sq ft, and a Manager held to the cap
 

@@ -14,7 +14,7 @@ test.beforeEach(async () => {
     const db = context.firestore();
     await db.collection('products').doc('gateMotors__SIE1000').set({
       id: 'gateMotors|SIE1000', group: 'gateMotors', seedModel: 'SIE1000', model: 'SIE1000',
-      name: 'Sliding gate motor', gst: 18, dealer: 18500, contractor: null, client: null, active: true,
+      name: 'Sliding gate motor', gst: 18, dealer: 14000, contractor: null, client: null, active: true,
     });
     await db.collection('stock').doc('gateMotors|SIE1000').set({
       key: 'gateMotors|SIE1000', q: 7, min: 2, t: Date.now(), byUid: UIDS.admin,
@@ -110,7 +110,7 @@ test('no price or tax field may be written to a Worker-readable stock document',
   await assertSucceeds(db.collection('stock').doc('gateMotors|SIE1000').set(base, { merge: true }));
   for (const leak of ['dealer', 'contractor', 'client', 'gst']) {
     await refused(
-      db.collection('stock').doc('gateMotors|SIE1000').set({ ...base, [leak]: 18500 }, { merge: true }),
+      db.collection('stock').doc('gateMotors|SIE1000').set({ ...base, [leak]: 14000 }, { merge: true }),
     );
   }
 });

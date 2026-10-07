@@ -20,58 +20,58 @@ class QuoteDiscountRaisedTest {
 
     @Test
     fun `(i) nothing about the discount changed - not raised`() {
-        assertFalse(QuoteDiscount.raised(4_440.0, 44_400.0, 4_440.0, 44_400.0))
+        assertFalse(QuoteDiscount.raised(3_400.0, 34_000.0, 3_400.0, 34_000.0))
     }
 
     @Test
     fun `(ii) the discount raised - raised`() {
-        assertTrue(QuoteDiscount.raised(4_440.0, 44_400.0, 5_328.0, 44_400.0))
+        assertTrue(QuoteDiscount.raised(3_400.0, 34_000.0, 4_080.0, 34_000.0))
     }
 
     @Test
     fun `(iii) lines added under an unchanged percentage - the amount rose, so raised`() {
         // The rate is the same 10%; only the amount clause catches it.
-        assertTrue(QuoteDiscount.raised(4_440.0, 44_400.0, 6_660.0, 66_600.0))
+        assertTrue(QuoteDiscount.raised(3_400.0, 34_000.0, 5_100.0, 51_000.0))
     }
 
     @Test
     fun `(iv) a flat discount kept while lines are removed - the rate rose, so raised`() {
-        // The amount is the same 2,000; only the rate clause catches it.
-        assertTrue(QuoteDiscount.raised(2_000.0, 44_400.0, 2_000.0, 22_200.0))
+        // The amount is the same 1,500; only the rate clause catches it.
+        assertTrue(QuoteDiscount.raised(1_500.0, 34_000.0, 1_500.0, 17_000.0))
     }
 
     @Test
     fun `(v) lines removed under an unchanged percentage - not raised`() {
-        assertFalse(QuoteDiscount.raised(4_440.0, 44_400.0, 2_220.0, 22_200.0))
+        assertFalse(QuoteDiscount.raised(3_400.0, 34_000.0, 1_700.0, 17_000.0))
     }
 
     @Test
     fun `(v) with a base that rounds - not raised, only because of the rupee margin`() {
-        // 10% of 44,410 is 4,441; of 22,205 it is 2,220.5, stored as 2,221.
-        // 2,221 x 44,410 = 98,634,610 against 4,441 x 22,205 + 44,410 =
-        // 98,656,815. Without the margin, 98,612,405 would call it a rise.
-        assertFalse(QuoteDiscount.raised(4_441.0, 44_410.0, 2_221.0, 22_205.0))
+        // 10% of 34,010 is 3,401; of 17,005 it is 1,700.5, stored as 1,701.
+        // 1,701 x 34,010 = 57,851,010 against 3,401 x 17,005 + 34,010 =
+        // 57,868,015. Without the margin, 57,834,005 would call it a rise.
+        assertFalse(QuoteDiscount.raised(3_401.0, 34_010.0, 1_701.0, 17_005.0))
     }
 
     @Test
     fun `a discount added where there was none - raised`() {
-        assertTrue(QuoteDiscount.raised(null, null, 2_220.0, 44_400.0))
-        assertTrue(QuoteDiscount.raised(0.0, 44_400.0, 2_220.0, 44_400.0))
+        assertTrue(QuoteDiscount.raised(null, null, 1_700.0, 34_000.0))
+        assertTrue(QuoteDiscount.raised(0.0, 34_000.0, 1_700.0, 34_000.0))
     }
 
     @Test
     fun `a discount taken off - not raised`() {
-        assertFalse(QuoteDiscount.raised(4_440.0, 44_400.0, 0.0, 44_400.0))
+        assertFalse(QuoteDiscount.raised(3_400.0, 34_000.0, 0.0, 34_000.0))
     }
 
     @Test
     fun `one rupee more is the margin, two is a rise`() {
-        assertFalse(QuoteDiscount.raised(4_440.0, 44_400.0, 4_441.0, 44_400.0))
-        assertTrue(QuoteDiscount.raised(4_440.0, 44_400.0, 4_442.0, 44_400.0))
+        assertFalse(QuoteDiscount.raised(3_400.0, 34_000.0, 3_401.0, 34_000.0))
+        assertTrue(QuoteDiscount.raised(3_400.0, 34_000.0, 3_402.0, 34_000.0))
     }
 
     @Test
     fun `a stored base that cannot be read counts as raised - it fails closed`() {
-        assertTrue(QuoteDiscount.raised(4_440.0, null, 2_220.0, 22_200.0))
+        assertTrue(QuoteDiscount.raised(3_400.0, null, 1_700.0, 17_000.0))
     }
 }
